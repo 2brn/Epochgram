@@ -154,9 +154,9 @@ A search bar at the bottom lets you search timeline records and shows the number
 | --- | --- |
 | **Enter** | Open the matched file. |
 | **Alt/Option+Enter** | Filter timeline records by the current query. |
-| **!marked** | Show only marked records. |
-| **!hidden** | Show only hidden records. |
-| **!similar** | Show only similar records to currently opened file. |
+| **!marked** or **$marked** | Show only marked records. |
+| **!hidden** or **$hidden** | Show only hidden records. |
+| **!similar** or **$similar** | Show only similar records to currently opened file. |
 | **"exact"** | Find exact string. |
 
 ## Actions
