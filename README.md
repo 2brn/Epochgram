@@ -119,7 +119,7 @@ Each file has one anchor record that represents its canonical date. All other re
 > Added new line...		 ✐ tracked change
 > ```
 
-Each record appears as `note name ⸱ summary` (when **⛭ Show note name** is enabled). The summary is either the first _N_ words, markdown-aware (**⛭ Summary length** setting) or an AI summary (Pro). A manual summary can be set with YAML (`description: ...`) or from the context menu; manual summaries are never overwritten by AI.
+Each record appears as `note name ⸱ summary` (when **⛭ Show note name** is enabled). The summary is either the first _N_ words flattened from markdown (**⛭ Summary length** setting) or an AI summary (Pro). A manual summary can be set with YAML (`description: ...`) or from the context menu; manual summaries are never overwritten by AI.
 
 Timeline draws today as <img src="images/circle-today.svg" width="18" height="18" alt="">, weekdays as <img src="images/circle.svg" width="18" height="18" alt=""> and weekends as <img src="images/circle-filled.svg" width="18" height="18" alt="">. Entries are shown stacked or side by side when space allows, long entries are truncated with `…`. If space runs out, the day collapses to a few records and shows the rest as `(+n)`. When zoomed out, records collapse into placeholder bars <img src="images/rectangle-horizontal.svg" width="18" height="18" alt="">, with height based on record count.
 
@@ -154,9 +154,9 @@ A search bar at the bottom lets you search timeline records and shows the number
 | --- | --- |
 | **Enter** | Open the matched file. |
 | **Alt/Option+Enter** | Filter timeline records by the current query. |
-| **!marked** or **$marked** | Show only marked records. |
-| **!hidden** or **$hidden** | Show only hidden records. |
-| **!similar** or **$similar** | Show only similar records to currently opened file. |
+| **$marked** | Show only marked records. |
+| **$hidden** | Show only hidden records. |
+| **$similar** | Show only similar records to currently opened file. |
 | **"exact"** | Find exact string. |
 
 ## Actions
