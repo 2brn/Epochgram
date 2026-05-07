@@ -331,6 +331,9 @@ Epochgram also provides **Rebuild** and **Reset** popups for rebuilding or clear
     - **⛭ AI summaries** → remove all AI summaries and use default "first N words".
     - **⛭ Epochs** → remove all Epochs.
 
+> [!TIP]
+> **⛭ Version X.X.X** shows the current version, build timestamp, and a link to the [CHANGELOG](CHANGELOG).
+
 ## FAQ
 
 > **How do I get support?**  
