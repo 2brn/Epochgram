@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.3.8] - 2026-05-08
+- Manual YAML `description` field is now used as-is in summaries — punctuation such as `!`, `?`, `;` is preserved and no markdown flattening is applied.
+
 ## [1.3.7] - 2026-05-08
 - Renamed `CHANGELOG.md` to `CHANGELOG` (no extension); updated settings link, release workflow, and production build to match.
 - Fixed release workflow to sync `CHANGELOG` to `2brn/Epochgram` on each release.
