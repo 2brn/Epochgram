@@ -1,5 +1,10 @@
 # Epochgram changelog
 
+## [1.3.9] - 2026-05-11
+- Added handling Daily Notes setting Template file location for creating daily notes.
+- Fixed refreshing index on changed YAML.
+- Updated readme.
+
 ## [1.3.8] - 2026-05-08
 - Manual YAML `description` field is now used as-is in summaries — punctuation such as `!`, `?`, `;` is preserved and no markdown flattening is applied.
 
