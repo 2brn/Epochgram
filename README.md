@@ -167,7 +167,7 @@ A search bar at the bottom lets you search timeline records and shows the number
 
 Files in the vault are never modified unless you run an explicit file action. All attributes *except the date and manual summary* are stored in Epochgram data files, not in vault files.
 
-| Record context menu | Description |
+| Record menu | Description |
 | --- | --- |
 | **<img src="images/square-pen.svg" width="18" height="18" alt=""> Summary…** | Update the file YAML `description` (configurable via **⛭ Description property name**). |
 | **<img src="images/tag.svg" width="18" height="18" alt=""> Topic** | Open the topics assignment popup; to remove topics, clear the input (Pro). |
@@ -178,12 +178,12 @@ Files in the vault are never modified unless you run an explicit file action. Al
 | **<img src="images/folder-tree.svg" width="18" height="18" alt=""> Move to…** | Move the file to another folder. |
 | **<img src="images/trash2.svg" width="18" height="18" alt=""> Delete** | **Permanently delete the file**, or move it to trash, depending on Obsidian settings. |
 
-| Date context menu | Description |
-| --- | --- |
-| **<img src="images/file-plus.svg" width="18" height="18" alt=""> Create daily note** | Uses **⛭ Daily notes** core plugin settings for that date: date format, location, and template. Also available by **Double-click**. |
-
 > [!TIP]
 > **⌘ Epochgram: Clear tracked changes for current file** → clear all file history at once.
+
+| Date menu | Description |
+| --- | --- |
+| **<img src="images/file-plus.svg" width="18" height="18" alt=""> Create daily note** | Uses **⛭ Daily notes** core plugin settings for that date: date format, location, and template. Also available by **Double-click**. |
 
 ## Review State
 
