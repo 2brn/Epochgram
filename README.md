@@ -339,7 +339,7 @@ Epochgram also provides **Rebuild** and **Reset** popups for rebuilding or clear
 ## FAQ
 
 > **How do I get support?**  
-> Check the docs first. If you still cannot find relevant information, feel free to [open an issue on GitHub](https://github.com/2brn/Epochgram/issues). You can also join the [Epochgram Reddit community](https://www.reddit.com/r/Epochgram/) for discussions, feedback, and updates. For private matters such as licensing, email me at [hi@epochgram.com](mailto:hi@epochgram.com).
+> Check the docs first. If you still cannot find what you need, feel free to [open an issue on GitHub](https://github.com/2brn/Epochgram/issues). You can also join the [Reddit community](https://www.reddit.com/r/Epochgram/) for discussions, feedback, and updates. If you have any other questions, just contact me at hi@epochgram.com.
 
 > **What should I do if Epochgram feels slow?**  
 > On huge vaults or slower machines, performance may degrade. Try setting **⛭ Semantic threshold** and **⛭ Topic threshold** to `0`, disable **⛭ Auto summarize** and **⛭ Generate Epochs**. You can also uncheck **⛭ Enable animation** or reset plugin data.
