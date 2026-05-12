@@ -1,5 +1,11 @@
 # Epochgram changelog
 
+## [1.3.15] - 2026-05-12
+- Fixed failed tests and build.
+- Updated AI summary/epoch tests for constructor-safe `Notice` mocking and missing bridge stubs.
+- Fixed modal lifecycle floating-promise lint issues in suggest modals.
+- Added `package-lock.json` and refreshed dependency metadata.
+
 ## [1.3.14] - 2026-05-12
 - Fixed release workflow YAML syntax: corrected env indentation and removed release-only repo migration.
 
