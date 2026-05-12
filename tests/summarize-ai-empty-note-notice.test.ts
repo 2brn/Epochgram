@@ -54,7 +54,7 @@ describe("Summarize AI on empty note", () => {
 	};
 
 	it("shows a notice and does not enqueue jobs", async () => {
-		const noticeSpy = vi.spyOn(obsidian, "Notice").mockImplementation((() => {
+		const noticeSpy = vi.spyOn(obsidian, "Notice").mockImplementation((function () {
 			return {} as any;
 		}) as any);
 		const ctime = Date.UTC(2026, 0, 24);
@@ -71,7 +71,7 @@ describe("Summarize AI on empty note", () => {
 	});
 
 	it("treats frontmatter-only date notes as empty", async () => {
-		const noticeSpy = vi.spyOn(obsidian, "Notice").mockImplementation((() => {
+		const noticeSpy = vi.spyOn(obsidian, "Notice").mockImplementation((function () {
 			return {} as any;
 		}) as any);
 		const ctime = Date.UTC(2026, 0, 25);

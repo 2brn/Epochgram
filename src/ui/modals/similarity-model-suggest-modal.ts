@@ -99,7 +99,7 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 	}
 
 	onOpen() {
-		super.onOpen();
+		void super.onOpen();
 		this.titleEl.setText(this.focus === "topics" ? "Topics model" : "Semantics model");
 		const currentOverride = this.getCurrentOverride();
 		const defaultModelId = this.getDefaultModelId();
@@ -126,7 +126,7 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 	onClose() {
 		this.inputEl.removeEventListener("keydown", this.handleKeyDown);
 		this.inputEl.removeEventListener("input", this.handleInput);
-		super.onClose();
+		void super.onClose();
 		const el = this.priorActiveElement;
 		this.priorActiveElement = null;
 		if (el && typeof el.focus === "function") {

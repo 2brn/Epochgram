@@ -91,7 +91,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 	}
 
 	onOpen() {
-		super.onOpen();
+		void super.onOpen();
 		this.committed = false;
 		this.modalEl.addClass("mod-epochgram-timeline-search");
 		this.titleEl.setText(this.titleText);
@@ -118,7 +118,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 	onClose() {
 		this.inputEl.removeEventListener("input", this.handleInput);
 		this.inputEl.removeEventListener("keydown", this.handleKeyDown);
-		super.onClose();
+		void super.onClose();
 		if (Platform.isMobile) {
 			this.priorActiveElement = null;
 			return;

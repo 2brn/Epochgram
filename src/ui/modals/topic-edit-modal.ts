@@ -77,7 +77,7 @@ class TopicSuggestModal extends SuggestModal<TopicSuggestItem> {
 	}
 
 	onOpen() {
-		super.onOpen();
+		void super.onOpen();
 		this.titleEl.setText(this.titleText);
 		this.inputEl.value = this.initialValue;
 		this.inputEl.dispatchEvent(new Event("input"));
@@ -88,7 +88,7 @@ class TopicSuggestModal extends SuggestModal<TopicSuggestItem> {
 	onClose() {
 		this.inputEl.removeEventListener("keydown", this.handleKeyDown);
 		this.inputEl.removeEventListener("input", this.handleInput);
-		super.onClose();
+		void super.onClose();
 		const el = this.priorActiveElement;
 		this.priorActiveElement = null;
 		if (el && typeof el.focus === "function") {

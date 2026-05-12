@@ -4,10 +4,16 @@ import { withTrustedPro } from "./helpers/trusted-pro";
 const noticeCalls: string[] = [];
 
 vi.mock("obsidian", () => ({
-	Notice: vi.fn().mockImplementation((message: string) => {
+	Notice: vi.fn(function (message: string) {
 		noticeCalls.push(String(message ?? ""));
+		return {} as any;
 	}),
 	Platform: { isDesktopApp: true },
+}));
+
+vi.mock("../src/plugin/ai-summaries/bridge-server", () => ({
+	ensureAiBridgeServerRunning: vi.fn(async () => undefined),
+	maybeNudgeBridgeNotReady: vi.fn(() => undefined),
 }));
 
 vi.mock("../src/plugin/notice-utils", () => ({
@@ -80,6 +86,10 @@ describe("regenerateMissingEpochsForAllRecords fast mode", () => {
 			ensureIndexLoaded: async () => undefined,
 			openAiBridgeWindow: async () => undefined,
 			app: {},
+			aiBridge: {
+				enqueue: vi.fn(),
+				getStatus: () => ({ clientConnected: true, queued: 0, inProgress: 0 }),
+			},
 		};
 		withTrustedPro(plugin);
 

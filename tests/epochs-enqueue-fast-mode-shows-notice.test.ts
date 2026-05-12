@@ -4,8 +4,9 @@ import { withTrustedPro } from "./helpers/trusted-pro";
 const noticeCalls: string[] = [];
 
 vi.mock("obsidian", () => ({
-	Notice: vi.fn().mockImplementation((message: string) => {
+	Notice: vi.fn(function (message: string) {
 		noticeCalls.push(String(message ?? ""));
+		return {} as any;
 	}),
 	Platform: { isDesktopApp: true },
 }));
@@ -104,6 +105,7 @@ describe("enqueueEpochsForDateKeys fast mode notice", () => {
 			openAiBridgeWindow: async () => undefined,
 			app: {},
 			aiBridge: {
+				enqueue: vi.fn(),
 				getStatus: () => ({ clientConnected: false, queued: 0, inProgress: 0 }),
 			},
 		};

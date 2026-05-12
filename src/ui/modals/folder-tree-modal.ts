@@ -53,7 +53,7 @@ export class FolderTreeModal extends SuggestModal<TFolder> {
 	}
 
 	onOpen() {
-		super.onOpen();
+		void super.onOpen();
 		this.modalEl.addClass("mod-file-move");
 		this.titleEl.setText("Move note to");
 		const placeholder = this.initialFolder?.path || "/";
@@ -66,7 +66,7 @@ export class FolderTreeModal extends SuggestModal<TFolder> {
 	onClose() {
 		this.inputEl.removeEventListener("keydown", this.handleKeyDown);
 		this.modalEl.removeClass("mod-file-move");
-		super.onClose();
+		void super.onClose();
 		const el = this.priorActiveElement;
 		this.priorActiveElement = null;
 		window.requestAnimationFrame(() => {
