@@ -1,5 +1,12 @@
 # Epochgram changelog
 
+## [1.3.11] - 2026-05-12
+- Replaced note-name toggle with `Filename length` word-based truncation (`0-12`) and updated rendering flow.
+- Fixed filename truncation across languages/scripts (including Cyrillic, Greek, Arabic, Chinese, Japanese) and punctuation handling.
+- Fixed cases where summaries equal/prepend filenames (including empty-content and tracked-change fallback paths) so truncation is applied consistently.
+- Enforced display-time `Summary length` truncation for tracked-change summaries, including prefixed-summary paths.
+- Summary word counting now ignores `↗︎`, `[x]`, and `[ ]` markers.
+
 ## [1.3.10] - 2026-05-12
 - Fixed double-tap handler to use first tap coordinates instead of second tap coordinates for consistent gesture recognition.
 

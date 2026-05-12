@@ -119,7 +119,7 @@ Each file has one anchor record that represents its canonical date. All other re
 > Added new line...		 ✐ tracked change
 > ```
 
-Each record appears as `note name ⸱ summary` (when **⛭ Show note name** is enabled). The summary is either the first _N_ words flattened from markdown (**⛭ Summary length** setting) or an AI summary (Pro). A manual summary can be set with YAML (`description: ...`) or from the context menu; manual summaries are never overwritten by AI.
+Each record appears as `file ⸱ summary`. You can control the length of each part using **⛭ Filename length** and **⛭ Summary length**. The summary is either the first `N` words extracted from Markdown or an AI-generated summary when **⛭ Auto summarize** is enabled (Pro). You can also set a manual summary using YAML (`description: ...`) or via context menu **<img src="images/square-pen.svg" width="18" height="18" alt=""> Summary…**; manual summaries are always preferred over AI-generated ones.
 
 Timeline draws today as <img src="images/circle-today.svg" width="18" height="18" alt="">, weekdays as <img src="images/circle.svg" width="18" height="18" alt=""> and weekends as <img src="images/circle-filled.svg" width="18" height="18" alt="">. Entries are shown stacked or side by side when space allows, long entries are truncated with `…`. If space runs out, the day collapses to a few records and shows the rest as `(+n)`. When zoomed out, records collapse into placeholder bars <img src="images/rectangle-horizontal.svg" width="18" height="18" alt="">, with height based on record count.
 
