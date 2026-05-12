@@ -24,7 +24,7 @@
 		"@types/diff": "^5.0.8",
 		"@types/node": "^20.19.25",
 		"builtin-modules": "3.3.0",
-		"esbuild": "0.17.3",
+		"esbuild": "^0.28.0",
 		"esbuild-plugin-inline-worker": "^0.1.1",
 		"eslint": "^9.39.4",
 		"eslint-plugin-obsidianmd": "^0.1.9",
