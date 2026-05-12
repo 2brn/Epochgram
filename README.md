@@ -355,5 +355,4 @@ Epochgram also provides **Rebuild** and **Reset** popups for rebuilding or clear
   - AI Bridge: Epochgram starts a local server on `http://127.0.0.1` and opens a local bridge page in Google Chrome to use Chrome's on-device Summarizer API. The bridge communication stays on your device. Chrome [may download](https://developer.chrome.com/docs/ai/summarizer-api) its built-in model(s) (Gemini Nano) the first time you use these APIs.
   - Similarity: embeddings/topic models and runtime files may be downloaded on first use via `@huggingface/transformers` (for example from [Hugging Face](https://huggingface.co)) and ONNX Runtime Web WASM from [jsDelivr](https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260410-5e55544225/dist/).
 - All vault data is processed locally on your device and is NEVER sent over the internet.
-- Source code is closed.
 - License: MIT (see [LICENSE](LICENSE)).

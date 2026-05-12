@@ -1,0 +1,149 @@
+name: Release Epochgram
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version to publish, for example 0.4.1
+        required: true
+        type: string
+  push:
+    tags:
+      - "*.*.*"
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      PLUGIN_NAME: epochgram
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build production bundle
+        run: npm run build:production
+
+      - name: Resolve release version and tag
+        id: release_meta
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          REF_TAG=""
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            REF_TAG="${GITHUB_REF_NAME}"
+            if [[ "${REF_TAG}" == v* ]]; then
+              VERSION="${REF_TAG#v}"
+            else
+              VERSION="${REF_TAG}"
+            fi
+            TAG="${VERSION}"
+          else
+            VERSION="${INPUT_VERSION}"
+            TAG="${VERSION}"
+          fi
+          if [ -z "${VERSION}" ]; then
+            echo "Release version is required." >&2
+            exit 1
+          fi
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if [ "${VERSION}" != "${PACKAGE_VERSION}" ]; then
+            echo "Version mismatch: requested=${VERSION} package.json=${PACKAGE_VERSION}" >&2
+            exit 1
+          fi
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            if [ -z "${REF_TAG}" ]; then
+              echo "Missing tag ref name." >&2
+              exit 1
+            fi
+            if [ "${REF_TAG}" != "${VERSION}" ] && [ "${REF_TAG}" != "v${VERSION}" ]; then
+              echo "Tag/version mismatch: tag=${REF_TAG} package.json=${PACKAGE_VERSION}" >&2
+              exit 1
+            fi
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release notes
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          VERSION: ${{ steps.release_meta.outputs.version }}
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const version = process.env.VERSION;
+          const text = fs.readFileSync('CHANGELOG', 'utf8');
+          const lines = text.split(/\r?\n/);
+          const header = `## [${version}]`;
+          const start = lines.findIndex((l) => l.startsWith(header));
+          if (start === -1) {
+            console.error(`Could not find changelog section for ${header}`);
+            process.exit(1);
+          }
+          let end = start + 1;
+          while (end < lines.length && !lines[end].startsWith('## [')) end++;
+          const section = lines.slice(start, end).join('\n').trim() + '\n';
+          fs.writeFileSync('release-notes.md', section);
+          NODE
+
+      - name: Prepare release assets
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          VERSION: ${{ steps.release_meta.outputs.version }}
+        run: |
+          mkdir -p release
+          cp production/${PLUGIN_NAME}/manifest.json release/
+          cp production/${PLUGIN_NAME}/main.js release/
+          if [ -f production/${PLUGIN_NAME}/styles.css ]; then cp production/${PLUGIN_NAME}/styles.css release/; fi
+
+      - name: Generate artifact attestations
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            release/manifest.json
+            release/main.js
+            release/styles.css
+
+      - name: Upload build artifact
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: release/
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: ${{ steps.release_meta.outputs.tag }}
+          body_path: release-notes.md
+          files: |
+            release/manifest.json
+            release/main.js
+            release/styles.css

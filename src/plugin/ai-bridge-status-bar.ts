@@ -1,0 +1,130 @@
+import { Platform } from "obsidian";
+import type { EpochPlugin } from "../main";
+import { setCssStyles } from "../dom";
+import { hasAiBridgeAccess } from "./pro-feature-state";
+
+import { AI_BRIDGE_GLYPH } from "./icons";
+
+function getEl(plugin: EpochPlugin): HTMLElement | null {
+	if (!Platform.isDesktopApp || Platform.isMobileApp) return null;
+	const anyPlugin: any = plugin as any;
+	const cached = anyPlugin.__epochStatusBarAiBridgeEl;
+	try {
+		const HTMLElementAny: any = (globalThis as any).HTMLElement;
+		if (cached && (typeof HTMLElementAny === "undefined" || cached instanceof HTMLElementAny)) {
+			return cached;
+		}
+	} catch {
+		// ignore
+	}
+	try {
+		if (typeof (plugin as any).addStatusBarItem !== "function") return null;
+		const el: HTMLElement = (plugin as any).addStatusBarItem();
+		setCssStyles(el, { display: "none" });
+		el.addClass?.("epoch-status-progress");
+		el.addClass?.("epoch-status-bridge");
+		try {
+			el.setAttribute("aria-label", "AI bridge");
+			el.setAttribute("data-tooltip-position", "top");
+		} catch {
+			// ignore
+		}
+		anyPlugin.__epochStatusBarAiBridgeEl = el;
+		return el;
+	} catch {
+		return null;
+	}
+}
+
+export function refreshAiBridgeStatusBar(plugin: EpochPlugin): void {
+	const el = getEl(plugin);
+	if (!el) return;
+
+	let shouldShow = false;
+	try {
+		shouldShow = hasAiBridgeAccess(plugin);
+	} catch {
+		shouldShow = false;
+	}
+
+	if (!shouldShow) {
+		setCssStyles(el, { display: "none" });
+		return;
+	}
+
+	const bridge: any = (plugin as any).aiBridge ?? null;
+	if (!bridge) {
+		setCssStyles(el, { display: "none" });
+		return;
+	}
+	let status: any = null;
+	try {
+		status = bridge?.getStatus?.() ?? null;
+	} catch {
+		status = null;
+	}
+	const clientConnected = status?.clientConnected === true;
+	const disconnected = !clientConnected;
+
+	try {
+		el.removeClass?.("is-warning");
+		el.removeClass?.("is-connected");
+		if (clientConnected) {
+			el.addClass?.("is-connected");
+		} else if (disconnected) {
+			// Red when the bridge page isn't connected.
+			el.addClass?.("is-warning");
+		}
+	} catch {
+		// ignore
+	}
+
+	// Keep the bridge button minimal; AI job progress shows in the shared progress indicator.
+	el.textContent = `${AI_BRIDGE_GLYPH} AI`;
+	try {
+		(el.style as any).cursor = "pointer";
+	} catch {
+		// ignore
+	}
+
+	try {
+		if (disconnected) {
+			el.setAttribute("aria-label", "AI bridge (disconnected)");
+		} else {
+			el.setAttribute("aria-label", "AI bridge");
+		}
+	} catch {
+		// ignore
+	}
+
+	setCssStyles(el, { display: "" });
+}
+
+export function initAiBridgeStatusBar(plugin: EpochPlugin): void {
+	const el = getEl(plugin);
+	if (!el) return;
+
+	const anyPlugin: any = plugin as any;
+	try {
+		if (!anyPlugin.__epochStatusBarAiBridgeClickBound) {
+			anyPlugin.__epochStatusBarAiBridgeClickBound = true;
+			el.addEventListener("click", (ev) => {
+				ev.preventDefault();
+				ev.stopPropagation();
+				try {
+					void (plugin as any).openAiBridgeWindow?.({ silent: false, source: "command", forceOpen: true });
+				} catch {
+					// ignore
+				}
+			});
+		}
+	} catch {
+		// ignore
+	}
+
+	try {
+		refreshAiBridgeStatusBar(plugin);
+	} catch {
+		// ignore
+	}
+}

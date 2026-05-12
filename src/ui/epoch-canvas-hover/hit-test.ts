@@ -1,0 +1,59 @@
+import type { DateEntry } from "../../indexer/types";
+import type { DayLayout } from "../epoch-canvas-types";
+import type { EpochCanvas } from "../epoch-canvas";
+import { normalizeMarkColorIndex } from "../mark-colors";
+import { hoverState } from "./internals";
+
+export function findSummaryEntryAtPoint(canvas: EpochCanvas, x: number, y: number): DateEntry | null {
+	const state = hoverState(canvas);
+	for (const layout of state.layouts) {
+		let bestEntry: DateEntry | null = null;
+		let bestDist = Number.POSITIVE_INFINITY;
+		let bestPriority = -1;
+
+		const inheritedSourceMap: Map<string, string> | null = (() => {
+			try {
+				const map = (canvas as any)?.inheritedMarkSourceByPath as Map<string, string> | null | undefined;
+				return map && typeof map.get === "function" ? map : null;
+			} catch {
+				return null;
+			}
+		})();
+
+		for (const rect of layout.summaryRects) {
+			if (!(x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2)) continue;
+			const entry = rect.entry;
+			const filePath = (entry as any)?.file;
+			const isMarked = !!normalizeMarkColorIndex((entry as any)?.markColor);
+			const hasInherited = !!(inheritedSourceMap && typeof filePath === "string" && filePath && inheritedSourceMap.get(filePath));
+			const isActive = !!(state.activeFilePath && typeof filePath === "string" && filePath === state.activeFilePath);
+			const centerY = (rect.y1 + rect.y2) / 2;
+			const dist = Math.abs(centerY - y);
+			const priority = isActive && (isMarked || hasInherited) ? 3 : hasInherited ? 2 : isMarked ? 1 : 0;
+
+			if (
+				bestEntry == null ||
+				dist < bestDist ||
+				(dist === bestDist && priority > bestPriority)
+			) {
+				bestEntry = entry;
+				bestDist = dist;
+				bestPriority = priority;
+			}
+		}
+		if (bestEntry) return bestEntry;
+	}
+	return null;
+}
+
+export function findDayLayoutAtPoint(canvas: EpochCanvas, x: number, y: number): DayLayout | null {
+	const state = hoverState(canvas);
+	for (const layout of state.layouts) {
+		if (!layout.hasVisibleDate) continue;
+		const rect = layout.dateRect;
+		if (x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2) {
+			return layout;
+		}
+	}
+	return null;
+}

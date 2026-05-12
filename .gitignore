@@ -1,0 +1,39 @@
+# vscode
+.vscode 
+
+# Intellij
+*.iml
+.idea
+
+# npm
+node_modules
+
+# Don't include the compiled main.js file in the repo.
+# They should be uploaded to GitHub releases instead.
+main.js
+
+# Generated standalone export bundle (built by esbuild.config.mjs)
+export-epochs-standalone.js
+
+# Exclude sourcemaps
+*.map
+
+# Build artifacts
+production/
+
+# Local release artifacts
+epochgram-*.zip
+images/*.zip
+release/
+release-notes.md
+
+# obsidian
+data.json
+index.json
+
+# Generated demo vault
+epoch-demo-vault/
+
+# Exclude macOS Finder (System Explorer) View States
+.DS_Store
+main.css
