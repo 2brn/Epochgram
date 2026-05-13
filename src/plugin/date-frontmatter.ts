@@ -1,6 +1,6 @@
 import { TFile } from "obsidian";
 import type { EpochPlugin } from "../main";
-import { formatDate } from "../utils";
+import { formatDate, normalizeIsoDatePrefix } from "../utils";
 import {
 	buildFrontmatterPropertyLineRegex,
 	getYamlDatePropertyKey,
@@ -17,7 +17,7 @@ function isDateKey(value: string): boolean {
 }
 
 function normalizeDateKeyInput(value: string): string | null {
-	const k = String(value || "").trim();
+	const k = normalizeIsoDatePrefix(String(value || "").trim());
 	if (!k) return null;
 	if (!isDateKey(k)) return null;
 	return k;

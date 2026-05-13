@@ -9,6 +9,18 @@ export function sanitizeSummaryText(input: string): string {
 	}
 }
 
+export function normalizeIsoDatePrefix(input: string): string {
+	const raw = String(input || "").trim();
+	if (!raw) return "";
+	const m = raw.match(/^(\d{4}-\d{2}-\d{2})[Tt].*$/);
+	if (m && m[1]) return m[1];
+	const compact = raw.match(/^(\d{4})(\d{2})(\d{2})[Tt].*$/);
+	if (compact && compact[1] && compact[2] && compact[3]) {
+		return `${compact[1]}-${compact[2]}-${compact[3]}`;
+	}
+	return raw;
+}
+
 export function normalizeDailyNoteDateFormatInput(format: string): string {
 	let f = String(format || "").trim();
 	if (!f) return "";

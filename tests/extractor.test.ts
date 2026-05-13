@@ -46,6 +46,15 @@ describe("DATE PARSING", () => {
 		expect(r).toBe("2025-04-03");
 	});
 
+	it("parses ISO timestamps by ignoring everything after T", () => {
+		expect(parseAnyDate("2020-08-21T10:30:00.123")).toBe("2020-08-21");
+		expect(parseAnyDate("2020-08-21T10:30:00.123Z")).toBe("2020-08-21");
+		expect(parseAnyDate("2020-08-21T10:30:00.123+03:00")).toBe("2020-08-21");
+		expect(parseAnyDate("20200821T103000")).toBe("2020-08-21");
+		expect(parseAnyDate("20200821T103000Z")).toBe("2020-08-21");
+		expect(parseAnyDate("20200821T103000+0300")).toBe("2020-08-21");
+	});
+
 	it("ignores '6000 years ago'", () => {
 		const r = parseAnyDate("Humans lived 6000 years ago");
 		expect(r).toBe(null);

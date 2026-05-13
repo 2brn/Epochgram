@@ -1,4 +1,5 @@
 import { EPOCH_BUCKETS, epochBucketRoughDays, isEpochBucket, type EpochBucket } from "../../indexer/types";
+import { normalizeIsoDatePrefix } from "../../utils";
 
 export const AI_CHUNK_MAX_CHARS = 2500;
 export const AI_REDUCE_MAX_DEPTH = 4;
@@ -118,10 +119,11 @@ export function isDateKey(value: string): boolean {
 }
 
 export function parseDateKey(dateKey: string): Date | null {
-	if (!isDateKey(dateKey)) return null;
+	const key = normalizeIsoDatePrefix(dateKey);
+	if (!isDateKey(key)) return null;
 	// Treat date keys as a date-only UTC value for deterministic bucketing.
 	// This avoids timezone-dependent shifts near year boundaries.
-	const d = new Date(dateKey + "T00:00:00Z");
+	const d = new Date(key + "T00:00:00Z");
 	return Number.isFinite(d.getTime()) ? d : null;
 }
 

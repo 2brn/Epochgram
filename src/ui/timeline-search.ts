@@ -1,4 +1,5 @@
 import { parseAnyDate } from "../indexer/extractor";
+import { normalizeIsoDatePrefix } from "../utils";
 
 export type TimelineQueryDateRange = { start: string; end: string };
 
@@ -70,7 +71,7 @@ function parseNumericDateKey(tokenRaw: string): string | null {
 }
 
 function parseSearchDateKey(tokenRaw: string): string | null {
-	const t = stripDateTokenEdges(tokenRaw);
+	const t = normalizeIsoDatePrefix(stripDateTokenEdges(tokenRaw));
 	if (!t) return null;
 	if (isDateKey(t)) return t;
 	const numeric = parseNumericDateKey(t);

@@ -3,6 +3,15 @@ import { describe, expect, it } from "vitest";
 import { parseDateKey, pickEpochPeriod } from "../src/plugin/ai-summaries/shared";
 
 describe("Epoch period alignment", () => {
+	it("parses date keys with T-suffixed timestamps", () => {
+		expect(parseDateKey("2020-08-21T10:30:00.123")).toBeTruthy();
+		expect(parseDateKey("2020-08-21T10:30:00.123Z")).toBeTruthy();
+		expect(parseDateKey("2020-08-21T10:30:00.123+03:00")).toBeTruthy();
+		expect(parseDateKey("20200821T103000")).toBeTruthy();
+		expect(parseDateKey("20200821T103000Z")).toBeTruthy();
+		expect(parseDateKey("20200821T103000+0300")).toBeTruthy();
+	});
+
 	it("aligns 3months/6months/year to start of year (Q/H/Y)", () => {
 		const d = parseDateKey("2026-02-13");
 		expect(d).toBeTruthy();

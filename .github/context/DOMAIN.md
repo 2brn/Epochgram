@@ -77,6 +77,7 @@ Timeline date marker interactions (Verified)
 ### Date-format rules (Verified)
 - When Obsidian `moment` is available (normal plugin runtime), any *full-date* Moment format is accepted (including week/weekday/day-of-year/time tokens and literals/prefixes like `note_YYYY-MM-DD`).
 - When parsing a filename, Epochgram extracts only the calendar date and normalizes it to the internal `YYYY-MM-DD` key (time components are ignored for indexing).
+- Date parsing paths that accept raw date-like text normalize ISO-like timestamp inputs by using only the date prefix before `T` (e.g. `2020-08-21T10:30:00.123`, `2020-08-21T10:30:00.123Z`, `2020-08-21T10:30:00.123+03:00`, and compact forms like `20200821T103000+0300` all normalize to `2020-08-21`).
 - Date-property (`dateprop`) and recurrence (`repeat`/`recur`) anchor extraction for indexing reads raw YAML frontmatter lines from current file content (instead of trusting metadata cache first), so frontmatter removal is reflected immediately and on full rebuild.
 - In non-Obsidian environments (tests/Node), only `YYYY`/`YY` + `MM` + `DD` (+ literals) are supported.
 

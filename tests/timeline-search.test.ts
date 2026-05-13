@@ -29,6 +29,16 @@ describe("timeline search", () => {
 		expect(q.fuzzyText).toBe("alpha");
 	});
 
+	it("parses T-suffixed timestamps in date ranges", () => {
+		const q1 = parseTimelineQuery("2020-08-21T10:30:00.123 to 2020-08-22T10:30:00.123Z alpha");
+		expect(q1.dateRange).toEqual({ start: "2020-08-21", end: "2020-08-22" });
+		expect(q1.fuzzyText).toBe("alpha");
+
+		const q2 = parseTimelineQuery("20200821T103000 to 20200822T103000+0300 alpha");
+		expect(q2.dateRange).toEqual({ start: "2020-08-21", end: "2020-08-22" });
+		expect(q2.fuzzyText).toBe("alpha");
+	});
+
 	it("parses date ranges in dd-mm-yyyy format", () => {
 		const q = parseTimelineQuery("01-02-2026 - 28-02-2026 alpha");
 		expect(q.dateRange).toEqual({ start: "2026-02-01", end: "2026-02-28" });

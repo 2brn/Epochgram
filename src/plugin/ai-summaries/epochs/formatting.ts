@@ -1,4 +1,5 @@
 import type { EpochPlugin } from "../../../main";
+import { normalizeIsoDatePrefix } from "../../../utils";
 
 import { hasEpochInputAiSummaryError } from "../epoch-input-ai-fallback";
 import { getYamlDescriptionPropertyKey, readFrontmatterProperty } from "../../frontmatter-keys";
@@ -15,7 +16,7 @@ const toUtcDateKey = (ms: number): string => {
 };
 
 const tryParseSingleDateKey = (raw: string): string => {
-	const s = String(raw ?? "").trim();
+	const s = normalizeIsoDatePrefix(String(raw ?? "").trim());
 	if (!s) return "";
 	if (s.includes("\n") || s.includes("\r")) return "";
 	if (s.length > 48) return "";
