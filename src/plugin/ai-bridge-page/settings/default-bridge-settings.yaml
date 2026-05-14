@@ -1,6 +1,8 @@
 sharedContext: |
   Obsidian markdown notes.
   Ignore dates and empty content.
+  Don't output filenames.
+  Prefer nouns.
   Treat the input as the only source of facts.
   No duplicates and metaphrases.
 
@@ -22,8 +24,6 @@ reduce:
 records:
   context: |
     {{filePath}}
-    Related:
-    {{related}}
 
   type: headline
   length: long
@@ -32,7 +32,7 @@ epochs:
   - period: day-month
 
     context: |
-      Output facts, max 3 lines, max 7 words per line.
+      Output facts, max 3 lines, max 6 words per line.
 
     type: key-points
     length: short
@@ -40,7 +40,7 @@ epochs:
   - period: 3month-year
 
     context: |
-      Output only abstract topics, max 10 words.
+      Output abstract topics, max 10 words.
       Example: Science, Sport, Travel
 
     type: headline
