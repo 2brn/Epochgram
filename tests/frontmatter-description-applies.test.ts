@@ -238,20 +238,20 @@ describe("Frontmatter description applies", () => {
 			const file = makeFile("folder/desc-tracked.md", Date.UTC(2026, 2, 1));
 			contents[file.path] = [
 				"---",
-				"description: Desc wins",
+				"description: this is my, not your note",
 				"---",
 				"Alpha"
 			].join("\n");
 
 			(pluginStub.app.metadataCache.getFileCache as any).mockImplementation(() => ({
-				frontmatter: { description: "Desc wins" },
+				frontmatter: { description: "this is my, not your note" },
 				tags: []
 			}));
 
 			await indexer.processFile(file, { reason: "modify" });
 			contents[file.path] = [
 				"---",
-				"description: Desc wins",
+				"description: this is my, not your note",
 				"---",
 				"Beta"
 			].join("\n");
@@ -259,7 +259,7 @@ describe("Frontmatter description applies", () => {
 
 			const list: any[] = ((indexer as any).index["2026-03-14"] ?? []) as any[];
 			const entry = list.find((e) => e && e.file === file.path && e.source === "tracked");
-			expect(entry?.summary).toBe("Desc wins");
+			expect(entry?.summary).toBe("this is my, not your note");
 			expect(String(entry?.summary ?? "")).not.toMatch(/Alpha|Beta/);
 		} finally {
 			vi.useRealTimers();

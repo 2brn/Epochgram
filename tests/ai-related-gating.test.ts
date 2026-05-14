@@ -57,7 +57,7 @@ describe("AI summaries related-context gating", () => {
 		});
 	};
 
-	it("suppresses related for URL-only notes even with frontmatter", async () => {
+	it("keeps related for URL-only notes when similarity provides context", async () => {
 		const ctime = Date.UTC(2025, 0, 5);
 		const file = makeFile("folder/logo.md", ctime);
 		contents[file.path] = "---\ntitle: Epoch - Logo\ntags: [epoch]\n---\nhttps://pin.it/abc123\n";
@@ -65,8 +65,11 @@ describe("AI summaries related-context gating", () => {
 		await indexer.processFile(file, { reason: "modify" });
 		const built = await (await import("../src/plugin/ai-summaries/file-jobs")).buildJobsForFile(pluginStub, file.path, true);
 		expect(built.jobs.length).toBeGreaterThan(0);
+		const anyRelated = built.jobs.some(j => String((j as any).related ?? "").length > 0);
+		expect(anyRelated).toBe(true);
 		for (const j of built.jobs) {
-			expect(String((j as any).related ?? "")).toBe("");
+			const r = String((j as any).related ?? "");
+			if (r) expect(r.length).toBeLessThanOrEqual(1500);
 		}
 	});
 

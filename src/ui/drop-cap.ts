@@ -110,12 +110,14 @@ function findLeadBoundary(
 	let foundBoundary = false;
 
 	reWord.lastIndex = 0;
+	let wordCount = 0;
 
 	while ((m = reWord.exec(s))) {
 		const rawWord = m[0];
 		const w = rawWord.toLowerCase();
 		const start = m.index;
 		if (start >= lineEnd) break;
+		wordCount++;
 
 		const isStop = stop.has(w);
 		const fullEnd = Math.min(start + rawWord.length, lineEnd);
@@ -126,8 +128,8 @@ function findLeadBoundary(
 				if (!isStop) sawContent = true;
 				lastEnd = end;
 			} else {
-				// After the first content word, a stop-word ends the lead (do not include it).
-				if (isStop) {
+				// Stop-word boundaries only apply from the third word onward.
+				if (wordCount >= 3 && isStop) {
 					foundBoundary = true;
 					break;
 				}

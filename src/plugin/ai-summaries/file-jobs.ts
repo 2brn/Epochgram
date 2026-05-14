@@ -4,7 +4,6 @@ import type { AiSummaryJob } from "../ai-bridge";
 import { computeAiSummaryInputHash, isLikelyTextFilePath } from "../../utils";
 import { extractFrontmatterDescription } from "../../indexer/summarizer";
 import { buildPerCallContext } from "./contexts";
-import { shouldIncludeRelatedContext } from "./shared";
 import { getIndexerInternals, getLinesForFile } from "./indexer";
 import { buildRelatedSummariesAllDates, getRelatedScoredForFile } from "./related";
 import { getYamlDatePropertyKey, getYamlDescriptionPropertyKey } from "../frontmatter-keys";
@@ -147,7 +146,7 @@ export async function buildJobsForFile(
 		const groupInput = groupInputRaw.length > AI_NOTE_MAX_CHARS ? groupInputRaw.slice(0, AI_NOTE_MAX_CHARS) : groupInputRaw;
 		const inputHash = computeGroupHash(args.groupDate, args.groupType, groupInput);
 		if (groupHasFreshAi(args.targetEntries, inputHash)) return;
-		const relatedRaw = shouldIncludeRelatedContext(groupInput) ? getRelatedAllDates() : "";
+		const relatedRaw = getRelatedAllDates();
 		const RELATED_MAX_CHARS = 1500;
 		const related = relatedRaw.length > RELATED_MAX_CHARS ? relatedRaw.slice(0, RELATED_MAX_CHARS) : relatedRaw;
 		const targets: JobTarget[] = args.targetEntries.map(e => {

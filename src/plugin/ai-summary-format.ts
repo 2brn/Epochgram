@@ -3,6 +3,7 @@ import { sanitizeSummaryText } from "../utils";
 export function formatAiSummaryOutput(rawSummary: string): string {
 	const cleaned = sanitizeSummaryText(String(rawSummary || ""))
 		.replace(/^\*\s+/gm, "")
+		.replace(/["'""''«»]/g, "")
 		.trim();
 	if (!cleaned) return "";
 

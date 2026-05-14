@@ -2,6 +2,7 @@ sharedContext: |
   Obsidian markdown notes.
   Ignore dates and empty content.
   Treat the input as the only source of facts.
+  No duplicates and metaphrases.
 
 format: plain-text
 preference: capability
@@ -31,7 +32,7 @@ epochs:
   - period: day-month
 
     context: |
-      Output facts, max 7 words per line.
+      Output facts, max 3 lines, max 7 words per line.
 
     type: key-points
     length: short
@@ -39,8 +40,8 @@ epochs:
   - period: 3month-year
 
     context: |
-      Output high-level topics, max 7 words per line.
-      Example: Science, Personal knowledge, Travel
+      Output only abstract topics, max 10 words.
+      Example: Science, Sport, Travel
 
     type: headline
     length: short

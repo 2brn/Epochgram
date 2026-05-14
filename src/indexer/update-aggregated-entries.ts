@@ -157,7 +157,10 @@ export function updateAggregatedEntriesInternal(
 		};
 		base.reviewState = entryReviewState;
 		if (described) {
-			base.summary = resolveSummaryForFile(s.plugin, entry.file, described, { includeFileName: false });
+			base.summary = resolveSummaryForFile(s.plugin, entry.file, described, {
+				includeFileName: false,
+				skipFlatten: true
+			});
 			return base;
 		}
 		if (shouldUseAiSummaryForEntry(entry)) {
@@ -231,7 +234,10 @@ export function updateAggregatedEntriesInternal(
 			let summary = sourceEntry.summary;
 			let usedAiSummary = false;
 			if (described) {
-				summary = resolveSummaryForFile(s.plugin, filePath, described, { includeFileName: false });
+				summary = resolveSummaryForFile(s.plugin, filePath, described, {
+					includeFileName: false,
+					skipFlatten: true
+				});
 			} else if (shouldUseAiSummaryForEntry(sourceEntry)) {
 				const resolved = resolveGroupedAiSummaryIfValid(sourceEntry);
 				if (resolved) {

@@ -113,10 +113,14 @@ export function formatEpochItemText(plugin: EpochPlugin, e: any): string {
 	// Tracked change entries should read like actions.
 	if (src === "tracked") {
 		const change = typeof e?.trackedChange === "string" ? String(e.trackedChange) : "";
-		const action =
-			change === "removed" ? "Removed" :
-			change === "added" ? "Added" :
-			"Edited";
+		// When summary comes from YAML description, normalize to "Edited" regardless of tracked change type
+		// to avoid showing redundant prefixes (Added TODO, Edited TODO, Removed TODO) for the same item
+		const usesYamlDescription = yamlDescription && summaryText === yamlDescription;
+		const action = usesYamlDescription
+			? "Edited"
+			: (change === "removed" ? "Removed" :
+			  change === "added" ? "Added" :
+			  "Edited");
 		if (summaryText) return `${action} ${summaryText}`;
 		if (fileLabel) return `${action} "${fileLabel}"`;
 		return action;

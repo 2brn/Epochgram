@@ -75,7 +75,10 @@ export function updateTrackedDatesInternal(
 				getYamlDescriptionPropertyKey(s.plugin)
 			).trim();
 			if (!described) return "";
-			return resolveSummaryForFile(s.plugin, file.path, described, { includeFileName: false });
+			return resolveSummaryForFile(s.plugin, file.path, described, {
+				includeFileName: false,
+				skipFlatten: true
+			});
 		} catch {
 			return "";
 		}

@@ -3,6 +3,7 @@ import { sanitizeSummaryText } from "../utils";
 export function formatEpochSummaryForIndex(rawSummary: string): string {
 	const summary = sanitizeSummaryText(String(rawSummary || ""))
 		.replace(/^\*\s+/gm, "")
+		.replace(/["'""''«»]/g, "")
 		.trim();
 	if (!summary) return "";
 

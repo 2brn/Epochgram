@@ -8,10 +8,16 @@ describe("drop-cap lead boundary", () => {
 		expect(rest.startsWith(",")).toBe(true);
 	});
 
-	test("stops at stop-word after first content word", () => {
+	test("stops at stop-word from third word onward", () => {
 		const { prefix, rest } = splitLeadByStopWordsOrPunctuation("Payment Provider Checklist and Italy");
 		expect(prefix).toBe("Payment Provider Checklist");
 		expect(rest.startsWith("and ")).toBe(true);
+	});
+
+	test("does not stop on second-word stop-word", () => {
+		const { prefix, rest } = splitLeadByStopWordsOrPunctuation("Alpha and Beta");
+		expect(prefix).toBe("Alpha and Beta");
+		expect(rest).toBe("");
 	});
 
 	test("if first line has punctuation, prefers punctuation over stop-words", () => {

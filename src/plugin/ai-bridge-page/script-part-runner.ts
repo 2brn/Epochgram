@@ -172,31 +172,6 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 				const ctx = rendered && String(rendered).trim() ? rendered : (job && job.context ? job.context : "");
 				return ctx;
 			})();
-			try {
-				console.debug("[Epochgram bridge] summarize settings", {
-					job: {
-						id: job && job.id,
-						kind: job && job.kind,
-						filePath: job && job.filePath,
-						date: job && job.date,
-						reduce: !!(job && job.reduce),
-						reduceDepth: job && job.reduceDepth != null ? job.reduceDepth : null,
-						inputChars: (job && job.input ? String(job.input).length : 0)
-					},
-					settings: {
-						type: summarizerOpts.type,
-						length: summarizerOpts.length,
-						format: summarizerOpts.format,
-						preference: summarizerOpts.preference,
-						outputLanguage,
-						expectedInputLanguages,
-						expectedContextLanguages
-					},
-					sharedContext: summarizerOpts.sharedContext,
-					contextTemplate: summarizerOpts.jobSpecificContext,
-					context: perCallContext
-				});
-			} catch {}
 			const out = await retryUpTo3(async (attempt) => {
 				// After a failure, clear cached summarizers; Chrome can invalidate them.
 				if (attempt > 1) {

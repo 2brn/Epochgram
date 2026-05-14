@@ -133,21 +133,22 @@ export function buildEpochRows(args: EpochsSummaryRenderArgs): {
 	const padX = 0;
 
 	const rows: EpochRenderRow[] = [];
-	const fixLeadingCommaLines = (value: string[]): string[] => {
+	const fixLeadingPunctuationLines = (value: string[]): string[] => {
 		const lines = Array.isArray(value) ? value.slice() : [];
 		for (let i = 1; i < lines.length; i++) {
 			const prevRaw = String(lines[i - 1] ?? "");
 			const curRaw = String(lines[i] ?? "");
 			const prev = prevRaw.trimEnd();
 			const cur = curRaw.trimStart();
-			if (!cur.startsWith(",")) continue;
+			if (!/^[,.;:!?]+/.test(cur)) continue;
 
-			const m = cur.match(/^,+/);
-			const commas = m ? m[0] : ",";
-			const rest = cur.slice(commas.length).trimStart();
+			const m = cur.match(/^[,.;:!?]+/);
+			const punctuation = m ? m[0] : "";
+			if (!punctuation) continue;
+			const rest = cur.slice(punctuation.length).trimStart();
 			if (!prev.trim()) continue;
 
-			lines[i - 1] = prev + commas;
+			lines[i - 1] = prev + punctuation;
 			if (rest) {
 				lines[i] = rest;
 			} else {
@@ -325,7 +326,7 @@ export function buildEpochRows(args: EpochsSummaryRenderArgs): {
 				// ignore
 			}
 		}
-		lines = fixLeadingCommaLines(lines);
+		lines = fixLeadingPunctuationLines(lines);
 		ctx.restore();
 
 		let rowLine1Ascent = baseMetrics.ascent;
