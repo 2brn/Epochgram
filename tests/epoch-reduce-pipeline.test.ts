@@ -6,6 +6,56 @@ import { withTrustedPro } from "./helpers/trusted-pro";
 // Ensures epoch jobs can use the same chunk+reduce pipeline as file summaries.
 
 describe("epoch reduce pipeline", () => {
+	it("skips failed chunk and still enqueues reduce from successful chunks", () => {
+		const index: any = {};
+		const plugin: any = {
+			indexer: { index },
+			settings: { generateEpochs: true },
+			hasProAccess: () => true
+		};
+		withTrustedPro(plugin);
+
+		const enqueue = vi.fn();
+		plugin.aiBridge = { enqueue };
+
+		const bucket = "year";
+		const start = "2025-01-01";
+		const end = "2025-12-31";
+		const filePath = `epoch://${bucket}/${start}-${end}`;
+		const context = buildEpochContext(bucket as any, start, end);
+
+		const baseJob: any = {
+			filePath,
+			kind: "epoch",
+			date: start,
+			blockStart: 0,
+			blockEnd: 0,
+			source: "epoch",
+			inputHash: "h1",
+			epochBucket: bucket,
+			epochStart: start,
+			epochEnd: end,
+			context
+		};
+
+		handleBridgeResult(
+			plugin,
+			{ ...baseJob, id: "c0", groupId: "g1", chunkIndex: 0, chunkCount: 2 },
+			{ summary: "Chunk topic A" }
+		);
+		handleBridgeResult(
+			plugin,
+			{ ...baseJob, id: "c1", groupId: "g1", chunkIndex: 1, chunkCount: 2 },
+			{ error: "request failed" }
+		);
+
+		expect(enqueue).toHaveBeenCalledTimes(1);
+		const reduceJob = enqueue.mock.calls[0]?.[0]?.[0];
+		expect(reduceJob).toBeTruthy();
+		expect(reduceJob.reduce).toBe(true);
+		expect(String(reduceJob.input || "")).toContain("Chunk topic A");
+	});
+
 	it("enqueues a reduce job after chunked epoch parts complete, then stores final epoch", () => {
 		const index: any = {};
 		const plugin: any = {

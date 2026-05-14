@@ -2,7 +2,7 @@ import { Platform } from "obsidian";
 import type { EpochPlugin } from "../../main";
 import { buildAiBridgePageHtml } from "../ai-bridge-page";
 import { applyBridgeCorsHeaders, getQueryToken, readBody, safeJson, sendHtml } from "./http-helpers";
-import { sanitizeBridgeOptions, sanitizeBridgeServerState } from "./sanitize";
+import { sanitizeBridgeOptions, sanitizeBridgeServerState, validateBridgeOptionsYaml } from "./sanitize";
 import { estimateTokens } from "./tokens";
 import type { AiBridgeStatus, AiSummaryJob, AiSummaryJobResult } from "./types";
 
@@ -533,6 +533,32 @@ export class AiBridgeServer {
 						return;
 					}
 					safeJson(req, res, 405, { error: "method not allowed" });
+					return;
+				}
+
+				if (pathName === "/api/options/validate") {
+					if (req.method !== "POST") {
+						safeJson(req, res, 405, { error: "method not allowed" });
+						return;
+					}
+					const raw = await readBody(req);
+					let body: any = {};
+					try {
+						body = JSON.parse(raw || "{}");
+					} catch {
+						// ignore
+					}
+					if (!body || typeof body !== "object") body = {};
+					const checked = validateBridgeOptionsYaml(typeof body.settingsYaml === "string" ? body.settingsYaml : "");
+					safeJson(req, res, 200, {
+						ok: checked.valid,
+						errors: checked.errors,
+						warnings: checked.warnings,
+						formattedUserYaml: checked.formattedUserYaml,
+						formattedMergedYaml: checked.formattedMergedYaml,
+						resolved: checked.resolved,
+						stored: checked.stored
+					});
 					return;
 				}
 

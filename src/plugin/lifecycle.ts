@@ -285,6 +285,35 @@ export const lifecycleMethods: LifecycleMethods = {
 			}
 		});
 
+		this.addCommand({
+			id: "summarize-current",
+			name: "Summarize current file",
+			checkCallback: (checking: boolean) => {
+				try {
+					if (!hasAiBridgeAccess(this)) return false;
+					const file = this.app.workspace.getActiveFile();
+					if (!file) return false;
+					if (!this.shouldIndexFile(file)) return false;
+					if (!this.indexer.isFileKnown(file.path)) return false;
+					if (checking) return true;
+					if (!Platform.isDesktopApp) {
+						new Notice("AI summaries are available only on desktop.", 2500);
+						return true;
+					}
+					void wrapNoticeError("Epochgram: Summarize current file failed", async () => {
+						await (this as any).enqueueAiSummariesForFile?.(file.path, {
+							force: true,
+							showNotice: true,
+							enableIfDisabled: true
+						});
+					})();
+					return true;
+				} catch {
+					return false;
+				}
+			}
+		});
+
 		try {
 			const fileOpenRef = this.app.workspace.on("file-open", (file) => {
 				if (file) {

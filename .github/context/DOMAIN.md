@@ -281,6 +281,7 @@ Epoch (period) generation input (Verified)
 - Epoch input ordering is deterministic given the same vault metadata (but is not strictly newest-first).
 - Epoch generation includes **all** eligible input items for the epoch range (no “top N” truncation); attachments / non-text files are excluded.
 - When epoch input is large, jobs are chunked on **line boundaries** and then reduced (summaries-of-summaries) instead of truncating/clipping the input text.
+  - Initial chunk jobs are marked as reduce jobs with `reduceDepth: 0` so reduce-specific bridge settings/context are applied from the first chunk stage.
   - Reduce follow-ups are capped by `AI_REDUCE_MAX_DEPTH` (currently `4`) to bound queue fanout.
 - Day epoch AI inputs are derived from both:
   - the aggregated index (`indexer.index` date keys/entries), and
@@ -312,6 +313,7 @@ AI bridge startup behavior (Verified)
 - When there is queued/in-progress AI work and no client is connected, Epochgram requires an explicit user action (command/status-bar click) to open the bridge page in Chrome.
 - The bridge page delays auto-starting processing for ~3.5s and skips Summarizer detection during that startup grace period (to reduce Chrome crash risk if the tab is closed immediately).
 - The bridge page does not perform language detection.
+  - Bridge YAML language fields (`outputLanguage`, `expectedInputLanguages`, `expectedContextLanguages`) accept only `en`, `ja`, or `es`.
   - Summary options:
     - `summaryOutputLanguage` is user-selectable (default `en`; supported: `en`, `es`, `ja`) and is persisted in plugin settings via the bridge `/api/options` endpoint.
     - `summaryExpectedInputLanguages` is user-selectable (multi-select; supported: `en`, `es`, `ja`).
@@ -327,7 +329,10 @@ AI bridge startup behavior (Verified)
 - Epoch jobs (including epoch reduce stages) use `epochCtxTemplate` (there is no separate epoch-reduce template).
 - The bridge page supports context-template placeholders (substituted before sending `context` to Chrome Summarizer).
   - Summary jobs: `{{filePath}}`, `{{fileName}}`, `{{related}}`.
-  - Epoch jobs (including reduce stages): `{{related}}`, `{{bucket}}`.
+  - Epoch jobs (including reduce stages): `{{related}}`.
+- Context placeholders support double-brace syntax only (for example `{{filePath}}`); single-brace placeholders like `{filePath}` are rejected by YAML validation.
+- `{{bucket}}` is not supported and is rejected by YAML validation.
+- `sharedContext` is passed to `Summarizer.create(...)`, while per-job `context` is passed to `summarize(..., { context })`.
 - The bridge page’s Summary/Epoch context templates are empty by default.
 - “Reset to defaults” restores the built-in default context templates.
 - Built-in default context templates live in `src/plugin/ai-context-templates.ts`:

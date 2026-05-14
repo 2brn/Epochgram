@@ -716,6 +716,8 @@ export async function buildEpochJobsForDateKeys(
 			for (let i = 0; i < chunks.length; i++) {
 				jobs.push({
 					id: mkId(),
+					reduce: true,
+					reduceDepth: 0,
 					groupId,
 					chunkIndex: i,
 					chunkCount: chunks.length,

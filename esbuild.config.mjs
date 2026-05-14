@@ -19,6 +19,8 @@ const BRIDGE_FAVICON_VIRTUAL = "epochgram-bridge-favicon";
 
 const EPOCHGRAM_LOGO_FULL_SVG_FILE = path.join("images", "epochgram-logo-full.svg");
 const EPOCHGRAM_LOGO_FULL_VIRTUAL = "epochgram-logo-full";
+const BRIDGE_DEFAULT_SETTINGS_YAML_FILE = path.join("src", "plugin", "ai-bridge-page", "settings", "default-bridge-settings.yaml");
+const BRIDGE_DEFAULT_SETTINGS_YAML_VIRTUAL = "epochgram-bridge-default-settings-yaml";
 
 const bridgeFaviconInlinePlugin = {
 	name: "epochgram-bridge-favicon-inline",
@@ -59,6 +61,28 @@ const epochgramLogoFullInlinePlugin = {
 				contents: `export default ${JSON.stringify(svg)};`,
 				loader: "js",
 				watchFiles: [EPOCHGRAM_LOGO_FULL_SVG_FILE]
+			};
+		});
+	}
+};
+
+const bridgeDefaultSettingsYamlInlinePlugin = {
+	name: "epochgram-bridge-default-settings-yaml-inline",
+	setup(build) {
+		build.onResolve({ filter: /^epochgram-bridge-default-settings-yaml$/ }, () => {
+			return { path: BRIDGE_DEFAULT_SETTINGS_YAML_VIRTUAL, namespace: "epochgram-bridge-default-settings-yaml-inline" };
+		});
+		build.onLoad({ filter: /.*/, namespace: "epochgram-bridge-default-settings-yaml-inline" }, async () => {
+			let yamlText = "";
+			try {
+				yamlText = await fs.promises.readFile(BRIDGE_DEFAULT_SETTINGS_YAML_FILE, "utf8");
+			} catch {
+				yamlText = "";
+			}
+			return {
+				contents: `export default ${JSON.stringify(yamlText)};`,
+				loader: "js",
+				watchFiles: [BRIDGE_DEFAULT_SETTINGS_YAML_FILE]
 			};
 		});
 	}
@@ -127,7 +151,8 @@ const pluginContext = await esbuild.context({
 			}
 		}),
 		bridgeFaviconInlinePlugin,
-		epochgramLogoFullInlinePlugin
+		epochgramLogoFullInlinePlugin,
+		bridgeDefaultSettingsYamlInlinePlugin
 	],
 	outfile: "main.js",
 	minify: false,

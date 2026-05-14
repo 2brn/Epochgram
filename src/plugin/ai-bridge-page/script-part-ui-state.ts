@@ -8,38 +8,165 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 
 	function makeDefaultOptionsState() {
 		return {
-			summaryCtxTemplate: DEFAULTS.summaryCtxTemplate,
-			epochCtxTemplate: DEFAULTS.epochCtxTemplate,
-			summaryOutputLanguage: "en",
-			summaryExpectedInputLanguages: ["en", "ja", "es"],
-			summaryExpectedContextLanguages: ["en"],
-			summaryType: "headline",
-			summaryLength: "long",
-			epochOutputLanguage: "en",
-			epochExpectedInputLanguages: ["en", "ja", "es"],
-			epochExpectedContextLanguages: ["en"],
-			epochType: "key-points",
-			epochLength: "short"
+			settingsYaml: String(BUILTIN_DEFAULTS && BUILTIN_DEFAULTS.settingsYaml ? BUILTIN_DEFAULTS.settingsYaml : ""),
+			settingsYamlFormatted: "",
+			resolved: null
 		};
 	}
 
-	function safeArray(raw) {
-		return Array.isArray(raw) ? raw : null;
+	function escapeHtml(raw) {
+		return String(raw || "")
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;");
 	}
 
-	function normalizeSupportedLanguageList(raw, fallbackArr) {
-		const arr = safeArray(raw) || (typeof raw === "string" && raw ? [raw] : []);
+	function renderYamlHighlight(yamlText) {
+		if (!settingsYamlHighlightEl) return;
+		const src = String(yamlText || "");
+		const lines = src.split("\n");
 		const out = [];
-		const seen = new Set();
-		for (const item of arr) {
-			const n = normalizeSupportedLanguage(item);
-			if (seen.has(n)) continue;
-			seen.add(n);
-			out.push(n);
+		for (const ln of lines) {
+			let line = escapeHtml(ln);
+			line = line.replace(/(^|\s)(#.*$)/, "$1<span class=\"yamlComment\">$2</span>");
+			line = line.replace(/^(\s*-\s*)([A-Za-z_][\w-]*)(\s*:)/, "$1<span class=\"yamlKey\">$2</span>$3");
+			line = line.replace(/^(\s*)([A-Za-z_][\w-]*)(\s*:)/, "$1<span class=\"yamlKey\">$2</span>$3");
+			line = line.replace(/(\|\s*)$/, "<span class=\"yamlPipe\">$1</span>");
+			line = line.replace(/(:\s*)([^#\n][^\n]*)$/, (m, a, b) => {
+				const v = String(b || "");
+				if (!v.trim()) return m;
+				return a + "<span class=\"yamlString\">" + v + "</span>";
+			});
+			out.push(line);
 		}
-		if (out.length) return out;
-		const fb = Array.isArray(fallbackArr) && fallbackArr.length ? fallbackArr : ["en"];
-		return normalizeSupportedLanguageList(fb, ["en"]);
+		settingsYamlHighlightEl.innerHTML = out.join("\n") + "\n";
+	}
+
+	function setYamlValidationState(ok, errors, warnings) {
+		const hasErrors = !ok && Array.isArray(errors) && errors.length > 0;
+		if (settingsPanelEl && settingsPanelEl.classList) {
+			if (hasErrors) settingsPanelEl.classList.add("invalid");
+			else settingsPanelEl.classList.remove("invalid");
+		}
+		if (settingsErrorsEl) {
+			let message = "";
+			if (Array.isArray(errors) && errors.length > 0) {
+				message = String(errors[0] || "").split(/\r?\n/)[0] || "";
+			} else if (Array.isArray(warnings) && warnings.length > 0) {
+				message = "warning: " + (String(warnings[0] || "").split(/\r?\n/)[0] || "");
+			}
+			settingsErrorsEl.textContent = message;
+		}
+	}
+
+	async function validateSettingsYaml(yamlText) {
+		try {
+			return await post("options/validate", { settingsYaml: String(yamlText || "") });
+		} catch (e) {
+			return {
+				ok: false,
+				errors: [String(e && e.message ? e.message : e)],
+				warnings: [],
+				formattedUserYaml: String(yamlText || "")
+			};
+		}
+	}
+
+	function normalizeOptionsState(raw) {
+		const state = makeDefaultOptionsState();
+		if (!raw || typeof raw !== "object") return state;
+		if (typeof raw.settingsYaml === "string") state.settingsYaml = raw.settingsYaml;
+		if (typeof raw.settingsYamlFormatted === "string") state.settingsYamlFormatted = raw.settingsYamlFormatted;
+		if (raw.resolved && typeof raw.resolved === "object") state.resolved = raw.resolved;
+		return state;
+	}
+
+	function mergeOptionsState(localRaw, savedRaw) {
+		const local = normalizeOptionsState(localRaw);
+		const saved = normalizeOptionsState(savedRaw);
+		const d = makeDefaultOptionsState();
+		const settingsYaml = String(
+			(saved && typeof saved.settingsYaml === "string" && saved.settingsYaml.trim())
+				? saved.settingsYaml
+				: (local && typeof local.settingsYaml === "string" && local.settingsYaml.trim())
+					? local.settingsYaml
+					: d.settingsYaml
+		);
+		return normalizeOptionsState({
+			settingsYaml,
+			settingsYamlFormatted: typeof saved.settingsYamlFormatted === "string" ? saved.settingsYamlFormatted : "",
+			resolved: saved.resolved || local.resolved || null
+		});
+	}
+
+	function loadOptionsState() {
+		const raw = safeGetLocalStorage(OPTS_KEY);
+		if (raw) {
+			try {
+				return normalizeOptionsState(JSON.parse(raw));
+			} catch {
+				return makeDefaultOptionsState();
+			}
+		}
+		return makeDefaultOptionsState();
+	}
+
+	function writeOptionsState(state) {
+		safeSetLocalStorage(OPTS_KEY, JSON.stringify(state || makeDefaultOptionsState()));
+	}
+
+	function readOptionsFromUi() {
+		return {
+			settingsYaml: String(settingsYamlEl && settingsYamlEl.value != null ? settingsYamlEl.value : "")
+		};
+	}
+
+	function applyOptionsStateToUi(state) {
+		optionsState = normalizeOptionsState(state);
+		if (settingsYamlEl) settingsYamlEl.value = String(optionsState.settingsYaml || "");
+		renderYamlHighlight(String(optionsState.settingsYaml || ""));
+	}
+
+	function syncYamlOverlayScroll() {
+		try {
+			if (!settingsYamlEl || !settingsYamlHighlightEl) return;
+			settingsYamlHighlightEl.scrollTop = settingsYamlEl.scrollTop;
+			settingsYamlHighlightEl.scrollLeft = settingsYamlEl.scrollLeft;
+		} catch {
+			// ignore
+		}
+	}
+
+	async function validateAndPersistYaml(options) {
+		const opts = options || {};
+		const shouldPersist = opts.persist !== false;
+		const shouldFormat = opts.format === true;
+		const yamlText = String(settingsYamlEl && settingsYamlEl.value != null ? settingsYamlEl.value : "");
+		const result = await validateSettingsYaml(yamlText);
+		const ok = !!(result && result.ok === true);
+		setYamlValidationState(ok, result && result.errors ? result.errors : [], result && result.warnings ? result.warnings : []);
+		if (!ok) return null;
+		const nextYaml = yamlText;
+		renderYamlHighlight(nextYaml);
+		syncYamlOverlayScroll();
+		const nextState = normalizeOptionsState({
+			settingsYaml: nextYaml,
+			settingsYamlFormatted: typeof result.formattedUserYaml === "string" ? result.formattedUserYaml : "",
+			resolved: result && result.resolved ? result.resolved : null
+		});
+		optionsState = nextState;
+		if (shouldPersist) {
+			writeOptionsState(nextState);
+			void postSavedOptionsToObsidian({ settingsYaml: nextState.settingsYaml });
+		}
+		return result;
+	}
+
+	function normalizeEpochBucket(raw) {
+		const v = String(raw || "").trim().toLowerCase();
+		if (v === "3month") return "3months";
+		if (v === "6month") return "6months";
+		return v;
 	}
 
 	function normalizeSummarizerType(raw) {
@@ -51,144 +178,100 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 	function normalizeSummarizerLength(raw) {
 		const v = typeof raw === "string" ? raw : "";
 		if (v === "short" || v === "medium" || v === "long") return v;
-		return "long";
+		return "short";
 	}
 
-	function readMultiSelectValues(el) {
-		try {
-			if (!el) return [];
-			const out = [];
-			const opts = el.selectedOptions ? Array.from(el.selectedOptions) : [];
-			for (const o of opts) {
-				if (!o || o.value == null) continue;
-				out.push(String(o.value));
-			}
-			return out;
-		} catch {
-			return [];
+	function normalizeSummarizerPreference(raw) {
+		const v = typeof raw === "string" ? raw : "";
+		if (v === "auto" || v === "speed" || v === "capability") return v;
+		return "auto";
+	}
+
+	function periodCoversBucket(period, bucket) {
+		const order = ["day", "2days", "week", "2weeks", "month", "3months", "6months", "year"];
+		const normalizedBucket = normalizeEpochBucket(bucket);
+		const idx = order.indexOf(normalizedBucket);
+		if (idx < 0) return false;
+		const p = String(period || "").trim().toLowerCase();
+		if (!p) return false;
+		if (!p.includes("-")) return normalizeEpochBucket(p) === normalizedBucket;
+		const pair = p.split("-");
+		if (pair.length !== 2) return false;
+		const a = order.indexOf(normalizeEpochBucket(pair[0]));
+		const b = order.indexOf(normalizeEpochBucket(pair[1]));
+		if (a < 0 || b < 0 || a > b) return false;
+		return idx >= a && idx <= b;
+	}
+
+	function mergeSettingsBlock(base, override) {
+		const out = Object.assign({}, base || {});
+		if (!override || typeof override !== "object") return out;
+		for (const key of ["type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages", "context"]) {
+			if (override[key] != null) out[key] = override[key];
 		}
+		return out;
 	}
 
-	function setMultiSelectValues(el, values) {
-		try {
-			if (!el) return;
-			const set = new Set(Array.isArray(values) ? values.map(v => String(v)) : []);
-			for (const opt of Array.from(el.options || [])) {
-				try { opt.selected = set.has(String(opt.value)); } catch {}
-			}
-		} catch {
-		}
-	}
-
-	function normalizeOptionsState(raw) {
-		const state = makeDefaultOptionsState();
-		if (!raw || typeof raw !== "object") return state;
-		if (typeof raw.summaryCtxTemplate === "string") state.summaryCtxTemplate = raw.summaryCtxTemplate;
-		if (typeof raw.epochCtxTemplate === "string") state.epochCtxTemplate = raw.epochCtxTemplate;
-		if (typeof raw.summaryOutputLanguage === "string") state.summaryOutputLanguage = raw.summaryOutputLanguage;
-		if (raw.summaryExpectedInputLanguages != null) state.summaryExpectedInputLanguages = raw.summaryExpectedInputLanguages;
-		if (raw.summaryExpectedContextLanguages != null) state.summaryExpectedContextLanguages = raw.summaryExpectedContextLanguages;
-		if (typeof raw.summaryType === "string") state.summaryType = raw.summaryType;
-		if (typeof raw.summaryLength === "string") state.summaryLength = raw.summaryLength;
-		if (typeof raw.epochOutputLanguage === "string") state.epochOutputLanguage = raw.epochOutputLanguage;
-		if (raw.epochExpectedInputLanguages != null) state.epochExpectedInputLanguages = raw.epochExpectedInputLanguages;
-		if (raw.epochExpectedContextLanguages != null) state.epochExpectedContextLanguages = raw.epochExpectedContextLanguages;
-		if (typeof raw.epochType === "string") state.epochType = raw.epochType;
-		if (typeof raw.epochLength === "string") state.epochLength = raw.epochLength;
-		try {
-			state.summaryOutputLanguage = normalizeSupportedLanguage(state.summaryOutputLanguage);
-			state.summaryExpectedInputLanguages = normalizeSupportedLanguageList(state.summaryExpectedInputLanguages, ["en", "ja", "es"]);
-			state.summaryExpectedContextLanguages = normalizeSupportedLanguageList(state.summaryExpectedContextLanguages, ["en"]);
-			state.summaryType = normalizeSummarizerType(state.summaryType);
-			state.summaryLength = normalizeSummarizerLength(state.summaryLength);
-			state.epochOutputLanguage = normalizeSupportedLanguage(state.epochOutputLanguage);
-			state.epochExpectedInputLanguages = normalizeSupportedLanguageList(state.epochExpectedInputLanguages, ["en", "ja", "es"]);
-			state.epochExpectedContextLanguages = normalizeSupportedLanguageList(state.epochExpectedContextLanguages, ["en"]);
-			state.epochType = normalizeSummarizerType(state.epochType);
-			state.epochLength = normalizeSummarizerLength(state.epochLength);
-		} catch {}
-		return state;
-	}
-
-	function mergeOptionsState(localRaw, savedRaw) {
-		const out = makeDefaultOptionsState();
-		const apply = (raw) => {
-			if (!raw || typeof raw !== "object") return;
-			if (typeof raw.summaryCtxTemplate === "string") out.summaryCtxTemplate = raw.summaryCtxTemplate;
-			if (typeof raw.epochCtxTemplate === "string") out.epochCtxTemplate = raw.epochCtxTemplate;
-			if (typeof raw.summaryOutputLanguage === "string") out.summaryOutputLanguage = raw.summaryOutputLanguage;
-			if (raw.summaryExpectedInputLanguages != null) out.summaryExpectedInputLanguages = raw.summaryExpectedInputLanguages;
-			if (raw.summaryExpectedContextLanguages != null) out.summaryExpectedContextLanguages = raw.summaryExpectedContextLanguages;
-			if (typeof raw.summaryType === "string") out.summaryType = raw.summaryType;
-			if (typeof raw.summaryLength === "string") out.summaryLength = raw.summaryLength;
-			if (typeof raw.epochOutputLanguage === "string") out.epochOutputLanguage = raw.epochOutputLanguage;
-			if (raw.epochExpectedInputLanguages != null) out.epochExpectedInputLanguages = raw.epochExpectedInputLanguages;
-			if (raw.epochExpectedContextLanguages != null) out.epochExpectedContextLanguages = raw.epochExpectedContextLanguages;
-			if (typeof raw.epochType === "string") out.epochType = raw.epochType;
-			if (typeof raw.epochLength === "string") out.epochLength = raw.epochLength;
+	function buildBridgeSettingsForJob(job) {
+		if (!optionsState) optionsState = loadOptionsState();
+		const resolved = optionsState && optionsState.resolved && typeof optionsState.resolved === "object" ? optionsState.resolved : null;
+		const root = resolved || {
+			type: "headline",
+			format: "plain-text",
+			length: "short",
+			preference: "auto",
+			expectedInputLanguages: ["en", "ja", "es"],
+			outputLanguage: "en",
+			expectedContextLanguages: ["en"],
+			sharedContext: "",
+			epochs: []
 		};
-		apply(localRaw);
-		apply(savedRaw);
-		return normalizeOptionsState(out);
-	}
+		let merged = mergeSettingsBlock(root, null);
+		let contextTemplate = "";
+		const isEpoch = !!(job && job.kind === "epoch");
+		const isReduce = !!(job && job.reduce === true);
+		const chunkCount = Number(job && job.chunkCount != null ? job.chunkCount : 0);
+		const isIntermediateReduce = isReduce && !!(job && job.groupId) && Number.isFinite(chunkCount) && chunkCount > 1;
 
-	function loadOptionsState() {
-		const raw = safeGetLocalStorage(OPTS_KEY);
-		if (raw) {
-			try {
-				return normalizeOptionsState(JSON.parse(raw));
-			} catch {
-				return normalizeOptionsState(null);
+		if (isIntermediateReduce && root.reduce) {
+			merged = mergeSettingsBlock(merged, root.reduce);
+			contextTemplate = String(root.reduce.context || "");
+			const d = Number(job && job.reduceDepth != null ? job.reduceDepth : 0);
+			contextTemplate = contextTemplate.replace(/\{\{reduceDepth\}\}/g, String(Number.isFinite(d) ? d : 0));
+		} else if (isEpoch) {
+			const bucket = normalizeEpochBucket(job && (job.epochBucket || job.bucket));
+			const rules = Array.isArray(root.epochs) ? root.epochs : [];
+			for (const r of rules) {
+				if (!r || typeof r !== "object") continue;
+				if (!periodCoversBucket(r.period, bucket)) continue;
+				merged = mergeSettingsBlock(merged, r);
+				contextTemplate = typeof r.context === "string" ? r.context : contextTemplate;
+				break;
 			}
+		} else if (root.records) {
+			merged = mergeSettingsBlock(merged, root.records);
+			contextTemplate = String(root.records.context || "");
 		}
 
-		return normalizeOptionsState(null);
-	}
+		const sharedContext = String(root.sharedContext || "").trim();
+		const jobSpecificContext = String(contextTemplate || "").trim();
 
-	function writeOptionsState(state) {
-		safeSetLocalStorage(OPTS_KEY, JSON.stringify(state));
-	}
-
-	function readOptionsFromUi() {
 		return {
-			summaryCtxTemplate: String(ctxTplSummariesEl && ctxTplSummariesEl.value != null ? ctxTplSummariesEl.value : ""),
-			epochCtxTemplate: String(ctxTplEpochsEl && ctxTplEpochsEl.value != null ? ctxTplEpochsEl.value : ""),
-			summaryOutputLanguage: String(summaryOutputLanguageEl && summaryOutputLanguageEl.value != null ? summaryOutputLanguageEl.value : "en"),
-			summaryExpectedInputLanguages: readMultiSelectValues(summaryExpectedInputLanguagesEl),
-			summaryExpectedContextLanguages: readMultiSelectValues(summaryExpectedContextLanguagesEl),
-			summaryType: String(summaryTypeEl && summaryTypeEl.value != null ? summaryTypeEl.value : "headline"),
-			summaryLength: String(summaryLengthEl && summaryLengthEl.value != null ? summaryLengthEl.value : "long"),
-			epochOutputLanguage: String(epochOutputLanguageEl && epochOutputLanguageEl.value != null ? epochOutputLanguageEl.value : "en"),
-			epochExpectedInputLanguages: readMultiSelectValues(epochExpectedInputLanguagesEl),
-			epochExpectedContextLanguages: readMultiSelectValues(epochExpectedContextLanguagesEl),
-			epochType: String(epochTypeEl && epochTypeEl.value != null ? epochTypeEl.value : "headline"),
-			epochLength: String(epochLengthEl && epochLengthEl.value != null ? epochLengthEl.value : "long")
+			type: normalizeSummarizerType(merged.type),
+			format: (String(merged.format || "plain-text") === "markdown" ? "markdown" : "plain-text"),
+			length: normalizeSummarizerLength(merged.length),
+			preference: normalizeSummarizerPreference(merged.preference),
+			outputLanguage: normalizeSupportedLanguage(merged.outputLanguage),
+			expectedInputLanguages: normalizeSupportedLanguageList(merged.expectedInputLanguages, ["en", "ja", "es"]),
+			expectedContextLanguages: normalizeSupportedLanguageList(merged.expectedContextLanguages, ["en"]),
+			sharedContext,
+			jobSpecificContext
 		};
-	}
-
-	function applyOptionsStateToUi(state) {
-		optionsState = normalizeOptionsState(state);
-		if (ctxTplSummariesEl) ctxTplSummariesEl.value = optionsState.summaryCtxTemplate;
-		if (ctxTplEpochsEl) ctxTplEpochsEl.value = optionsState.epochCtxTemplate;
-		if (summaryTypeEl) summaryTypeEl.value = normalizeSummarizerType(optionsState.summaryType);
-		if (summaryLengthEl) summaryLengthEl.value = normalizeSummarizerLength(optionsState.summaryLength);
-		if (summaryOutputLanguageEl) summaryOutputLanguageEl.value = normalizeSupportedLanguage(optionsState.summaryOutputLanguage);
-		setMultiSelectValues(summaryExpectedInputLanguagesEl, normalizeSupportedLanguageList(optionsState.summaryExpectedInputLanguages, ["en", "ja", "es"]));
-		setMultiSelectValues(summaryExpectedContextLanguagesEl, normalizeSupportedLanguageList(optionsState.summaryExpectedContextLanguages, ["en"]));
-		if (epochTypeEl) epochTypeEl.value = normalizeSummarizerType(optionsState.epochType);
-		if (epochLengthEl) epochLengthEl.value = normalizeSummarizerLength(optionsState.epochLength);
-		if (epochOutputLanguageEl) epochOutputLanguageEl.value = normalizeSupportedLanguage(optionsState.epochOutputLanguage);
-		setMultiSelectValues(epochExpectedInputLanguagesEl, normalizeSupportedLanguageList(optionsState.epochExpectedInputLanguages, ["en", "ja", "es"]));
-		setMultiSelectValues(epochExpectedContextLanguagesEl, normalizeSupportedLanguageList(optionsState.epochExpectedContextLanguages, ["en"]));
 	}
 
 	function pickTemplatesForJob(job) {
-		if (!optionsState) optionsState = loadOptionsState();
-		const isEpoch = job && job.kind === "epoch";
-		const perCallTemplate = isEpoch
-			? optionsState.epochCtxTemplate
-			: optionsState.summaryCtxTemplate;
-		return { perCallTemplate };
+		const s = buildBridgeSettingsForJob(job);
+		return { perCallTemplate: s.jobSpecificContext || "" };
 	}
 
 	function safeStringify(obj, maxLen) {
@@ -239,64 +322,71 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 
 	async function postSavedOptionsToObsidian(o) {
 		try {
-			await post("options", o);
+			const payload = {
+				settingsYaml: String(o && typeof o.settingsYaml === "string" ? o.settingsYaml : "")
+			};
+			await post("options", payload);
 		} catch {
 		}
 	}
 
 	function wireOptionsPersistence() {
-		const save = () => {
-			if (!optionsState) optionsState = loadOptionsState();
-			const next = readOptionsFromUi();
-			optionsState = normalizeOptionsState(next);
-			writeOptionsState(optionsState);
-			if (optionsSaveTimer) {
-				try { window.clearTimeout(optionsSaveTimer); } catch {}
-				optionsSaveTimer = 0;
+		if (!settingsYamlEl) return;
+		const queueValidate = () => {
+			renderYamlHighlight(String(settingsYamlEl.value || ""));
+			syncYamlOverlayScroll();
+			if (optionsValidationTimer) {
+				try { window.clearTimeout(optionsValidationTimer); } catch {}
+				optionsValidationTimer = 0;
 			}
-			optionsSaveTimer = window.setTimeout(() => {
-				optionsSaveTimer = 0;
-				void postSavedOptionsToObsidian(optionsState);
-			}, 450);
+			optionsValidationTimer = window.setTimeout(() => {
+				optionsValidationTimer = 0;
+				void validateAndPersistYaml({ persist: true, format: false });
+			}, 260);
 		};
-		const els = [
-			ctxTplSummariesEl,
-			ctxTplEpochsEl,
-			summaryTypeEl,
-			summaryLengthEl,
-			summaryOutputLanguageEl,
-			summaryExpectedInputLanguagesEl,
-			summaryExpectedContextLanguagesEl,
-			epochTypeEl,
-			epochLengthEl,
-			epochOutputLanguageEl,
-			epochExpectedInputLanguagesEl,
-			epochExpectedContextLanguagesEl
-		].filter(Boolean);
-		for (const el of els) {
-			try { el.addEventListener("change", save); } catch {}
-			try { el.addEventListener("input", save); } catch {}
-		}
+		try {
+			settingsYamlEl.addEventListener("keydown", (e) => {
+				if (e.key !== "Enter") return;
+				const el = settingsYamlEl;
+				const start = el.selectionStart ?? 0;
+				const end = el.selectionEnd ?? start;
+				const val = el.value;
+				const wasAtEnd = start === val.length && end === val.length;
+				const lineStart = val.lastIndexOf("\n", start - 1) + 1;
+				const lineEndRaw = val.indexOf("\n", start);
+				const lineEnd = lineEndRaw >= 0 ? lineEndRaw : val.length;
+				const lineText = val.slice(lineStart, lineEnd);
+				const beforeCaret = val.slice(lineStart, start);
+				const indentFromLine = lineText.match(/^(\s*)/)?.[1] ?? "";
+				const indent = /^\s*$/.test(beforeCaret) ? beforeCaret : indentFromLine;
+				const trimmed = beforeCaret.trimEnd();
+				const extraIndent = /(?:^|\s)-\s*$|:\s*$|[|>][-+]?\s*$/.test(trimmed) ? "  " : "";
+				e.preventDefault();
+				const insert = "\n" + indent + extraIndent;
+				el.value = val.slice(0, start) + insert + val.slice(end);
+				el.selectionStart = el.selectionEnd = start + insert.length;
+				if (wasAtEnd) {
+					try {
+						el.scrollTop = el.scrollHeight;
+					} catch {}
+				}
+				queueValidate();
+			});
+		} catch {}
+		try { settingsYamlEl.addEventListener("input", queueValidate); } catch {}
+		try { settingsYamlEl.addEventListener("scroll", syncYamlOverlayScroll); } catch {}
+		try {
+			settingsYamlEl.addEventListener("blur", () => {
+				void validateAndPersistYaml({ persist: true, format: true });
+			});
+		} catch {}
 	}
 
 	if (resetDefaultsBtn) {
 		resetDefaultsBtn.addEventListener("click", () => {
-			if (!optionsState) optionsState = loadOptionsState();
 			const d = makeDefaultOptionsState();
-			try {
-				// Keep the bridge page empty-by-default on first load, but allow the
-				// Reset button to restore the built-in defaults.
-				if (typeof BUILTIN_DEFAULTS === "object" && BUILTIN_DEFAULTS) {
-					if (typeof BUILTIN_DEFAULTS.summaryCtxTemplate === "string") d.summaryCtxTemplate = BUILTIN_DEFAULTS.summaryCtxTemplate;
-					if (typeof BUILTIN_DEFAULTS.epochCtxTemplate === "string") d.epochCtxTemplate = BUILTIN_DEFAULTS.epochCtxTemplate;
-				}
-			} catch {
-				// ignore
-			}
-			optionsState = d;
 			applyOptionsStateToUi(d);
-			writeOptionsState(d);
-			void postSavedOptionsToObsidian(d);
+			void validateAndPersistYaml({ persist: true, format: true });
 		});
 	}
 

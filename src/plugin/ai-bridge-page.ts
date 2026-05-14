@@ -1,8 +1,7 @@
 import bridgeFaviconSvg from "epochgram-bridge-favicon";
 
 import epochgramLogoFullSvg from "epochgram-logo-full";
-
-import { DEFAULT_EPOCH_CONTEXT_TEMPLATE, DEFAULT_SUMMARY_CONTEXT_TEMPLATE } from "./ai-context-templates";
+import defaultBridgeSettingsYaml from "epochgram-bridge-default-settings-yaml";
 
 import { AI_BRIDGE_SCRIPT_PART1 } from "./ai-bridge-page/script-part-ui";
 import { AI_BRIDGE_SCRIPT_PART2 } from "./ai-bridge-page/script-part-detect";
@@ -49,20 +48,21 @@ export function buildAiBridgePageHtml(token: string): string {
 		#sumResult { width: 100%; overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0; }
 		#curText { width: 100%; overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0; }
 		#err { max-height: 10vh; overflow-y: auto; }
-		#ctxTplSummaries { height: 140px; min-height: 140px; }
-		#ctxTplEpochs { height: 140px; min-height: 140px; }
 		.small { font-size: 12px; }
 		.danger { border-color: #ff8a8a !important; color: #ff8a8a !important; }
 		.cardFill { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 0; }
-		.ctxFields { display: flex; flex-direction: column; gap: 10px; flex: 0 0 auto; min-height: 0; }
-		.ctxField { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; min-height: 0; min-width: 0; }
 		.statusBoxes { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
 		.statusGrow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-		.optRow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: start; }
-		.optField { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-		.optField select { width: 100%; min-width: 0; }
-		.optField select { height: 34px; }
-		.optField select[multiple] { height: 34px; }
+		.settingsEditorWrap { position: relative; flex: 1; min-height: 200px; overflow: hidden; border-radius: 8px; background: #171717; }
+		.settingsEditorWrap.invalid { box-shadow: 0 0 0 1px rgba(255, 138, 138, 0.8) inset; }
+		.settingsYamlHighlight { position: absolute; inset: 0; margin: 0; pointer-events: none; white-space: pre; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 1.45; padding: 10px; color: #b8b8b8; overflow: hidden; }
+		.settingsYamlInput { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 8px; background: transparent; color: transparent; caret-color: #d4d4d4; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 1.45; resize: none; padding: 10px; white-space: pre; overflow-y: auto; overflow-x: auto; }
+		.settingsYamlInput:focus { outline: none; }
+		.yamlKey { color: #9cdcfe; }
+		.yamlPipe { color: #c586c0; }
+		.yamlComment { color: #6a9955; }
+		.yamlString { color: #ce9178; }
+		.settingsErrors { margin-top: 8px; color: #ff8a8a; white-space: pre-wrap; }
   </style>
 </head>
 <body>
@@ -100,110 +100,12 @@ export function buildAiBridgePageHtml(token: string): string {
     </div>
 
 		<div class="card optionsCard">
-			<div style="margin-bottom: 10px;" class="box cardFill">
-				<div style="margin-bottom: 10px;"><strong>Summary</strong></div>
-				<div class="optRow" style="margin-bottom: 10px;">
-					<div class="optField">
-						<div class="muted">Type</div>
-						<select id="summaryType" class="mono">
-							<option value="tldr">TL;DR</option>
-							<option value="teaser">Teaser</option>
-							<option value="key-points">Key points</option>
-							<option value="headline">Headline</option>
-						</select>
-					</div>
-					<div class="optField">
-						<div class="muted">Length</div>
-						<select id="summaryLength" class="mono">
-							<option value="short">Short</option>
-							<option value="medium">Medium</option>
-							<option value="long">Long</option>
-						</select>
-					</div>
-					<div class="optField">
-						<div class="muted">Output language</div>
-						<select id="summaryOutputLanguage" class="mono">
-							<option value="en">English (en)</option>
-							<option value="es">Spanish (es)</option>
-							<option value="ja">Japanese (ja)</option>
-						</select>
-					</div>
-					<div class="optField">
-						<div class="muted">Input languages</div>
-						<select id="summaryExpectedInputLanguages" class="mono" multiple>
-							<option value="en">English (en)</option>
-							<option value="es">Spanish (es)</option>
-							<option value="ja">Japanese (ja)</option>
-						</select>
-					</div>
-					<div class="optField">
-						<div class="muted">Context languages</div>
-						<select id="summaryExpectedContextLanguages" class="mono" multiple>
-							<option value="en">English (en)</option>
-							<option value="es">Spanish (es)</option>
-							<option value="ja">Japanese (ja)</option>
-						</select>
-					</div>
-				</div>
-				<div class="muted mono small wrap" style="margin-top: 8px;">Context placeholders: {{filePath}} {{fileName}} {{related}}</div>
-				<div class="ctxFields" style="margin-top: 10px;">
-					<div class="ctxField">
-						<textarea id="ctxTplSummaries" class="mono" spellcheck="false"></textarea>
-					</div>
-				</div>
+			<div style="margin-bottom: 8px;"><strong>Settings</strong></div>
+			<div class="settingsEditorWrap" id="settingsPanel" style="margin-top: 8px;">
+				<pre id="settingsYamlHighlight" class="settingsYamlHighlight"></pre>
+				<textarea id="settingsYaml" class="settingsYamlInput" spellcheck="false"></textarea>
 			</div>
-			<div style="margin-bottom: 10px;" class="box cardFill">
-				<div style="margin-bottom: 10px;"><strong>Epoch</strong></div>
-				<div class="optRow" style="margin-bottom: 10px;">
-					<div class="optField">
-						<div class="muted">Type</div>
-						<select id="epochType" class="mono">
-							<option value="tldr">TL;DR</option>
-							<option value="teaser">Teaser</option>
-							<option value="key-points">Key points</option>
-							<option value="headline">Headline</option>
-						</select>
-					</div>
-					<div class="optField">
-						<div class="muted">Length</div>
-						<select id="epochLength" class="mono">
-							<option value="short">Short</option>
-							<option value="medium">Medium</option>
-							<option value="long">Long</option>
-						</select>
-					</div>
-					<div class="optField">
-						<div class="muted">Output language</div>
-						<select id="epochOutputLanguage" class="mono">
-							<option value="en">English (en)</option>
-							<option value="es">Spanish (es)</option>
-							<option value="ja">Japanese (ja)</option>
-						</select>
-					</div>
-					<div class="optField">
-						<div class="muted">Input languages</div>
-						<select id="epochExpectedInputLanguages" class="mono" multiple>
-							<option value="en">English (en)</option>
-							<option value="es">Spanish (es)</option>
-							<option value="ja">Japanese (ja)</option>
-						</select>
-					</div>
-					<div class="optField">
-						<div class="muted">Context languages</div>
-						<select id="epochExpectedContextLanguages" class="mono" multiple>
-							<option value="en">English (en)</option>
-							<option value="es">Spanish (es)</option>
-							<option value="ja">Japanese (ja)</option>
-						</select>
-					</div>
-				</div>
-				<div class="muted mono small wrap" style="margin-top: 8px;">Context placeholders: {{bucket}} {{related}}</div>
-				<div class="ctxFields" style="margin-top: 10px;">
-					<div class="ctxField">
-						<textarea id="ctxTplEpochs" class="mono" spellcheck="false"></textarea>
-					</div>
-				</div>
-			</div>
+			<div id="settingsErrors" class="settingsErrors mono"></div>
 			<div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
 				<button id="resetDefaults" type="button">Reset to defaults</button>
 			</div>
@@ -236,18 +138,10 @@ export function buildAiBridgePageHtml(token: string): string {
 	const sumResultEl = $("sumResult");
 	const errEl = $("err");
 	const clearQueueBtn = $("clearQueue");
-	const summaryTypeEl = $("summaryType");
-	const summaryLengthEl = $("summaryLength");
-	const summaryOutputLanguageEl = $("summaryOutputLanguage");
-	const summaryExpectedInputLanguagesEl = $("summaryExpectedInputLanguages");
-	const summaryExpectedContextLanguagesEl = $("summaryExpectedContextLanguages");
-	const epochTypeEl = $("epochType");
-	const epochLengthEl = $("epochLength");
-	const epochOutputLanguageEl = $("epochOutputLanguage");
-	const epochExpectedInputLanguagesEl = $("epochExpectedInputLanguages");
-	const epochExpectedContextLanguagesEl = $("epochExpectedContextLanguages");
-	const ctxTplSummariesEl = $("ctxTplSummaries");
-	const ctxTplEpochsEl = $("ctxTplEpochs");
+	const settingsPanelEl = $("settingsPanel");
+	const settingsYamlEl = $("settingsYaml");
+	const settingsYamlHighlightEl = $("settingsYamlHighlight");
+	const settingsErrorsEl = $("settingsErrors");
 	const resetDefaultsBtn = $("resetDefaults");
 	const chart = $("chart");
 	const chartCtx = chart && chart.getContext ? chart.getContext("2d") : null;
@@ -265,16 +159,12 @@ export function buildAiBridgePageHtml(token: string): string {
 	let lastStatus = null;
 	let openedUpdateLink = false;
 	const CHROME_UPDATE_URL = "https://www.google.com/intl/uk/chrome/update/";
-	const OPTS_KEY = "epoch_ai_bridge_ctx_v2";
+	const OPTS_KEY = "epoch_ai_bridge_yaml_v1";
 	let optionsSaveTimer = 0;
+	let optionsValidationTimer = 0;
 	let optionsState = null;
-	const DEFAULTS = {
-		summaryCtxTemplate: "",
-		epochCtxTemplate: ""
-	};
 	const BUILTIN_DEFAULTS = {
-		summaryCtxTemplate: ${JSON.stringify(DEFAULT_SUMMARY_CONTEXT_TEMPLATE)},
-		epochCtxTemplate: ${JSON.stringify(DEFAULT_EPOCH_CONTEXT_TEMPLATE)}
+		settingsYaml: ${JSON.stringify(defaultBridgeSettingsYaml)}
 	};
 	const FIXED_SUMMARIZER = { format: "plain-text" };
 	const downloadProgressState = { fileCount: 0, files: new Map() };

@@ -28,6 +28,8 @@ describe("epoch generation input chunking", () => {
 			expect(typeof j.chunkIndex).toBe("number");
 			expect(typeof j.chunkCount).toBe("number");
 			expect(j.chunkCount).toBe(jobs.length);
+			expect(j.reduce).toBe(true);
+			expect(j.reduceDepth).toBe(0);
 		}
 	});
 });

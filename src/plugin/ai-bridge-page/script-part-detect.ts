@@ -190,7 +190,6 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 		const dict = isEpoch
 			? {
 				related,
-				bucket: String((jobAny && (jobAny.epochBucket ?? jobAny.bucket)) ?? ""),
 			}
 			: {
 				filePath: String(job && job.filePath ? job.filePath : ""),
@@ -199,8 +198,7 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 			};
 		return tpl
 			.replace(/\{\{(context|jobContext)\}\}/g, "")
-			.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in dict ? dict[k] : m))
-			.replace(/\{(\w+)\}/g, (m, k) => (k in dict ? dict[k] : m));
+			.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in dict ? dict[k] : m));
 	}
 
 	async function detectOutputLanguage(job) {
@@ -216,6 +214,7 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 			type: optionsIn && optionsIn.type ? optionsIn.type : "headline",
 			length: optionsIn && optionsIn.length ? optionsIn.length : "long",
 			format: optionsIn && optionsIn.format ? optionsIn.format : "plain-text",
+			preference: optionsIn && optionsIn.preference ? optionsIn.preference : "auto",
 			monitor(m) {
 				try {
 					resetDownloadProgressState({ soft: true });
@@ -242,6 +241,9 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 		options.expectedContextLanguages = ctxLangs;
 		options.outputLanguage = outLang;
 
+		const sharedCtx = optionsIn && typeof optionsIn.sharedContext === "string" ? optionsIn.sharedContext : "";
+		if (sharedCtx.trim()) options.sharedContext = sharedCtx;
+
 		try {
 			return await Summarizer.create(options);
 		} catch (e) {
@@ -250,11 +252,13 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 					type: "headline",
 					length: "long",
 					format: "plain-text",
+					preference: options.preference,
 					monitor: options.monitor
 				};
 				fallback.expectedInputLanguages = inLangs;
 				fallback.expectedContextLanguages = ctxLangs;
 				fallback.outputLanguage = outLang;
+				if (sharedCtx.trim()) fallback.sharedContext = sharedCtx;
 				return await Summarizer.create(fallback);
 			} catch {
 				throw e;
@@ -271,7 +275,8 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 		const t = String(o && o.type ? o.type : "headline");
 		const l = String(o && o.length ? o.length : "long");
 		const f = String(o && o.format ? o.format : "plain-text");
-		return [outLang, inLangs.join(","), ctxLangs.join(","), t, l, f].join("|");
+		const p = String(o && o.preference ? o.preference : "auto");
+		return [outLang, inLangs.join(","), ctxLangs.join(","), t, l, f, p].join("|");
 	}
 
 	async function ensureSummarizer(o) {
@@ -283,8 +288,8 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 			return s;
 		} catch (e) {
 			try {
-				const s2 = await createSummarizer({ type: "headline", length: "long", format: "plain-text", outputLanguage: "en", expectedInputLanguages: ["en"], expectedContextLanguages: ["en"] });
-				summarizersByKey.set(makeSummarizerKey({ type: "headline", length: "long", format: "plain-text", outputLanguage: "en", expectedInputLanguages: ["en"], expectedContextLanguages: ["en"] }), s2);
+				const s2 = await createSummarizer({ type: "headline", length: "long", format: "plain-text", preference: "auto", outputLanguage: "en", expectedInputLanguages: ["en"], expectedContextLanguages: ["en"] });
+				summarizersByKey.set(makeSummarizerKey({ type: "headline", length: "long", format: "plain-text", preference: "auto", outputLanguage: "en", expectedInputLanguages: ["en"], expectedContextLanguages: ["en"] }), s2);
 				return s2;
 			} catch {
 				throw e;

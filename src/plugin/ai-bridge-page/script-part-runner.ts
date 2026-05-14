@@ -130,64 +130,73 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 						" | chars: " + (job.input?.length || 0) +
 						" | ~tokens: " + approxTokens;
 			{
-				const clipByLines = (raw, maxChars) => {
-					const text = String(raw ?? "");
-					const limit = (typeof maxChars === "number" && Number.isFinite(maxChars) && maxChars > 0)
-						? Math.max(1, Math.floor(maxChars))
-						: 1200;
-					if (!text || text.length <= limit) return text;
-					const parts = text.split(/(\r\n|\n|\r|\u2028|\u2029)/);
-					let out = "";
-					for (let i = 0; i < parts.length; i += 2) {
-						const line = String(parts[i] ?? "");
-						const eol = String(parts[i + 1] ?? "");
-						const chunk = line + eol;
-						if (!chunk) continue;
-						if (!out) {
-							if (chunk.length > limit) return chunk + "\n…(truncated)";
-							out = chunk;
-							continue;
-						}
-						if ((out.length + chunk.length) > limit) return out + "\n…(truncated)";
-						out += chunk;
-					}
-					return out + "\n…(truncated)";
-				};
-				curTextEl.textContent = clipByLines(job.input || "", 1200);
+				curTextEl.textContent = String(job.input || "");
 			}
 
-			const t = pickTemplatesForJob(job);
+			const jobSettings = (typeof buildBridgeSettingsForJob === "function")
+				? buildBridgeSettingsForJob(job)
+				: null;
 			const kindKey = (job && job.kind === "epoch") ? "epoch" : "summary";
 			const langs = (typeof readSelectedBridgeLanguages === "function")
 				? readSelectedBridgeLanguages(kindKey)
 				: { outputLanguage: "en", expectedInputLanguages: ["en", "ja", "es"], expectedContextLanguages: ["en"] };
-			outputLanguage = langs.outputLanguage;
-			expectedInputLanguages = langs.expectedInputLanguages;
-			expectedContextLanguages = langs.expectedContextLanguages;
+			outputLanguage = (jobSettings && typeof jobSettings.outputLanguage === "string")
+				? jobSettings.outputLanguage
+				: langs.outputLanguage;
+			expectedInputLanguages = (jobSettings && Array.isArray(jobSettings.expectedInputLanguages))
+				? jobSettings.expectedInputLanguages
+				: langs.expectedInputLanguages;
+			expectedContextLanguages = (jobSettings && Array.isArray(jobSettings.expectedContextLanguages))
+				? jobSettings.expectedContextLanguages
+				: langs.expectedContextLanguages;
 			const isEpoch = kindKey === "epoch";
-			const stateTypeKey = isEpoch ? "epochType" : "summaryType";
-			const stateLengthKey = isEpoch ? "epochLength" : "summaryLength";
-			const typeEl = isEpoch ? epochTypeEl : summaryTypeEl;
-			const lengthEl = isEpoch ? epochLengthEl : summaryLengthEl;
 			const typeFallback = isEpoch ? "headline" : "headline";
 			const lengthFallback = isEpoch ? "long" : "long";
-			const type = (typeof normalizeSummarizerType === "function")
-				? normalizeSummarizerType((optionsState && optionsState[stateTypeKey]) ? optionsState[stateTypeKey] : (typeEl && typeEl.value))
-				: String((optionsState && optionsState[stateTypeKey]) ? optionsState[stateTypeKey] : (typeEl && typeEl.value) || typeFallback);
-			const length = (typeof normalizeSummarizerLength === "function")
-				? normalizeSummarizerLength((optionsState && optionsState[stateLengthKey]) ? optionsState[stateLengthKey] : (lengthEl && lengthEl.value))
-				: String((optionsState && optionsState[stateLengthKey]) ? optionsState[stateLengthKey] : (lengthEl && lengthEl.value) || lengthFallback);
+			const type = (jobSettings && jobSettings.type)
+				? jobSettings.type
+				: typeFallback;
+			const length = (jobSettings && jobSettings.length)
+				? jobSettings.length
+				: lengthFallback;
 			const summarizerOpts = {
 				type,
 				length,
-				format: FIXED_SUMMARIZER.format
+				format: (jobSettings && jobSettings.format) ? jobSettings.format : FIXED_SUMMARIZER.format,
+				preference: (jobSettings && jobSettings.preference) ? jobSettings.preference : "auto",
+				sharedContext: (jobSettings && typeof jobSettings.sharedContext === "string") ? jobSettings.sharedContext : "",
+				jobSpecificContext: (jobSettings && typeof jobSettings.jobSpecificContext === "string") ? jobSettings.jobSpecificContext : ""
 			};
 			if (pageClosing) break;
 			perCallContext = (() => {
-				const rendered = renderContextTemplate(t.perCallTemplate, job, summarizerOpts);
+				const rendered = renderContextTemplate(summarizerOpts.jobSpecificContext || "", job, summarizerOpts);
 				const ctx = rendered && String(rendered).trim() ? rendered : (job && job.context ? job.context : "");
 				return ctx;
 			})();
+			try {
+				console.debug("[Epochgram bridge] summarize settings", {
+					job: {
+						id: job && job.id,
+						kind: job && job.kind,
+						filePath: job && job.filePath,
+						date: job && job.date,
+						reduce: !!(job && job.reduce),
+						reduceDepth: job && job.reduceDepth != null ? job.reduceDepth : null,
+						inputChars: (job && job.input ? String(job.input).length : 0)
+					},
+					settings: {
+						type: summarizerOpts.type,
+						length: summarizerOpts.length,
+						format: summarizerOpts.format,
+						preference: summarizerOpts.preference,
+						outputLanguage,
+						expectedInputLanguages,
+						expectedContextLanguages
+					},
+					sharedContext: summarizerOpts.sharedContext,
+					contextTemplate: summarizerOpts.jobSpecificContext,
+					context: perCallContext
+				});
+			} catch {}
 			const out = await retryUpTo3(async (attempt) => {
 				// After a failure, clear cached summarizers; Chrome can invalidate them.
 				if (attempt > 1) {
@@ -200,7 +209,9 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 					expectedContextLanguages,
 					type: summarizerOpts.type,
 					length: summarizerOpts.length,
-					format: summarizerOpts.format
+					format: summarizerOpts.format,
+					preference: summarizerOpts.preference,
+					sharedContext: summarizerOpts.sharedContext
 				});
 				// If a queue built up while the model was downloading, refresh once
 				// so the status UI flips to ready before heavy processing begins.

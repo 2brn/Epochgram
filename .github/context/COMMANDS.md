@@ -37,6 +37,11 @@ Commands are registered in `plugin/lifecycle.ts` (export command via `plugin/exp
     - When epoch generation is enabled, Epochgram may enqueue *internal-only* AI summaries as needed so epoch inputs can use AI summaries even when Auto summarize is OFF.
       - Epoch generation is then scheduled to run after the AI queue becomes idle.
 
+- `summarize-current` — “Summarize current file”
+  - Pro + Desktop.
+  - Available when the active file exists, is indexable, and is known by the index.
+  - Enqueues summary jobs for all records from the active file (`force: true`).
+
 - `review-all` — “Review all”
   - Always available.
   - Marks all non-hidden records as Reviewed across all indexed files.
@@ -62,5 +67,7 @@ These operate on the active file and are only available when a file is active, i
 
 ## Current File Actions
 These operate on the active file and are only available when a file is active, index-ready, and the file is indexable/known.
+- `summarize-current` — “Summarize current file” (Pro + Desktop)
+  - Queues summary jobs for all records from the active file.
 - `clear-tracked-changes-current-note` — “Clear tracked changes for current file” (Pro only)
   - Clears tracked entries for the active file and prunes `source: "tracked"` date entries for that file from the aggregated index.

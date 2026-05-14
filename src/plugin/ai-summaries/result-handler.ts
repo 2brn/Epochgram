@@ -234,6 +234,14 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 		}
 
 		if (g.done.size >= g.chunkCount) {
+			const successfulChunks = g.summaries.size;
+			if (successfulChunks <= 0) {
+				groups.delete(groupIdKey);
+				const fb = (g.fallbackText ?? "").trim();
+				if (fb) storeEpochSummary(plugin, job, fb);
+				return;
+			}
+
 			const orderedRaw: string[] = [];
 			for (let i = 0; i < g.chunkCount; i++) {
 				const part = g.summaries.get(i) ?? "";
@@ -418,6 +426,15 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 	}
 
 	if (g.done.size >= g.chunkCount) {
+		const successfulChunks = g.summaries.size;
+		if (successfulChunks <= 0) {
+			groups.delete(groupIdKey);
+			const fb = (g.fallbackText ?? "").trim();
+			if (fb) storeEntrySummaries(plugin, job, entries, fb);
+			else markEpochInputAiSummaryError(plugin as any, entries as any[], g.inputHash, result.error ?? "(no summary)");
+			return;
+		}
+
 		const orderedRaw: string[] = [];
 		for (let i = 0; i < g.chunkCount; i++) {
 			const part = g.summaries.get(i) ?? "";

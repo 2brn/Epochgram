@@ -11,6 +11,26 @@ import { getYamlDatePropertyKey, getYamlDescriptionPropertyKey } from "../frontm
 
 const AI_NOTE_MAX_CHARS = 24000;
 
+function sanitizeAiInputText(input: string): string {
+	const raw = String(input || "");
+	if (!raw) return "";
+	let s = raw;
+	s = s.replace(/^\uFEFF/, "");
+	s = s.replace(/^---\s*\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)\s*(?:\r?\n|$)/, "");
+	s = s.replace(/```[\s\S]*?```/g, " ");
+	s = s.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+	s = s.replace(/`([^`]+)`/g, "$1");
+	s = s.replace(/^\s{0,3}#{1,6}\s+/gm, "");
+	s = s.replace(/\*\*(.*?)\*\*/g, "$1");
+	s = s.replace(/__(.*?)__/g, "$1");
+	s = s.replace(/(^|\s)\*(\S(?:[\s\S]*?\S)?)\*(?=\s|$)/g, "$1$2");
+	s = s.replace(/(^|\s)_(\S(?:[\s\S]*?\S)?)_(?=\s|$)/g, "$1$2");
+	s = s.replace(/<[^>]+>/g, "");
+	s = s.replace(/[ \t]+/g, " ");
+	s = s.replace(/\n{3,}/g, "\n\n");
+	return s.trim();
+}
+
 function isOnlyDateFrontmatter(lines: string[], datePropertyKey: string): boolean {
 	if (!Array.isArray(lines) || lines.length === 0) return false;
 	const stripBom = (s: string): string => (s && s.charCodeAt(0) === 0xfeff ? s.slice(1) : s);
@@ -73,11 +93,12 @@ export async function buildJobsForFile(
 		return out;
 	};
 
-	const fullText = lines.length > 0 ? joinLinesUpToChars(lines, AI_NOTE_MAX_CHARS) : "";
+	const fullTextRaw = lines.length > 0 ? joinLinesUpToChars(lines, AI_NOTE_MAX_CHARS) : "";
+	const fullText = sanitizeAiInputText(fullTextRaw);
 	const datePropertyKey = getYamlDatePropertyKey(plugin);
 	const descriptionPropertyKey = getYamlDescriptionPropertyKey(plugin);
 	if (isOnlyDateFrontmatter(lines, datePropertyKey)) return { jobs: [], reason: "File is empty" };
-	if (extractFrontmatterDescription(fullText, descriptionPropertyKey)) return { jobs: [], reason: "YAML description exists" };
+	if (extractFrontmatterDescription(fullTextRaw, descriptionPropertyKey)) return { jobs: [], reason: "YAML description exists" };
 	if (!fullText.trim()) return { jobs: [], reason: "File is empty" };
 
 	const jobs: AiSummaryJob[] = [];
@@ -121,7 +142,7 @@ export async function buildJobsForFile(
 		targetEntries: FileDateEntry[];
 		inputText: string;
 	}) => {
-		const groupInputRaw = String(args.inputText ?? "").trim();
+		const groupInputRaw = sanitizeAiInputText(String(args.inputText ?? "")).trim();
 		if (!groupInputRaw) return;
 		const groupInput = groupInputRaw.length > AI_NOTE_MAX_CHARS ? groupInputRaw.slice(0, AI_NOTE_MAX_CHARS) : groupInputRaw;
 		const inputHash = computeGroupHash(args.groupDate, args.groupType, groupInput);
@@ -193,7 +214,7 @@ export async function buildJobsForFile(
 	for (const [date, entries] of contentByDate) {
 		const rep = entries[0]!;
 		const parts = entries
-			.map(e => lines.slice(e.blockStart, e.blockEnd + 1).join("\n").trim())
+			.map(e => sanitizeAiInputText(lines.slice(e.blockStart, e.blockEnd + 1).join("\n").trim()))
 			.filter(Boolean);
 		pushGroupJobs({
 			groupType: "content",
@@ -208,7 +229,7 @@ export async function buildJobsForFile(
 	for (const [date, entries] of Object.entries(data.trackedDates ?? {})) {
 		if (!Array.isArray(entries) || entries.length === 0) continue;
 		const rep = entries[0]!;
-		const parts = entries.map(e => String(e.summary ?? "").trim()).filter(Boolean);
+		const parts = entries.map(e => sanitizeAiInputText(String(e.summary ?? "").trim())).filter(Boolean);
 		pushGroupJobs({
 			groupType: "tracked",
 			groupDate: date,

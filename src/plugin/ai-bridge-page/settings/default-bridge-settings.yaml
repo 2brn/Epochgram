@@ -1,0 +1,46 @@
+sharedContext: |
+  Obsidian markdown notes.
+  Ignore dates and empty content.
+  Treat the input as the only source of facts.
+
+format: plain-text
+preference: capability
+
+expectedInputLanguages: [en, ja, es]
+outputLanguage: en
+expectedContextLanguages: [en]
+
+reduce:
+  context: |
+    Compress repetitive or low-information content.
+    Preserve important facts.
+
+  type: key-points
+  length: long
+
+records:
+  context: |
+    {{filePath}}
+    Related:
+    {{related}}
+
+  type: headline
+  length: long
+
+epochs:
+  - period: day-month
+
+    context: |
+      Output facts, max 7 words per line.
+
+    type: key-points
+    length: short
+
+  - period: 3month-year
+
+    context: |
+      Output high-level topics, max 7 words per line.
+      Example: Science, Personal knowledge, Travel
+
+    type: headline
+    length: short
