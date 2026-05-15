@@ -44,7 +44,7 @@ export default defineConfig([
       "package.json",
       "**/*.js",
       "**/*.mjs",
-      "vitest.config.ts",
+      "vitest.config.mts",
     ],
   },
   ...obsidianmd.configs.recommended,

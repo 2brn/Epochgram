@@ -8,16 +8,16 @@ describe("drop-cap lead boundary", () => {
 		expect(rest.startsWith(",")).toBe(true);
 	});
 
-	test("stops at stop-word from third word onward", () => {
-		const { prefix, rest } = splitLeadByStopWordsOrPunctuation("Payment Provider Checklist and Italy");
-		expect(prefix).toBe("Payment Provider Checklist");
-		expect(rest.startsWith("and ")).toBe(true);
-	});
+	       test("stops at stop-word from second word onward", () => {
+		       const { prefix, rest } = splitLeadByStopWordsOrPunctuation("Payment Provider Checklist and Italy");
+		       expect(prefix).toBe("Payment Provider Checklist");
+		       expect(rest.startsWith("and ")).toBe(true);
+	       });
 
-	test("does not stop on second-word stop-word", () => {
+	test("stops on second-word stop-word", () => {
 		const { prefix, rest } = splitLeadByStopWordsOrPunctuation("Alpha and Beta");
-		expect(prefix).toBe("Alpha and Beta");
-		expect(rest).toBe("");
+		expect(prefix).toBe("Alpha");
+		expect(rest.startsWith("and ")).toBe(true);
 	});
 
 	test("if first line has punctuation, prefers punctuation over stop-words", () => {
@@ -62,5 +62,13 @@ describe("drop-cap lead boundary", () => {
 		expect(prefix).toBe("Epochs now allow manual epoch creation");
 		expect(rest.startsWith(".")).toBe(true);
 		expect(rest.includes("Automated summary generation")).toBe(true);
+	});
+
+	test("caps prefix to max words even when comma appears later", () => {
+		const text =
+			"Obsidian plugin Epochgram generates visual timelines of notes with AI processing and features like summaries, while other topics discussed include Ardupilot";
+		const { prefix, rest } = splitLeadByStopWordsOrPunctuation(text, undefined, { maxWords: 6 });
+		expect(prefix).toBe("Obsidian plugin Epochgram generates visual timelines");
+		expect(rest.startsWith("of ")).toBe(true);
 	});
 });

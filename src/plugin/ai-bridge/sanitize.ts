@@ -20,19 +20,22 @@ const TYPE_VALUES = new Set(["key-points", "tldr", "teaser", "headline"]);
 const FORMAT_VALUES = new Set(["markdown", "plain-text"]);
 const LENGTH_VALUES = new Set(["short", "medium", "long"]);
 const PREFERENCE_VALUES = new Set(["auto", "speed", "capability"]);
-const PERIOD_ORDER = ["day", "2days", "week", "2weeks", "month", "3months", "6months", "year"] as const;
-const ROOT_KEYS = new Set(["sharedContext", "type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages", "reduce", "records", "epochs"]);
-const BLOCK_KEYS = new Set(["context", "type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages"]);
-const EPOCH_KEYS = new Set(["period", "context", "type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages"]);
-const LEGACY_PLACEHOLDERS = new Set(["context", "jobContext"]);
+const PERIOD_ORDER = ["day", "2days", "4days", "week", "2weeks", "month", "3months", "6months", "year"] as const;
+const ROOT_KEYS = new Set(["sharedContext", "type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages", "maxRelatedChars", "maxOutputWords", "reduce", "records", "epochs"]);
+const BLOCK_KEYS = ["context", "type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages", "maxOutputWords"] as const;
+const REDUCE_KEYS = new Set([...BLOCK_KEYS, "maxDepth", "maxChunkChars"]);
+const RECORDS_KEYS = new Set([...BLOCK_KEYS, "maxInputChars"]);
+const EPOCH_KEYS = new Set(["period", ...BLOCK_KEYS, "maxFileChars"]);
 const SHARED_CONTEXT_ALLOWED_PLACEHOLDERS = new Set<string>();
-const REDUCE_CONTEXT_ALLOWED_PLACEHOLDERS = new Set(["reduceDepth"]);
+const REDUCE_CONTEXT_ALLOWED_PLACEHOLDERS = new Set<string>();
 const RECORDS_CONTEXT_ALLOWED_PLACEHOLDERS = new Set(["filePath", "fileName", "related"]);
 const EPOCH_CONTEXT_ALLOWED_PLACEHOLDERS = new Set(["related"]);
 const SUPPORTED_LANGUAGES = new Set(["en", "ja", "es"]);
 const PERIOD_ALIASES: Record<string, (typeof PERIOD_ORDER)[number]> = {
 	day: "day",
 	"2days": "2days",
+	"4day": "4days",
+	"4days": "4days",
 	week: "week",
 	"2weeks": "2weeks",
 	month: "month",
@@ -49,6 +52,15 @@ type BridgeFormat = "markdown" | "plain-text";
 type BridgeLength = "short" | "medium" | "long";
 type BridgePreference = "auto" | "speed" | "capability";
 
+type BridgeTuningFields = {
+	maxInputChars?: number;
+	maxRelatedChars?: number;
+	maxOutputWords?: number;
+	maxDepth?: number;
+	maxChunkChars?: number;
+	maxFileChars?: number;
+};
+
 export type BridgeSettingsBlock = {
 	type: BridgeKind;
 	format: BridgeFormat;
@@ -58,9 +70,10 @@ export type BridgeSettingsBlock = {
 	outputLanguage: BridgeLanguage;
 	expectedContextLanguages: BridgeLanguage[];
 	context?: string;
+	maxOutputWords?: number;
 };
 
-export type BridgeSettingsOverride = Partial<BridgeSettingsBlock>;
+export type BridgeSettingsOverride = Partial<BridgeSettingsBlock> & BridgeTuningFields;
 
 export type BridgeEpochRule = BridgeSettingsOverride & {
 	period: string;
@@ -68,6 +81,8 @@ export type BridgeEpochRule = BridgeSettingsOverride & {
 
 export type BridgeResolvedSettings = BridgeSettingsBlock & {
 	sharedContext: string;
+	maxRelatedChars: number;
+	maxOutputWords?: number;
 	reduce?: BridgeSettingsOverride;
 	records?: BridgeSettingsOverride;
 	epochs: BridgeEpochRule[];
@@ -75,8 +90,6 @@ export type BridgeResolvedSettings = BridgeSettingsBlock & {
 
 export type BridgeOptionsState = {
 	settingsYaml: string;
-	settingsYamlFormatted: string;
-	resolved: BridgeResolvedSettings;
 };
 
 export type BridgeOptionsValidation = {
@@ -88,6 +101,20 @@ export type BridgeOptionsValidation = {
 	resolved: BridgeResolvedSettings;
 	stored: BridgeOptionsState;
 };
+
+function normalizePositiveInteger(raw: any): number | null {
+	if (typeof raw === "number" && Number.isFinite(raw)) {
+		const n = Math.floor(raw);
+		return n > 0 ? n : null;
+	}
+	if (typeof raw === "string") {
+		const trimmed = String(raw).trim();
+		if (!/^\d+$/.test(trimmed)) return null;
+		const n = Number(trimmed);
+		return Number.isSafeInteger(n) && n > 0 ? n : null;
+	}
+	return null;
+}
 
 function checkUnknownKeys(name: string, obj: Record<string, any>, allowed: Set<string>, errors: string[]) {
 	for (const key of Object.keys(obj)) {
@@ -116,11 +143,55 @@ function hasEmptyDoubleBracePlaceholder(input: string): boolean {
 }
 
 function getSupportedPlaceholdersLabel(contextType?: "shared" | "reduce" | "records" | "epoch"): string {
-	if (contextType === "reduce") return "{{reduceDepth}}";
+	if (contextType === "reduce") return "none";
 	if (contextType === "records") return "{{filePath}}, {{fileName}}, {{related}}";
 	if (contextType === "epoch") return "{{related}}";
 	if (contextType === "shared") return "none";
 	return "none";
+}
+
+function applyPositiveIntegerField(
+	name: string,
+	raw: Record<string, any>,
+	key: keyof BridgeTuningFields,
+	errors: string[],
+	out: Record<string, any>
+) {
+	if (!hasOwn(raw, key)) return;
+	if (isEmptyYamlScalar(raw[key])) {
+		errors.push(`${name}.${key} cannot be empty`);
+		return;
+	}
+	const normalized = normalizePositiveInteger(raw[key]);
+	if (normalized == null) {
+		errors.push(`${name}.${key} must be a positive integer`);
+		return;
+	}
+	out[key] = normalized;
+}
+
+function applyOptionalPositiveIntegerField(
+	name: string,
+	raw: Record<string, any>,
+	key: keyof BridgeTuningFields,
+	errors: string[],
+	out: Record<string, any>
+) {
+	if (!hasOwn(raw, key)) return;
+	if (isEmptyYamlScalar(raw[key])) return;
+	const normalized = normalizePositiveInteger(raw[key]);
+	if (normalized == null) {
+		errors.push(`${name}.${key} must be a positive integer`);
+		return;
+	}
+	out[key] = normalized;
+}
+
+function readPositiveIntegerOrDefault(rawValue: any, defaultValue: any): number {
+	const normalized = normalizePositiveInteger(rawValue);
+	if (normalized != null) return normalized;
+	const fallback = normalizePositiveInteger(defaultValue);
+	return fallback ?? 0;
 }
 
 function validateContextPlaceholders(name: string, text: string, errors: string[], contextType?: "shared" | "reduce" | "records" | "epoch") {
@@ -138,7 +209,6 @@ function validateContextPlaceholders(name: string, text: string, errors: string[
 		null;
 
 	for (const key of collectDoubleBracePlaceholders(src)) {
-		if (LEGACY_PLACEHOLDERS.has(key)) continue;
 		if (key === "bucket") {
 			errors.push(`${name}: placeholder '{{bucket}}' is not supported`);
 			continue;
@@ -277,8 +347,14 @@ function isEmptyYamlScalar(value: any): boolean {
 	return false;
 }
 
-function validateExplicitEmptyFields(name: string, raw: any, errors: string[], opts?: { allowContext?: boolean }) {
+function validateExplicitEmptyFields(
+	name: string,
+	raw: any,
+	errors: string[],
+	opts?: { allowContext?: boolean; numericKeys?: Array<keyof BridgeTuningFields> }
+) {
 	const allowContext = opts?.allowContext === true;
+	const numericKeys = Array.isArray(opts?.numericKeys) ? opts.numericKeys : [];
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return;
 	if (hasOwn(raw, "type") && isEmptyYamlScalar(raw.type)) {
 		errors.push(`${name}.type cannot be empty`);
@@ -298,6 +374,11 @@ function validateExplicitEmptyFields(name: string, raw: any, errors: string[], o
 	if (allowContext && hasOwn(raw, "context") && isEmptyYamlScalar(raw.context)) {
 		errors.push(`${name}.context cannot be empty`);
 	}
+	for (const key of numericKeys) {
+		if (hasOwn(raw, key) && isEmptyYamlScalar(raw[key])) {
+			errors.push(`${name}.${key} cannot be empty`);
+		}
+	}
 }
 
 function validateBlock(name: string, block: any, errors: string[], opts?: { allowContext?: boolean; defaultMissing?: boolean }): BridgeSettingsBlock | BridgeSettingsOverride {
@@ -313,6 +394,7 @@ function validateBlock(name: string, block: any, errors: string[], opts?: { allo
 	if (defaultMissing || raw.outputLanguage != null) out.outputLanguage = normalizeLang(raw.outputLanguage);
 	if (defaultMissing || raw.expectedContextLanguages != null) out.expectedContextLanguages = normalizeLangList(raw.expectedContextLanguages, ["en"]);
 	if (allowContext && typeof raw.context === "string") out.context = raw.context;
+	applyOptionalPositiveIntegerField(name, raw, "maxOutputWords", errors, out as Record<string, any>);
 
 	if (hasOwn(raw, "type") && isEmptyYamlScalar(raw.type)) {
 		errors.push(`${name}.type cannot be empty`);
@@ -383,6 +465,28 @@ function validateBlock(name: string, block: any, errors: string[], opts?: { allo
 	return defaultMissing ? (out as BridgeSettingsBlock) : out;
 }
 
+function validateReduceBlock(name: string, block: any, errors: string[]): BridgeSettingsOverride {
+	const out = validateBlock(name, block, errors, { allowContext: true }) as BridgeSettingsOverride;
+	const raw = block && typeof block === "object" && !Array.isArray(block) ? block as Record<string, any> : {};
+	applyPositiveIntegerField(name, raw, "maxDepth", errors, out as Record<string, any>);
+	applyPositiveIntegerField(name, raw, "maxChunkChars", errors, out as Record<string, any>);
+	return out;
+}
+
+function validateRecordsBlock(name: string, block: any, errors: string[]): BridgeSettingsOverride {
+	const out = validateBlock(name, block, errors, { allowContext: true }) as BridgeSettingsOverride;
+	const raw = block && typeof block === "object" && !Array.isArray(block) ? block as Record<string, any> : {};
+	applyPositiveIntegerField(name, raw, "maxInputChars", errors, out as Record<string, any>);
+	return out;
+}
+
+function validateEpochRuleBlock(name: string, block: any, errors: string[]): BridgeSettingsOverride {
+	const out = validateBlock(name, block, errors, { allowContext: true }) as BridgeSettingsOverride;
+	const raw = block && typeof block === "object" && !Array.isArray(block) ? block as Record<string, any> : {};
+	applyPositiveIntegerField(name, raw, "maxFileChars", errors, out as Record<string, any>);
+	return out;
+}
+
 export function validateBridgeOptionsYaml(settingsYamlRaw: string): BridgeOptionsValidation {
 	const errors: string[] = [];
 	const warnings: string[] = [];
@@ -406,21 +510,21 @@ export function validateBridgeOptionsYaml(settingsYamlRaw: string): BridgeOption
 
 	if (Object.keys(userObj).length > 0) {
 		checkUnknownKeys("root", userObj, ROOT_KEYS, errors);
-		validateExplicitEmptyFields("root", userObj, errors);
+		validateExplicitEmptyFields("root", userObj, errors, { numericKeys: ["maxRelatedChars"] });
 		if (userObj.reduce && typeof userObj.reduce === "object" && !Array.isArray(userObj.reduce)) {
-			checkUnknownKeys("reduce", userObj.reduce as Record<string, any>, BLOCK_KEYS, errors);
-			validateExplicitEmptyFields("reduce", userObj.reduce, errors, { allowContext: true });
+			checkUnknownKeys("reduce", userObj.reduce as Record<string, any>, REDUCE_KEYS, errors);
+			validateExplicitEmptyFields("reduce", userObj.reduce, errors, { allowContext: true, numericKeys: ["maxDepth", "maxChunkChars"] });
 		}
 		if (userObj.records && typeof userObj.records === "object" && !Array.isArray(userObj.records)) {
-			checkUnknownKeys("records", userObj.records as Record<string, any>, BLOCK_KEYS, errors);
-			validateExplicitEmptyFields("records", userObj.records, errors, { allowContext: true });
+			checkUnknownKeys("records", userObj.records as Record<string, any>, RECORDS_KEYS, errors);
+			validateExplicitEmptyFields("records", userObj.records, errors, { allowContext: true, numericKeys: ["maxInputChars"] });
 		}
 		if (Array.isArray(userObj.epochs)) {
 			for (let i = 0; i < userObj.epochs.length; i++) {
 				const ep = userObj.epochs[i];
 				if (ep && typeof ep === "object" && !Array.isArray(ep)) {
 					checkUnknownKeys(`epochs[${i}]`, ep as Record<string, any>, EPOCH_KEYS, errors);
-					validateExplicitEmptyFields(`epochs[${i}]`, ep, errors, { allowContext: true });
+					validateExplicitEmptyFields(`epochs[${i}]`, ep, errors, { allowContext: true, numericKeys: ["maxFileChars"] });
 				}
 			}
 		}
@@ -429,6 +533,11 @@ export function validateBridgeOptionsYaml(settingsYamlRaw: string): BridgeOption
 	const merged = deepMerge(defaultObj, userObj);
 	const rootBlock = validateBlock("root", merged, errors, { defaultMissing: true }) as BridgeSettingsBlock;
 	const sharedContext = typeof merged.sharedContext === "string" ? merged.sharedContext : "";
+	if (hasOwn(merged, "maxRelatedChars")) {
+		applyPositiveIntegerField("root", merged as Record<string, any>, "maxRelatedChars", errors, merged as Record<string, any>);
+	}
+	const maxRelatedChars = readPositiveIntegerOrDefault((merged as Record<string, any>).maxRelatedChars, defaultObj.maxRelatedChars);
+	const maxOutputWords = readPositiveIntegerOrDefault((merged as Record<string, any>).maxOutputWords, defaultObj.maxOutputWords);
 	if (merged.sharedContext != null && typeof merged.sharedContext !== "string") {
 		errors.push("sharedContext must be a string block");
 	}
@@ -436,13 +545,13 @@ export function validateBridgeOptionsYaml(settingsYamlRaw: string): BridgeOption
 
 	let reduce: BridgeSettingsOverride | undefined;
 	if (merged.reduce != null) {
-		reduce = validateBlock("reduce", merged.reduce, errors, { allowContext: true });
+		reduce = validateReduceBlock("reduce", merged.reduce, errors);
 		validateContextPlaceholders("reduce.context", String(reduce.context || ""), errors, "reduce");
 	}
 
 	let records: BridgeSettingsOverride | undefined;
 	if (merged.records != null) {
-		records = validateBlock("records", merged.records, errors, { allowContext: true });
+		records = validateRecordsBlock("records", merged.records, errors);
 		validateContextPlaceholders("records.context", String(records.context || ""), errors, "records");
 	}
 
@@ -475,7 +584,7 @@ export function validateBridgeOptionsYaml(settingsYamlRaw: string): BridgeOption
 			}
 		}
 		covered.push({ period: normalizedPeriod, start: bounds[0], end: bounds[1] });
-		const b = validateBlock(`epochs[${i}]`, rec, errors, { allowContext: true });
+		const b = validateEpochRuleBlock(`epochs[${i}]`, rec, errors);
 		validateContextPlaceholders(`epochs[${i}].context`, String(b.context || ""), errors, "epoch");
 		epochs.push({ ...b, period: normalizedPeriod, context: b.context || "" });
 	}
@@ -483,15 +592,15 @@ export function validateBridgeOptionsYaml(settingsYamlRaw: string): BridgeOption
 	const resolved: BridgeResolvedSettings = {
 		sharedContext,
 		...rootBlock,
+		maxRelatedChars,
+		maxOutputWords: maxOutputWords > 0 ? maxOutputWords : undefined,
 		reduce,
 		records,
 		epochs
 	};
 
 	const stored: BridgeOptionsState = {
-		settingsYaml: userYaml,
-		settingsYamlFormatted: userYaml ? asYamlString(userObj) : "",
-		resolved
+		settingsYaml: userYaml
 	};
 
 	return {

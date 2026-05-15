@@ -9,7 +9,6 @@
 		"build:production": "npm run lint && npm run build && node scripts/prepare-production.js --deploy-vault --require-vault",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
-		"sync:pro-keys": "node scripts/sync-pro-keys-from-web.mjs",
 		"package:production": "npm run build && node scripts/prepare-production.js",
 		"test": "vitest run",
 		"test:watch": "vitest",

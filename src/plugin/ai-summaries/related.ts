@@ -181,3 +181,49 @@ export function buildRelatedSummariesAllDates(
 	if (!out) return "";
 	return out.length > maxTotalChars ? out.slice(0, maxTotalChars).trimEnd() + "…" : out;
 }
+
+export async function buildRelatedSummariesForFiles(
+	plugin: EpochPlugin,
+	filePaths: string[],
+	options: { maxSourceFiles?: number; maxFiles?: number; maxEntriesPerFile?: number; maxSummaryChars?: number; maxTotalChars?: number } = {}
+): Promise<string> {
+	const normalizedSources = Array.from(new Set(
+		(filePaths ?? [])
+			.map((filePath) => String(filePath || "").trim())
+			.filter((filePath) => !!filePath && isLikelyTextFilePath(filePath) && !filePath.startsWith("epoch://"))
+	));
+	if (normalizedSources.length === 0) return "";
+
+	const sourceSet = new Set(normalizedSources);
+	const maxSourceFiles = typeof options.maxSourceFiles === "number" ? options.maxSourceFiles : 8;
+	const pickedSources = normalizedSources.slice(0, Math.max(0, maxSourceFiles));
+	const merged = new Map<string, number>();
+
+	for (const filePath of pickedSources) {
+		const scored = await getRelatedScoredForFile(plugin, filePath);
+		for (const item of scored) {
+			const relatedPath = String(item?.path || "").trim();
+			if (!relatedPath || sourceSet.has(relatedPath) || !isLikelyTextFilePath(relatedPath)) continue;
+			const score = typeof item?.score === "number" ? item.score : 0;
+			const prev = merged.get(relatedPath);
+			if (prev == null || score > prev) {
+				merged.set(relatedPath, score);
+			}
+		}
+	}
+
+	const relatedScored = Array.from(merged.entries())
+		.map(([path, score]) => ({ path, score }))
+		.sort((a, b) => {
+			if (a.score !== b.score) return a.score > b.score ? -1 : 1;
+			return a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
+		});
+	if (relatedScored.length === 0) return "";
+
+	return buildRelatedSummariesAllDates(plugin, relatedScored, {
+		maxFiles: options.maxFiles,
+		maxEntriesPerFile: options.maxEntriesPerFile,
+		maxSummaryChars: options.maxSummaryChars,
+		maxTotalChars: options.maxTotalChars
+	});
+}

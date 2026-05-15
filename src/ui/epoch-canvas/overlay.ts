@@ -1,6 +1,23 @@
 import type { EpochCanvas } from "../epoch-canvas";
 import { BASE_SPACING, DATE_OVERLAY_VISIBILITY_MS } from "../epoch-canvas-constants";
 
+function areOverlayAnimationsEnabled(canvas: EpochCanvas): boolean {
+	try {
+		const pluginAny: any = (canvas as any)?.plugin;
+		return pluginAny?.settings?.enableAnimation !== false;
+	} catch {
+		return true;
+	}
+}
+
+function syncDateOverlayMotionStyle(canvas: EpochCanvas): void {
+	const c: any = canvas as any;
+	const el = c.dateOverlayEl as HTMLElement | null;
+	if (!el) return;
+	const animationsEnabled = areOverlayAnimationsEnabled(canvas);
+	el.style.transition = animationsEnabled ? "" : "none";
+}
+
 export function computeDateOverlayLabel(canvas: EpochCanvas): string | null {
 	const c: any = canvas as any;
 	if (!c.dateOverlayEl) return null;
@@ -55,6 +72,7 @@ export function showDateOverlay(canvas: EpochCanvas): void {
 	const c: any = canvas as any;
 	const el = c.dateOverlayEl as HTMLElement | null;
 	if (!el) return;
+	syncDateOverlayMotionStyle(canvas);
 	if (c.dateOverlayTimer != null) {
 		window.clearTimeout(c.dateOverlayTimer);
 		c.dateOverlayTimer = null;
@@ -70,11 +88,14 @@ export function hideDateOverlay(canvas: EpochCanvas, immediate: boolean = false)
 	const c: any = canvas as any;
 	const el = c.dateOverlayEl as HTMLElement | null;
 	if (!el) return;
+	syncDateOverlayMotionStyle(canvas);
+	const animationsEnabled = areOverlayAnimationsEnabled(canvas);
+	const shouldHideImmediately = immediate || !animationsEnabled;
 	if (c.dateOverlayTimer != null) {
 		window.clearTimeout(c.dateOverlayTimer);
 		c.dateOverlayTimer = null;
 	}
-	if (immediate) {
+	if (shouldHideImmediately) {
 		el.classList.remove("is-visible");
 	} else {
 		requestAnimationFrame(() => el.classList.remove("is-visible"));
@@ -85,6 +106,7 @@ export function updateDateOverlay(canvas: EpochCanvas): void {
 	const c: any = canvas as any;
 	const el = c.dateOverlayEl as HTMLElement | null;
 	if (!el) return;
+	syncDateOverlayMotionStyle(canvas);
 	const hoverKey = (() => {
 		try {
 			const hs = c.hoverSummary ?? null;

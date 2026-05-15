@@ -10,6 +10,36 @@ export function findSummaryEntryAtPoint(canvas: EpochCanvas, x: number, y: numbe
 		let bestEntry: DateEntry | null = null;
 		let bestDist = Number.POSITIVE_INFINITY;
 		let bestPriority = -1;
+		const hitRects = new Map<number, { entry: DateEntry; x1: number; y1: number; x2: number; y2: number }>();
+		const stableRects = (layout as any).summaryHoverRects ?? layout.summaryRects;
+
+		for (const rect of stableRects ?? []) {
+			hitRects.set(rect.itemIndex, {
+				entry: rect.entry,
+				x1: rect.x1,
+				y1: rect.y1,
+				x2: rect.x2,
+				y2: rect.y2,
+			});
+		}
+
+		for (const rect of layout.summaryRects ?? []) {
+			const prev = hitRects.get(rect.itemIndex);
+			if (!prev) {
+				hitRects.set(rect.itemIndex, {
+					entry: rect.entry,
+					x1: rect.x1,
+					y1: rect.y1,
+					x2: rect.x2,
+					y2: rect.y2,
+				});
+				continue;
+			}
+			prev.x1 = Math.min(prev.x1, rect.x1);
+			prev.y1 = Math.min(prev.y1, rect.y1);
+			prev.x2 = Math.max(prev.x2, rect.x2);
+			prev.y2 = Math.max(prev.y2, rect.y2);
+		}
 
 		const inheritedSourceMap: Map<string, string> | null = (() => {
 			try {
@@ -20,7 +50,7 @@ export function findSummaryEntryAtPoint(canvas: EpochCanvas, x: number, y: numbe
 			}
 		})();
 
-		for (const rect of layout.summaryRects) {
+		for (const rect of hitRects.values()) {
 			if (!(x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2)) continue;
 			const entry = rect.entry;
 			const filePath = (entry as any)?.file;

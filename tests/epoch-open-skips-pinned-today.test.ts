@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { findFirstRelatedEntryForEpochRange } from "../src/ui/epoch-canvas/epochs-view";
+import { findFirstRelatedEntryForEpochRange, listRelatedEntriesForEpochRange } from "../src/ui/epoch-canvas/epochs-view";
+import { pickNextEpochEntryFromRange } from "../src/ui/epoch-canvas-events/interactions";
 
 function makeCanvas(index: Record<string, any[]>): any {
 	return {
@@ -160,5 +161,101 @@ describe("epoch open target selection", () => {
 
 		const picked = findFirstRelatedEntryForEpochRange(canvas, "2025-01-02", "2025-01-03");
 		expect(picked?.file).toBe("Real.md");
+	});
+
+	it("returns all related records in priority order for epoch range", () => {
+		const canvas = makeCanvas({
+			"2025-01-03": [
+				{
+					date: "2025-01-03",
+					file: "Tracked.md",
+					blockStart: 0,
+					blockEnd: 0,
+					source: "tracked",
+					summary: "Tracked summary"
+				},
+				{
+					date: "2025-01-03",
+					file: "Content.md",
+					blockStart: 0,
+					blockEnd: 0,
+					source: "content",
+					summary: "Content summary"
+				},
+				{
+					date: "2025-01-03",
+					file: "Anchor.md",
+					blockStart: 0,
+					blockEnd: 0,
+					source: "cdate",
+					summary: "Anchor summary"
+				}
+			],
+			"2025-01-02": [
+				{
+					date: "2025-01-02",
+					file: "Older.md",
+					blockStart: 0,
+					blockEnd: 0,
+					source: "content",
+					summary: "Older summary"
+				}
+			]
+		});
+
+		const ordered = listRelatedEntriesForEpochRange(canvas, "2025-01-02", "2025-01-03");
+		expect(ordered.map((e) => e.file)).toEqual(["Anchor.md", "Content.md", "Tracked.md", "Older.md"]);
+	});
+
+	it("cycles epoch open target and resets counter when switching epoch", () => {
+		const canvas = makeCanvas({
+			"2025-01-03": [
+				{
+					date: "2025-01-03",
+					file: "A.md",
+					blockStart: 0,
+					blockEnd: 0,
+					source: "cdate",
+					summary: "A"
+				},
+				{
+					date: "2025-01-03",
+					file: "B.md",
+					blockStart: 0,
+					blockEnd: 0,
+					source: "content",
+					summary: "B"
+				}
+			],
+			"2025-01-02": [
+				{
+					date: "2025-01-02",
+					file: "C.md",
+					blockStart: 0,
+					blockEnd: 0,
+					source: "content",
+					summary: "C"
+				}
+			],
+			"2025-01-01": [
+				{
+					date: "2025-01-01",
+					file: "D.md",
+					blockStart: 0,
+					blockEnd: 0,
+					source: "content",
+					summary: "D"
+				}
+			]
+		});
+		const state: any = {};
+
+		expect(pickNextEpochEntryFromRange(canvas as any, "2025-01-02", "2025-01-03", state)?.file).toBe("A.md");
+		expect(pickNextEpochEntryFromRange(canvas as any, "2025-01-02", "2025-01-03", state)?.file).toBe("B.md");
+		expect(pickNextEpochEntryFromRange(canvas as any, "2025-01-02", "2025-01-03", state)?.file).toBe("C.md");
+		expect(pickNextEpochEntryFromRange(canvas as any, "2025-01-02", "2025-01-03", state)?.file).toBe("A.md");
+
+		// Switching to a different epoch range should reset cursor and start from its top-priority record.
+		expect(pickNextEpochEntryFromRange(canvas as any, "2025-01-01", "2025-01-01", state)?.file).toBe("D.md");
 	});
 });

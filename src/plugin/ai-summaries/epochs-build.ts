@@ -5,9 +5,10 @@ import type { EpochJobMode } from "./epochs-types";
 
 import { computeAiSummaryInputHash } from "../../utils";
 import { isTopicSimilarityEnabled } from "../similarity/config";
+import { getAiSummaryTuning } from "./bridge-settings";
 import { buildEpochContext } from "./contexts";
+import { buildRelatedSummariesForFiles } from "./related";
 import {
-	AI_CHUNK_MAX_CHARS,
 	EPOCH_BUCKET_ORDER,
 	isDateKey,
 	isEpochBucket,
@@ -60,6 +61,12 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 	};
 	const isAnchorSource = (src: string): boolean => src === "dateprop" || src === "namedate" || src === "cdate";
 	const getAnchorPriority = (src: string): number => (src === "dateprop" ? 3 : src === "namedate" ? 2 : src === "cdate" ? 1 : 0);
+	const tuning = getAiSummaryTuning(plugin);
+	const clipRelated = (raw: string): string => {
+		const text = String(raw || "").trim();
+		if (!text) return "";
+		return text.length > tuning.maxRelatedChars ? text.slice(0, tuning.maxRelatedChars) : text;
+	};
 	type EpochInputFileStats = {
 		records: number;
 		markedRecords: number;
@@ -67,10 +74,8 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 		anchorRecords: number;
 		newestDayKey: string;
 	};
-	const isLongEpochBucket = (bucket: EpochBucket): boolean => bucket === "3months" || bucket === "6months" || bucket === "year";
 	const getPerFileCharCapForBucket = (bucket: EpochBucket): number => {
-		if (!isLongEpochBucket(bucket)) return 0;
-		return Math.max(400, Math.floor(AI_CHUNK_MAX_CHARS * 0.25));
+		return tuning.getEpochMaxFileChars(bucket);
 	};
 	const getInboundLinkCountIndex = (): Map<string, number> => {
 		const out = new Map<string, number>();
@@ -620,7 +625,8 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 		}
 
 		const epochFilePath = `epoch://${bucket}/${start}-${end}`;
-		const inputHash = computeAiSummaryInputHash(epochFilePath, `${start}|${bucket}`, inputText, AI_CHUNK_MAX_CHARS);
+		const inputHash = computeAiSummaryInputHash(epochFilePath, `${start}|${bucket}`, inputText, tuning.maxChunkChars);
+		const related = clipRelated(await buildRelatedSummariesForFiles(plugin, Array.from(inputGroups.keys())));
 		const existingText = matchingEpoch ? readEpochText(matchingEpoch as any) : "";
 		const existingHash = matchingEpoch ? String((matchingEpoch as any).aiSummaryInputHash || "") : "";
 		const isFresh = !!existingText && existingHash === inputHash;
@@ -631,7 +637,7 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 			if (isFresh) continue;
 		}
 
-		const chunks = splitIntoAiChunksByLines(inputText, AI_CHUNK_MAX_CHARS)
+		const chunks = splitIntoAiChunksByLines(inputText, tuning.maxChunkChars)
 			.filter((c) => c && c.trim());
 		if (chunks.length === 1) {
 			jobs.push({
@@ -643,7 +649,8 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 				blockEnd: 0,
 				source: "epoch",
 				input: chunks[0]!,
-				context: buildEpochContext(bucket, start, end),
+				related,
+				context: buildEpochContext(bucket, start, end, related),
 				inputHash,
 				createdAt: Date.now(),
 				epochBucket: bucket,
@@ -667,7 +674,8 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 					blockEnd: 0,
 					source: "epoch",
 					input: chunks[i]!,
-					context: buildEpochContext(bucket, start, end),
+					related,
+					context: buildEpochContext(bucket, start, end, related),
 					inputHash,
 					createdAt: Date.now(),
 					epochBucket: bucket,

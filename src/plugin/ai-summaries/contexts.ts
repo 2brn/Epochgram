@@ -15,23 +15,23 @@ function redactDatesFromPromptText(text: string): string {
 		.replace(/\b\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?\b/g, "[timestamp]");
 }
 
-export function buildEpochContext(bucket: EpochBucket, start: string, end: string): string {
+export function buildEpochContext(bucket: EpochBucket, start: string, end: string, related: string = ""): string {
 	return renderAiContextTemplate(DEFAULT_EPOCH_CONTEXT_TEMPLATE, {
 		filePath: "",
 		bucket,
 		start,
 		end,
-		related: ""
+		related
 	});
 }
 
-export function buildEpochReduceContext(bucket: EpochBucket, start: string, end: string): string {
+export function buildEpochReduceContext(bucket: EpochBucket, start: string, end: string, related: string = ""): string {
 	return renderAiContextTemplate(DEFAULT_EPOCH_CONTEXT_TEMPLATE, {
 		filePath: "",
 		bucket,
 		start,
 		end,
-		related: ""
+		related
 	});
 }
 

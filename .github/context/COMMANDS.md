@@ -30,7 +30,7 @@ Commands are registered in `plugin/lifecycle.ts` (export command via `plugin/exp
   - Opens the local AI bridge page used by AI summaries/epochs workflows.
   - If run on mobile, shows a notice that the AI bridge is desktop-only.
 
-- `summarize-all` — “Summarize all”
+- `summarize-all` — “Summarize missing”
   - Pro + Desktop.
   - If `summarizeAI` (Auto summarize) is enabled, enqueues missing AI summaries for all records (timeline-visible).
   - If `generateEpochs === true`:

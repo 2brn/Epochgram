@@ -1,8 +1,12 @@
 import { EPOCH_BUCKETS, epochBucketRoughDays, isEpochBucket, type EpochBucket } from "../../indexer/types";
 import { normalizeIsoDatePrefix } from "../../utils";
 
-export const AI_CHUNK_MAX_CHARS = 2500;
-export const AI_REDUCE_MAX_DEPTH = 4;
+function requirePositiveLimit(maxChars: number, key: string): number {
+	if (!Number.isFinite(maxChars)) throw new Error(`${key} must be a finite positive integer`);
+	const limit = Math.floor(maxChars);
+	if (limit <= 0) throw new Error(`${key} must be a finite positive integer`);
+	return limit;
+}
 
 export function shouldIncludeRelatedContext(inputText: string): boolean {
 	const raw = String(inputText ?? "").trim();
@@ -46,21 +50,23 @@ export function shouldIncludeRelatedContext(inputText: string): boolean {
 	return true;
 }
 
-export function clipChunk(raw: string): string {
+export function clipChunk(raw: string, maxChars: number): string {
 	if (!raw) return "";
-	return raw.length > AI_CHUNK_MAX_CHARS ? raw.slice(0, AI_CHUNK_MAX_CHARS) : raw;
+	const limit = requirePositiveLimit(maxChars, "chunkMaxChars");
+	return raw.length > limit ? raw.slice(0, limit) : raw;
 }
 
-export function splitIntoAiChunks(raw: string): string[] {
+export function splitIntoAiChunks(raw: string, maxChars: number): string[] {
 	const text = raw ?? "";
+	const limit = requirePositiveLimit(maxChars, "chunkMaxChars");
 	if (!text) return [""];
-	if (text.length <= AI_CHUNK_MAX_CHARS) return [text];
+	if (text.length <= limit) return [text];
 
 	const chunks: string[] = [];
 	let cursor = 0;
 	const softSearch = 800;
 	while (cursor < text.length) {
-		let end = Math.min(text.length, cursor + AI_CHUNK_MAX_CHARS);
+		let end = Math.min(text.length, cursor + limit);
 		if (end < text.length) {
 			const lookStart = Math.max(cursor, end - softSearch);
 			const window = text.slice(lookStart, end);
@@ -69,7 +75,7 @@ export function splitIntoAiChunks(raw: string): string[] {
 			if (cut >= 0) {
 				end = lookStart + cut;
 				if (end <= cursor) {
-					end = Math.min(text.length, cursor + AI_CHUNK_MAX_CHARS);
+					end = Math.min(text.length, cursor + limit);
 				}
 			}
 		}
@@ -80,10 +86,10 @@ export function splitIntoAiChunks(raw: string): string[] {
 	return chunks;
 }
 
-export function splitIntoAiChunksByLines(raw: string, maxChars: number = AI_CHUNK_MAX_CHARS): string[] {
+export function splitIntoAiChunksByLines(raw: string, maxChars: number): string[] {
 	const text = raw ?? "";
 	if (!text) return [""];
-	const limit = Number.isFinite(maxChars) && maxChars > 0 ? Math.max(1, Math.floor(maxChars)) : AI_CHUNK_MAX_CHARS;
+	const limit = requirePositiveLimit(maxChars, "chunkMaxChars");
 	if (text.length <= limit) return [text];
 
 	const parts = text.split(/(\r\n|\n|\r|\u2028|\u2029)/);

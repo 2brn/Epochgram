@@ -276,7 +276,8 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 		const l = String(o && o.length ? o.length : "long");
 		const f = String(o && o.format ? o.format : "plain-text");
 		const p = String(o && o.preference ? o.preference : "auto");
-		return [outLang, inLangs.join(","), ctxLangs.join(","), t, l, f, p].join("|");
+		const shared = String(o && typeof o.sharedContext === "string" ? o.sharedContext : "").trim();
+		return [outLang, inLangs.join(","), ctxLangs.join(","), t, l, f, p, shared].join("|");
 	}
 
 	async function ensureSummarizer(o) {

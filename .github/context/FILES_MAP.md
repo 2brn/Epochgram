@@ -5,7 +5,7 @@ This is a “what to open first” map of the codebase.
 ## Root
 - `main.ts` — Defines `EpochPlugin` and mixes in method modules.
 - `settings.ts` — Settings schema (`EpochSettings`), defaults (`DEFAULT_SETTINGS`), and settings UI.
-- `esbuild.config.mjs` / `tsconfig.json` / `vitest.config.ts` — Build/test configuration.
+- `esbuild.config.mjs` / `tsconfig.json` / `vitest.config.mts` — Build/test configuration.
 - `manifest.json` — Obsidian plugin metadata (id, name, version, min app version).
 
 ## plugin/

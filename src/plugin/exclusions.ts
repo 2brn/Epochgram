@@ -41,14 +41,6 @@ export const exclusionMethods: ExclusionMethods = {
 	shouldIndexPath(this: EpochPlugin, path: string): boolean {
 		if (!path) return false;
 		if (this.isPluginDataFile(path)) return false;
-		try {
-			const leaf = this.getFileName(path).toLowerCase();
-			if ((leaf.startsWith("epoch-") || leaf.startsWith("epochs-")) && leaf.endsWith(".html")) {
-				return false;
-			}
-		} catch {
-			// ignore
-		}
 		return !this.isExcludedPath(path);
 	},
 

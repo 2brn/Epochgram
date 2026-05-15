@@ -52,7 +52,7 @@ const STOP_EN = new Set([
 function findLeadBoundary(
 	text: string,
 	stop: ReadonlySet<string> = STOP_EN,
-	options?: { fallbackWordsWhenNoPunctuation?: number }
+	options?: { fallbackWordsWhenNoPunctuation?: number; maxWords?: number }
 ): number {
 	const s = String(text ?? "");
 	if (!s) return 0;
@@ -93,12 +93,40 @@ function findLeadBoundary(
 		break;
 	}
 
+	const maxWords =
+		options && typeof options.maxWords === "number" && Number.isFinite(options.maxWords)
+			? Math.max(0, Math.floor(options.maxWords))
+			: 0;
+
+	let maxWordsBoundary = 0;
+	if (maxWords > 0) {
+		reWord.lastIndex = 0;
+		let w: RegExpExecArray | null;
+		let wordCount = 0;
+		while ((w = reWord.exec(s))) {
+			const start = w.index;
+			if (start >= lineEnd) break;
+			const end = Math.min(start + w[0].length, lineEnd);
+			wordCount++;
+			if (wordCount >= maxWords) {
+				maxWordsBoundary = end;
+				break;
+			}
+		}
+	}
+
 	// Boundary precedence:
 	// - If we have a sentence-ending '.', prefer it when it occurs before the first strong
 	//   punctuation (e.g. multi-sentence summaries that later contain commas).
 	// - Otherwise, in punctuation-first mode, stop at the first strong punctuation.
-	if (dotPos > 0 && (punctPos < 0 || dotPos < punctPos)) return dotPos;
-	if (punctPos > 0) return punctPos;
+	if (dotPos > 0 && (punctPos < 0 || dotPos < punctPos)) {
+		if (maxWordsBoundary > 0) return Math.min(dotPos, maxWordsBoundary);
+		return dotPos;
+	}
+	if (punctPos > 0) {
+		if (maxWordsBoundary > 0) return Math.min(punctPos, maxWordsBoundary);
+		return punctPos;
+	}
 
 	const fallbackWordsWhenNoPunctuation =
 		options && typeof options.fallbackWordsWhenNoPunctuation === "number" && Number.isFinite(options.fallbackWordsWhenNoPunctuation)
@@ -128,8 +156,8 @@ function findLeadBoundary(
 				if (!isStop) sawContent = true;
 				lastEnd = end;
 			} else {
-				// Stop-word boundaries only apply from the third word onward.
-				if (wordCount >= 3 && isStop) {
+				// Stop-word boundaries apply after at least one word.
+				if (wordCount >= 2 && isStop) {
 					foundBoundary = true;
 					break;
 				}
@@ -162,16 +190,22 @@ function findLeadBoundary(
 			wordCount++;
 			if (wordCount >= fallbackWordsWhenNoPunctuation) break;
 		}
-		if (fallbackEnd > 0) return Math.max(0, Math.min(fallbackEnd, lineEnd));
+		if (fallbackEnd > 0) {
+			const fallbackBoundary = Math.max(0, Math.min(fallbackEnd, lineEnd));
+			if (maxWordsBoundary > 0) return Math.min(fallbackBoundary, maxWordsBoundary);
+			return fallbackBoundary;
+		}
 	}
 
-	return Math.max(0, Math.min(lastEnd, lineEnd));
+	const naturalBoundary = Math.max(0, Math.min(lastEnd, lineEnd));
+	if (maxWordsBoundary > 0) return Math.min(naturalBoundary, maxWordsBoundary);
+	return naturalBoundary;
 }
 
 export function splitLeadByStopWordsOrPunctuation(
 	text: string,
 	stop: ReadonlySet<string> = STOP_EN,
-	options?: { fallbackWordsWhenNoPunctuation?: number }
+	options?: { fallbackWordsWhenNoPunctuation?: number; maxWords?: number }
 ): { prefix: string; rest: string } {
 	const s = String(text ?? "");
 	if (!s) return { prefix: "", rest: "" };

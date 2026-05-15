@@ -266,7 +266,7 @@ export const lifecycleMethods: LifecycleMethods = {
 
 		this.addCommand({
 			id: "summarize-all",
-			name: "Summarize all",
+			name: "Summarize missing",
 			checkCallback: (checking: boolean) => {
 				try {
 					if (!hasAiBridgeAccess(this)) return false;
@@ -275,7 +275,7 @@ export const lifecycleMethods: LifecycleMethods = {
 						new Notice("AI summaries are available only on desktop.", 2500);
 						return true;
 					}
-					wrapNoticeError("Epochgram: Summarize all failed", () =>
+					wrapNoticeError("Epochgram: Summarize missing failed", () =>
 						(this as any).regenerateMissingAiSummariesAndEpochsForAllRecords?.()
 					)();
 					return true;

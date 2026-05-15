@@ -53,6 +53,17 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 		}
 		throw lastErr || new Error("Retry failed");
 	}
+
+	function trimToExactWordCount(text, maxWordsRaw) {
+		const src = String(text ?? "");
+		if (typeof maxWordsRaw !== "number" || !Number.isFinite(maxWordsRaw)) return src;
+		const maxWords = Math.floor(maxWordsRaw);
+		if (maxWords <= 0) return src;
+		const words = src.match(/\S+/g) || [];
+		if (words.length <= maxWords) return src;
+		return words.slice(0, maxWords).join(" ");
+	}
+
 	function teardownBridgePage(reason) {
 		try { void reason; } catch {}
 		if (pageClosing) return;
@@ -163,6 +174,7 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 				length,
 				format: (jobSettings && jobSettings.format) ? jobSettings.format : FIXED_SUMMARIZER.format,
 				preference: (jobSettings && jobSettings.preference) ? jobSettings.preference : "auto",
+				maxOutputWords: (jobSettings && typeof jobSettings.maxOutputWords === "number") ? jobSettings.maxOutputWords : null,
 				sharedContext: (jobSettings && typeof jobSettings.sharedContext === "string") ? jobSettings.sharedContext : "",
 				jobSpecificContext: (jobSettings && typeof jobSettings.jobSpecificContext === "string") ? jobSettings.jobSpecificContext : ""
 			};
@@ -198,7 +210,7 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 				);
 			}, "summarize");
 			if (pageClosing) break;
-          const outStr = String(out ?? "");
+			const outStr = trimToExactWordCount(String(out ?? ""), summarizerOpts.maxOutputWords);
           if (/^Model not available in Chromium\b/i.test(outStr)) {
             throw new Error("Summarizer model not available in this Chromium runtime");
           }

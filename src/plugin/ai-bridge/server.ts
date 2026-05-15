@@ -183,10 +183,10 @@ export class AiBridgeServer {
 
 	private setBridgeOptions(next: Record<string, any>): void {
 		const prev = this.getBridgeOptions();
-		this.plugin.settings.aiBridgeOptions = next as any;
-		try {
-			(this.plugin as any).onAiBridgeOptionsChanged?.(prev, next);
-		} catch {}
+		   this.plugin.settings.aiBridgeOptions = next as any;
+		   try {
+			   (this.plugin as any).onAiBridgeOptionsChanged?.(prev, next);
+		   } catch {}
 		if (this.optionsPersistTimer) {
 			clearTimeout(this.optionsPersistTimer);
 			this.optionsPersistTimer = null;

@@ -112,25 +112,25 @@ export type EpochPlugin = EpochPluginImpl &
 	DescriptionFrontmatterMethods;
 
 Object.assign(
-	EpochPluginImpl.prototype,
-	iconMethods,
-	licenseMethods,
-	dailyNoteMethods,
-	viewMethods,
-	indexingMethods,
-	exclusionMethods,
-	persistenceMethods,
-	fileFlagMethods,
-	fileEventMethods,
-	settingsHandlerMethods,
-	pollingMethods,
-	aiSummariesMethods,
-	similarityMethods,
-	inheritedMarkMethods,
-	searchMethods,
-	dateFrontmatterMethods,
-	descriptionFrontmatterMethods,
-	lifecycleMethods
+   EpochPluginImpl.prototype,
+   iconMethods,
+   licenseMethods,
+   dailyNoteMethods,
+   viewMethods,
+   indexingMethods,
+   exclusionMethods,
+   persistenceMethods,
+   fileFlagMethods,
+   fileEventMethods,
+   settingsHandlerMethods,
+   pollingMethods,
+   aiSummariesMethods,
+   similarityMethods,
+   inheritedMarkMethods,
+   searchMethods,
+   dateFrontmatterMethods,
+   descriptionFrontmatterMethods,
+   lifecycleMethods
 );
 
 export default EpochPluginImpl;

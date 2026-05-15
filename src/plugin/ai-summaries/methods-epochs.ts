@@ -19,6 +19,10 @@ function getAiEnqueueCancelKey(plugin: EpochPlugin): number {
 	}
 }
 
+function wasAiEnqueueCanceled(plugin: EpochPlugin, startCancelKey: number): boolean {
+	return getAiEnqueueCancelKey(plugin) !== startCancelKey;
+}
+
 function aiBridgeHasPendingWork(plugin: EpochPlugin): boolean {
 	try {
 		const bridge: any = (plugin as any).aiBridge;
@@ -211,6 +215,7 @@ export async function enqueueEpochsForDateKeys(
 	const bucketQueue = Array.isArray(options.buckets) && options.buckets.length > 0
 		? (options.buckets.filter(Boolean) as EpochBucket[])
 		: (EPOCH_BUCKET_ORDER.slice() as EpochBucket[]);
+	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 	if (isGenerateEpochsEffective(this)) {
 		try {
 			// Force-regenerating epochs should not implicitly force-refresh per-note AI summaries.
@@ -260,6 +265,7 @@ export async function enqueueEpochsForDateKeys(
 		} catch {
 			// ignore
 		}
+		if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 		const shouldShow = options.showNotice === true;
 		let queuedCount = 0;
 		if (shouldShow) {
@@ -273,8 +279,10 @@ export async function enqueueEpochsForDateKeys(
 			} catch {
 				queuedCount = 0;
 			}
+			if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 			if (queuedCount > 0) new Notice(`Epochs: queued ${queuedCount} job(s).`, 2000);
 		}
+		if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 		void this.openAiBridgeWindow({ silent: true });
 		// Always schedule regeneration after idle when the caller explicitly asked
 		// for epoch generation. The queuedCount is best-effort for the notice only;
@@ -293,6 +301,7 @@ export async function enqueueEpochsForDateKeys(
 	}
 	const bridge: AiBridgeServer = (this as any).aiBridge;
 	void this.openAiBridgeWindow({ silent: true });
+	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 	if (bucketQueue.length > 1) {
 		const first = bucketQueue[0]!;
 		const rest = bucketQueue.slice(1);
@@ -307,7 +316,9 @@ export async function enqueueEpochsForDateKeys(
 		} catch {
 			// ignore
 		}
+		if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 		const firstJobs = await buildEpochJobsForDateKeys(this, normalizedDateKeys, mode, [first]);
+		if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 		if (firstJobs.length > 0) {
 			bridge.enqueue(firstJobs);
 		}
@@ -325,6 +336,7 @@ export async function enqueueEpochsForDateKeys(
 		return;
 	}
 	const jobs = await buildEpochJobsForDateKeys(this, normalizedDateKeys, mode, options.buckets);
+	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 	if (jobs.length === 0) {
 		return;
 	}
@@ -344,6 +356,7 @@ export async function generateEpochsForAllRecords(this: EpochPlugin): Promise<vo
 	if (!Platform.isDesktopApp) return;
 	if (!isGenerateEpochsEffective(this)) return;
 	await this.ensureIndexLoaded();
+	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 	if (isGenerateEpochsEffective(this)) {
 		try {
 			const dateKeys = collectAllEpochDateKeys(this);
@@ -379,8 +392,10 @@ export async function generateEpochsForAllRecords(this: EpochPlugin): Promise<vo
 			} catch {
 				queuedCount = 0;
 			}
+			if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 			if (queuedCount > 0) new Notice(`Epochs: queued ${queuedCount} job(s).`, 2000);
 		}
+		if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 		void this.openAiBridgeWindow({ silent: true });
 		if (queuedCount > 0 || !shouldShow) {
 			scheduleEpochRegenerationAfterAiIdle(this, "staleOrMissing", false);
@@ -388,9 +403,11 @@ export async function generateEpochsForAllRecords(this: EpochPlugin): Promise<vo
 		return;
 	}
 	await ensureAiBridgeServerRunning(this);
+	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 	const bridge: AiBridgeServer = (this as any).aiBridge;
 	void this.openAiBridgeWindow({ silent: true });
 	const jobs = await buildEpochJobs(this, "staleOrMissing");
+	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 	if (jobs.length === 0) {
 		return;
 	}
@@ -417,6 +434,7 @@ export async function regenerateEpochsForAllRecords(this: EpochPlugin): Promise<
 	}
 	if (isGenerateEpochsEffective(this)) {
 		await this.ensureIndexLoaded();
+		if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 		try {
 			const dateKeys = collectAllEpochDateKeys(this);
 			const queued = await enqueueInternalAiSummariesForDateKeys(this, dateKeys, { force: true });
@@ -443,6 +461,7 @@ export async function regenerateEpochsForAllRecords(this: EpochPlugin): Promise<
 	}
 	if (isSummarizeAIEffective(this) && aiBridgeHasPendingWork(this)) {
 		await this.ensureIndexLoaded();
+		if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 		const shouldShow = true;
 		let queuedCount = 0;
 		if (shouldShow) {
@@ -452,8 +471,10 @@ export async function regenerateEpochsForAllRecords(this: EpochPlugin): Promise<
 			} catch {
 				queuedCount = 0;
 			}
+			if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 			if (queuedCount > 0) new Notice(`Epochs: queued ${queuedCount} job(s).`, 2000);
 		}
+		if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 		void this.openAiBridgeWindow({ silent: true });
 		if (queuedCount > 0 || !shouldShow) {
 			scheduleEpochRegenerationAfterAiIdle(this, "force", false);
@@ -461,6 +482,7 @@ export async function regenerateEpochsForAllRecords(this: EpochPlugin): Promise<
 		return;
 	}
 	await this.ensureIndexLoaded();
+	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 	try {
 		await ensureAiBridgeServerRunning(this);
 	} catch (err: any) {
@@ -470,6 +492,7 @@ export async function regenerateEpochsForAllRecords(this: EpochPlugin): Promise<
 	const bridge: AiBridgeServer = (this as any).aiBridge;
 	void this.openAiBridgeWindow({ silent: true });
 	const jobs = await buildEpochJobs(this, "force");
+	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 	if (jobs.length === 0) {
 		return;
 	}
@@ -496,6 +519,7 @@ export async function regenerateMissingEpochsForAllRecords(this: EpochPlugin): P
 		return;
 	}
 	await this.ensureIndexLoaded();
+	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 	const dateKeys = collectAllEpochDateKeys(this);
 	if (dateKeys.length === 0) {
 		return;
@@ -538,8 +562,10 @@ export async function regenerateMissingEpochsForAllRecords(this: EpochPlugin): P
 			} catch {
 				queuedCount = 0;
 			}
+			if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 			if (queuedCount > 0) new Notice(`Epochs: queued ${queuedCount} missing job(s).`, 2000);
 		}
+		if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 		void this.openAiBridgeWindow({ silent: true });
 		scheduleEpochRegenerationCascadeAfterAiIdleForDateKeys(this, dateKeys, mode, bucketQueue, false);
 		return;
@@ -562,24 +588,36 @@ export async function regenerateMissingEpochsForAllRecords(this: EpochPlugin): P
 	} catch {
 		// ignore
 	}
+	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 
-	const first = bucketQueue[0]!;
-	const rest = bucketQueue.slice(1);
-	let firstJobs: any[] = [];
-	try {
-		firstJobs = await buildEpochJobsForDateKeys(this, dateKeys, mode, [first]);
-	} catch {
-		firstJobs = [];
+	let firstNonEmptyJobs: any[] = [];
+	let firstNonEmptyIndex = -1;
+	for (let i = 0; i < bucketQueue.length; i++) {
+		const bucket = bucketQueue[i]!;
+		let jobsForBucket: any[] = [];
+		try {
+			jobsForBucket = await buildEpochJobsForDateKeys(this, dateKeys, mode, [bucket]);
+		} catch {
+			jobsForBucket = [];
+		}
+		if (wasAiEnqueueCanceled(this, startCancelKey)) return;
+		if (jobsForBucket.length === 0) continue;
+		firstNonEmptyJobs = jobsForBucket;
+		firstNonEmptyIndex = i;
+		break;
 	}
-	if (firstJobs.length === 0) {
+	if (firstNonEmptyJobs.length === 0) {
 		return;
 	}
-	bridge.enqueue(firstJobs as any);
-	// Cascade remaining buckets after each prior bucket completes.
-	scheduleEpochRegenerationCascadeAfterAiIdleForDateKeys(this, dateKeys, mode, rest, false);
+	bridge.enqueue(firstNonEmptyJobs as any);
+	// Cascade only buckets that come after the first non-empty one we just enqueued.
+	const rest = bucketQueue.slice(firstNonEmptyIndex + 1);
+	if (rest.length > 0) {
+		scheduleEpochRegenerationCascadeAfterAiIdleForDateKeys(this, dateKeys, mode, rest, false);
+	}
 	{
 		const plannedTotal = Number((this as any).__epochEpochHierarchyTotalJobs ?? 0);
-		const count = Number.isFinite(plannedTotal) && plannedTotal > 0 ? plannedTotal : firstJobs.length;
+		const count = Number.isFinite(plannedTotal) && plannedTotal > 0 ? plannedTotal : firstNonEmptyJobs.length;
 		new Notice(`Epochs: queued ${count} missing job(s).`, 2500);
 	}
 	maybeNudgeBridgeNotReady(this, bridge);

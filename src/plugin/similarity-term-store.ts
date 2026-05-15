@@ -79,19 +79,6 @@ export async function readTermStore(plugin: EpochPlugin): Promise<TermClassifica
 			files: typeof parsed?.files === "object" && parsed.files ? parsed.files : {}
 		};
 
-		// Opportunistically normalize legacy stores that used the sentinel "zeroshot".
-		try {
-			const parsedModel = typeof parsed?.model === "string" ? parsed.model : "";
-			if (parsedModel.trim().toLowerCase() === "zeroshot") {
-				await plugin.app.vault.adapter.write(p, JSON.stringify(store));
-				try {
-					await (plugin as any).updateTermSimilarityFileStat?.();
-				} catch {}
-			}
-		} catch {
-			// ignore
-		}
-
 		anyPlugin.termSimilarityIndex = store;
 		anyPlugin.termSimilarityLoaded = true;
 		return store;

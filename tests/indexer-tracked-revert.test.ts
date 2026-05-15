@@ -14,12 +14,55 @@ import type { Change } from "diff";
 import { Indexer } from "../src/indexer/indexer";
 import type { EpochIndex, TrackedChangeType } from "../src/indexer/types";
 import { TFile } from "obsidian";
-import { buildDayData } from "../src/ui/epoch-data";
 import {
  SUMMARY_ENTRY_SEPARATOR,
  SUMMARY_ICON_TRACKED_ADDED,
 } from "../src/ui/epoch-canvas-constants";
-import { summaryIconLabel, selectTimelineEntries } from "../src/ui/epoch-canvas-utils";
+import { entryFileName, formatEntrySummary, selectTimelineEntries, shouldRenderEntry, summaryIconLabel } from "../src/ui/epoch-canvas-utils";
+
+interface DayData {
+	ts: number;
+	date: string;
+	summary: string;
+}
+
+const buildDayData = (index: EpochIndex): DayData[] => {
+	const out: DayData[] = [];
+
+	for (const date of Object.keys(index)) {
+		const entries = index[date];
+		if (!entries || entries.length === 0) continue;
+		const filteredEntries = entries.filter(shouldRenderEntry);
+		const visibleEntries = selectTimelineEntries(filteredEntries);
+		if (visibleEntries.length === 0) continue;
+
+		const [yyyy, mm, dd] = date.split("-");
+		const ts = Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd));
+
+		const summary = visibleEntries
+			.map(entry => {
+				const rendered =
+					(formatEntrySummary(entry, {
+						fallbackToFileName: true
+					}) || "").trim();
+				if (rendered) {
+					return rendered;
+				}
+				return entryFileName(entry);
+			})
+			.filter(Boolean)
+			.join(SUMMARY_ENTRY_SEPARATOR);
+
+		out.push({
+			ts,
+			date,
+			summary
+		});
+	}
+
+	out.sort((a, b) => a.ts - b.ts);
+	return out;
+};
 
 const TEST_DAY = "2025-11-28T09:00:00.000Z";
 

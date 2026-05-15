@@ -201,6 +201,23 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 	let stableProcessedTokens = 0;
 	let stableProcessedUpdatedAt = 0;
 	let refreshStatusPromise = null;
+	function computeRemainingPct(remainingTokens, processedTokens, errorTokens) {
+		const rem = Math.max(0, Number(remainingTokens) || 0);
+		const processed = Math.max(0, Number(processedTokens) || 0);
+		const errors = Math.max(0, Number(errorTokens) || 0);
+		const total = rem + processed + errors;
+		return total > 0 ? (rem / total) : 0;
+	}
+	function resetPerfUiHistory(now, processedTokens, remainingTokens, errorTokens) {
+		perfUiInitialized = true;
+		lastSampleAt = now;
+		lastDone = processedTokens;
+		speedSeries = [0];
+		const seedRemainingPct = Math.max(0, Math.min(1, computeRemainingPct(remainingTokens, processedTokens, errorTokens)));
+		remainingPctSeries = [seedRemainingPct];
+		if (speedEl) speedEl.textContent = "0.0 tok/s";
+		drawChart();
+	}
 	function stabilizeProcessedTokens(s, rawProcessed) {
 		const now = Date.now();
 		const queuedTokens = Number(s?.queuedTokens || 0);
@@ -264,21 +281,14 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 			const baseNonEpoch = Math.max(0, remainingTokens - Math.max(0, epochQueuedTokens) - Math.max(0, epochInProgressTokens));
 			const remainingTokensAllBuckets = hasEpochRemaining ? (baseNonEpoch + epochRemainingTokens) : remainingTokens;
 			const errorTokens = Number(s.errorTokens || 0);
-			const totalTokens = Math.max(0, processedTokens + errorTokens + remainingTokensAllBuckets);
-			const remainingPct = totalTokens > 0 ? (remainingTokensAllBuckets / totalTokens) : 0;
+			const remainingPct = computeRemainingPct(remainingTokensAllBuckets, processedTokens, errorTokens);
 
 			if (remainingEl) remainingEl.textContent = String(Math.max(0, Math.floor(remainingTokensAllBuckets))) + " tok";
 
 			const now = Date.now();
 			// Avoid a huge first sample if the page opens mid-queue.
 			if (!perfUiInitialized || !lastSampleAt || !Number.isFinite(lastSampleAt)) {
-				perfUiInitialized = true;
-				lastSampleAt = now;
-				lastDone = processedTokens;
-				if (speedEl) speedEl.textContent = "0.0 tok/s";
-				speedSeries.push(0);
-				remainingPctSeries.push(remainingPct);
-				drawChart();
+				resetPerfUiHistory(now, processedTokens, remainingTokensAllBuckets, errorTokens);
 				return;
 			}
 

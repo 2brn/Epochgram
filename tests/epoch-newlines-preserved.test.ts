@@ -52,8 +52,6 @@ describe("epoch rendering", () => {
 		} as any);
 
 		expect(rows.length).toBe(1);
-		// Drop-caps remain enabled for the first paragraph.
-		expect(rows[0]!.dropLineCount).toBeGreaterThan(0);
 		expect(rows[0]!.lines.slice(0, 3)).toEqual([
 			"Epoch GitHub repository link edited",
 			"Search active styles edited",

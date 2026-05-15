@@ -2,7 +2,7 @@ import type { EpochCanvas } from "../epoch-canvas";
 import type { DateEntry } from "../../indexer/types";
 import { getEventState } from "./state";
 import { getEpochRangeFromEntry } from "../epoch-canvas-utils";
-import { findFirstRelatedEntryForEpochRange } from "../epoch-canvas/epochs-view";
+import { listRelatedEntriesForEpochRange } from "../epoch-canvas/epochs-view";
 import { setCssStyles } from "../../dom";
 
 function isEpochEntry(entry: DateEntry | null | undefined): boolean {
@@ -20,15 +20,40 @@ async function openEpochEntryTarget(
 	const s: any = getEventState(canvas) as any;
 	const range = getEpochRangeFromEntry(entry);
 	if (!range) return false;
-	const first = findFirstRelatedEntryForEpochRange(canvas, range.start, range.end);
-	if (!first) return false;
+	const next = pickNextEpochEntryFromRange(canvas, range.start, range.end, s);
+	if (!next) return false;
 	try {
-		(s as any).suppressNextFocusScrollForPath?.(first.file);
+		(s as any).suppressNextFocusScrollForPath?.(next.file);
 	} catch {
 		// ignore
 	}
-	await s.openEntry(first, ev as any, suppressFocusHover);
+	await s.openEntry(next, ev as any, suppressFocusHover);
 	return true;
+}
+
+type EpochOpenCursorState = {
+	key: string;
+	index: number;
+};
+
+export function pickNextEpochEntryFromRange(canvas: EpochCanvas, start: string, end: string, state: any): DateEntry | null {
+	const ordered = listRelatedEntriesForEpochRange(canvas, start, end);
+	if (!ordered.length) return null;
+	const key = `${start}|${end}`;
+	const prev: EpochOpenCursorState | null = state && typeof state === "object"
+		? (state.__epochOpenCursor ?? null)
+		: null;
+	let index = 0;
+	if (prev && prev.key === key) {
+		const lastIndex = Number(prev.index);
+		if (Number.isInteger(lastIndex) && lastIndex >= 0) {
+			index = (lastIndex + 1) % ordered.length;
+		}
+	}
+	if (state && typeof state === "object") {
+		state.__epochOpenCursor = { key, index };
+	}
+	return ordered[index] ?? null;
 }
 
 export async function handlePointClick(
@@ -75,6 +100,7 @@ export async function handlePointClick(
 			if (s.isPointerDeviceEvent()) {
 				s.keepHoverUntilPointerMove = true;
 				s.setHoverSummary(best.dayIndex, best.itemIndex, true);
+				setCssStyles(s.canvas, { cursor: "pointer" });
 			} else if (!preserveHoverOnNonPointer) {
 				s.clearHover();
 			}
@@ -154,6 +180,7 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 			if (s.isPointerDeviceEvent()) {
 				s.keepHoverUntilPointerMove = true;
 				s.setHoverSummary(best.dayIndex, best.itemIndex, true);
+				setCssStyles(s.canvas, { cursor: "pointer" });
 			} else {
 				s.clearHover();
 			}
@@ -212,6 +239,7 @@ export async function handleDoublePoint(canvas: EpochCanvas, x: number, y: numbe
 			await openEpochEntryTarget(canvas, summaryEntry, { ctrlKey: false, metaKey: false }, true);
 			if (s.isPointerDeviceEvent()) {
 				s.keepHoverUntilPointerMove = true;
+				setCssStyles(s.canvas, { cursor: "pointer" });
 			} else {
 				s.clearHover();
 			}

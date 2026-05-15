@@ -2,6 +2,7 @@ import type { DateEntry } from "../../indexer/types";
 import type { EpochCanvas } from "../epoch-canvas";
 
 import { getEpochRangeFromEntry } from "../epoch-canvas-utils";
+import { selectTimelineEntries } from "../epoch-canvas-utils";
 import { getEntriesForDate, isAttachmentEntry } from "../entry-helpers";
 
 import { resetScrollNavTargetState } from "./scroll-nav-reset";
@@ -117,9 +118,14 @@ export function setEpochsViewWithToolbar(canvas: EpochCanvas, value: boolean): v
 }
 
 export function findFirstRelatedEntryForEpochRange(canvas: EpochCanvas, start: string, end: string): DateEntry | null {
+	const entries = listRelatedEntriesForEpochRange(canvas, start, end);
+	return entries[0] ?? null;
+}
+
+export function listRelatedEntriesForEpochRange(canvas: EpochCanvas, start: string, end: string): DateEntry[] {
 	const c: any = canvas as any;
 	const isDateKey = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
-	if (!isDateKey(start) || !isDateKey(end)) return null;
+	if (!isDateKey(start) || !isDateKey(end)) return [];
 
 	const isSyntheticPinnedTodayClone = (entry: any): boolean => {
 		try {
@@ -136,7 +142,7 @@ export function findFirstRelatedEntryForEpochRange(canvas: EpochCanvas, start: s
 		.filter((k) => isDateKey(k) && k >= start && k <= end)
 		.sort()
 		.reverse();
-	if (keys.length === 0) return null;
+	if (keys.length === 0) return [];
 
 	const isNonEpochEntry = (e: DateEntry | null | undefined): boolean => {
 		if (!e) return false;
@@ -154,41 +160,45 @@ export function findFirstRelatedEntryForEpochRange(canvas: EpochCanvas, start: s
 		return 1;
 	};
 
-	const pickPreferred = (entries: DateEntry[]): DateEntry | null => {
-		if (!entries.length) return null;
-		const nonAttachments = entries.filter((e) => !isAttachmentEntry(e));
-		const pool = nonAttachments.length > 0 ? nonAttachments : entries;
-		let best: DateEntry | null = null;
-		let bestRank = Number.POSITIVE_INFINITY;
-		for (const e of pool) {
-			const r = groupRank(e);
-			if (r < bestRank) {
-				best = e;
-				bestRank = r;
-				if (bestRank === 0) break;
-			}
-		}
-		return best ?? pool[0] ?? null;
+	const orderByPriority = (entries: DateEntry[]): DateEntry[] => {
+		const pool = entries.slice();
+		pool.sort((a, b) => {
+			const aAttach = isAttachmentEntry(a) ? 1 : 0;
+			const bAttach = isAttachmentEntry(b) ? 1 : 0;
+			if (aAttach !== bAttach) return aAttach - bAttach;
+			const ar = groupRank(a);
+			const br = groupRank(b);
+			if (ar !== br) return ar - br;
+			const af = String((a as any)?.file || "");
+			const bf = String((b as any)?.file || "");
+			if (af < bf) return -1;
+			if (af > bf) return 1;
+			return 0;
+		});
+		return pool;
 	};
+
+	const out: DateEntry[] = [];
 
 	for (const key of keys) {
 		const d = new Date(`${key}T00:00:00`);
 		// Important: bypass epochsView filtering so we can pick a real note.
-		const entries = getEntriesForDate(canvas, d, { includeAll: true }).filter(isNonEpochEntry);
+		const entries = selectTimelineEntries(getEntriesForDate(canvas, d, { includeAll: true }).filter(isNonEpochEntry));
 		if (entries.length === 0) continue;
-		const preferred = pickPreferred(entries);
-		if (preferred) return preferred;
+		const ordered = orderByPriority(entries);
+		for (const e of ordered) out.push(e);
 	}
+	if (out.length > 0) return out;
 
 	for (const key of keys) {
 		const raw = Array.isArray(c.index[key]) ? c.index[key] : [];
 		const candidates = raw.filter((e: any) => isNonEpochEntry(e));
 		if (candidates.length === 0) continue;
-		const preferred = pickPreferred(candidates as any);
-		if (preferred) return preferred;
+		const ordered = orderByPriority(selectTimelineEntries(candidates as any));
+		for (const e of ordered) out.push(e);
 	}
 
-	return null;
+	return out;
 }
 
 export function exitEpochsViewAndFocusEpoch(canvas: EpochCanvas, entry: DateEntry): void {

@@ -4,11 +4,11 @@ import type { AiSummaryJob } from "../ai-bridge";
 import { computeAiSummaryInputHash, isLikelyTextFilePath } from "../../utils";
 import { extractFrontmatterDescription } from "../../indexer/summarizer";
 import { buildPerCallContext } from "./contexts";
+import { getAiSummaryTuning } from "./bridge-settings";
 import { getIndexerInternals, getLinesForFile } from "./indexer";
 import { buildRelatedSummariesAllDates, getRelatedScoredForFile } from "./related";
 import { getYamlDatePropertyKey, getYamlDescriptionPropertyKey } from "../frontmatter-keys";
-
-const AI_NOTE_MAX_CHARS = 24000;
+import { splitIntoAiChunks } from "./shared";
 
 function sanitizeAiInputText(input: string): string {
 	const raw = String(input || "");
@@ -79,6 +79,10 @@ export async function buildJobsForFile(
 	if (!data) return { jobs: [], reason: "File not indexed" };
 	const lines = await getLinesForFile(plugin, filePath);
 	if (lines.length === 0) return { jobs: [], reason: "File is empty or unreadable" };
+	const tuning = getAiSummaryTuning(plugin);
+	const maxInputChars = tuning.recordsMaxInputChars;
+	const maxRelatedChars = tuning.maxRelatedChars;
+	const maxChunkChars = tuning.maxChunkChars;
 
 	const joinLinesUpToChars = (ls: string[], maxChars: number): string => {
 		if (!ls || ls.length === 0) return "";
@@ -92,7 +96,7 @@ export async function buildJobsForFile(
 		return out;
 	};
 
-	const fullTextRaw = lines.length > 0 ? joinLinesUpToChars(lines, AI_NOTE_MAX_CHARS) : "";
+	const fullTextRaw = lines.length > 0 ? joinLinesUpToChars(lines, maxInputChars) : "";
 	const fullText = sanitizeAiInputText(fullTextRaw);
 	const datePropertyKey = getYamlDatePropertyKey(plugin);
 	const descriptionPropertyKey = getYamlDescriptionPropertyKey(plugin);
@@ -122,7 +126,7 @@ export async function buildJobsForFile(
 	});
 	const computeGroupHash = (groupDate: string, groupType: GroupType, groupInput: string): string => {
 		const key = groupType === "anchor" ? "anchor" : `${groupDate}|${groupType}`;
-		return computeAiSummaryInputHash(filePath, key, groupInput, AI_NOTE_MAX_CHARS);
+		return computeAiSummaryInputHash(filePath, key, groupInput, maxInputChars);
 	};
 	const groupHasFreshAi = (entries: FileDateEntry[], expectedHash: string): boolean => {
 		if (force) return false;
@@ -143,12 +147,11 @@ export async function buildJobsForFile(
 	}) => {
 		const groupInputRaw = sanitizeAiInputText(String(args.inputText ?? "")).trim();
 		if (!groupInputRaw) return;
-		const groupInput = groupInputRaw.length > AI_NOTE_MAX_CHARS ? groupInputRaw.slice(0, AI_NOTE_MAX_CHARS) : groupInputRaw;
+		const groupInput = groupInputRaw.length > maxInputChars ? groupInputRaw.slice(0, maxInputChars) : groupInputRaw;
 		const inputHash = computeGroupHash(args.groupDate, args.groupType, groupInput);
 		if (groupHasFreshAi(args.targetEntries, inputHash)) return;
 		const relatedRaw = getRelatedAllDates();
-		const RELATED_MAX_CHARS = 1500;
-		const related = relatedRaw.length > RELATED_MAX_CHARS ? relatedRaw.slice(0, RELATED_MAX_CHARS) : relatedRaw;
+		const related = relatedRaw.length > maxRelatedChars ? relatedRaw.slice(0, maxRelatedChars) : relatedRaw;
 		const targets: JobTarget[] = args.targetEntries.map(e => {
 			// Targets must point to the correct *container* where the entries live.
 			// Filename date-range “extra days” are stored under `contentDates` but
@@ -162,15 +165,13 @@ export async function buildJobsForFile(
 				"content";
 			return toTarget(e, k);
 		});
-		jobs.push({
-			id: mkId(),
+		const baseJob = {
 			filePath,
 			kind: args.kind,
 			date: args.representative.date,
 			blockStart: args.representative.blockStart,
 			blockEnd: args.representative.blockEnd,
 			source: args.representative.source,
-			input: groupInput,
 			context: buildPerCallContext(filePath, args.representative, related),
 			related,
 			inputHash,
@@ -178,7 +179,32 @@ export async function buildJobsForFile(
 			targets,
 			groupType: args.groupType,
 			groupDate: args.groupDate
-		});
+		};
+		const chunks = splitIntoAiChunks(groupInput, maxChunkChars)
+			.map((chunk) => String(chunk || "").trim())
+			.filter(Boolean);
+		if (groupInput.length <= maxChunkChars || chunks.length <= 1) {
+			jobs.push({
+				id: mkId(),
+				...baseJob,
+				input: groupInput
+			});
+			return;
+		}
+
+		const groupId = mkId();
+		for (let i = 0; i < chunks.length; i++) {
+			jobs.push({
+				id: mkId(),
+				...baseJob,
+				input: chunks[i]!,
+				reduce: true,
+				reduceDepth: 0,
+				groupId,
+				chunkIndex: i,
+				chunkCount: chunks.length
+			});
+		}
 	};
 
 	const anchorEntries: FileDateEntry[] = [];

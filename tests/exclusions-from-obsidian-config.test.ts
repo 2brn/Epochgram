@@ -73,7 +73,7 @@ describe("Obsidian config ignored/excluded paths", () => {
 		expect(plugin.shouldIndexPath("Folder/ok.md")).toBe(true);
 	});
 
-	it("shouldIndexPath returns false for exported epoch HTML files", () => {
+	it("shouldIndexPath does not hard-block exported epoch HTML files", () => {
 		const plugin = makePlugin({
 			getConfig: () => undefined,
 			config: { userIgnoreFilters: [] }
@@ -81,8 +81,8 @@ describe("Obsidian config ignored/excluded paths", () => {
 
 		expect(plugin.shouldIndexPath("epochgram-2026-02-16.html")).toBe(true);
 		expect(plugin.shouldIndexPath("Daily/epochgram-2026-02-16.html")).toBe(true);
-		expect(plugin.shouldIndexPath("epoch-2026-02-16.html")).toBe(false);
-		expect(plugin.shouldIndexPath("Daily/epoch-2026-02-16.html")).toBe(false);
-		expect(plugin.shouldIndexPath("epochs-2026-02-16.html")).toBe(false);
+		expect(plugin.shouldIndexPath("epoch-2026-02-16.html")).toBe(true);
+		expect(plugin.shouldIndexPath("Daily/epoch-2026-02-16.html")).toBe(true);
+		expect(plugin.shouldIndexPath("epochs-2026-02-16.html")).toBe(true);
 	});
 });

@@ -58,7 +58,6 @@ Frontmatter recurring schedule `repeat` (Verified)
   - Matching is attempted against both the full path and the leaf filename.
 - File explorer actions are suppressed for excluded paths (see `plugin/view/file-menu.ts`).
 - Exported HTML files named `epochgram-*.html` are indexed as non-text: they are searchable by filename/path only (export HTML content is ignored).
-- Exported HTML files named `epoch-*.html` / `epochs-*.html` are ignored by indexing.
 
 ### Daily notes (Verified)
 - Epochgram always reads `format` and `folder` from Obsidian core **Daily Notes** plugin settings (when enabled).
@@ -231,9 +230,9 @@ Summary generation (Verified)
 - Editing summaries (Verified in `ui/menus/summary-menu.ts`): saves YAML frontmatter `description` for the file and clears stored AI summary fields for that file so the description becomes the visible summary source immediately.
 
 AI summary context defaults (Verified)
-- Default AI per-note summary context templates (see `plugin/ai-context-templates.ts`) treat the current note content (the job input) as the primary source.
-- Built-in default summary context starts with `Ignore dates`, includes `Ignore empty content`, and includes `{{filePath}}` + `{{related}}`.
-- Built-in default epoch context starts with `Ignore dates`, includes `Ignore empty content`, and includes `{{related}}`.
+- Built-in AI bridge defaults now live in `src/plugin/ai-bridge-page/settings/default-bridge-settings.yaml` and are validated/merged by `plugin/ai-bridge/sanitize.ts`.
+- Bridge YAML supports optional `maxOutputWords` at root and per-job blocks (`reduce`, `records`, each `epochs` rule). Empty values are treated as unset; when set to a positive integer, bridge output is truncated to that exact maximum word count before submission.
+- Default per-note/epoch bridge context treats the current job input as the primary source and uses the YAML placeholder rules (`{{filePath}}`, `{{fileName}}`, `{{related}}`) enforced by the bridge YAML validator.
 - Stored epoch summaries are post-processed for indexing so:
   - each sentence becomes its own output line,
   - lines do not end with a trailing `.` (period), and
@@ -261,7 +260,7 @@ Epoch (period) generation input (Verified)
     - When epoch generation is enabled, Epochgram may enqueue internal per-note AI summary jobs (even if Auto summarize is off) so epoch inputs can use `aiSummary`.
       - When these per-note AI summary jobs are enqueued for epochs, they are queued newest-to-oldest.
     - These per-note AI summaries are persisted in the index (with `aiSummaryInputHash`) and are reused on subsequent epoch regenerations; forcing an epoch regeneration does **not** implicitly force-refresh the per-note summaries (they rerun only when the input hash changes).
-    - Per-note AI summary job inputs are capped to ~24k chars and chunked dynamically in the bridge using Chromium Summarizer quotas (`inputQuota` / `measureInputUsage()`); chunk sizing reserves quota for injected related-context (which is clipped to fit), then splits by headings/paragraphs with overlap and uses summary-of-summaries for long notes (max 2 reduce passes).
+    - Per-note AI summary job inputs use bridge-YAML tuning persisted in `settings.aiBridgeOptions`: `records.maxInputChars` (default `24000`), root `maxRelatedChars` (default `1500`), `reduce.maxChunkChars` (default `2500`), and `reduce.maxDepth` (default `4`). Oversized per-note groups are pre-chunked in the plugin and then flow through the same reduce pipeline used by epoch jobs.
     - When generating missing epochs with epoch generation enabled, Epochgram may queue per-note summaries first and then schedule the epoch cascade; it emits an immediate queued notice for this path.
   - `false` (disabled): epoch generation is disabled.
 - Epoch AI job inputs are grouped by full note path:
@@ -282,7 +281,10 @@ Epoch (period) generation input (Verified)
 - Epoch generation includes **all** eligible input items for the epoch range (no “top N” truncation); attachments / non-text files are excluded.
 - When epoch input is large, jobs are chunked on **line boundaries** and then reduced (summaries-of-summaries) instead of truncating/clipping the input text.
   - Initial chunk jobs are marked as reduce jobs with `reduceDepth: 0` so reduce-specific bridge settings/context are applied from the first chunk stage.
-  - Reduce follow-ups are capped by `AI_REDUCE_MAX_DEPTH` (currently `4`) to bound queue fanout.
+  - Reduce follow-ups are capped by bridge YAML `reduce.maxDepth` (default `4`) to bound queue fanout.
+  - Epoch chunk sizing shares the same bridge YAML `reduce.maxChunkChars` value used by per-note reduce jobs.
+  - Epoch jobs can now attach semantic-related note summaries in `job.related`; the same root `maxRelatedChars` cap applies to both per-note jobs and epoch jobs.
+  - Any epoch bucket can respect a matching epoch-rule `maxFileChars` cap from bridge YAML when the selected `epochs[]` rule sets it (default built-in config sets `625` on the `3month-year` rule).
 - Day epoch AI inputs are derived from both:
   - the aggregated index (`indexer.index` date keys/entries), and
   - the per-file extracted dates (`indexer.files` cdate/namedDate/dateProp/contentDates/trackedDates)
@@ -324,32 +326,19 @@ AI bridge startup behavior (Verified)
     - `epochExpectedInputLanguages` is user-selectable (multi-select; supported: `en`, `es`, `ja`).
     - `epochExpectedContextLanguages` is user-selectable (multi-select; supported: `en`, `es`, `ja`).
     - Summarizer `epochType` and `epochLength` are user-selectable (type: `tldr`, `teaser`, `key-points`, `headline`; length: `short`, `medium`, `long`; defaults: `key-points` + `short`).
-- The bridge page persists its options in localStorage under `epoch_ai_bridge_ctx_v2` (flat fields: `summaryCtxTemplate`, `epochCtxTemplate`, `summaryOutputLanguage`, `summaryExpectedInputLanguages`, `summaryExpectedContextLanguages`, `summaryType`, `summaryLength`, `epochOutputLanguage`, `epochExpectedInputLanguages`, `epochExpectedContextLanguages`, `epochType`, `epochLength`).
-- Reduce jobs use `summaryCtxTemplate`.
-- Epoch jobs (including epoch reduce stages) use `epochCtxTemplate` (there is no separate epoch-reduce template).
+- The bridge page persists its options in localStorage under `epoch_ai_bridge_yaml_v1` and posts the same YAML to `/api/options`; plugin settings persist the sanitized state as `{ settingsYaml, settingsYamlFormatted, resolved }`.
+- The bridge YAML surface includes root summarizer settings plus `reduce`, `records`, and `epochs[]` blocks.
+  - Numeric tuning fields now include root `maxRelatedChars`, `records.maxInputChars`, `reduce.maxDepth`, `reduce.maxChunkChars`, and `epochs[].maxFileChars`.
+- Reduce jobs use the `reduce` block.
+- Per-note jobs use the `records` block.
+- Epoch jobs use the first matching `epochs[]` rule for their bucket; epoch reduce stages still use the `reduce` block.
 - The bridge page supports context-template placeholders (substituted before sending `context` to Chrome Summarizer).
   - Summary jobs: `{{filePath}}`, `{{fileName}}`, `{{related}}`.
   - Epoch jobs (including reduce stages): `{{related}}`.
 - Context placeholders support double-brace syntax only (for example `{{filePath}}`); single-brace placeholders like `{filePath}` are rejected by YAML validation.
 - `{{bucket}}` is not supported and is rejected by YAML validation.
 - `sharedContext` is passed to `Summarizer.create(...)`, while per-job `context` is passed to `summarize(..., { context })`.
-- The bridge page’s Summary/Epoch context templates are empty by default.
-- “Reset to defaults” restores the built-in default context templates.
-- Built-in default context templates live in `src/plugin/ai-context-templates.ts`:
-  - Summary default:
-    - `Ignore dates`
-    - `Ignore empty content`
-    - `Treat the input as the only source of facts; do not add new information`
-    - `{{filePath}}`
-    - `Related context:`
-    - `{{related}}`
-  - Epoch default:
-    - `Ignore dates`
-    - `Ignore empty content`
-    - `Treat the input as the only source of facts; do not add new information`
-    - `Ouput max 7 words per line`
-    - `Related context:`
-    - `{{related}}`
+- “Reset to defaults” restores the built-in bridge YAML from `src/plugin/ai-bridge-page/settings/default-bridge-settings.yaml`.
 - When processing completes and the queue becomes idle, the bridge page keeps the last “Current text preview” content (it does not auto-clear on idle).
 - On bridge page close, the page sends a best-effort disconnect beacon (`POST /api/bye`, via `sendBeacon`) so the server immediately reports `clientConnected: false` (avoids waiting for the ~15s `clientConnected` timeout).
 - The bridge page clears the queue via a single canonical API call (`POST /api/clearQueue`).

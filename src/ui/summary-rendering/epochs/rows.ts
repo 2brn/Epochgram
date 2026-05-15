@@ -251,7 +251,7 @@ export function buildEpochRows(args: EpochsSummaryRenderArgs): {
 				const firstParagraph = String(paragraphs[0] ?? "").trim();
 				const remainder = paragraphs.slice(1).map((p) => String(p ?? "").trim()).filter(Boolean);
 				const trimmed = firstParagraph.trimStart();
-				const { prefix, rest } = splitLeadByStopWordsOrPunctuation(trimmed, undefined, { fallbackWordsWhenNoPunctuation: 6 });
+				const { prefix, rest } = splitLeadByStopWordsOrPunctuation(trimmed, undefined, { fallbackWordsWhenNoPunctuation: 5, maxWords: 5 });
 				if (prefix) {
 					ctx.save();
 					ctx.font = dropCapFont;
@@ -335,7 +335,7 @@ export function buildEpochRows(args: EpochsSummaryRenderArgs): {
 			try {
 				const first = String(lines[0] ?? "");
 				const trimmed = first.trimStart();
-				const { prefix } = splitLeadByStopWordsOrPunctuation(trimmed, undefined, { fallbackWordsWhenNoPunctuation: 6 });
+				const { prefix } = splitLeadByStopWordsOrPunctuation(trimmed, undefined, { fallbackWordsWhenNoPunctuation: 4, maxWords: 4 });
 				if (!dropCapsDisabled && prefix) {
 					ctx.save();
 					ctx.font = dropCapFont;

@@ -292,6 +292,8 @@ export async function stopAiBridge(this: EpochPlugin): Promise<void> {
 }
 
 export function onAiBridgeOptionsChanged(this: EpochPlugin, _prev: Record<string, any>, _next: Record<string, any>): void {
-	// No-op by design: do not show "AI settings changed" prompts.
+	try {
+		void this.reloadIndexFromPluginData?.();
+	} catch {}
 	return;
 }

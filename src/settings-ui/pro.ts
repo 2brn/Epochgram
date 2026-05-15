@@ -10,7 +10,7 @@ import { confirmModal, SimilarityModelSuggestModal } from "../ui/modals";
 import { DEFAULT_SETTINGS } from "../settings-model";
 import { registerInfoResetGesture } from "./info-reset-gesture";
 import { countMissingAiSummaries, hasMissingAiSummariesFast } from "../plugin/ai-summaries/file-jobs";
-import { countMissingEpochs, countMissingEpochsFast } from "../plugin/ai-summaries/epochs";
+import { countMissingEpochsFast } from "../plugin/ai-summaries/epochs";
 import { createSettingGroup } from "./setting-groups";
 import { DEFAULT_SIMILARITY_MODEL, DEFAULT_ZERO_SHOT_MODEL, NO_SIMILARITY_MODEL } from "../plugin/similarity/config";
 import {
@@ -603,8 +603,7 @@ export function renderProPanel(containerEl: HTMLElement, app: any, plugin: Epoch
 						let missingCount = 0;
 						try {
 							await (plugin as any).ensureIndexLoaded?.();
-							const maybeMissing = countMissingEpochsFast(plugin);
-							missingCount = maybeMissing > 0 ? await countMissingEpochs(plugin) : 0;
+							missingCount = countMissingEpochsFast(plugin);
 						} catch {
 							missingCount = 0;
 						}

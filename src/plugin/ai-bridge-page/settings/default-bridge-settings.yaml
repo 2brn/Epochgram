@@ -1,47 +1,58 @@
 sharedContext: |
-  Obsidian markdown notes.
   Ignore dates and empty content.
-  Don't output filenames.
-  Prefer nouns.
-  Treat the input as the only source of facts.
-  No duplicates and metaphrases.
+  Group by topics, compress, remove duplicates and metaphrases.
+  Order by frequency.
 
 format: plain-text
 preference: capability
-
-expectedInputLanguages: [en, ja, es]
+expectedInputLanguages: [en]
 outputLanguage: en
 expectedContextLanguages: [en]
+maxRelatedChars: 300
 
 reduce:
   context: |
-    Compress repetitive or low-information content.
-    Preserve important facts.
-
-  type: key-points
+    Recursive summary reduction.
+    Preserve dominant topics and recurring entities.
+  
+  type: tldr
   length: long
+  maxChunkChars: 3000
+  maxDepth: 3
 
 records:
   context: |
+    File:
     {{filePath}}
-
-  type: headline
-  length: long
+    
+    Preserve facts, entities, terminology, and concrete topics.
+    Remove repetition, filler, boilerplate, and metaphrases.
+    
+  type: tldr
+  length: short
+    
+  maxInputChars: 3000
+  maxOutputWords: 30
 
 epochs:
-  - period: day-month
-
+  - period: day-2weeks
     context: |
-      Output facts, max 3 lines, max 6 words per line.
+      Short-term activity summary.
+      Recent events, actions, tasks, places, people, projects.
+      Output max 12 words, nouns only.
 
-    type: key-points
+    type: tldr
     length: short
+    maxFileChars: 300
+    maxOutputWords: 30
 
-  - period: 3month-year
-
+  - period: month-year
     context: |
-      Output abstract topics, max 10 words.
-      Example: Science, Sport, Travel
+      Broad period summary.
+      Long-term themes, domains, projects, interests, recurring topics.
+      Output max 12 words, nouns only.
 
-    type: headline
-    length: short
+    type: tldr
+    length: medium
+    maxFileChars: 300
+    maxOutputWords: 30

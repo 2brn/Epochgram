@@ -4,9 +4,10 @@ import type { FileDateEntry } from "../../indexer/types";
 import { sanitizeSummaryText } from "../../utils";
 import type { AiBridgeServer, AiSummaryJob } from "../ai-bridge";
 import { buildEpochReduceContext, buildReduceContext } from "./contexts";
+import { getAiSummaryTuning } from "./bridge-settings";
 import { getIndexerInternals, resolveTargetEntries } from "./indexer";
 import { schedulePersist } from "./persistence";
-import { AI_REDUCE_MAX_DEPTH, isDateKey, splitIntoAiChunksByLines } from "./shared";
+import { isDateKey, splitIntoAiChunksByLines } from "./shared";
 import { isEpochJob, storeEpochSummary } from "./epochs-store";
 import { formatAiSummaryOutput } from "../ai-summary-format";
 import { clearEpochInputAiSummaryError, markEpochInputAiSummaryError } from "./epoch-input-ai-fallback";
@@ -166,6 +167,7 @@ function dedupeNonEmptyLines(text: string): string {
 }
 
 export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, result: { summary?: string; error?: string }): void {
+	const tuning = getAiSummaryTuning(plugin);
 	const hasError = typeof result.error === "string" && result.error.trim().length > 0;
 	const summary = typeof result.summary === "string" ? result.summary : "";
 	const hasUsableSummary = !!summary.trim() && !isRejectedAiSummary(summary);
@@ -207,6 +209,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 				epochBucket: (job as any).epochBucket,
 				epochStart: (job as any).epochStart,
 				epochEnd: (job as any).epochEnd,
+				related: (job as any).related,
 				inputHash: job.inputHash,
 				depth: 0,
 				chunkCount: chunkCountNum,
@@ -227,6 +230,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 			g.epochBucket = (job as any).epochBucket;
 			g.epochStart = (job as any).epochStart;
 			g.epochEnd = (job as any).epochEnd;
+			g.related = (job as any).related;
 		}
 		g.done.add(chunkIndex!);
 		if (!hasError && hasUsableSummary) {
@@ -258,7 +262,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 
 			const depth = typeof g.depth === "number" ? g.depth : 0;
 			const bridge: AiBridgeServer | null = (plugin as any).aiBridge ?? null;
-			if (!bridge || depth >= AI_REDUCE_MAX_DEPTH) {
+			if (!bridge || depth >= tuning.reduceMaxDepth) {
 				storeEpochSummary(plugin, job, combined);
 				return;
 			}
@@ -267,7 +271,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 			const nextDepth = depth + 1;
 			const combinedForReduce = dedupeNonEmptyLines(combined) || combined;
 			const reduceChunks = dedupeOrderedParts(
-				splitIntoAiChunksByLines(combinedForReduce)
+				splitIntoAiChunksByLines(combinedForReduce, tuning.maxChunkChars)
 					.map(c => dedupeNonEmptyLines(c))
 					.filter(c => c && c.trim())
 			);
@@ -279,6 +283,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 				const epochBucket = (g.epochBucket ?? (job as any).epochBucket) as any;
 				const epochStart = (g.epochStart ?? (job as any).epochStart ?? job.date) as any;
 				const epochEnd = (g.epochEnd ?? (job as any).epochEnd ?? epochStart) as any;
+				const related = String(g.related ?? (job as any).related ?? "");
 				bridge.enqueue([
 					{
 						id: reduceJobId,
@@ -289,7 +294,8 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 						blockEnd: job.blockEnd,
 						source: job.source,
 						input: reduceChunks[0]!,
-						context: buildEpochReduceContext(epochBucket, epochStart, epochEnd),
+						related: related as any,
+						context: buildEpochReduceContext(epochBucket, epochStart, epochEnd, related),
 						reduce: true,
 						reduceDepth: nextDepth,
 						inputHash: job.inputHash,
@@ -319,12 +325,14 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 				done: new Set<number>(),
 				summaries: new Map<number, string>(),
 				fallbackText: combined,
+				related: (g.related ?? (job as any).related) as any,
 				createdAt: Date.now()
 			});
 			const epochBucket = (g.epochBucket ?? (job as any).epochBucket) as any;
 			const epochStart = (g.epochStart ?? (job as any).epochStart ?? job.date) as any;
 			const epochEnd = (g.epochEnd ?? (job as any).epochEnd ?? epochStart) as any;
-			const epochReduceContext = buildEpochReduceContext(epochBucket, epochStart, epochEnd);
+			const related = String(g.related ?? (job as any).related ?? "");
+			const epochReduceContext = buildEpochReduceContext(epochBucket, epochStart, epochEnd, related);
 			const reduceJobs: AiSummaryJob[] = [];
 			for (let i = 0; i < reduceChunks.length; i++) {
 				reduceJobs.push({
@@ -339,6 +347,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 					blockEnd: job.blockEnd,
 					source: job.source,
 					input: reduceChunks[i]!,
+					related: related as any,
 					context: epochReduceContext,
 					reduce: true,
 					reduceDepth: nextDepth,
@@ -457,7 +466,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 			return;
 		}
 
-		if (depth >= AI_REDUCE_MAX_DEPTH) {
+		if (depth >= tuning.reduceMaxDepth) {
 			storeEntrySummaries(plugin, job, entries, combined);
 			return;
 		}
@@ -466,7 +475,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 		const nextDepth = depth + 1;
 		const combinedForReduce = dedupeNonEmptyLines(combined) || combined;
 		const reduceChunks = dedupeOrderedParts(
-			splitIntoAiChunksByLines(combinedForReduce)
+			splitIntoAiChunksByLines(combinedForReduce, tuning.maxChunkChars)
 				.map(c => dedupeNonEmptyLines(c))
 				.filter(c => c && c.trim())
 		);

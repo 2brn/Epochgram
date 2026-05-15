@@ -154,7 +154,11 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 			settingsYamlFormatted: typeof result.formattedUserYaml === "string" ? result.formattedUserYaml : "",
 			resolved: result && result.resolved ? result.resolved : null
 		});
+		const prevYaml = optionsState && typeof optionsState.settingsYaml === "string" ? String(optionsState.settingsYaml) : "";
 		optionsState = nextState;
+		if (prevYaml !== nextState.settingsYaml) {
+			try { summarizersByKey.clear(); } catch {}
+		}
 		if (shouldPersist) {
 			writeOptionsState(nextState);
 			void postSavedOptionsToObsidian({ settingsYaml: nextState.settingsYaml });
@@ -187,8 +191,23 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 		return "auto";
 	}
 
+	function normalizeOptionalPositiveInteger(raw) {
+		if (typeof raw === "number" && Number.isFinite(raw)) {
+			const n = Math.floor(raw);
+			return n > 0 ? n : null;
+		}
+		if (typeof raw === "string") {
+			const trimmed = String(raw).trim();
+			if (!trimmed) return null;
+			if (!/^\d+$/.test(trimmed)) return null;
+			const n = Number(trimmed);
+			return Number.isSafeInteger(n) && n > 0 ? n : null;
+		}
+		return null;
+	}
+
 	function periodCoversBucket(period, bucket) {
-		const order = ["day", "2days", "week", "2weeks", "month", "3months", "6months", "year"];
+		const order = ["day", "2days", "4days", "week", "2weeks", "month", "3months", "6months", "year"];
 		const normalizedBucket = normalizeEpochBucket(bucket);
 		const idx = order.indexOf(normalizedBucket);
 		if (idx < 0) return false;
@@ -206,7 +225,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 	function mergeSettingsBlock(base, override) {
 		const out = Object.assign({}, base || {});
 		if (!override || typeof override !== "object") return out;
-		for (const key of ["type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages", "context"]) {
+		for (const key of ["type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages", "context", "maxOutputWords"]) {
 			if (override[key] != null) out[key] = override[key];
 		}
 		return out;
@@ -255,6 +274,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 
 		const sharedContext = String(root.sharedContext || "").trim();
 		const jobSpecificContext = String(contextTemplate || "").trim();
+		const maxOutputWords = normalizeOptionalPositiveInteger(merged.maxOutputWords);
 
 		return {
 			type: normalizeSummarizerType(merged.type),
@@ -264,6 +284,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 			outputLanguage: normalizeSupportedLanguage(merged.outputLanguage),
 			expectedInputLanguages: normalizeSupportedLanguageList(merged.expectedInputLanguages, ["en", "ja", "es"]),
 			expectedContextLanguages: normalizeSupportedLanguageList(merged.expectedContextLanguages, ["en"]),
+			maxOutputWords,
 			sharedContext,
 			jobSpecificContext
 		};
@@ -496,10 +517,14 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 		try { if (el === errEl) syncErrVisibility(); } catch {}
 	}
 
-	function rangeMaxPow10(value) {
+	function rangeMaxPow2(value) {
 		const v = Math.max(1, Number(value) || 0);
-		const p = Math.ceil(Math.log10(v));
-		return Math.pow(10, Math.max(0, p));
+		if (v < 10) return Math.max(1, Math.round(v));
+		const digits = Math.floor(Math.log(v) / Math.log(10)) + 1;
+		const step = Math.pow(10, Math.max(1, digits - 1));
+		const rounded = Math.round(v / step) * step;
+		if (rounded >= v) return rounded;
+		return rounded + step;
 	}
 
 	function drawChart() {
@@ -529,7 +554,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 				if (v > maxValue) maxValue = v;
 			}
 		} catch {}
-		const maxY = rangeMaxPow10(maxValue);
+		const maxY = rangeMaxPow2(maxValue);
 		const padL = 40;
 		const padR = 6;
 		const padT = 4;
@@ -562,22 +587,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 
 		chartCtx.font = "12px ui-monospace, Menlo, Consolas";
 		chartCtx.fillStyle = "#9aa0a6";
-		chartCtx.strokeStyle = "#333";
-		chartCtx.lineWidth = 1;
-		const maxPow = Math.round(Math.log10(maxY));
-		for (let p = 0; p <= maxPow; p++) {
-			const tick = Math.pow(10, p);
-			const y = padT + (1 - tick / maxY) * gh;
-			chartCtx.globalAlpha = 0.55;
-			chartCtx.beginPath();
-			chartCtx.moveTo(padL, y);
-			chartCtx.lineTo(padL + gw, y);
-			chartCtx.stroke();
-			chartCtx.globalAlpha = 1;
-			if (p === maxPow) {
-				chartCtx.fillText(String(tick), 4, y + 4);
-			}
-		}
+		chartCtx.fillText(String(maxY), 4, padT + 4);
 
 		chartCtx.strokeStyle = "#8c9ea9";
 		chartCtx.lineWidth = 2;

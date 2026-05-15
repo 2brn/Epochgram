@@ -38,18 +38,7 @@ export interface EpochSettings {
 	similarityThreshold: number;
 	similarityZeroShotMinScore?: number;
 	aiBridgeOptions?: {
-		summaryCtxTemplate?: string;
-		epochCtxTemplate?: string;
-		summaryOutputLanguage?: "en" | "es" | "ja";
-		summaryExpectedInputLanguages?: Array<"en" | "es" | "ja">;
-		summaryExpectedContextLanguages?: Array<"en" | "es" | "ja">;
-		summaryType?: "tldr" | "teaser" | "key-points" | "headline";
-		summaryLength?: "short" | "medium" | "long";
-		epochOutputLanguage?: "en" | "es" | "ja";
-		epochExpectedInputLanguages?: Array<"en" | "es" | "ja">;
-		epochExpectedContextLanguages?: Array<"en" | "es" | "ja">;
-		epochType?: "tldr" | "teaser" | "key-points" | "headline";
-		epochLength?: "short" | "medium" | "long";
+		settingsYaml?: string;
 	};
 	aiBridgeServer?: {
 		token: string;

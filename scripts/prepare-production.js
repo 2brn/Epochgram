@@ -99,28 +99,6 @@ function copyFileIfExists(src, dst) {
 	return true;
 }
 
-function copyDirContents(srcDir, dstDir) {
-	if (!fs.existsSync(srcDir)) return 0;
-	const stat = fs.statSync(srcDir);
-	if (!stat.isDirectory()) return 0;
-
-	ensureDir(dstDir);
-	let copied = 0;
-	for (const name of fs.readdirSync(srcDir)) {
-		const src = path.join(srcDir, name);
-		const dst = path.join(dstDir, name);
-		const st = fs.statSync(src);
-		if (st.isDirectory()) {
-			copied += copyDirContents(src, dst);
-		} else if (st.isFile()) {
-			ensureDir(path.dirname(dst));
-			fs.copyFileSync(src, dst);
-			copied++;
-		}
-	}
-	return copied;
-}
-
 function getReadmeImageFiles(repoRoot) {
 	const readmePath = path.join(repoRoot, "README.md");
 	if (!fs.existsSync(readmePath)) return [];

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Indexer } from "../src/indexer/indexer";
 import { normalizeDateFromTimestamp } from "../src/indexer/extractor";
+import { validateBridgeOptionsYaml } from "../src/plugin/ai-bridge/sanitize";
 import { TFile } from "obsidian";
 import { computeAiSummaryInputHash } from "../src/utils";
 
@@ -11,11 +12,13 @@ describe("AI summary hash consistency", () => {
 
 	beforeEach(() => {
 		contents = {};
+		const validated = validateBridgeOptionsYaml("");
 		pluginStub = {
 			settings: {
 				trackChanges: false,
 				summaryWordsCount: 8,
-				summarizeAI: true
+				summarizeAI: true,
+				aiBridgeOptions: validated.stored
 			},
 			hasProAccess: () => true,
 			app: {
@@ -26,7 +29,8 @@ describe("AI summary hash consistency", () => {
 				workspace: {
 					getActiveViewOfType: vi.fn()
 				}
-			}
+			},
+			aiBridgeResolved: validated.resolved
 		};
 		indexer = new Indexer(pluginStub);
 	});
@@ -47,13 +51,14 @@ describe("AI summary hash consistency", () => {
 		});
 	};
 
-	it("uses stored AI summary for long inputs (>24000 chars)", async () => {
+	it("uses stored AI summary for long inputs above records.maxInputChars", async () => {
 		const ctime = Date.UTC(2025, 0, 5);
 		const file = makeFile("folder/long-note.md", ctime);
+		const maxInputChars = pluginStub.aiBridgeResolved.records?.maxInputChars ?? 24000;
 
-		// Make content longer than the 24000-char hashing window.
-		contents[file.path] = "# Heading\n" + "word ".repeat(6000);
-		expect(contents[file.path].length).toBeGreaterThan(24000);
+		// Make content longer than the configured hashing window.
+		contents[file.path] = "# Heading\n" + "word ".repeat(60000);
+		expect(contents[file.path].length).toBeGreaterThan(maxInputChars);
 
 		await indexer.processFile(file, { reason: "modify" });
 
@@ -74,9 +79,9 @@ describe("AI summary hash consistency", () => {
 			}
 			return out;
 		};
-		const fullTextForHash = joinLinesUpToChars(fullText.split(/\r?\n/), 24000);
+		const fullTextForHash = joinLinesUpToChars(fullText.split(/\r?\n/), maxInputChars);
 		fileData.cdate.aiSummary = aiSummary;
-		fileData.cdate.aiSummaryInputHash = computeAiSummaryInputHash(file.path, "anchor", fullTextForHash, 24000);
+		fileData.cdate.aiSummaryInputHash = computeAiSummaryInputHash(file.path, "anchor", fullTextForHash, maxInputChars);
 
 		// Rebuild aggregated entries to pick up AI summary.
 		(indexer as any).latestLines[file.path] = fullText.split(/\r?\n/);

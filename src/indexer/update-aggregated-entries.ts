@@ -5,6 +5,7 @@ import { computeAiSummaryInputHash } from "utils";
 import { expandRecurrenceToDateKeys } from "./recurrence";
 import { extractFrontmatterDescription } from "./summarizer";
 import { resolveFrontmatterSuppressionFlags } from "./frontmatter-flags";
+import { getAiSummaryTuning } from "../plugin/ai-summaries/bridge-settings";
 import { getYamlDescriptionPropertyKey, readFrontmatterProperty } from "../plugin/frontmatter-keys";
 import type {
 	DateEntry,
@@ -69,7 +70,8 @@ export function updateAggregatedEntriesInternal(
 		}
 		return (entry as any)?.aiSummaryVisible === true;
 	};
-	const AI_NOTE_MAX_CHARS = 24000;
+	const tuning = getAiSummaryTuning(s.plugin as any);
+	const maxInputChars = tuning.recordsMaxInputChars;
 	const joinLinesUpToChars = (ls: string[], maxChars: number): string => {
 		if (!ls || ls.length === 0) return "";
 		if (!(maxChars > 0)) return "";
@@ -81,7 +83,7 @@ export function updateAggregatedEntriesInternal(
 		}
 		return out;
 	};
-	const fullText = lines.length > 0 ? joinLinesUpToChars(lines, AI_NOTE_MAX_CHARS) : "";
+	const fullText = lines.length > 0 ? joinLinesUpToChars(lines, maxInputChars) : "";
 	const described = (() => {
 		const descriptionKey = getYamlDescriptionPropertyKey(s.plugin);
 		if (fullText) {
@@ -127,7 +129,7 @@ export function updateAggregatedEntriesInternal(
 	const computeGroupHash = (entry: FileDateEntry, groupInput: string): string => {
 		const gt = groupTypeForEntry(entry);
 		const key = gt === "anchor" ? "anchor" : `${entry.date}|${gt}`;
-		return computeAiSummaryInputHash(filePath, key, groupInput, AI_NOTE_MAX_CHARS);
+		return computeAiSummaryInputHash(filePath, key, groupInput, maxInputChars);
 	};
 	const resolveGroupedAiSummaryIfValid = (entry: FileDateEntry): string | null => {
 		const gt = groupTypeForEntry(entry);

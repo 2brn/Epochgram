@@ -151,4 +151,41 @@ describe("enqueueEpochsForDateKeys defer behavior", () => {
 		expect(enqueueThrottledJobsMock).toHaveBeenCalledTimes(1);
 		expect(scheduleCascade).not.toHaveBeenCalled();
 	});
+
+	it("does not schedule cascade when canceled during delayed hierarchy count", async () => {
+		scheduleCascade.mockClear();
+		enqueueThrottledJobsMock.mockReset();
+		enqueueThrottledJobsMock.mockImplementation(async () => undefined);
+
+		const buildMock: any = buildEpochJobsForDateKeys as any;
+		buildMock.mockReset();
+		buildMock.mockImplementation(async (plugin: any, _keys: any[], _mode: any, _bucketsOverride: any[]) => {
+			plugin.__epochAiEnqueueCancelKey = (Number(plugin.__epochAiEnqueueCancelKey) || 0) + 1;
+			return [{ kind: "epoch", input: "aaaa" }];
+		});
+
+		const plugin: any = {
+			settings: {
+				generateEpochs: true,
+				summarizeAI: false,
+			},
+			hasProAccess: () => true,
+			__epochAiEnqueueCancelKey: 0,
+			ensureIndexLoaded: async () => undefined,
+			openAiBridgeWindow: async () => undefined,
+			app: {},
+			aiBridge: {
+				getStatus: () => ({ clientConnected: false, queued: 1, inProgress: 0 }),
+			},
+		};
+		withTrustedPro(plugin);
+
+		await enqueueEpochsForDateKeys.call(plugin, ["2026-02-12"], {
+			force: true,
+			showNotice: true,
+			buckets: ["day", "2days"],
+		});
+
+		expect(scheduleCascade).not.toHaveBeenCalled();
+	});
 });

@@ -34,7 +34,8 @@
     - Dropping outside the timeline canvas cancels the operation (no file rename; no `date` update).
   - Epoch entries in Epochs view:
     - Single click/tap on an epoch entry opens a related *real* record from within the epoch’s date range.
-    - Selection prefers the **newest** eligible day in the range; within a day it prefers `cdate`/`namedate`/`dateprop` over `content` over `tracked`, and skips attachments when possible.
+    - Repeated clicks/taps on the same epoch cycle through all related records in priority order; switching to a different epoch resets that cycle.
+    - Selection order prefers the **newest** eligible day in the range; within a day it prefers `cdate`/`namedate`/`dateprop` over `content` over `tracked`, and skips attachments when possible.
   - Many UI popups attempt to prevent unintended scroll jumps:
     - Modals/suggest popups try to restore prior focus with `preventScroll` on close (see `ui/modals/*`).
     - Topic editing entrypoints temporarily suppress Epochgram’s external auto-scroll so active-file updates don’t snap the timeline (see `ui/menus/summary-menu/topic-menu.ts`).
