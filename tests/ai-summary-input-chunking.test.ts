@@ -32,7 +32,16 @@ describe("AI summary input chunking", () => {
 				trackChanges: true,
 				summaryWordsCount: 8,
 				summarizeAI: true,
-				parseDatesInFrontmatter: true
+				parseDatesInFrontmatter: true,
+				aiBridgeOptions: {
+					settingsYaml: [
+						"records:",
+						"  maxInputChars: 12000",
+						"reduce:",
+						"  maxChunkChars: 1200",
+						"  maxDepth: 3"
+					].join("\n")
+				}
 			},
 			hasProAccess: () => true,
 			app: {
@@ -82,7 +91,7 @@ describe("AI summary input chunking", () => {
 		await indexer.processFile(file, { reason: "modify" });
 
 		const built = await buildJobsForFile(pluginStub, file.path, false);
-		const anchorJobs = built.jobs.filter((job: any) => job.groupType === "anchor" && job.kind === "dateProp");
+		const anchorJobs = built.jobs.filter((job: any) => job.groupType === "anchor");
 		expectChunked(anchorJobs);
 	});
 

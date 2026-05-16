@@ -1,8 +1,7 @@
 # Epochgram changelog
 
 ## [1.4.0] - 2026-05-16
-- Reworked AI Bridge settings into YAML and improved summarization flow.
-- Added `Summarize current file` command.
+- Reworked AI Bridge settings into YAML and improved summarization flow; added `Summarize current file` command.
 - Added bridge and epochs fixes.
 - Refactored review-related code paths.
 - Fixed and cleaned up styles.

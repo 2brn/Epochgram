@@ -9,10 +9,10 @@ describe("AI bridge page Reset to defaults", () => {
 		// Built-in defaults are embedded for initial load and the Reset button.
 		expect(html.includes("const BUILTIN_DEFAULTS")).toBe(true);
 		expect(html.includes("settingsYaml")).toBe(true);
-		expect(html.includes("Obsidian markdown notes.")).toBe(true);
+		expect(html.includes("Ignore dates and empty content.")).toBe(true);
 		expect(html.includes("{{filePath}}")).toBe(true);
-		expect(html.includes("maxInputChars: 24000")).toBe(true);
-		expect(html.includes("maxChunkChars: 2500")).toBe(true);
+		expect(html.includes("maxInputChars: 3000")).toBe(true);
+		expect(html.includes("maxChunkChars: 3000")).toBe(true);
 
 		// Reset handler should reference BUILTIN_DEFAULTS.
 		expect(html.includes("makeDefaultOptionsState()")).toBe(true);
