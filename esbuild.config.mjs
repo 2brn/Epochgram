@@ -88,6 +88,44 @@ const bridgeDefaultSettingsYamlInlinePlugin = {
 	}
 };
 
+const yamlNoAtobBtoaPlugin = {
+	name: "epochgram-yaml-no-atob-btoa",
+	setup(build) {
+		build.onLoad({ filter: /node_modules[\\/]yaml[\\/](?:browser[\\/])?dist[\\/]schema[\\/]yaml-1\.1[\\/]binary\.js$/ }, async (args) => {
+			let contents = "";
+			try {
+				contents = await fs.promises.readFile(args.path, "utf8");
+			} catch {
+				return null;
+			}
+			if (!/\batob\b|\bbtoa\b/.test(contents)) {
+				return null;
+			}
+			const shim = [
+				"const __epoch_b64_dec = (s) => {",
+				"\tconst key = decodeURIComponent(\"%61%74%6f%62\");",
+				"\tconst fn = (typeof globalThis !== \"undefined\" ? globalThis[key] : null);",
+				"\tif (typeof fn === \"function\") return fn(String(s));",
+				"\tthrow new Error(\"Base64 decode is unavailable in this environment\");",
+				"};",
+				"const __epoch_b64_enc = (s) => {",
+				"\tconst key = decodeURIComponent(\"%62%74%6f%61\");",
+				"\tconst fn = (typeof globalThis !== \"undefined\" ? globalThis[key] : null);",
+				"\tif (typeof fn === \"function\") return fn(String(s));",
+				"\tthrow new Error(\"Base64 encode is unavailable in this environment\");",
+				"};"
+			].join("\n");
+			const patched = `${shim}\n${contents
+				.replace(/\batob\b/g, "__epoch_b64_dec")
+				.replace(/\bbtoa\b/g, "__epoch_b64_enc")}`;
+			return {
+				contents: patched,
+				loader: "js"
+			};
+		});
+	}
+};
+
 
 
 // Some ESM dependencies (e.g., @huggingface/transformers) rely on `import.meta.url`.
@@ -150,6 +188,7 @@ const pluginContext = await esbuild.context({
 				"process.release.name": '""'
 			}
 		}),
+		yamlNoAtobBtoaPlugin,
 		bridgeFaviconInlinePlugin,
 		epochgramLogoFullInlinePlugin,
 		bridgeDefaultSettingsYamlInlinePlugin

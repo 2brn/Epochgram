@@ -4,7 +4,7 @@ import { registerFileMenu } from "./view/file-menu";
 
 export interface ViewMethods {
 	onunload(): void;
-	openEpochView(options?: { skipSnap?: boolean }): Promise<void>;
+	openEpochView(options?: { skipSnap?: boolean; activate?: boolean }): Promise<void>;
 	openTimelineSearch(): Promise<void>;
 	ensureEpochViewLeaf(): Promise<void>;
 	refreshEpochViews(options?: { forceSemanticRelated?: boolean }): void;
@@ -16,7 +16,7 @@ export const viewMethods: ViewMethods = {
 		onViewUnload(this);
 	},
 
-	async openEpochView(this: EpochPlugin, options?: { skipSnap?: boolean }): Promise<void> {
+	async openEpochView(this: EpochPlugin, options?: { skipSnap?: boolean; activate?: boolean }): Promise<void> {
 		await openEpochView(this, options ?? {});
 	},
 

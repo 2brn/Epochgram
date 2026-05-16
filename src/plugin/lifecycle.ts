@@ -559,11 +559,11 @@ export const lifecycleMethods: LifecycleMethods = {
 											};
 
 											const runOpen = () => {
-												wrapNoticeError("Epochgram: Auto-open timeline failed", () => this.openEpochView())();
+												wrapNoticeError("Epochgram: Auto-open timeline failed", () => this.openEpochView({ activate: true }))();
 											};
 
 											const attemptOpen = () => {
-												if (hasOpenMarkdownFile() || performance.now() - startAt >= 3000) {
+												if (hasOpenMarkdownFile() || performance.now() - startAt >= 500) {
 													runOpen();
 													return;
 												}

@@ -23,8 +23,9 @@ export function onViewUnload(plugin: EpochPlugin): void {
 	plugin.app.workspace.detachLeavesOfType(VIEW_TYPE_EPOCH);
 }
 
-export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: boolean } = {}): Promise<void> {
+export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: boolean; activate?: boolean } = {}): Promise<void> {
 	await plugin.ensureIndexLoaded();
+	const shouldActivate = options.activate === true;
 	const current = plugin.app.workspace.getMostRecentLeaf();
 	if (current && current.view.getViewType() === "markdown") {
 		(plugin as any).noteLeaf = current;
@@ -111,7 +112,7 @@ export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: b
 		const leaf = leaves[0];
 		void plugin.app.workspace.revealLeaf(leaf);
 		try {
-			if (Platform.isMobileApp) {
+			if (Platform.isMobileApp || shouldActivate) {
 				plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
 			}
 		} catch {
@@ -150,12 +151,12 @@ export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: b
 
 	await leaf.setViewState({
 		type: VIEW_TYPE_EPOCH,
-		active: false
+		active: shouldActivate
 	});
 
 	void plugin.app.workspace.revealLeaf(leaf);
 	try {
-		if (Platform.isMobileApp) {
+		if (Platform.isMobileApp || shouldActivate) {
 			plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
 		}
 	} catch {
