@@ -62,8 +62,6 @@ A Timemap of Your Mind
 - Copy files into your vault plugin folder: `.obsidian/plugins/epochgram`.
 - Enable Epochgram in Obsidian Settings → Community plugins.
 
-</br>
-
 > [!TIP]
 > Click the <img src="images/epochgram_bw.svg" width="18" height="18" alt="Epochgram"> ribbon icon or run **⌘ Epochgram: Open timeline** to show the timeline in the right panel.</br>
 > To open it automatically on launch, enable **⛭ Open timeline on startup**.
