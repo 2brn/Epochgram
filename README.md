@@ -8,9 +8,6 @@ A Timemap of Your Mind
   <a href="https://github.com/2brn/Epochgram/releases">
     <img src="https://img.shields.io/github/v/release/2brn/Epochgram?style=for-the-badge&sort=semver" alt="GitHub release (latest SemVer)">
   </a>
-  <!-- <a href="https://obsidian.md/plugins?id=epochgram">
-    <img src="https://img.shields.io/badge/dynamic/json?logo=obsidian&color=%23483699&label=downloads&query=%24%5B%22epochgram%22%5D.downloads&url=https%3A%2F%2Fraw.githubusercontent.com%2Fobsidianmd%2Fobsidian-releases%2Fmaster%2Fcommunity-plugin-stats.json&style=for-the-badge" alt="Obsidian Downloads">
-  </a> -->
 </p>
 
 </br>
@@ -115,7 +112,6 @@ Each file has one anchor record that represents its canonical date. All other re
 <p align="center">
 <img src="images/create.gif" height="360" alt="Create note">
 <img src="images/dragndrop.gif" height="360" alt="Drag-n-drop">
-<!-- <img src="images/tracked.gif" height="360" alt="Create note"> -->
 </p>
 
 > ```text
