@@ -48,15 +48,15 @@ A Timemap of Your Mind
 
 ### Download
 
-#### Via [Obsidian Community plugins](https://obsidian.md/plugins?id=epochgram)
+Install from **[Obsidian Community plugins](https://community.obsidian.md/plugins/epochgram)**
 
-#### Via BRAT
+BRAT
 
 - Install [BRAT](https://community.obsidian.md/plugins/obsidian42-brat) community plugin in Obsidian.
 - Use [Obsidian protocol](https://www.epochgram.com/brat) to add Epochgram.
 - Or Obsidian Settings → BRAT → Add beta plugin [https://github.com/2brn/Epochgram](https://github.com/2brn/Epochgram).
 
-#### Manual install
+Manual install
 
 - Download the latest release files from [GitHub releases](https://github.com/2brn/Epochgram/releases).
 - Copy files into your vault plugin folder: `.obsidian/plugins/epochgram`.
