@@ -155,7 +155,7 @@ const pluginContext = await esbuild.context({
 		bridgeDefaultSettingsYamlInlinePlugin
 	],
 	outfile: "main.js",
-	minify: false,
+	minify: prod,
 });
 
 if (prod) {

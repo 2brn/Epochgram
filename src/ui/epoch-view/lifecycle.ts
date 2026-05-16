@@ -173,21 +173,42 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 		// ignore
 	}
 	view.refreshSyncedEpochAvailability();
+	const resolveFileFromLeafState = (leaf: WorkspaceLeaf | null | undefined): TFile | null => {
+		try {
+			const getViewState = (leaf as any)?.getViewState;
+			if (typeof getViewState !== "function") return null;
+			const vs = getViewState.call(leaf);
+			const raw = vs?.state?.file ?? vs?.state?.path ?? null;
+			const path = typeof raw === "string" ? raw : "";
+			if (!path) return null;
+			const af = view.app.vault.getAbstractFileByPath(path);
+			return af instanceof TFile ? af : null;
+		} catch {
+			return null;
+		}
+	};
 	// Delay initial active-file sync until after startup snap + first size/layout.
 	view.registerEvent(
 		view.app.workspace.on("active-leaf-change", () => {
 			let leafFilePath: string | null = null;
+			let shouldForceFocus = false;
 			try {
 				const leaf = (view.app.workspace as any)?.activeLeaf as WorkspaceLeaf | null | undefined;
 				const leafView = leaf?.view;
 				if (leafView instanceof MarkdownView) {
 					const f = leafView.file;
 					if (f instanceof TFile) leafFilePath = f.path;
+				} else {
+					const f = resolveFileFromLeafState(leaf);
+					if (f instanceof TFile) {
+						leafFilePath = f.path;
+						shouldForceFocus = true;
+					}
 				}
 			} catch {
 				// ignore
 			}
-			const suppressFocus = !!leafFilePath && leafFilePath === view.activeFilePath;
+			const suppressFocus = shouldForceFocus ? false : (!!leafFilePath && leafFilePath === view.activeFilePath);
 			view.updateActiveFile(undefined, { suppressFocus });
 		})
 	);
@@ -232,22 +253,10 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 					snapFile = f;
 					const line = leafView.editor?.getCursor?.().line;
 					if (typeof line === "number") cursorLine = line;
-				} else {
-					try {
-						const getViewState = (leaf as any)?.getViewState;
-						if (typeof getViewState === "function") {
-							const vs = getViewState.call(leaf);
-							const raw = vs?.state?.file ?? vs?.state?.path ?? null;
-							const path = typeof raw === "string" ? raw : "";
-							if (path) {
-								const af = view.app.vault.getAbstractFileByPath(path);
-								snapFile = af instanceof TFile ? af : null;
-							}
-						}
-					} catch {
-						// ignore
-					}
 				}
+			}
+			if (!snapFile) {
+				snapFile = resolveFileFromLeafState(leaf);
 			}
 		} catch {
 			// ignore
@@ -285,9 +294,11 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 		}
 
 		view.startupSnapPath = snapFile?.path ?? null;
-		// Apply snap *before* the first resize/draw to avoid a visible jump.
 		// Priority: opened file -> today.
+		// Initialize canvas size first so startup snap uses the same geometry as
+		// later manual/ribbon snaps.
 		const hasOpenFile = !!view.startupSnapPath;
+		view.canvas.initSize();
 		if (hasOpenFile) {
 			if (Platform.isMobileApp && cursorLine == null) {
 				view.startupDeferredSnapPath = view.startupSnapPath;
@@ -298,8 +309,22 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 		} else {
 			view.canvas.snapInitialPosition(null, null, { draw: false });
 		}
-		view.canvas.initSize();
 		view.updateActiveFile();
+		// Reconcile one frame later: some startup layouts settle after the first
+		// snap, which can produce a slight offset compared to manual ribbon open.
+		requestAnimationFrame(() => {
+			try {
+				if (!view.canvas) return;
+				if (Platform.isMobileApp && view.startupDeferredSnapPath) return;
+				if (view.startupSnapPath) {
+					view.canvas.snapInitialPosition(view.startupSnapPath, cursorLine, { draw: false });
+				} else {
+					view.canvas.snapInitialPosition(null, null, { draw: false });
+				}
+			} catch {
+				// ignore
+			}
+		});
 		if (!Platform.isMobileApp) {
 			view.startStartupDefaultNoteRefocus();
 		}

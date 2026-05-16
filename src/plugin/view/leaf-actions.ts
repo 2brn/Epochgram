@@ -30,7 +30,43 @@ export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: b
 		(plugin as any).noteLeaf = current;
 	}
 
-	const getOpenMarkdownFile = (): { file: any; line: number | null } | null => {
+	const resolveFileFromLeaf = (leaf: any): { file: any; line: number | null } | null => {
+		if (!leaf) return null;
+		try {
+			const v: any = leaf?.view;
+			const f = v?.file;
+			if (f) {
+				const line0 = v?.editor?.getCursor?.().line;
+				const line = typeof line0 === "number" ? line0 : null;
+				return { file: f, line };
+			}
+		} catch {
+			// ignore
+		}
+		try {
+			const getViewState = leaf?.getViewState;
+			if (typeof getViewState !== "function") return null;
+			const vs = getViewState.call(leaf);
+			const raw = vs?.state?.file ?? vs?.state?.path ?? null;
+			const path = typeof raw === "string" ? raw : "";
+			if (!path) return null;
+			const af = (plugin.app.vault as any)?.getAbstractFileByPath?.(path);
+			if (!af) return null;
+			return { file: af, line: null };
+		} catch {
+			// ignore
+		}
+		return null;
+	};
+
+	const getOpenFile = (): { file: any; line: number | null } | null => {
+		try {
+			const activeLeaf: any = (plugin.app.workspace as any)?.activeLeaf ?? null;
+			const active = resolveFileFromLeaf(activeLeaf);
+			if (active?.file) return active;
+		} catch {
+			// ignore
+		}
 		try {
 			const noteLeaf: any = (plugin as any).noteLeaf ?? null;
 			const noteView: any = noteLeaf?.view ?? null;
@@ -59,6 +95,13 @@ export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: b
 		} catch {
 			// ignore
 		}
+		try {
+			const recent = plugin.app.workspace.getMostRecentLeaf?.();
+			const resolved = resolveFileFromLeaf(recent);
+			if (resolved?.file) return resolved;
+		} catch {
+			// ignore
+		}
 		return null;
 	};
 
@@ -77,7 +120,7 @@ export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: b
 		if (!options.skipSnap) {
 			const view: any = leaf.view as any;
 			try {
-				const open = getOpenMarkdownFile();
+				const open = getOpenFile();
 				const path = open?.file?.path ?? null;
 				const line = open?.line ?? null;
 				if (path) {
@@ -107,7 +150,7 @@ export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: b
 
 	await leaf.setViewState({
 		type: VIEW_TYPE_EPOCH,
-		active: true
+		active: false
 	});
 
 	void plugin.app.workspace.revealLeaf(leaf);

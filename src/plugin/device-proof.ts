@@ -1,4 +1,5 @@
 import type { EpochPlugin } from "../main";
+import { encodeBase64 } from "./base64";
 
 const KEY_STORAGE_VERSION = 1;
 const KEY_DB_NAME = "epochgram-device-proof";
@@ -87,13 +88,7 @@ function toArrayBuffer(view: Uint8Array): ArrayBuffer {
 }
 
 function bytesToBase64Url(bytes: Uint8Array): string {
-	let binary = "";
-	for (const byte of bytes) {
-		binary += String.fromCharCode(byte);
-	}
-	const encoded = typeof btoa === "function"
-		? btoa(binary)
-		: Buffer.from(bytes).toString("base64");
+	const encoded = encodeBase64(bytes);
 	return encoded.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 

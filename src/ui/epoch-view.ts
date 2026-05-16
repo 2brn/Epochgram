@@ -242,6 +242,20 @@ export class EpochView extends ItemView {
 
 	private updateActiveFile = (_leaf?: any, options: { suppressFocus?: boolean } = {}) => {
 		const suppressFocus = options.suppressFocus !== false;
+		const resolveFileFromLeafState = (leaf: WorkspaceLeaf | null | undefined): TFile | null => {
+			try {
+				const getViewState = (leaf as any)?.getViewState;
+				if (typeof getViewState !== "function") return null;
+				const vs = getViewState.call(leaf);
+				const raw = vs?.state?.file ?? vs?.state?.path ?? null;
+				const path = typeof raw === "string" ? raw : "";
+				if (!path) return null;
+				const af = this.app.vault.getAbstractFileByPath(path);
+				return af instanceof TFile ? af : null;
+			} catch {
+				return null;
+			}
+		};
 		// Prefer the active leaf's file, so closing the last tab (MarkdownView.file -> null)
 		// immediately clears semantic highlights. workspace.getActiveFile() can return the
 		// last active file even when the current leaf has no file.
@@ -251,6 +265,11 @@ export class EpochView extends ItemView {
 			if (view instanceof MarkdownView) {
 				const f = view.file;
 				this.syncCanvasActiveFile(f instanceof TFile ? f : null, { suppressFocus });
+				return;
+			}
+			const nonMarkdownFile = resolveFileFromLeafState(leaf);
+			if (nonMarkdownFile) {
+				this.syncCanvasActiveFile(nonMarkdownFile, { suppressFocus: false });
 				return;
 			}
 		} catch {

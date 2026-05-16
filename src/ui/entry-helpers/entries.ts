@@ -230,7 +230,8 @@ export function pickEntryForFile(
 	canvas: EpochCanvas,
 	entries: DateEntry[],
 	file: string,
-	line: number | null
+	line: number | null,
+	options?: { bypassAttachmentsFilter?: boolean; bypassDateFilters?: boolean }
 ): DateEntry | null {
 	const s = state(canvas);
 	const parsed = getParsedTimelineQuery(canvas);
@@ -240,20 +241,22 @@ export function pickEntryForFile(
 	if (effective.showDraftOnly && !effective.hiddenOnly) {
 		candidates = candidates.filter(entry => entry.reviewState === "draft");
 	}
-	if (!effective.showAttachments) {
+	if (!effective.showAttachments && !options?.bypassAttachmentsFilter) {
 		candidates = candidates.filter(entry => !isAttachmentEntry(entry));
 	}
-	if (!effective.showContentDates && !effective.showPropDates) {
-		candidates = candidates.filter(entry => !(entry.source === "namedate" && (entry as any)?.namedDateRange === true));
-	}
-	if (!effective.showContentDates) {
-		candidates = candidates.filter(entry => entry.source !== "content");
-	}
-	if (!effective.showPropDates) {
-		candidates = candidates.filter(entry => {
-			if ((entry as any)?.recurring === true) return true;
-			return !(entry.source === "content" && isPropDateEntry(entry));
-		});
+	if (!options?.bypassDateFilters) {
+		if (!effective.showContentDates && !effective.showPropDates) {
+			candidates = candidates.filter(entry => !(entry.source === "namedate" && (entry as any)?.namedDateRange === true));
+		}
+		if (!effective.showContentDates) {
+			candidates = candidates.filter(entry => entry.source !== "content");
+		}
+		if (!effective.showPropDates) {
+			candidates = candidates.filter(entry => {
+				if ((entry as any)?.recurring === true) return true;
+				return !(entry.source === "content" && isPropDateEntry(entry));
+			});
+		}
 	}
 	if (!effective.showTrackedChanges) {
 		candidates = candidates.filter(entry => entry.source !== "tracked");

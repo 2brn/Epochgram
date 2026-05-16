@@ -134,7 +134,7 @@ Each file has one anchor record that represents its canonical date. All other re
 > Added new line...		 ✐ tracked change
 > ```
 
-Each record appears as `file ⸱ summary`. You can control the length of each part using **⛭ Filename length** and **⛭ Summary length**. The summary is either the first `N` words extracted from Markdown or an AI-generated summary when **⛭ Auto summarize** is enabled (Pro). You can also set a manual summary using YAML (`description: ...`) or via context menu **<img src="images/square-pen.svg" width="18" height="18" alt=""> Summary…**; manual summaries are always preferred over AI-generated ones.
+Each record appears as `file ⸱ summary`. You can control the length of each part using **⛭ Filename length** and **⛭ Summary length**. The summary is either the first `N` words extracted from Markdown or an AI-generated summary when **⛭ Auto summarize** is enabled (Pro). You can also set a manual summary using the YAML property **⛭ Description property name** or via context menu **<img src="images/square-pen.svg" width="18" height="18" alt=""> Summary…**; manual summaries are always preferred over AI-generated ones.
 
 Timeline draws today as <img src="images/circle-today.svg" width="18" height="18" alt="">, weekdays as <img src="images/circle.svg" width="18" height="18" alt=""> and weekends as <img src="images/circle-filled.svg" width="18" height="18" alt="">. Entries are shown stacked or side by side when space allows, long entries are truncated with `…`. If space runs out, the day collapses to a few records and shows the rest as `(+n)`. When zoomed out, records collapse into placeholder bars <img src="images/rectangle-horizontal.svg" width="18" height="18" alt="">, with height based on record count.
 
@@ -184,7 +184,7 @@ Files in the vault are never modified unless you run an explicit file action. Al
 
 | Record menu | Description |
 | --- | --- |
-| **<img src="images/square-pen.svg" width="18" height="18" alt=""> Summary…** | Update the file YAML `description` (configurable via **⛭ Description property name**). |
+| **<img src="images/square-pen.svg" width="18" height="18" alt=""> Summary…** | Update the file manual summary. |
 | **<img src="images/tag.svg" width="18" height="18" alt=""> Topic** | Open the topics assignment popup; to remove topics, clear the input (Pro). |
 | **<img src="images/pin.svg" width="18" height="18" alt=""> Pin** | Pin the file at the *Today* position; or **⌘ Epochgram: Toggle pin for current file**. |
 | **<img src="images/highlighter.svg" width="18" height="18" alt=""> Mark** | Mark similar records with a color; or **⌘ Epochgram: Toggle mark for current file**. |
@@ -428,6 +428,14 @@ Epochgram also provides **Rebuild** and **Reset** popups for rebuilding or clear
 	- Requires an payment and internet access for license validation; your email address, license key, and basic server-side telemetry may be processed (see [TERMS](https://www.epochgram.com/terms)).
   - Is not affiliated with Obsidian Sync, Publish, or other Obsidian paid services.
   - AI Bridge: Epochgram starts a local server on `http://127.0.0.1` and opens a local bridge page in Google Chrome to use Chrome's on-device Summarizer API. The bridge communication stays on your device. Chrome [may download](https://developer.chrome.com/docs/ai/summarizer-api) its built-in model(s) (Gemini Nano) the first time you use these APIs.
-  - Similarity: embeddings/topic models and runtime files may be downloaded on first use via `@huggingface/transformers` (for example from [Hugging Face](https://huggingface.co)) and ONNX Runtime Web WASM from [jsDelivr](https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260410-5e55544225/dist/).
+  - Similarity: embeddings/topic models and runtime files may be downloaded on first use via `@huggingface/transformers` (for example from [Hugging Face](https://huggingface.co)) and ONNX Runtime Web WASM from [jsDelivr](https://cdn.jsdelivr.net/npm/onnxruntime-web@1.24.3/dist/).
+  - Similarity WASM modules used by this plugin:
+    - `ort-wasm.wasm`
+    - `ort-wasm-simd.wasm`
+    - `ort-wasm-threaded.wasm`
+    - `ort-wasm-simd-threaded.wasm`
+    - `ort-wasm-simd-threaded.asyncify.wasm`
+    - `ort-wasm-simd-threaded.jsep.wasm`
+  - Source and purpose: these modules are provided by the `onnxruntime-web` package and are used only for local ONNX inference for similarity embeddings/topic classification.
 - All vault data is processed locally on your device and is NEVER sent over the internet.
 - License: MIT (see [LICENSE](LICENSE)).

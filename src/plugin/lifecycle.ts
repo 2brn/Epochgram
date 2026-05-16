@@ -527,19 +527,50 @@ export const lifecycleMethods: LifecycleMethods = {
 					window.setTimeout(() => {
 						const shouldAutoOpen = this.settings.openEpochViewOnStartup === true;
 						if (shouldAutoOpen) {
-							try {
-								wrapNoticeError("Epochgram: Auto-open view failed", () => this.ensureEpochViewLeaf())();
-							} catch {
-								// ignore
-							}
-
-							// Startup/activation: switch to the Epoch timeline once the workspace is ready.
+							// Startup/activation: use the same open path as ribbon click.
 							try {
 								if (!anyPlugin.__epochAutoOpenedOnStartup) {
 									anyPlugin.__epochAutoOpenedOnStartup = true;
 									window.setTimeout(() => {
 										try {
-											wrapNoticeError("Epochgram: Auto-open timeline failed", () => this.openEpochView())();
+											const startAt = performance.now();
+											const hasOpenMarkdownFile = (): boolean => {
+												try {
+													const active = this.app.workspace.getActiveFile();
+													if (active) return true;
+												} catch {
+													// ignore
+												}
+												try {
+													const leaves: any[] = (this.app.workspace as any)?.getLeavesOfType?.("markdown") ?? [];
+													for (const l of leaves) {
+														const v: any = l?.view;
+														if (v?.file) return true;
+														const getViewState = l?.getViewState;
+														if (typeof getViewState !== "function") continue;
+														const vs = getViewState.call(l);
+														const raw = vs?.state?.file ?? vs?.state?.path ?? null;
+														if (typeof raw === "string" && raw.length > 0) return true;
+													}
+												} catch {
+													// ignore
+												}
+												return false;
+											};
+
+											const runOpen = () => {
+												wrapNoticeError("Epochgram: Auto-open timeline failed", () => this.openEpochView())();
+											};
+
+											const attemptOpen = () => {
+												if (hasOpenMarkdownFile() || performance.now() - startAt >= 3000) {
+													runOpen();
+													return;
+												}
+												window.setTimeout(attemptOpen, 120);
+											};
+
+											attemptOpen();
 										} catch {
 											// ignore
 										}

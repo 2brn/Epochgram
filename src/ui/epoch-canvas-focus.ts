@@ -225,10 +225,10 @@ export function focusFile(
 		const nonRecurring = entries.filter((e) => (e as any)?.recurring !== true);
 		const recurring = entries.filter((e) => (e as any)?.recurring === true);
 		const matchNonRecurring = nonRecurring.length > 0
-			? pickEntryForFile(canvas, nonRecurring, filePath, null)
+			? pickEntryForFile(canvas, nonRecurring, filePath, null, { bypassAttachmentsFilter: true, bypassDateFilters: true })
 			: null;
 		const matchRecurring = recurring.length > 0
-			? pickEntryForFile(canvas, recurring, filePath, null)
+			? pickEntryForFile(canvas, recurring, filePath, null, { bypassAttachmentsFilter: true, bypassDateFilters: true })
 			: null;
 		if (!matchNonRecurring && !matchRecurring) continue;
 		const date = dateKeyToDate(dateKey);

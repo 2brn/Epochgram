@@ -31,6 +31,8 @@ export type SignedEntitlementEnvelope = {
 	signature: string;
 };
 
+import { decodeBase64, encodeBase64 } from "./base64";
+
 type RuntimeEntitlementCache = {
 	cacheKey: string;
 	witness: string;
@@ -77,23 +79,14 @@ function utf8Bytes(value: string): Uint8Array {
 }
 
 function bytesToBase64Url(bytes: Uint8Array): string {
-	let binary = "";
-	for (const byte of bytes) binary += String.fromCharCode(byte);
-	const encoded = typeof btoa === "function"
-		? btoa(binary)
-		: Buffer.from(bytes).toString("base64");
+	const encoded = encodeBase64(bytes);
 	return encoded.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function base64UrlToBytes(value: string): Uint8Array {
 	const normalized = String(value ?? "").replace(/-/g, "+").replace(/_/g, "/");
 	const padded = normalized + "=".repeat((4 - (normalized.length % 4 || 4)) % 4);
-	const binary = typeof atob === "function"
-		? atob(padded)
-		: Buffer.from(padded, "base64").toString("binary");
-	const out = new Uint8Array(binary.length);
-	for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-	return out;
+	return decodeBase64(padded);
 }
 
 function toBufferSource(bytes: Uint8Array): ArrayBuffer {
