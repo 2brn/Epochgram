@@ -16,13 +16,16 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 	private initialValue: string;
 	private onCommit: ((value: string) => void) | null;
 	private getTopMatches: ((query: string, max: number) => Array<{ entry: DateEntry; label?: string }>) | null;
-	private onChooseRecord: ((entry: DateEntry, query: string) => void) | null;
+	private onChooseRecord: ((entry: DateEntry, query: string, ev?: MouseEvent | KeyboardEvent) => void) | null;
 	private latestQuery = "";
 	private effectiveQuery = "";
 	private priorActiveElement: HTMLElement | null = null;
 	private handleInput: () => void;
 	private handleKeyDown: (evt: KeyboardEvent) => void;
+	private handleWindowKeyDown: (evt: KeyboardEvent) => void;
+	private handleWindowKeyUp: (evt: KeyboardEvent) => void;
 	private committed = false;
+	private newTabModifierActive = false;
 
 	constructor(
 		app: App,
@@ -31,7 +34,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 			initial: string;
 			onCommit?: (value: string) => void;
 			getTopMatches?: (query: string, max: number) => Array<{ entry: DateEntry; label?: string }>;
-			onChooseRecord?: (entry: DateEntry, query: string) => void;
+		onChooseRecord?: (entry: DateEntry, query: string, ev?: MouseEvent | KeyboardEvent) => void;
 		}
 	) {
 		super(app);
@@ -43,12 +46,14 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 		this.onChooseRecord = typeof options?.onChooseRecord === "function" ? options.onChooseRecord : null;
 		this.setPlaceholder("Search timeline...");
 		const filterKeyLabel = Platform.isMacOS ? "opt" : "alt";
+		const newTabKeyLabel = Platform.isMacOS ? "cmd" : "ctrl";
 		const instructions = [
 			{ command: "\"exact\"", purpose: "" },
 			{ command: "$marked", purpose: "" },
 			{ command: "$hidden", purpose: "" },
 			{ command: "$similar", purpose: "" },
 			{ command: "↵", purpose: "to open" },
+			{ command: `${newTabKeyLabel} ↵`, purpose: "to open in new tab" },
 			{ command: `${filterKeyLabel} ↵`, purpose: "to filter" },
 			{ command: "esc", purpose: "to dismiss" }
 		] as Array<{ command: string; purpose: string }>;
@@ -71,6 +76,22 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 			try {
 				if (!evt) return;
 				if (evt.key !== "Enter") return;
+				if (evt.ctrlKey || evt.metaKey) {
+					evt.preventDefault?.();
+					evt.stopPropagation?.();
+					const chooser: any = (this as any).chooser;
+					const selectedIndex = typeof chooser?.selectedItem === "number" ? chooser.selectedItem : -1;
+					const selectedValue =
+						selectedIndex >= 0 && Array.isArray(chooser?.values) && selectedIndex < chooser.values.length
+							? (chooser.values[selectedIndex] as TimelineSearchSuggestion)
+							: null;
+					const fallback = this.getSuggestions(String(this.latestQuery || "")).find((s) => (s as any)?.kind === "record") ?? null;
+					const picked = (selectedValue?.kind === "record" ? selectedValue : fallback) as TimelineSearchSuggestion | null;
+					if (picked && picked.kind === "record") {
+						this.onChooseSuggestion(picked, evt);
+					}
+					return;
+				}
 				if (!evt.altKey) return;
 				evt.preventDefault?.();
 				evt.stopPropagation?.();
@@ -88,6 +109,26 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 				// ignore
 			}
 		};
+		this.handleWindowKeyDown = (evt: KeyboardEvent) => {
+			try {
+				if (!evt) return;
+				if (evt.ctrlKey || evt.metaKey || evt.key === "Control" || evt.key === "Meta") {
+					this.newTabModifierActive = true;
+				}
+			} catch {
+				// ignore
+			}
+		};
+		this.handleWindowKeyUp = (evt: KeyboardEvent) => {
+			try {
+				if (!evt) return;
+				if (evt.key === "Control" || evt.key === "Meta" || (!evt.ctrlKey && !evt.metaKey)) {
+					this.newTabModifierActive = false;
+				}
+			} catch {
+				// ignore
+			}
+		};
 	}
 
 	onOpen() {
@@ -100,6 +141,11 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 		this.inputEl.dispatchEvent(new Event("input"));
 		this.inputEl.addEventListener("input", this.handleInput);
 		this.inputEl.addEventListener("keydown", this.handleKeyDown);
+		this.newTabModifierActive = false;
+		if (typeof window !== "undefined") {
+			window.addEventListener("keydown", this.handleWindowKeyDown);
+			window.addEventListener("keyup", this.handleWindowKeyUp);
+		}
 
 		(globalThis as any).setTimeout?.(() => {
 			try {
@@ -118,6 +164,11 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 	onClose() {
 		this.inputEl.removeEventListener("input", this.handleInput);
 		this.inputEl.removeEventListener("keydown", this.handleKeyDown);
+		if (typeof window !== "undefined") {
+			window.removeEventListener("keydown", this.handleWindowKeyDown);
+			window.removeEventListener("keyup", this.handleWindowKeyUp);
+		}
+		this.newTabModifierActive = false;
 		void super.onClose();
 		if (Platform.isMobile) {
 			this.priorActiveElement = null;
@@ -297,8 +348,19 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 			const entry = ((value as any).entry ?? null) as DateEntry | null;
 			if (!entry) return;
 			const q = String(this.effectiveQuery || this.latestQuery || "");
+			const hasNewTabModifier =
+				!!((_evt as any)?.ctrlKey || (_evt as any)?.metaKey) ||
+				this.newTabModifierActive;
+			const eventForOpen = hasNewTabModifier
+				? ((_evt as any)?.ctrlKey != null || (_evt as any)?.metaKey != null
+					? _evt
+					: ({
+						ctrlKey: !Platform.isMacOS,
+						metaKey: Platform.isMacOS
+					} as any))
+				: _evt;
 			try {
-				this.onChooseRecord?.(entry, q);
+				this.onChooseRecord?.(entry, q, eventForOpen as any);
 			} catch {}
 			this.committed = true;
 			this.close();

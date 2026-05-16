@@ -164,6 +164,7 @@ A search bar at the bottom lets you search timeline records and shows the number
 | Search shortcut | Description |
 | --- | --- |
 | **Enter** | Open the matched file. |
+| **Ctrl/Cmd+Enter** | Open the matched file in a new tab. |
 | **Alt/Option+Enter** | Filter timeline records by the current query. |
 | **$marked** | Show only marked records. |
 | **$hidden** | Show only hidden records. |

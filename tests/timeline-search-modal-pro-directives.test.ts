@@ -24,9 +24,25 @@ vi.mock("obsidian", () => {
 });
 
 import { TimelineSearchModal } from "../src/ui/modals/timeline-search-modal";
+import { Platform } from "obsidian";
 
 describe("TimelineSearchModal instructions", () => {
+	it("shows ctrl on non-mac and cmd on mac for new-tab shortcut", () => {
+		(Platform as any).isMacOS = false;
+		const modalWin: any = new TimelineSearchModal({} as any, { initial: "" });
+		const winCmds = (modalWin.instructions ?? []).map((x: any) => String(x?.command ?? ""));
+		expect(winCmds).toContain("ctrl ↵");
+		expect(winCmds).not.toContain("cmd ↵");
+
+		(Platform as any).isMacOS = true;
+		const modalMac: any = new TimelineSearchModal({} as any, { initial: "" });
+		const macCmds = (modalMac.instructions ?? []).map((x: any) => String(x?.command ?? ""));
+		expect(macCmds).toContain("cmd ↵");
+		expect(macCmds).not.toContain("ctrl ↵");
+	});
+
 	it("does not show removed !directive help", () => {
+		(Platform as any).isMacOS = false;
 		const modal: any = new TimelineSearchModal({} as any, { initial: "" });
 		const cmds = (modal.instructions ?? []).map((x: any) => String(x?.command ?? ""));
 		const bangCmds = cmds.filter((c: string) => c.startsWith("!"));

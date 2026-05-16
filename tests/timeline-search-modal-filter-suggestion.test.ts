@@ -84,4 +84,54 @@ describe("TimelineSearchModal (Filter) suggestion", () => {
 		modal.renderSuggestion(filter as any, el);
 		expect(el.setText).toHaveBeenCalledWith("(Filter alpha)");
 	});
+
+	it("ctrl+enter opens selected record suggestion", () => {
+		const onChooseRecord = vi.fn();
+		const modal: any = new TimelineSearchModal({} as any, {
+			initial: "",
+			getTopMatches: () => [
+				{ entry: { date: "2020-01-01", file: "notes/a.md" }, label: "A" }
+			],
+			onChooseRecord
+		});
+
+		const suggestions = modal.getSuggestions("alpha");
+		modal.chooser = { selectedItem: 0, values: suggestions };
+		const closeSpy = vi.fn();
+		modal.close = closeSpy;
+
+		const evt: any = {
+			key: "Enter",
+			ctrlKey: true,
+			metaKey: false,
+			altKey: false,
+			preventDefault: vi.fn(),
+			stopPropagation: vi.fn()
+		};
+		modal.handleKeyDown(evt);
+
+		expect(evt.preventDefault).toHaveBeenCalled();
+		expect(evt.stopPropagation).toHaveBeenCalled();
+		expect(onChooseRecord).toHaveBeenCalledTimes(1);
+		expect(closeSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("ctrl/cmd+click keeps new-tab intent even if choose event has no modifiers", () => {
+		const onChooseRecord = vi.fn();
+		const modal: any = new TimelineSearchModal({} as any, {
+			initial: "",
+			getTopMatches: () => [
+				{ entry: { date: "2020-01-01", file: "notes/a.md" }, label: "A" }
+			],
+			onChooseRecord
+		});
+
+		modal.newTabModifierActive = true;
+		const [record] = modal.getSuggestions("alpha");
+		modal.onChooseSuggestion(record as any, {} as any);
+
+		expect(onChooseRecord).toHaveBeenCalledTimes(1);
+		const forwarded = onChooseRecord.mock.calls[0]?.[2] as any;
+		expect(!!(forwarded?.ctrlKey || forwarded?.metaKey)).toBe(true);
+	});
 });

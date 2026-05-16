@@ -380,7 +380,7 @@ export function openSearchModal(view: any): void {
 				// ignore
 			}
 		},
-		onChooseRecord: (entry: DateEntry, query: string) => {
+		onChooseRecord: (entry: DateEntry, query: string, ev?: MouseEvent | KeyboardEvent) => {
 			const e: any = entry as any;
 			const filePath = String(e?.file ?? "");
 			if (!filePath) return;
@@ -402,7 +402,9 @@ export function openSearchModal(view: any): void {
 				// ignore
 			}
 			try {
-				void openEntryAction(view.canvas, entry as any, undefined, true);
+				const maybeEv = ev as { ctrlKey?: boolean; metaKey?: boolean } | undefined;
+				const evt = maybeEv && (maybeEv.ctrlKey || maybeEv.metaKey) ? (ev as any) : undefined;
+				void openEntryAction(view.canvas, entry as any, evt, true);
 			} catch {
 				// ignore
 			}

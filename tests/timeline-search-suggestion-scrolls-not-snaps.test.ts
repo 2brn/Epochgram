@@ -72,4 +72,40 @@ describe("Timeline search suggestion selection", () => {
 		expect(setActiveFile).toHaveBeenCalledWith("notes/a.md", 12, { suppressFocus: true });
 		expect(openEntryAction).toHaveBeenCalledTimes(1);
 	});
+
+	it("passes ctrl-enter modifiers to open in new tab", async () => {
+		const plugin: any = {
+			app: new App(),
+			settings: {},
+			viewPreferences: {},
+			hasProAccess: vi.fn(() => false),
+			timelineSearchIndex: { searchFileIdsRanked: vi.fn(() => []) }
+		};
+
+		const leaf: any = new WorkspaceLeaf();
+		leaf.app = plugin.app;
+
+		const view: any = new EpochView(leaf, plugin);
+		view.updateSearchControl = vi.fn();
+		view.scheduleSearchControlLayout = vi.fn();
+
+		view.canvas = {
+			index: { "2020-01-01": [{}] },
+			setSearchQuery: vi.fn(),
+			focusFilteredTimelineRecordForFile: vi.fn(() => true),
+			setActiveFile: vi.fn(() => {})
+		};
+
+		(view as any).openSearchModal();
+		expect(capturedOptions).toBeTruthy();
+
+		capturedOptions.onChooseRecord(
+			{ date: "2020-01-01", file: "notes/a.md", blockStart: 12, blockEnd: 15, summary: "", source: "content" },
+			"alpha",
+			{ ctrlKey: true, metaKey: false }
+		);
+
+		expect(openEntryAction).toHaveBeenCalledTimes(1);
+		expect(openEntryAction.mock.calls[0]?.[2]).toMatchObject({ ctrlKey: true });
+	});
 });
