@@ -46,10 +46,27 @@ A Timemap of Your Mind
 
 ## Get Started
 
-<!-- - Install via the [Obsidian Community plugins](https://obsidian.md/plugins?id=epochgram). -->
-- Install [BRAT](https://obsidian.md/plugins?id=brat) and use [Obsidian protocol](https://www.epochgram.com/brat) to get releases from the [Epochgram GitHub](https://github.com/2brn/Epochgram).
-- Click the <img src="images/epochgram_bw.svg" width="18" height="18" alt="Epochgram"> ribbon icon or run **⌘ Epochgram: Open timeline** to show the timeline in the right panel.
-- To open it automatically on launch, enable **⛭ Open timeline on startup**.
+### Download
+
+#### Via [Obsidian Community plugins](https://obsidian.md/plugins?id=epochgram)
+
+#### Via BRAT
+
+- Install [BRAT](https://community.obsidian.md/plugins/obsidian42-brat) community plugin in Obsidian.
+- Use [Obsidian protocol](https://www.epochgram.com/brat) to add Epochgram.
+- Or Obsidian Settings → BRAT → Add beta plugin [https://github.com/2brn/Epochgram](https://github.com/2brn/Epochgram).
+
+#### Manual install
+
+- Download the latest release files from [GitHub releases](https://github.com/2brn/Epochgram/releases).
+- Copy files into your vault plugin folder: `.obsidian/plugins/epochgram`.
+- Enable Epochgram in Obsidian Settings → Community plugins.
+
+</br>
+
+> [!TIP]
+> Click the <img src="images/epochgram_bw.svg" width="18" height="18" alt="Epochgram"> ribbon icon or run **⌘ Epochgram: Open timeline** to show the timeline in the right panel.</br>
+> To open it automatically on launch, enable **⛭ Open timeline on startup**.
 
 ### Cheatsheet
 

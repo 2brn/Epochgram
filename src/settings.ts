@@ -81,11 +81,11 @@ export class EpochSettingTab extends PluginSettingTab {
 		versionSetting.descEl.createEl("br");
 		const changelogLink = versionSetting.descEl.createEl("a", {
 			text: "Read the changelog.",
-			href: "https://github.com/2brn/epochgram/blob/main/CHANGELOG",
+			href: "https://github.com/2brn/Epochgram/blob/main/CHANGELOG",
 		});
 		changelogLink.addEventListener("click", (evt) => {
 			evt.preventDefault();
-			openExternalUrl("https://github.com/2brn/epochgram/blob/main/CHANGELOG");
+			openExternalUrl("https://github.com/2brn/Epochgram/blob/main/CHANGELOG");
 		});
 	}
 }
