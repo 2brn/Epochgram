@@ -81,7 +81,7 @@ A Timemap of Your Mind
 <img src="images/zoom.gif" height="360" alt="Timeline zoom" />
 </p>
 
-The timeline is a scrollable, zoomable surface that collects records from all files in the vault, excluding folders ignored in Obsidian settings. It detects dates and date ranges in different formats and renders *one record per file per day*, in the following priority order:
+The timeline is a scrollable, zoomable surface that collects records from all files in the vault, excluding paths ignored in Obsidian settings. It detects dates and date ranges in different formats and renders *one record per file per day*, in the following priority order:
 
 | Source | Description |
 | --- | --- |
@@ -255,9 +255,68 @@ In addition to the standard red-to-violet palette, an extended palette is availa
 
 Epochgram Pro includes an **AI Bridge** that uses Google Chrome's on-device AI APIs for local summarization. When started, it runs a small local server on an available port at `http://127.0.0.1`. The bridge page can be opened from **⌘ Epochgram: Open AI bridge**, from the **⌀ AI** status bar button (button absent = server not started, button red = client disconnected), or automatically on startup if **⛭ Open AI Bridge on startup** is enabled. This page processes summary jobs in Chrome and returns the results to the plugin. All summarization data stays **only on your device** and is not sent to external services.
 
-On first use, Chrome may need a user gesture to download the built-in Gemini Nano model, and the drive with your Chrome profile [should have](https://developer.chrome.com/docs/ai/summarizer-api#hardware-requirements) at least **22 GB** of free space. The bridge page also serves as a control panel, showing connection and model status, queue progress, the current text preview, the latest result, and a chart with progress in gray and processing speed in blue. Keep it open while summaries are running. You can also adjust API settings and prompt/context texts. For larger notes, Epochgram can split input into chunks, summarize them separately, then merge the results.
+On first use, Chrome may need a user gesture to download the built-in Gemini Nano model, and the drive with your Chrome profile [should have](https://developer.chrome.com/docs/ai/summarizer-api#hardware-requirements) at least **22 GB** of free space. The bridge page also serves as a control panel, showing connection and model status, queue progress, the current text preview, the latest result, and a chart with progress in gray and processing speed in blue. Keep it open while summaries are running. You can also adjust API settings and prompt/context texts in the YAML settings editor. For larger notes, Epochgram can split input into chunks, summarize them separately, then merge the results.
 
-You can use context placeholders. File summaries support `{{filePath}}` (full file path), `{{fileName}}` (file name), and `{{related}}` (summaries of related records). Epoch summaries support `{{bucket}}` (`day`, `2days`, `4days`, `week`, `2weeks`, `month`, `3months`, `6months`, `year`) and `{{related}}`.
+```yaml
+sharedContext: | # Shared instructions across all summarization jobs
+  Ignore dates and empty content.
+  Group by topics, compress, remove duplicates and metaphrases.
+  Order by frequency.
+
+format: plain-text # Output format: markdown | plain-text
+preference: capability # Model preference: auto | speed | capability
+expectedInputLanguages: [en] # Accepted input languages: en | es | ja
+outputLanguage: en # Output language: en | ja | es
+expectedContextLanguages: [en] # Accepted context languages: en | ja | es
+maxRelatedChars: 300 # Related-context size limit
+
+reduce:
+  context: | # Recursive reduction instructions
+    Recursive summary reduction.
+    Preserve dominant topics and recurring entities.
+
+  type: tldr # Reduction summary type: key-points | tldr | teaser | headline
+  length: long # Summary length: short | medium | long
+  maxChunkChars: 3000 # Split threshold before recursive reduction
+  maxDepth: 3 # Maximum recursive reduction depth
+
+records:
+  context: | # Per-record summarization instructions
+    File:
+    {{filePath}}
+    
+    Preserve facts, entities, terminology, and concrete topics.
+    Remove repetition, filler, boilerplate, and metaphrases.
+
+  type: tldr # Summary type: key-points | tldr | teaser | headline
+  length: short # Summary length: short | medium | long
+
+  maxInputChars: 3000 # Max source chars per record
+  maxOutputWords: 30 # Max generated words (optional)
+
+epochs:
+  - period: day-2weeks # Supported  periods/ranges: day | 2days | 4days | week | 2weeks | month | 3months | 6months | year | day-year
+    context: | # Epoch summarization instructions
+      Short-term activity summary.
+      Recent events, actions, tasks, places, people, projects.
+      Output max 12 words, nouns only.
+
+    type: tldr # Summary type: key-points | tldr | teaser | headline
+    length: short # Summary length: short | medium | long
+    maxFileChars: 300 # Max chars taken per file
+    maxOutputWords: 30 # Max generated words (optional)
+
+  - period: month-year
+    context: |
+      Broad period summary.
+      Long-term themes, domains, projects, interests, recurring topics.
+      Output max 12 words, nouns only.
+
+    type: tldr
+    length: medium 
+    maxFileChars: 300 
+    maxOutputWords: 30
+```
 
 > [!TIP]
 > Chrome's built-in Gemini Nano currently officially supports English, Spanish, and Japanese for input and output text. You can still try forcing another output language in the prompt context; for example, I used this context for Ukrainian: `OUTPUT ONLY IN UKRAINIAN!`.
@@ -269,7 +328,8 @@ You can use context placeholders. File summaries support `{{filePath}}` (full fi
 **⛭ Generate Epochs** → when enabled, Epochgram creates a zoomable time map that groups many days into larger period summaries, helping you see the bigger picture without reading the timeline day by day. Epochs are generated hierarchically from day up to year, in essence, summaries of summaries. If marked records are present, Epochs are colored by the most common mark color in that range. You can regenerate a specific Epoch from the context menu.
 
 > [!TIP]
-> **⌘ Epochgram: Summarize missing** → generate all missing AI summaries and Epochs.</br>
+> **⌘ Epochgram: Summarize current file** → generate AI summaries for all timeline records from the current file.</br>
+> **⌘ Epochgram: Summarize missing** → generate all missing AI summaries and Epochs across the entire vault.</br>
 
 ## Custom YAML
 
