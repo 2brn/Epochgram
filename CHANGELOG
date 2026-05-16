@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.4.4] - 2026-05-17
+- Fix mobile Epochgram opening in side panel leaf.
+
 ## [1.4.3] - 2026-05-16
 - Fixed auto-activating view if `Open timeline on startup` is on.
 
