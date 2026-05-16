@@ -11,6 +11,12 @@
   /* Epochs view: multiline epoch summaries render line 1 with a larger font. */
   --epoch-font-epochs-view-line1: var(--epoch-font-small);
   --epoch-font-epochs-view-line1-hover: var(--epoch-font-small-hover);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
 }
 
 .epoch-container {
@@ -18,15 +24,6 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
-}
-
-.epoch-root {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  width: 100%;
 }
 
 .epoch-filter-buttons {
@@ -113,8 +110,8 @@
   font-size: var(--font-ui-small);
 }
 
-.menu.epoch-menu-record {
-  max-width: min(420px, calc(100vw - 24px)) !important;
+.workspace-leaf-content .menu.epoch-menu-record {
+  max-width: min(420px, calc(100vw - 24px));
 }
 
 .epoch-controls .epoch-control-button {
@@ -137,7 +134,6 @@
   bottom: 0;
   transform: translateX(-50%);
   z-index: 2;
-  position: absolute;
   isolation: isolate;
   display: inline-flex;
   align-items: center;
@@ -412,11 +408,11 @@ body.theme-light .epoch-license-section {
 }
 
 /* Hide submenu arrows for circle-only mark group items. */
-.menu-item.epoch-menu-no-arrow .menu-item-icon.mod-submenu,
-.menu-item.epoch-menu-no-arrow .menu-item-submenu-icon,
-.menu-item.epoch-menu-no-arrow .menu-item-submenu-icon svg,
-.menu-item.epoch-menu-no-arrow .menu-item-submenu {
-  display: none !important;
+.menu .menu-item.epoch-menu-no-arrow .menu-item-icon.mod-submenu,
+.menu .menu-item.epoch-menu-no-arrow .menu-item-submenu-icon,
+.menu .menu-item.epoch-menu-no-arrow .menu-item-submenu-icon svg,
+.menu .menu-item.epoch-menu-no-arrow .menu-item-submenu {
+  display: none;
 }
 
 @media (hover: none), (pointer: coarse) {
@@ -670,11 +666,11 @@ body.theme-dark .epoch-pro-description {
   gap: 0.45rem;
   min-width: 122px;
   font-weight: 700;
-  --text-color: #fff;
+  --text-color: #ffffff;
   background: #c14d58;
   background-color: #c14d58;
   border-color: #c14d58;
-  color: #fff;
+  color: #ffffff;
 }
 
 .epoch-pro-get-pro-button .epoch-pro-get-pro-icon {
@@ -697,11 +693,11 @@ body.theme-dark .epoch-pro-description {
 .epoch-pro-get-pro-button:focus-visible,
 .epoch-pro-get-pro-button.mod-cta:hover,
 .epoch-pro-get-pro-button.mod-cta:focus-visible {
-  --text-color: #fff;
+  --text-color: #ffffff;
   background: #ae4350;
   background-color: #ae4350;
   border-color: #ae4350;
-  color: #fff;
+  color: #ffffff;
 }
 
 .epoch-prompt h3 {
@@ -771,8 +767,8 @@ body.theme-dark .epoch-pro-description {
   cursor: pointer;
 }
 
-.epoch-delete-confirm-toggle input[type="checkbox"] {
-  border-radius: 0 !important;
+.modal .epoch-delete-confirm-toggle input[type="checkbox"] {
+  border-radius: 0;
 }
 
 .epoch-folder-picker {
