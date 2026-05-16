@@ -340,7 +340,7 @@ AI bridge startup behavior (Verified)
 - `sharedContext` is passed to `Summarizer.create(...)`, while per-job `context` is passed to `summarize(..., { context })`.
 - “Reset to defaults” restores the built-in bridge YAML from `src/plugin/ai-bridge-page/settings/default-bridge-settings.yaml`.
 - When processing completes and the queue becomes idle, the bridge page keeps the last “Current text preview” content (it does not auto-clear on idle).
-- On bridge page close, the page sends a best-effort disconnect beacon (`POST /api/bye`, via `sendBeacon`) so the server immediately reports `clientConnected: false` (avoids waiting for the ~15s `clientConnected` timeout).
+- On bridge page close, the page sends a best-effort disconnect request (`POST /api/bye`, via `fetch(..., { keepalive: true })`) so the server immediately reports `clientConnected: false` (avoids waiting for the ~15s `clientConnected` timeout).
 - The bridge page clears the queue via a single canonical API call (`POST /api/clearQueue`).
   - Clearing the queue also cancels deferred/planned follow-up work (e.g., epoch regeneration scheduled to run “after AI is idle”, and any per-file throttled enqueues waiting on a cooldown timer).
 - The bridge server’s `/api/status` payload can include optional epoch progress fields (`epochTotal`, `epochProcessed`, `epochRemaining`) and optional epoch token fields (`epochTotalTokens`, `epochProcessedTokens`, `epochRemainingTokens`, `epochQueuedTokens`, `epochInProgressTokens`) so the bridge page can show remaining epoch jobs/tokens across cascaded bucket hierarchies (not just the currently queued bucket).

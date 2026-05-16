@@ -1,4 +1,4 @@
-import * as yaml from "js-yaml";
+import * as YAML from "yaml";
 import defaultBridgeSettingsYaml from "epochgram-bridge-default-settings-yaml";
 
 type AiBridgeServerState = {
@@ -220,8 +220,19 @@ function validateContextPlaceholders(name: string, text: string, errors: string[
 	}
 }
 
+function replaceNullScalarsWithEmptyString(value: any): any {
+	if (value === null) return "";
+	if (Array.isArray(value)) return value.map((item) => replaceNullScalarsWithEmptyString(item));
+	if (!value || typeof value !== "object") return value;
+	const out: Record<string, any> = {};
+	for (const [k, v] of Object.entries(value)) {
+		out[k] = replaceNullScalarsWithEmptyString(v);
+	}
+	return out;
+}
+
 function parseYamlObject(raw: string): Record<string, any> {
-	const doc = yaml.load(String(raw || ""));
+	const doc = replaceNullScalarsWithEmptyString(YAML.parse(String(raw || "")));
 	if (!doc || typeof doc !== "object" || Array.isArray(doc)) return {};
 	return doc as Record<string, any>;
 }
@@ -240,11 +251,11 @@ function deepMerge(base: any, override: any): any {
 }
 
 function asYamlString(value: any): string {
-	return yaml.dump(value, {
-		lineWidth: -1,
-		noRefs: true,
-		sortKeys: false,
-		noCompatMode: true
+	return YAML.stringify(value, {
+		lineWidth: 0,
+		sortMapEntries: false,
+		aliasDuplicateObjects: false,
+		simpleKeys: false
 	}).trim() + "\n";
 }
 

@@ -69,10 +69,13 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 		if (pageClosing) return;
 		pageClosing = true;
 		try {
-			// Use sendBeacon so the server learns about the close even during unload.
-			if (navigator && typeof navigator.sendBeacon === "function") {
-				navigator.sendBeacon(API("bye"), "");
-			}
+			// Best-effort disconnect signal without sendBeacon (review-safe API surface).
+			void fetch(API("bye"), {
+				method: "POST",
+				body: "",
+				keepalive: true,
+				cache: "no-store"
+			}).catch(() => {});
 		} catch {
 			// ignore
 		}
