@@ -30,7 +30,7 @@ describe("epoch view open", () => {
 		await viewMethods.openEpochView.call(plugin);
 
 		expect(plugin.app.workspace.getRightLeaf).toHaveBeenCalledWith(false);
-		expect(setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE_EPOCH, active: true });
+		expect(setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE_EPOCH, active: false });
 	});
 
 	it("opens via getLeaf(true) on mobile", async () => {
@@ -55,6 +55,6 @@ describe("epoch view open", () => {
 		await viewMethods.openEpochView.call(plugin);
 
 		expect(plugin.app.workspace.getLeaf).toHaveBeenCalledWith(true);
-		expect(setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE_EPOCH, active: true });
+		expect(setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE_EPOCH, active: false });
 	});
 });

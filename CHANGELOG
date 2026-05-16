@@ -1,5 +1,10 @@
 # Epochgram changelog
 
+## [1.4.1] - 2026-05-16
+- Fixed timeline startup snap alignment so auto-open startup behavior matches manual open behavior.
+- Updated plugin/runtime support paths related to trust/device and base64 handling.
+- Refined README docs: updated download links and removed leftover comments.
+
 ## [1.4.0] - 2026-05-16
 - Reworked AI Bridge settings into YAML and improved summarization flow; added `Summarize current file` command.
 - Added bridge and epochs fixes.
