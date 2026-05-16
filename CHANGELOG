@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.4.3] - 2026-05-16
+- Fixed auto-activating view if `Open timeline on startup` is on.
+
 ## [1.4.2] - 2026-05-16
 - Added handling for Ctrl/Cmd+Enter and Ctrl/Cmd+Click to open matched records in a new tab.
 
