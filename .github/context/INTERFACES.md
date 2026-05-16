@@ -7,6 +7,7 @@
 - Startup behavior:
   - After layout is ready, the plugin ensures an `epochgram-view` leaf exists (without stealing focus).
   - Desktop and mobile: it may auto-open Epochgram after layout is ready when `settings.openEpochViewOnStartup !== false`.
+  - Opening Epochgram prefers the right/sidebar leaf on both desktop and mobile; it falls back to opening a new tab leaf only when a right leaf is unavailable.
   - When the view opens, the timeline snaps to an open Markdown file’s best matching record (prefers the most recently active Markdown leaf when available); otherwise it snaps to Today.
     - Snapping targets the **newest** visible non-recurring record for that file; if only recurring records are visible, it snaps to the **oldest** recurring record. Cursor line does not affect which record is chosen.
   - For a short, bounded startup window, Epochgram will also try to refocus to a *newly opened* default note (e.g., Daily note / New note created by other plugins) if it appears after the initial snap.

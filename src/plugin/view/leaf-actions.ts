@@ -142,9 +142,6 @@ export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: b
 
 	const leaf = (() => {
 		const workspaceAny: any = plugin.app.workspace as any;
-		if (Platform.isMobileApp && typeof workspaceAny?.getLeaf === "function") {
-			return workspaceAny.getLeaf(true);
-		}
 		return plugin.app.workspace.getRightLeaf(false) ?? (typeof workspaceAny?.getLeaf === "function" ? workspaceAny.getLeaf(true) : null);
 	})();
 	if (!leaf) return;

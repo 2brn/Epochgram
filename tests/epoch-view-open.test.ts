@@ -33,7 +33,33 @@ describe("epoch view open", () => {
 		expect(setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE_EPOCH, active: false });
 	});
 
-	it("opens via getLeaf(true) on mobile", async () => {
+	it("prefers right leaf on mobile", async () => {
+		Platform.isMobileApp = true;
+		Platform.isDesktopApp = false;
+
+		const setViewState = vi.fn().mockResolvedValue(undefined);
+		const plugin: any = {
+			ensureIndexLoaded: vi.fn().mockResolvedValue(undefined),
+			app: {
+				workspace: {
+					getMostRecentLeaf: vi.fn().mockReturnValue(null),
+					getLeavesOfType: vi.fn().mockReturnValue([]),
+					getRightLeaf: vi.fn().mockReturnValue({ setViewState }),
+					getLeaf: vi.fn().mockReturnValue({ setViewState }),
+					revealLeaf: vi.fn(),
+					setActiveLeaf: vi.fn()
+				}
+			}
+		};
+
+		await viewMethods.openEpochView.call(plugin);
+
+		expect(plugin.app.workspace.getRightLeaf).toHaveBeenCalledWith(false);
+		expect(plugin.app.workspace.getLeaf).not.toHaveBeenCalled();
+		expect(setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE_EPOCH, active: false });
+	});
+
+	it("falls back to getLeaf(true) on mobile when right leaf is unavailable", async () => {
 		Platform.isMobileApp = true;
 		Platform.isDesktopApp = false;
 
