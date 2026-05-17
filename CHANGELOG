@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.4.6] - 2026-05-17
+- Fix settings autofocus behaviour.
+
 ## [1.4.5] - 2026-05-17
 - Added **Record width limit (%)** setting to control when timeline rows collapse overflow into `(+n)`.
 - Reworked settings layout into clearer sections.
