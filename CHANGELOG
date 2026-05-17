@@ -1,5 +1,12 @@
 # Epochgram changelog
 
+## [1.4.5] - 2026-05-17
+- Added **Record width limit (%)** setting to control when timeline rows collapse overflow into `(+n)`.
+- Reworked settings layout into clearer sections.
+- Updated summary rendering/measurement to respect record-width limits at runtime and tuned summary font zoom scaling.
+- Improved mobile touch behavior: smoother inertia carry between swipes and right-swipe sidebar collapse handling.
+- Improved interactions and README/docs wording.
+
 ## [1.4.4] - 2026-05-17
 - Fix mobile Epochgram opening in side panel leaf.
 
