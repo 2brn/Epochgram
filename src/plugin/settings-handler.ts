@@ -8,7 +8,6 @@ import { DEFAULT_SIMILARITY_MODEL, DEFAULT_ZERO_SHOT_MODEL, NO_SIMILARITY_MODEL 
 import { loadEmbeddingsModelViaWorker } from "./similarity/worker-embed";
 import { loadZeroShotModelViaWorkerWithId } from "./similarity/worker-zeroshot";
 import { isGenerateEpochsEffective } from "./pro-feature-state";
-import { VIEW_TYPE_EPOCH } from "../ui/epoch-view-mode";
 
 export interface SettingsHandlerMethods {
 	onSettingsChanged(key: keyof EpochSettings): Promise<void>;
@@ -347,20 +346,6 @@ export const settingsHandlerMethods: SettingsHandlerMethods = {
 		}
 
 		if (key === "enableAnimation") {
-			this.refreshEpochViews();
-			return;
-		}
-
-		if (key === "showInSidebar") {
-			try {
-				const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_EPOCH);
-				if (leaves.length > 0) {
-					this.app.workspace.detachLeavesOfType(VIEW_TYPE_EPOCH);
-					await this.ensureEpochViewLeaf();
-				}
-			} catch {
-				// ignore
-			}
 			this.refreshEpochViews();
 			return;
 		}

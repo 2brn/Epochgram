@@ -37,25 +37,4 @@ describe("epoch view startup", () => {
 		expect(plugin.app.workspace.getRightLeaf).not.toHaveBeenCalled();
 		expect(setViewState).not.toHaveBeenCalled();
 	});
-
-	it("creates a tab leaf when Show in sidebar is off", async () => {
-		const setViewState = vi.fn().mockResolvedValue(undefined);
-		const plugin: any = {
-			settings: {
-				showInSidebar: false
-			},
-			app: {
-				workspace: {
-					getLeavesOfType: vi.fn().mockReturnValue([]),
-					getRightLeaf: vi.fn().mockReturnValue({ setViewState }),
-					getLeaf: vi.fn().mockReturnValue({ setViewState })
-				}
-			}
-		};
-
-		await viewMethods.ensureEpochViewLeaf.call(plugin);
-
-		expect(plugin.app.workspace.getLeaf).toHaveBeenCalledWith(true);
-		expect(setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE_EPOCH, active: false });
-	});
 });

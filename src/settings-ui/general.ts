@@ -26,26 +26,6 @@ export function renderGeneralViewSettings(containerEl: HTMLElement, plugin: Epoc
 		await plugin.onSettingsChanged("openEpochViewOnStartup");
 	});
 
-	let showInSidebarToggle: any = null;
-	const showInSidebarSetting = new Setting(containerEl)
-		.setName("Show in sidebar")
-		.setDesc("Opens Epochgram in the right sidebar. Turn off to open as a tab.")
-		.addToggle((toggle: any) => {
-			showInSidebarToggle = toggle;
-			toggle
-				.setValue(plugin.settings.showInSidebar !== false)
-				.onChange(async (value: boolean) => {
-					plugin.settings.showInSidebar = value;
-					await plugin.onSettingsChanged("showInSidebar");
-				});
-		});
-	registerInfoResetGesture(showInSidebarSetting, async () => {
-		const def = DEFAULT_SETTINGS.showInSidebar !== false;
-		if (showInSidebarToggle) showInSidebarToggle.setValue(def);
-		plugin.settings.showInSidebar = def;
-		await plugin.onSettingsChanged("showInSidebar");
-	});
-
 	let enableAnimationToggle: any = null;
 	const enableAnimationSetting = new Setting(containerEl)
 		.setName("Enable animation")

@@ -61,8 +61,7 @@ Manual install
 
 > [!TIP]
 > Click the <img src="images/epochgram_bw.svg" width="18" height="18" alt="Epochgram"> ribbon icon or run **⌘ Epochgram: Open timeline** to show the timeline in the right panel.</br>
-> To open it automatically on launch, enable **⛭ Open on startup**.</br>
-> To switch between tab and right sidebar mode, toggle **⛭ Show in sidebar**.
+> To open it automatically on launch, enable **⛭ Open on startup**.
 
 ### Cheatsheet
 

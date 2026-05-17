@@ -4,11 +4,7 @@ import type { EpochPlugin } from "../../main";
 
 function getEpochTargetLeaf(plugin: EpochPlugin): any {
 	const workspaceAny: any = plugin.app.workspace as any;
-	const showInSidebar = plugin.settings?.showInSidebar !== false;
-	if (showInSidebar) {
-		return plugin.app.workspace.getRightLeaf(false) ?? (typeof workspaceAny?.getLeaf === "function" ? workspaceAny.getLeaf(true) : null);
-	}
-	return (typeof workspaceAny?.getLeaf === "function" ? workspaceAny.getLeaf(true) : null) ?? plugin.app.workspace.getRightLeaf(false);
+	return plugin.app.workspace.getRightLeaf(false) ?? (typeof workspaceAny?.getLeaf === "function" ? workspaceAny.getLeaf(true) : null);
 }
 
 export function onViewUnload(plugin: EpochPlugin): void {
