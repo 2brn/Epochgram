@@ -286,7 +286,91 @@ describe("touch pan", () => {
 
 		await handleTouchEnd(state as any, { touches: [], preventDefault: vi.fn() } as any);
 		expect(startInertia).toHaveBeenCalledTimes(1);
-		expect(Math.abs(Number(state.velocityY) || 0)).toBeGreaterThan(0.01);
+		expect(Number(state.velocityY) || 0).toBeGreaterThan(0.25);
+	});
+
+	test("swipe hide does not fire when touch starts during inertia", () => {
+		const collapse = vi.fn();
+		const state: any = {
+			// moving state (inertia in progress)
+			animatingView: false,
+			velocityY: 0.25,
+			animatingWheelPan: false,
+			animatingWheelZoom: false,
+			offsetY: 0,
+			targetOffsetY: 0,
+			scale: 1,
+			targetScale: 1,
+
+			// touch state
+			touchMode: null,
+			touchMoved: false,
+			touchStartX: 10,
+			touchStartY: 10,
+			touchStartOffsetY: 0,
+			touchStartTime: 0,
+			touchHadMultipleTouches: false,
+			touchLongPressTimeout: null,
+			lastTapTime: 0,
+			lastTapX: 0,
+			lastTapY: 0,
+			keepHoverAfterMenu: false,
+			keepHoverUntilPointerMove: false,
+			pendingScrollNavHighlight: null,
+			dragSource: null,
+			lastPanY: 10,
+			lastPanTime: performance.now() - 16,
+			viewInteractionUntil: 0,
+
+			// required misc
+			isPointerDeviceEvent: () => false,
+			attemptHoverPreview: vi.fn(),
+			clearHover: vi.fn(),
+			updateHover: vi.fn(),
+			findSummaryEntryAtPoint: vi.fn(() => null),
+			findDayLayoutAtPoint: vi.fn(() => null),
+			canvas: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }) },
+			layouts: [
+				{
+					index: 0,
+					hasVisibleDate: false,
+					dateRect: { x1: 0, y1: 0, x2: 0, y2: 0 },
+					summaryRects: []
+				}
+			],
+			draw: vi.fn(),
+			startInertia: vi.fn(),
+			resetScrollNavToToday: vi.fn(),
+			advanceScrollNav: vi.fn(() => false),
+			epochsView: false,
+			toggleEmptyAreaView: vi.fn(),
+			showSummaryMenu: vi.fn(),
+			showDateMenu: vi.fn(),
+			openEntry: vi.fn(async () => undefined),
+			openDateNote: vi.fn(async () => false),
+			createNoteForDate: vi.fn(async () => undefined),
+			getToday: () => new Date("2026-01-19T12:00:00.000Z"),
+			getDateForIndex: () => new Date("2026-01-19T00:00:00.000Z"),
+			suppressHoverUntil: 0,
+			suppressHoverUntilPointerMove: false,
+			previewLockedUntilAltRelease: false,
+			lastPointerEvent: null,
+			plugin: {
+				app: {
+					workspace: {
+						detachLeavesOfType: vi.fn(),
+						rightSplit: { collapse }
+					}
+				}
+			}
+		};
+
+		handleTouchStart(state as any, makeEvent([{ clientX: 10, clientY: 10 }]) as any);
+		expect((state as any).__touchGestureStartedDuringMotion).toBe(true);
+		handleTouchMove(state as any, makeEvent([{ clientX: 30, clientY: 12 }]) as any);
+
+		expect(collapse).not.toHaveBeenCalled();
+		expect(state.touchMode).toBe("pan");
 	});
 
 	test("touchstart during motion suppresses touch hover feedback", () => {

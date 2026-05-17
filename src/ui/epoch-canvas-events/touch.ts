@@ -1,4 +1,5 @@
 import type { EpochCanvas } from "../epoch-canvas";
+import { Platform } from "obsidian";
 import { dist, mid } from "../epoch-canvas-utils";
 import { hideHoverPreview as hideHoverPreviewHelper } from "../epoch-canvas-hover";
 import {
@@ -6,6 +7,7 @@ import {
 	LONG_PRESS_TOGGLE_VIEW_MS,
 	MIN_SCALE,
 	MAX_SCALE,
+	INERTIA_BOOST,
 	DATE_TOUCH_HIT_PAD,
 	DOUBLE_TAP_MAX_DELAY,
 	DOUBLE_TAP_MAX_DIST,
@@ -140,6 +142,12 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 	}
 	const nowPerf = performance.now();
 	const wasMoving = event.touches.length === 1 && isViewMotionActive(s);
+	try {
+		(s as any).__touchGestureStartedDuringMotion = wasMoving;
+		(s as any).__touchCarryVelocity = wasMoving ? Number(s.velocityY) || 0 : 0;
+	} catch {
+		// ignore
+	}
 	if (wasMoving) {
 		try {
 			(s as any).__touchConsumeActionsToken = gestureToken;
@@ -503,6 +511,26 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 	if (event.touches.length !== 1) return;
 
 	const touch = event.touches[0];
+
+	try {
+		
+		const plugin = (canvas as any).plugin;
+		if (plugin && typeof plugin === "object" && plugin.app?.workspace && Platform.isMobile && (s as any).__touchGestureStartedDuringMotion !== true) {
+			const dx = touch.clientX - s.touchStartX;
+			const dy = touch.clientY - s.touchStartY;
+			if (!(s as any)._swipeHideTriggered && dx > 0 && Math.abs(dx) > Math.abs(dy) * 2) {
+				(s as any)._swipeHideTriggered = true;
+				try {
+					if (typeof plugin.app.workspace.detachLeavesOfType === "function") {
+						plugin.app.workspace.rightSplit.collapse();
+					}
+				} catch {
+					// ignore
+				}
+				return;
+			}
+		}
+	} catch {}
 	if (s.touchMode === "entrydrag" || (s as any).entryDragActive) {
 		if (s.touchLongPressTimeout != null) {
 			clearTimeout(s.touchLongPressTimeout);
@@ -557,6 +585,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 	const distVal = Math.hypot(dx, dy);
 
 	if (!s.touchMoved && distVal > 12) {
+		(s as any)._swipeHideTriggered = false;
 		// Pan start: engage perf gating.
 		s.viewInteractionUntil = perfNow + 140;
 		s.touchMoved = true;
@@ -591,14 +620,13 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 		try {
 			(s as any).__touchPanStartedAt = performance.now();
 			(s as any).__touchPanAbs = 0;
+			const carryVelocity = Number((s as any).__touchCarryVelocity ?? 0) || 0;
+			s.velocityY = carryVelocity;
 		} catch {
 			// ignore
 		}
-		// Reset velocity baseline on pan start to avoid a single early move producing
-		// a large inertia kick (common on some Android touch stacks).
 		s.lastPanY = touch.clientY;
 		s.lastPanTime = performance.now();
-		s.velocityY = 0;
 		// Touch-drag is for panning; it should not trigger/adjust hover.
 		// Force-clear so persistent scroll-nav date hover is cleared too.
 		s.keepHoverUntilPointerMove = false;
@@ -618,7 +646,10 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 		const dt = now - s.lastPanTime;
 		if (dt > 0) {
 			const dyStep = touch.clientY - s.lastPanY;
-			s.velocityY = dyStep / dt;
+			const carryVelocity = Number((s as any).__touchCarryVelocity ?? 0) || 0;
+			const carryBlend = 1 / Math.max(1, Number(INERTIA_BOOST) || 1);
+			s.velocityY = (dyStep / dt) + (carryVelocity * carryBlend);
+			(s as any).__touchCarryVelocity = 0;
 			try {
 				const prevAbs = Number((s as any).__touchPanAbs ?? 0) || 0;
 				(s as any).__touchPanAbs = prevAbs + Math.abs(dyStep);
@@ -675,6 +706,12 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 		await commitAnchorEntryDrag(canvas);
 		suppressIncidentalHoverAfterTouch(s, 650);
 		return;
+	}
+	try {
+		(s as any).__touchGestureStartedDuringMotion = false;
+		(s as any).__touchCarryVelocity = 0;
+	} catch {
+		// ignore
 	}
 
 	const duration = Date.now() - s.touchStartTime;
@@ -855,6 +892,7 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 			}
 			(s as any).__touchPanAbs = 0;
 			(s as any).__touchPanStartedAt = 0;
+			(s as any).__touchCarryVelocity = 0;
 		} catch {
 			// ignore
 		}
@@ -927,6 +965,12 @@ export function handleTouchCancel(canvas: EpochCanvas, event: TouchEvent): void 
 	if (s.touchLongPressTimeout != null) {
 		clearTimeout(s.touchLongPressTimeout);
 		s.touchLongPressTimeout = null;
+	}
+	try {
+		(s as any).__touchGestureStartedDuringMotion = false;
+		(s as any).__touchCarryVelocity = 0;
+	} catch {
+		// ignore
 	}
 	// Treat cancel as an aborted gesture: clean up state and prevent any incidental synthetic
 	// hover updates, but do not run tap logic.

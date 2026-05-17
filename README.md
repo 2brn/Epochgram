@@ -60,7 +60,7 @@ Manual install
 - Enable Epochgram in Obsidian Settings → Community plugins.
 
 > [!TIP]
-> Click the <img src="images/epochgram_bw.svg" width="18" height="18" alt="Epochgram"> ribbon icon or run **⌘ Epochgram: Open timeline** to show the timeline in the right panel.</br>
+> Click the <img src="images/epochgram_bw.svg" width="18" height="18" alt="Epochgram"> ribbon icon or run **⌘ Epochgram: Open timeline** to show the timeline in the right sidebar.</br>
 > To open it automatically on launch, enable **⛭ Open on startup**.
 
 ### Cheatsheet
@@ -131,6 +131,13 @@ Each file has one anchor record that represents its canonical date. All other re
 > ```
 
 Each record appears as `file ⸱ summary`. You can control the length of each part using **⛭ Filename length** and **⛭ Summary length**. The summary is either the first `N` words extracted from Markdown or an AI-generated summary when **⛭ Auto summarize** is enabled (Pro). You can also set a manual summary using the YAML property **⛭ Description property name** or via context menu **<img src="images/square-pen.svg" width="18" height="18" alt=""> Edit summary…**; manual summaries are always preferred over AI-generated ones.
+
+> Use this [CSS snippet](https://obsidian.md/help/snippets) to make the timeline full width on mobile:
+> ```css
+>  body.is-mobile {
+>    --mobile-sidebar-width: 100vw;
+>  }
+> ```
 
 Timeline draws today as <img src="images/circle-today.svg" width="18" height="18" alt="">, weekdays as <img src="images/circle.svg" width="18" height="18" alt=""> and weekends as <img src="images/circle-filled.svg" width="18" height="18" alt="">. Entries are shown stacked or side by side when space allows, long entries are truncated with `…`. When records no longer fit within the **⛭ Record width limit**, the rest collapse into `(+n)`. When zoomed out, records collapse into placeholder bars <img src="images/rectangle-horizontal.svg" width="18" height="18" alt="">, with height based on record count.
 
