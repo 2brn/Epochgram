@@ -2,6 +2,15 @@ import { Platform } from "obsidian";
 import { VIEW_TYPE_EPOCH } from "../../ui/epoch-view-mode";
 import type { EpochPlugin } from "../../main";
 
+function getEpochTargetLeaf(plugin: EpochPlugin): any {
+	const workspaceAny: any = plugin.app.workspace as any;
+	const showInSidebar = plugin.settings?.showInSidebar !== false;
+	if (showInSidebar) {
+		return plugin.app.workspace.getRightLeaf(false) ?? (typeof workspaceAny?.getLeaf === "function" ? workspaceAny.getLeaf(true) : null);
+	}
+	return (typeof workspaceAny?.getLeaf === "function" ? workspaceAny.getLeaf(true) : null) ?? plugin.app.workspace.getRightLeaf(false);
+}
+
 export function onViewUnload(plugin: EpochPlugin): void {
 	try {
 		void (plugin as any).stopAiBridge?.();
@@ -140,10 +149,7 @@ export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: b
 		return;
 	}
 
-	const leaf = (() => {
-		const workspaceAny: any = plugin.app.workspace as any;
-		return plugin.app.workspace.getRightLeaf(false) ?? (typeof workspaceAny?.getLeaf === "function" ? workspaceAny.getLeaf(true) : null);
-	})();
+	const leaf = getEpochTargetLeaf(plugin);
 	if (!leaf) return;
 
 	await leaf.setViewState({
@@ -177,8 +183,7 @@ export async function ensureEpochViewLeaf(plugin: EpochPlugin): Promise<void> {
 	try {
 		const leaves = plugin.app.workspace.getLeavesOfType(VIEW_TYPE_EPOCH);
 		if (leaves.length > 0) return;
-		const workspaceAny: any = plugin.app.workspace as any;
-		const leaf = plugin.app.workspace.getRightLeaf(false) ?? (typeof workspaceAny?.getLeaf === "function" ? workspaceAny.getLeaf(true) : null);
+		const leaf = getEpochTargetLeaf(plugin);
 		if (!leaf) return;
 		await leaf.setViewState({
 			type: VIEW_TYPE_EPOCH,

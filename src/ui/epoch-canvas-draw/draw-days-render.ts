@@ -154,6 +154,11 @@ export function drawDayLayouts(params: {
 
 	const markColorsRaw = getEpochMarkColorSet(s.root);
 	const markColors = markColorsRaw;
+	const compactModeMinWidthPercentRaw = Number((s as any).plugin.settings.compactModeMinWidthPercent ?? 30);
+	const compactModeMinWidthPercent = Number.isFinite(compactModeMinWidthPercentRaw)
+		? Math.max(0, Math.min(100, compactModeMinWidthPercentRaw))
+		: 20;
+	const compactMinWidthRatio = compactModeMinWidthPercent / 100;
 
 	for (const i of renderIndices) {
 		const date = s.getDateForIndex(i, today);
@@ -257,6 +262,7 @@ export function drawDayLayouts(params: {
 					pathsWithEmbeddingTerm: (s as any)?.pathsWithEmbeddingTerm ?? null,
 					pathsWithClassifiedTerm: (s as any)?.pathsWithClassifiedTerm ?? null,
 					termSimilarPaths: semanticRelatedActiveTerm ? semanticRelatedTermPaths : null,
+					compactMinWidthRatio,
 					denseMode: denseForPrev,
 					epochsView: epochsViewActive,
 					epochDisableDropCaps,
@@ -296,13 +302,15 @@ export function drawDayLayouts(params: {
 					entries,
 					xStart,
 					rightWidth: rightWidthForText,
+					compactMinWidthBaseWidth: w,
 					scale: s.scale,
 					rowHeight,
 					fontSmall,
 					activeFilePath: activePath,
 					pathsWithEmbeddingTerm: (s as any)?.pathsWithEmbeddingTerm ?? null,
 					pathsWithClassifiedTerm: (s as any)?.pathsWithClassifiedTerm ?? null,
-					termSimilarPaths: semanticRelatedActiveTerm ? semanticRelatedTermPaths : null
+					termSimilarPaths: semanticRelatedActiveTerm ? semanticRelatedTermPaths : null,
+					compactMinWidthRatio
 				}))
 			);
 			const dayOpacity = recordOpacity * (epochsViewActive && prevEpochBucket && bucketFadeT < 1 ? bucketFadeT : 1);
@@ -322,6 +330,7 @@ export function drawDayLayouts(params: {
 								dayIndex: i,
 								xStart: TIMELINE_X + SUMMARY_OFFSET_X,
 								rightWidth,
+								compactMinWidthBaseWidth: w,
 								scale: s.scale,
 								rowHeight,
 								hoverAnim: s.hoverAnim,
@@ -345,6 +354,7 @@ export function drawDayLayouts(params: {
 								pathsWithEmbeddingTerm: (s as any)?.pathsWithEmbeddingTerm ?? null,
 								pathsWithClassifiedTerm: (s as any)?.pathsWithClassifiedTerm ?? null,
 								termSimilarPaths: semanticRelatedActiveTerm ? semanticRelatedTermPaths : null,
+								compactMinWidthRatio,
 								getEntryTitle: (entry: DateEntry) => (s as any).getEntryTitle(entry)
 							});
 							if (bucketCheck.anyRenderableText && !bucketCheck.needsDenseByWidth) {
@@ -361,6 +371,7 @@ export function drawDayLayouts(params: {
 									viewportBottom: h,
 									canvasWidth: w,
 									scale: s.scale,
+									compactMinWidthRatio,
 									rowHeight,
 									hoverAnim: hoverAnimEffective,
 									hoverGap,
@@ -373,7 +384,8 @@ export function drawDayLayouts(params: {
 									semanticRelatedPaths,
 									inheritedMarkIndexByPath,
 									showHidden: showHiddenForRender,
-									filenameWordsCount,								summaryWordsCount,
+									filenameWordsCount,
+									summaryWordsCount,
 									iconCache: (s as any).iconCache,
 									fontSmall,
 									fontSmallHover,
@@ -476,6 +488,7 @@ export function drawDayLayouts(params: {
 					viewportBottom: h,
 					canvasWidth: w,
 					scale: s.scale,
+					compactMinWidthRatio,
 					rowHeight,
 					hoverAnim: hoverAnimEffective,
 					hoverGap,
@@ -490,7 +503,9 @@ export function drawDayLayouts(params: {
 					epochsViewMarkedChildVisibleByDateKey,
 					showHidden: showHiddenForRender,
 					hiddenOnly: hiddenOnlyForRender,
-					filenameWordsCount,				summaryWordsCount,					iconCache: (s as any).iconCache,
+					filenameWordsCount,
+					summaryWordsCount,
+					iconCache: (s as any).iconCache,
 					fontSmall,
 					fontSmallHover,
 					fontEpochLine1: epochsViewActive ? fontEpochLine1 : undefined,

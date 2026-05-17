@@ -7,7 +7,7 @@ import type { EpochPlugin } from "./main";
 export type { EpochSettings } from "./settings-model";
 export { DEFAULT_SETTINGS } from "./settings-model";
 
-import { renderGeneralSettings } from "./settings-ui/general";
+import { renderGeneralViewSettings, renderIndexerSettings } from "./settings-ui/general";
 import { renderMaintenanceSettings } from "./settings-ui/maintenance";
 import { renderProPanel } from "./settings-ui/pro";
 import { createSettingGroup } from "./settings-ui/setting-groups";
@@ -62,9 +62,21 @@ export class EpochSettingTab extends PluginSettingTab {
 		})();
 
 		const { itemsEl: generalItems } = createSettingGroup(containerEl);
-		renderGeneralSettings(generalItems, this.plugin);
-		renderMaintenanceSettings(generalItems, this.app, this.plugin, () => this.display());
+		renderGeneralViewSettings(generalItems, this.plugin);
+
+		const { itemsEl: indexerItems } = createSettingGroup(containerEl, "Indexer");
+
 		renderProPanel(containerEl, this.app, this.plugin, () => this.display());
+		try {
+			const proGroup = containerEl.querySelector(":scope > .setting-group.epoch-pro-settings-group") as HTMLElement | null;
+			if (proGroup && containerEl.firstElementChild !== proGroup) {
+				containerEl.insertBefore(proGroup, containerEl.firstElementChild);
+			}
+		} catch {
+			// ignore
+		}
+		renderIndexerSettings(indexerItems, this.plugin);
+		renderMaintenanceSettings(indexerItems, this.app, this.plugin, () => this.display());
 
 		const { itemsEl: versionItems } = createSettingGroup(containerEl);
 		const versionSetting = new Setting(versionItems)

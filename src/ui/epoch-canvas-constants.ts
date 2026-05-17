@@ -33,7 +33,7 @@ export const SUMMARY_OFFSET_X = 16;
 export const SUMMARY_MIN_WIDTH = 40;
 export const SUMMARY_MAX_COL_WIDTH = 500;
 export const SUMMARY_COLUMN_GAP = 8;
-export const SUMMARY_FONT_ZOOM_MAX = 1.3;
+export const SUMMARY_FONT_ZOOM_MAX = 1.2;
 export const SUMMARY_FONT_ZOOM_RATE = 0.3;
 export const SUMMARY_FONT_MIN_PX = 6;
 

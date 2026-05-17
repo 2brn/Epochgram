@@ -176,7 +176,7 @@ Similarity settings (Partially Verified)
       - Semantics: `pipeline_tag=feature-extraction`
       - Topics: `pipeline_tag=zero-shot-classification`
       - Epochgram opens those search pages in the external browser (desktop and mobile).
-  - When Pro is inactive, the Pro settings panel shows an “Unlock the full Epochgram experience” row, then the Claim key row, then locked Pro settings blurred on a per-row basis; the “Get Pro” CTA opens `https://www.epochgram.com/pro` externally.
+  - When Pro is inactive, the Pro settings panel shows an “Unlock the full Epochgram Pro experience” row, then the Claim key row, then locked Pro settings blurred on a per-row basis; the “Get Pro” CTA opens `https://www.epochgram.com/pro` externally.
   - Pro activation uses a backend flow:
     - the user pastes a claim key once,
     - Epochgram sends the claim key plus `installId`, `devicePublicKey`, and plugin version to `POST /api/pro/activate`,

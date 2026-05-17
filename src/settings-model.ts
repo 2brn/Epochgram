@@ -1,6 +1,8 @@
 export interface EpochSettings {
 	openEpochViewOnStartup: boolean;
+	showInSidebar: boolean;
 	enableAnimation: boolean;
+	compactModeMinWidthPercent: number;
 	trackChanges: boolean;
 	claimKeyPreview?: string;
 	installId?: string;
@@ -48,7 +50,9 @@ export interface EpochSettings {
 
 export const DEFAULT_SETTINGS: EpochSettings = {
 	openEpochViewOnStartup: true,
+	showInSidebar: true,
 	enableAnimation: true,
+	compactModeMinWidthPercent: 30,
 	trackChanges: true,
 	timelineFilters: {
 		showDraftsOnly: false,

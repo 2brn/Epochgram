@@ -53,7 +53,7 @@ export function addEditTopic(menu: Menu, state: CanvasMenuState, entry: DateEntr
 		if (!Platform.isMobileApp) menu.addSeparator();
 		menu.addItem((item) => {
 			item
-				.setTitle("Topic…")
+				.setTitle("Set topic…")
 				.setIcon("tag")
 				.setDisabled(false)
 				.onClick(async () => {

@@ -13,6 +13,7 @@ export interface DaySummaryRenderArgs {
 	viewportBottom?: number;
 	canvasWidth: number;
 	scale: number;
+	compactMinWidthRatio?: number;
 	rowHeight: number;
 	hoverAnim: number;
 	hoverGap: number;

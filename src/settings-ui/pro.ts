@@ -18,11 +18,20 @@ import {
 	hasGenerateEpochsAccess,
 	hasSimilarityAccess,
 	hasSummarizeAIAccess,
-	hasTrackChangesAccess,
 	hasVerifiedEntitlement
 } from "../plugin/pro-feature-state";
 
-export function renderProPanel(containerEl: HTMLElement, app: any, plugin: EpochPlugin, refresh: () => void): void {
+type ProPanelOptions = {
+	advancedGroupsParentEl?: HTMLElement;
+};
+
+export function renderProPanel(
+	containerEl: HTMLElement,
+	app: any,
+	plugin: EpochPlugin,
+	refresh: () => void,
+	options?: ProPanelOptions
+): void {
 	// Clear pending license key when settings panel is opened/refreshed
 	plugin.proActivationPendingKey = "";
 
@@ -58,7 +67,6 @@ export function renderProPanel(containerEl: HTMLElement, app: any, plugin: Epoch
 	};
 
 	const isPro = hasVerifiedEntitlement(plugin);
-	const canTrackChanges = hasTrackChangesAccess(plugin);
 	const canSimilarity = hasSimilarityAccess(plugin);
 	const canSummarize = hasSummarizeAIAccess(plugin);
 	const canGenerateEpochs = hasGenerateEpochsAccess(plugin);
@@ -69,7 +77,9 @@ export function renderProPanel(containerEl: HTMLElement, app: any, plugin: Epoch
 	const activationBusy = plugin.proActivationBusy === true;
 	let pendingKey = String(plugin.proActivationPendingKey ?? "").trim();
 
-	const { itemsEl: proItems } = createSettingGroup(containerEl, "Epochgram Pro");
+	const { groupEl: proGroupEl, itemsEl: proItems } = createSettingGroup(containerEl);
+	proGroupEl.classList.add("epoch-pro-settings-group");
+	const advancedGroupsParentEl = options?.advancedGroupsParentEl ?? containerEl;
 
 	const formatValidationTime = (value: string): string => {
 		if (!value) return "";
@@ -230,7 +240,7 @@ export function renderProPanel(containerEl: HTMLElement, app: any, plugin: Epoch
 			scheduleLicenseLayout();
 		});
 		licenseSetting.addButton((button) => {
-			button.setButtonText(activationBusy ? "" : (hasStoredClaimKeyPreview ? "Reactivate" : "Activate"));
+			button.setButtonText(hasStoredClaimKeyPreview ? "Reactivate" : "Activate");
 			if (activationBusy) {
 				button.buttonEl.classList.add('mod-loading');
 			} else {
@@ -260,7 +270,7 @@ export function renderProPanel(containerEl: HTMLElement, app: any, plugin: Epoch
 		}
 		upsellDesc.append(upsellList);
 		const upsellSetting = new Setting(proItems)
-			.setName("Unlock the full Epochgram experience")
+			.setName("Unlock the full Epochgram Pro experience")
 			.setDesc(upsellDesc);
 		upsellSetting.settingEl?.classList?.add("epoch-pro-upsell-row");
 		upsellSetting.addButton((button) => {
@@ -281,21 +291,7 @@ export function renderProPanel(containerEl: HTMLElement, app: any, plugin: Epoch
 
 		renderLicenseSetting(proItems);
 
-		const trackSetting = markLockedRow(new Setting(proItems)
-		.setName("Track changes")
-			.setDesc(canTrackChanges ? "Track edits per note." : "Requires Epochgram Pro."));
-	trackSetting.addToggle((toggle) => {
-		toggle
-			.setValue(canTrackChanges ? plugin.settings.trackChanges : false)
-			.setDisabled(!canTrackChanges)
-			.onChange(async (value) => {
-				if (!canTrackChanges) return;
-				plugin.settings.trackChanges = value;
-				await plugin.onSettingsChanged("trackChanges");
-			});
-	});
-
-	const similarityGroup = createSettingGroup(containerEl, "Similarity");
+	const similarityGroup = createSettingGroup(advancedGroupsParentEl, "Similarity");
 	markLockedHeading(similarityGroup.groupEl);
 	const { itemsEl: similaritySection } = similarityGroup;
 
@@ -538,7 +534,7 @@ export function renderProPanel(containerEl: HTMLElement, app: any, plugin: Epoch
 	}
 
 	if (Platform.isDesktopApp) {
-		const aiGroup = createSettingGroup(containerEl, "Generative AI");
+		const aiGroup = createSettingGroup(advancedGroupsParentEl, "Generative AI");
 		markLockedHeading(aiGroup.groupEl);
 		const { itemsEl: aiSection } = aiGroup;
 

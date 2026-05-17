@@ -61,7 +61,8 @@ Manual install
 
 > [!TIP]
 > Click the <img src="images/epochgram_bw.svg" width="18" height="18" alt="Epochgram"> ribbon icon or run **⌘ Epochgram: Open timeline** to show the timeline in the right panel.</br>
-> To open it automatically on launch, enable **⛭ Open timeline on startup**.
+> To open it automatically on launch, enable **⛭ Open on startup**.</br>
+> To switch between tab and right sidebar mode, toggle **⛭ Show in sidebar**.
 
 ### Cheatsheet
 
@@ -130,9 +131,9 @@ Each file has one anchor record that represents its canonical date. All other re
 > Added new line...		 ✐ tracked change
 > ```
 
-Each record appears as `file ⸱ summary`. You can control the length of each part using **⛭ Filename length** and **⛭ Summary length**. The summary is either the first `N` words extracted from Markdown or an AI-generated summary when **⛭ Auto summarize** is enabled (Pro). You can also set a manual summary using the YAML property **⛭ Description property name** or via context menu **<img src="images/square-pen.svg" width="18" height="18" alt=""> Summary…**; manual summaries are always preferred over AI-generated ones.
+Each record appears as `file ⸱ summary`. You can control the length of each part using **⛭ Filename length** and **⛭ Summary length**. The summary is either the first `N` words extracted from Markdown or an AI-generated summary when **⛭ Auto summarize** is enabled (Pro). You can also set a manual summary using the YAML property **⛭ Description property name** or via context menu **<img src="images/square-pen.svg" width="18" height="18" alt=""> Edit summary…**; manual summaries are always preferred over AI-generated ones.
 
-Timeline draws today as <img src="images/circle-today.svg" width="18" height="18" alt="">, weekdays as <img src="images/circle.svg" width="18" height="18" alt=""> and weekends as <img src="images/circle-filled.svg" width="18" height="18" alt="">. Entries are shown stacked or side by side when space allows, long entries are truncated with `…`. If space runs out, the day collapses to a few records and shows the rest as `(+n)`. When zoomed out, records collapse into placeholder bars <img src="images/rectangle-horizontal.svg" width="18" height="18" alt="">, with height based on record count.
+Timeline draws today as <img src="images/circle-today.svg" width="18" height="18" alt="">, weekdays as <img src="images/circle.svg" width="18" height="18" alt=""> and weekends as <img src="images/circle-filled.svg" width="18" height="18" alt="">. Entries are shown stacked or side by side when space allows, long entries are truncated with `…`. When records no longer fit within the **⛭ Record width limit**, the rest collapse into `(+n)`. When zoomed out, records collapse into placeholder bars <img src="images/rectangle-horizontal.svg" width="18" height="18" alt="">, with height based on record count.
 
 > [!TIP]
 > A top label shows the current date, and a vertical red line marks the distance from Today — at the default zoom, each day of redshift represents one month.
@@ -181,8 +182,8 @@ Files in the vault are never modified unless you run an explicit file action. Al
 
 | Record menu | Description |
 | --- | --- |
-| **<img src="images/square-pen.svg" width="18" height="18" alt=""> Summary…** | Update the file manual summary. |
-| **<img src="images/tag.svg" width="18" height="18" alt=""> Topic** | Open the topics assignment popup; to remove topics, clear the input (Pro). |
+| **<img src="images/square-pen.svg" width="18" height="18" alt=""> Edit summary…** | Update the file manual summary. |
+| **<img src="images/tag.svg" width="18" height="18" alt=""> Set topic…** | Open the topics assignment popup; to remove topics, clear the input (Pro). |
 | **<img src="images/pin.svg" width="18" height="18" alt=""> Pin** | Pin the file at the *Today* position; or **⌘ Epochgram: Toggle pin for current file**. |
 | **<img src="images/highlighter.svg" width="18" height="18" alt=""> Mark** | Mark similar records with a color; or **⌘ Epochgram: Toggle mark for current file**. |
 | **<img src="images/pencil-ruler.svg" width="18" height="18" alt=""> Draft**</br>**<img src="images/eye.svg" width="18" height="18" alt=""> Review**</br>**<img src="images/eye-off.svg" width="18" height="18" alt=""> Hide** | Change the file review state. |
@@ -265,7 +266,7 @@ In addition to the standard red-to-violet palette, an extended palette is availa
 
 <p align="center"><img src="images/epochs.gif" height="360" alt="Epochs"></p>
 
-Epochgram Pro includes an **AI Bridge** that uses Google Chrome's on-device AI APIs for local summarization. When started, it runs a small local server on an available port at `http://127.0.0.1`. The bridge page can be opened from **⌘ Epochgram: Open AI bridge**, from the **⌀ AI** status bar button (button absent = server not started, button red = client disconnected), or automatically on startup if **⛭ Open AI Bridge on startup** is enabled. This page processes summary jobs in Chrome and returns the results to the plugin. All summarization data stays **only on your device** and is not sent to external services.
+Epochgram Pro includes an **AI Bridge** that uses Google Chrome's on-device AI APIs for local summarization. When started, it runs a small local server on an available port at `http://127.0.0.1`. The bridge page can be opened from **⌘ Epochgram: Open AI bridge**, from the **⌀ AI** status bar button (button absent = server not started, button red = client disconnected), or automatically on startup if **⛭ Open AI bridge on startup** is enabled. This page processes summary jobs in Chrome and returns the results to the plugin. All summarization data stays **only on your device** and is not sent to external services.
 
 On first use, Chrome may need a user gesture to download the built-in Gemini Nano model, and the drive with your Chrome profile [should have](https://developer.chrome.com/docs/ai/summarizer-api#hardware-requirements) at least **22 GB** of free space. The bridge page also serves as a control panel, showing connection and model status, queue progress, the current text preview, the latest result, and a chart with progress in gray and processing speed in blue. Keep it open while summaries are running. You can also adjust API settings and prompt/context texts in the YAML settings editor. For larger notes, Epochgram can split input into chunks, summarize them separately, then merge the results.
 
@@ -422,17 +423,9 @@ Epochgram also provides **Rebuild** and **Reset** popups for rebuilding or clear
 ## Disclosures
 
 - Epochgram Pro:
-	- Requires an payment and internet access for license validation; your email address, license key, and basic server-side telemetry may be processed (see [TERMS](https://www.epochgram.com/terms)).
+	- Requires a payment and internet access for license validation; your email address, license key, and basic server-side telemetry may be processed (see [TERMS](https://www.epochgram.com/terms)).
   - Is not affiliated with Obsidian Sync, Publish, or other Obsidian paid services.
   - AI Bridge: Epochgram starts a local server on `http://127.0.0.1` and opens a local bridge page in Google Chrome to use Chrome's on-device Summarizer API. The bridge communication stays on your device. Chrome [may download](https://developer.chrome.com/docs/ai/summarizer-api) its built-in model(s) (Gemini Nano) the first time you use these APIs.
   - Similarity: embeddings/topic models and runtime files may be downloaded on first use via `@huggingface/transformers` (for example from [Hugging Face](https://huggingface.co)) and ONNX Runtime Web WASM from [jsDelivr](https://cdn.jsdelivr.net/npm/onnxruntime-web@1.24.3/dist/).
-  - Similarity WASM modules used by this plugin:
-    - `ort-wasm.wasm`
-    - `ort-wasm-simd.wasm`
-    - `ort-wasm-threaded.wasm`
-    - `ort-wasm-simd-threaded.wasm`
-    - `ort-wasm-simd-threaded.asyncify.wasm`
-    - `ort-wasm-simd-threaded.jsep.wasm`
-  - Source and purpose: these modules are provided by the `onnxruntime-web` package and are used only for local ONNX inference for similarity embeddings/topic classification.
 - All vault data is processed locally on your device and is NEVER sent over the internet.
 - License: MIT (see [LICENSE](LICENSE)).

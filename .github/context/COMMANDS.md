@@ -47,7 +47,7 @@ Commands are registered in `plugin/lifecycle.ts` (export command via `plugin/exp
   - Marks all non-hidden records as Reviewed across all indexed files.
   - Does not unhide hidden records.
 
-Maintenance rebuild/reset flows are available in Settings → Maintenance.
+Maintenance rebuild/reset flows are available in Settings → Indexer (`Index`).
 
 ## Current File Toggles
 These operate on the active file and are only available when a file is active, index-ready, and the file is indexable/known.

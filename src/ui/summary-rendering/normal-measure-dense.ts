@@ -3,7 +3,8 @@ import {
 	BASE_SPACING,
 	SUMMARY_COLUMN_GAP,
 	SUMMARY_MARGIN,
-	SUMMARY_MAX_COL_WIDTH
+	SUMMARY_MAX_COL_WIDTH,
+	SUMMARY_MIN_SCALE
 } from "../epoch-canvas-constants";
 import { entrySummaryComponents, withFontWeight } from "../epoch-canvas-utils";
 import { formatDate } from "utils";
@@ -14,6 +15,7 @@ export function computeNeedsDenseByWidthFast(args: {
 	entries: DateEntry[];
 	xStart: number;
 	rightWidth: number;
+	compactMinWidthBaseWidth?: number;
 	scale: number;
 	rowHeight: number;
 	fontSmall: string;
@@ -21,6 +23,7 @@ export function computeNeedsDenseByWidthFast(args: {
 	pathsWithEmbeddingTerm?: Set<string> | null;
 	pathsWithClassifiedTerm?: Set<string> | null;
 	termSimilarPaths?: Set<string> | null;
+	compactMinWidthRatio?: number;
 }): boolean {
 	const { ctx } = args;
 	const entries = Array.isArray(args.entries) ? args.entries : [];
@@ -40,6 +43,15 @@ export function computeNeedsDenseByWidthFast(args: {
 	const rightWidth = Number(args.rightWidth);
 	const xStart = Number(args.xStart);
 	if (!Number.isFinite(rightWidth) || !Number.isFinite(xStart)) return false;
+	const compactMinWidthRatioRaw = Number(args.compactMinWidthRatio ?? 0);
+	const compactMinWidthRatio = Number.isFinite(compactMinWidthRatioRaw)
+		? Math.max(0, Math.min(1, compactMinWidthRatioRaw))
+		: 0;
+	const compactMinWidthBaseWidthRaw = Number(args.compactMinWidthBaseWidth ?? rightWidth);
+	const compactMinWidthBaseWidth = Number.isFinite(compactMinWidthBaseWidthRaw) && compactMinWidthBaseWidthRaw > 0
+		? compactMinWidthBaseWidthRaw
+		: rightWidth;
+	const compactMinWidthPx = scale > SUMMARY_MIN_SCALE ? compactMinWidthBaseWidth * compactMinWidthRatio : 0;
 
 	const colWidth = Math.min(
 		SUMMARY_MAX_COL_WIDTH,
@@ -64,7 +76,7 @@ export function computeNeedsDenseByWidthFast(args: {
 	const leadingWorst = getSummaryIconMetrics(1, rowHeight);
 	const worstTextStartX = lastColX + leadingWorst.iconsWidth + leadingWorst.textGap;
 	const worstMaxTextWidth = Math.max(0, rightEdge - worstTextStartX);
-	if (worstMaxTextWidth > ellW + 0.5) {
+	if (worstMaxTextWidth > ellW + 0.5 && (compactMinWidthPx <= 0 || worstMaxTextWidth > compactMinWidthPx + 0.5)) {
 		return false;
 	}
 
@@ -98,7 +110,7 @@ export function computeNeedsDenseByWidthFast(args: {
 			const suffixReserve = 0;
 			const textStartX = x + leadingIconMetrics.iconsWidth + (leadingIconMetrics.totalWidth > 0 ? leadingIconMetrics.textGap : 0);
 			const maxTextWidth = Math.max(0, rightEdge - textStartX - suffixReserve);
-			if (maxTextWidth <= ellEffective + 0.5) return true;
+			if (maxTextWidth <= ellEffective + 0.5 || (compactMinWidthPx > 0 && maxTextWidth <= compactMinWidthPx + 0.5)) return true;
 		}
 	}
 

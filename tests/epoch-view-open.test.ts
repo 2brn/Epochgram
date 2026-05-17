@@ -107,4 +107,60 @@ describe("epoch view open", () => {
 		expect(setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE_EPOCH, active: true });
 		expect(plugin.app.workspace.setActiveLeaf).toHaveBeenCalled();
 	});
+
+	it("prefers tab leaf when Show in sidebar is off", async () => {
+		Platform.isMobileApp = false;
+		Platform.isDesktopApp = true;
+
+		const setViewState = vi.fn().mockResolvedValue(undefined);
+		const plugin: any = {
+			settings: {
+				showInSidebar: false
+			},
+			ensureIndexLoaded: vi.fn().mockResolvedValue(undefined),
+			app: {
+				workspace: {
+					getMostRecentLeaf: vi.fn().mockReturnValue(null),
+					getLeavesOfType: vi.fn().mockReturnValue([]),
+					getRightLeaf: vi.fn().mockReturnValue({ setViewState }),
+					getLeaf: vi.fn().mockReturnValue({ setViewState }),
+					revealLeaf: vi.fn(),
+					setActiveLeaf: vi.fn()
+				}
+			}
+		};
+
+		await viewMethods.openEpochView.call(plugin);
+
+		expect(plugin.app.workspace.getLeaf).toHaveBeenCalledWith(true);
+		expect(setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE_EPOCH, active: false });
+	});
+
+	it("prefers tab leaf on mobile when Show in sidebar is off", async () => {
+		Platform.isMobileApp = true;
+		Platform.isDesktopApp = false;
+
+		const setViewState = vi.fn().mockResolvedValue(undefined);
+		const plugin: any = {
+			settings: {
+				showInSidebar: false
+			},
+			ensureIndexLoaded: vi.fn().mockResolvedValue(undefined),
+			app: {
+				workspace: {
+					getMostRecentLeaf: vi.fn().mockReturnValue(null),
+					getLeavesOfType: vi.fn().mockReturnValue([]),
+					getRightLeaf: vi.fn().mockReturnValue({ setViewState }),
+					getLeaf: vi.fn().mockReturnValue({ setViewState }),
+					revealLeaf: vi.fn(),
+					setActiveLeaf: vi.fn()
+				}
+			}
+		};
+
+		await viewMethods.openEpochView.call(plugin);
+
+		expect(plugin.app.workspace.getLeaf).toHaveBeenCalledWith(true);
+		expect(setViewState).toHaveBeenCalledWith({ type: VIEW_TYPE_EPOCH, active: false });
+	});
 });

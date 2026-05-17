@@ -3,11 +3,12 @@ import type { EpochPlugin } from "../main";
 import { DEFAULT_SETTINGS } from "../settings-model";
 import { registerInfoResetGesture } from "./info-reset-gesture";
 import { normalizeFrontmatterPropertyKey } from "../plugin/frontmatter-keys";
+import { hasTrackChangesAccess } from "../plugin/pro-feature-state";
 
-export function renderGeneralSettings(containerEl: HTMLElement, plugin: EpochPlugin): void {
+export function renderGeneralViewSettings(containerEl: HTMLElement, plugin: EpochPlugin): void {
 	let openOnStartupToggle: any = null;
 	const openOnStartupSetting = new Setting(containerEl)
-			.setName("Open timeline on startup")
+			.setName("Open on startup")
 			.setDesc("Automatically opens the timeline when Obsidian starts.")
 		.addToggle((toggle: any) => {
 			openOnStartupToggle = toggle;
@@ -23,6 +24,26 @@ export function renderGeneralSettings(containerEl: HTMLElement, plugin: EpochPlu
 		if (openOnStartupToggle) openOnStartupToggle.setValue(def);
 		plugin.settings.openEpochViewOnStartup = def;
 		await plugin.onSettingsChanged("openEpochViewOnStartup");
+	});
+
+	let showInSidebarToggle: any = null;
+	const showInSidebarSetting = new Setting(containerEl)
+		.setName("Show in sidebar")
+		.setDesc("Opens Epochgram in the right sidebar. Turn off to open as a tab.")
+		.addToggle((toggle: any) => {
+			showInSidebarToggle = toggle;
+			toggle
+				.setValue(plugin.settings.showInSidebar !== false)
+				.onChange(async (value: boolean) => {
+					plugin.settings.showInSidebar = value;
+					await plugin.onSettingsChanged("showInSidebar");
+				});
+		});
+	registerInfoResetGesture(showInSidebarSetting, async () => {
+		const def = DEFAULT_SETTINGS.showInSidebar !== false;
+		if (showInSidebarToggle) showInSidebarToggle.setValue(def);
+		plugin.settings.showInSidebar = def;
+		await plugin.onSettingsChanged("showInSidebar");
 	});
 
 	let enableAnimationToggle: any = null;
@@ -43,6 +64,84 @@ export function renderGeneralSettings(containerEl: HTMLElement, plugin: EpochPlu
 		if (enableAnimationToggle) enableAnimationToggle.setValue(def);
 		plugin.settings.enableAnimation = def;
 		await plugin.onSettingsChanged("enableAnimation");
+	});
+
+	const compactModeMinWidthSetting = new Setting(containerEl);
+	const setCompactModeMinWidthLabel = (val: number) => {
+		if (val <= 0) {
+			compactModeMinWidthSetting.setName("Record width limit (disabled)");
+		} else {
+			compactModeMinWidthSetting.setName(`Record width limit (${val}%)`);
+		}
+	};
+	const currentCompactModeMinWidth = Number.isFinite(Number(plugin.settings.compactModeMinWidthPercent))
+		? Math.max(0, Math.min(100, Math.round(Number(plugin.settings.compactModeMinWidthPercent))))
+		: Math.max(0, Math.min(100, Math.round(Number(DEFAULT_SETTINGS.compactModeMinWidthPercent))));
+	setCompactModeMinWidthLabel(currentCompactModeMinWidth);
+	compactModeMinWidthSetting.setDesc("Collapse overflow records into a (+n) group.");
+	let compactModeMinWidthSlider: any = null;
+	let suppressCompactModeMinWidthOnChange = false;
+	compactModeMinWidthSetting.addSlider((slider) => {
+		compactModeMinWidthSlider = slider;
+		slider
+			.setLimits(0, 100, 1)
+			.setValue(currentCompactModeMinWidth)
+			.setDynamicTooltip()
+			.onChange(async (value) => {
+				if (suppressCompactModeMinWidthOnChange) return;
+				const rounded = Math.max(0, Math.min(100, Math.round(value)));
+				if (rounded !== value) {
+					slider.setValue(rounded);
+					return;
+				}
+				if (plugin.settings.compactModeMinWidthPercent === rounded) return;
+				plugin.settings.compactModeMinWidthPercent = rounded;
+				setCompactModeMinWidthLabel(rounded);
+				await plugin.onSettingsChanged("compactModeMinWidthPercent");
+			});
+	});
+	registerInfoResetGesture(compactModeMinWidthSetting, async () => {
+		const def = Math.max(0, Math.min(100, Math.round(Number(DEFAULT_SETTINGS.compactModeMinWidthPercent))));
+		if (!compactModeMinWidthSlider) return;
+		if (plugin.settings.compactModeMinWidthPercent === def) {
+			setCompactModeMinWidthLabel(def);
+			return;
+		}
+		suppressCompactModeMinWidthOnChange = true;
+		compactModeMinWidthSlider.setValue(def);
+		suppressCompactModeMinWidthOnChange = false;
+		plugin.settings.compactModeMinWidthPercent = def;
+		setCompactModeMinWidthLabel(def);
+		await plugin.onSettingsChanged("compactModeMinWidthPercent");
+	});
+}
+
+export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlugin): void {
+	const canTrackChanges = hasTrackChangesAccess(plugin);
+	let trackChangesToggle: any = null;
+	const trackChangesSetting = new Setting(containerEl)
+		.setName("Track changes")
+		.setDesc(canTrackChanges ? "Track edits per note." : "Requires Epochgram Pro.")
+		.addToggle((toggle: any) => {
+			trackChangesToggle = toggle;
+			toggle
+				.setValue(canTrackChanges ? plugin.settings.trackChanges === true : false)
+				.setDisabled(!canTrackChanges)
+				.onChange(async (value: boolean) => {
+					if (!canTrackChanges) return;
+					plugin.settings.trackChanges = value;
+					await plugin.onSettingsChanged("trackChanges");
+				});
+		});
+	if (!canTrackChanges) {
+		trackChangesSetting.settingEl?.classList?.add("epoch-pro-locked-row");
+	}
+	registerInfoResetGesture(trackChangesSetting, async () => {
+		const def = DEFAULT_SETTINGS.trackChanges === true;
+		if (trackChangesToggle) trackChangesToggle.setValue(canTrackChanges ? def : false);
+		if (!canTrackChanges) return;
+		plugin.settings.trackChanges = def;
+		await plugin.onSettingsChanged("trackChanges");
 	});
 
 	let parseDatesInFrontmatterToggle: any = null;

@@ -42,7 +42,7 @@ describe("Edit summary menus write YAML description", () => {
 
 		addEditSummary(menu as any, state, entry, "Note");
 
-		const item = findItem(menu, "Summary…");
+		const item = findItem(menu, "Edit summary…");
 		expect(item).toBeTruthy();
 		await item.onClickCb();
 

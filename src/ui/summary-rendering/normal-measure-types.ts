@@ -8,7 +8,9 @@ export interface NormalMeasureArgs {
 	dayIndex: number;
 	xStart: number;
 	rightWidth: number;
+	compactMinWidthBaseWidth?: number;
 	scale: number;
+	compactMinWidthRatio?: number;
 	compactMode?: boolean;
 	rowHeight: number;
 	hoverAnim: number;

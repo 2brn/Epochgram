@@ -16,7 +16,9 @@ export const LOCAL_ACTIVATION_SETTING_KEYS = [
 
 const SYNC_SAFE_SETTING_KEYS = [
 	"openEpochViewOnStartup",
+	"showInSidebar",
 	"enableAnimation",
+	"compactModeMinWidthPercent",
 	"trackChanges",
 	"timelineFilters",
 	"parseDatesInFrontmatter",

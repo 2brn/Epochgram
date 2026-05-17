@@ -4,7 +4,7 @@ import { addEditTopic } from "../src/ui/menus/summary-menu/topic-menu";
 import { withTrustedPro } from "./helpers/trusted-pro";
 
 function findEditTopicItem(menu: any): any {
-	return (menu.items as any[]).find((x) => x && x.kind !== "separator" && typeof x.title === "string" && x.title.startsWith("Topic"));
+	return (menu.items as any[]).find((x) => x && x.kind !== "separator" && typeof x.title === "string" && x.title.startsWith("Set topic"));
 }
 
 describe("Edit topic menu gating", () => {
@@ -61,7 +61,7 @@ describe("Edit topic menu gating", () => {
 
 		const item = findEditTopicItem(menu as any);
 		expect(item).toBeTruthy();
-		expect(item.title).toBe("Topic…");
+		expect(item.title).toBe("Set topic…");
 		expect(item.disabled).toBe(false);
 	});
 });

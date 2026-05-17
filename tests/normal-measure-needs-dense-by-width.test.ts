@@ -135,4 +135,72 @@ describe("buildNormalColumns needsDenseByWidth", () => {
 
 		expect(out.needsDenseByWidth).toBe(false);
 	});
+
+	it("is true when compact width ratio threshold is reached", () => {
+		const ctx = mockCtx();
+		const entries: DateEntry[] = [
+			makeEntry({ file: "a.md", summary: "A" }),
+			makeEntry({ file: "b.md", summary: "B" })
+		];
+
+		const out = buildNormalColumns({
+			ctx,
+			entries,
+			dayIndex: 0,
+			xStart: 0,
+			rightWidth: 10,
+			scale: 1,
+			compactMinWidthRatio: 1,
+			rowHeight: 18,
+			hoverAnim: 0,
+			animSummary: null,
+			activeFilePath: null,
+			showHidden: false,
+			filenameWordsCount: 2,
+			summaryWordsCount: 5,
+			fontSmall: "12px system-ui",
+			fontSmallHover: "13px system-ui",
+			colTextBase: "#000",
+			colTextHover: "#000",
+			colHighlight: "#f00",
+			colRelated: "#00f",
+			getEntryTitle: () => null
+		});
+
+		expect(out.needsDenseByWidth).toBe(true);
+	});
+
+	it("does not trigger compact threshold when ratio is disabled", () => {
+		const ctx = mockCtx();
+		const entries: DateEntry[] = [
+			makeEntry({ file: "a.md", summary: "A" }),
+			makeEntry({ file: "b.md", summary: "B" })
+		];
+
+		const out = buildNormalColumns({
+			ctx,
+			entries,
+			dayIndex: 0,
+			xStart: 0,
+			rightWidth: 10,
+			scale: 1,
+			compactMinWidthRatio: 0,
+			rowHeight: 18,
+			hoverAnim: 0,
+			animSummary: null,
+			activeFilePath: null,
+			showHidden: false,
+			filenameWordsCount: 2,
+			summaryWordsCount: 5,
+			fontSmall: "12px system-ui",
+			fontSmallHover: "13px system-ui",
+			colTextBase: "#000",
+			colTextHover: "#000",
+			colHighlight: "#f00",
+			colRelated: "#00f",
+			getEntryTitle: () => null
+		});
+
+		expect(out.needsDenseByWidth).toBe(false);
+	});
 });

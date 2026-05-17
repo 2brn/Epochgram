@@ -4,6 +4,7 @@ import {
 	SUMMARY_HIDDEN_ALPHA,
 	SUMMARY_MARGIN,
 	SUMMARY_MAX_COL_WIDTH,
+	SUMMARY_MIN_SCALE,
 	SUMMARY_SEPARATOR_SYMBOL
 } from "../epoch-canvas-constants";
 import {
@@ -83,6 +84,15 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 	const maxRows = Math.max(1, Math.floor(bandHeight / rowHeight));
 	const itemsPerCol = Math.max(1, Math.min(maxRows, entries.length));
 	const columnCount = Math.ceil(entries.length / itemsPerCol);
+	const compactMinWidthRatioRaw = Number(args.compactMinWidthRatio ?? 0);
+	const compactMinWidthRatio = Number.isFinite(compactMinWidthRatioRaw)
+		? Math.max(0, Math.min(1, compactMinWidthRatioRaw))
+		: 0;
+	const compactMinWidthBaseWidthRaw = Number(args.compactMinWidthBaseWidth ?? rightWidth);
+	const compactMinWidthBaseWidth = Number.isFinite(compactMinWidthBaseWidthRaw) && compactMinWidthBaseWidthRaw > 0
+		? compactMinWidthBaseWidthRaw
+		: rightWidth;
+	const compactMinWidthPx = scale > SUMMARY_MIN_SCALE ? compactMinWidthBaseWidth * compactMinWidthRatio : 0;
 
 	const colWidth = Math.min(
 		SUMMARY_MAX_COL_WIDTH,
@@ -191,7 +201,9 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 			const textStartX = x + leadingIconMetrics.iconsWidth + (leadingIconMetrics.totalWidth > 0 ? leadingIconMetrics.textGap : 0);
 			const maxTextWidth = Math.max(0, rightEdge - textStartX - suffixReserve);
 			sawAnyRow = true;
-			if (maxTextWidth <= ellWBold + 0.5) anyRowTooNarrowForEllipsis = true;
+			if (maxTextWidth <= ellWBold + 0.5 || (compactMinWidthPx > 0 && maxTextWidth <= compactMinWidthPx + 0.5)) {
+				anyRowTooNarrowForEllipsis = true;
+			}
 
 			if (!shouldMeasureText) {
 				rows.push({
@@ -266,7 +278,9 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 			}
 			const lineHeight = Math.max(12, Math.round(parseFontPx(summaryFont) * 1.25));
 			const ellW = ctx.measureText("ΓÇª").width;
-			if (maxTextWidth <= ellW + 0.5) anyRowTooNarrowForEllipsis = true;
+			if (maxTextWidth <= ellW + 0.5 || (compactMinWidthPx > 0 && maxTextWidth <= compactMinWidthPx + 0.5)) {
+				anyRowTooNarrowForEllipsis = true;
+			}
 			const lines = linesRaw;
 			const textHeight = Math.max(0, lines.length) * lineHeight;
 			const height = Math.max(rowHeight, textHeight + padY * 2);

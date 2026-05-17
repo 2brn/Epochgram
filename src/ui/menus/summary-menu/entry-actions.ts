@@ -41,7 +41,7 @@ export function addEditSummary(menu: Menu, state: CanvasMenuState, entry: DateEn
 	if (summaryWords <= 0) return;
 	menu.addItem((item) => {
 		item
-			.setTitle("Summary…")
+			.setTitle("Edit summary…")
 			.setIcon("square-pen")
 			.setDisabled(false)
 			.onClick(async () => {

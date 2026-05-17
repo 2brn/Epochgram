@@ -7,7 +7,9 @@
 - Startup behavior:
   - After layout is ready, the plugin ensures an `epochgram-view` leaf exists (without stealing focus).
   - Desktop and mobile: it may auto-open Epochgram after layout is ready when `settings.openEpochViewOnStartup !== false`.
-  - Opening Epochgram prefers the right/sidebar leaf on both desktop and mobile; it falls back to opening a new tab leaf only when a right leaf is unavailable.
+  - Opening Epochgram follows `settings.showInSidebar`:
+    - `true` (default): prefers the right/sidebar leaf; falls back to a tab leaf only when needed.
+    - `false`: prefers a tab leaf; falls back to the right/sidebar leaf only when needed.
   - When the view opens, the timeline snaps to an open Markdown file’s best matching record (prefers the most recently active Markdown leaf when available); otherwise it snaps to Today.
     - Snapping targets the **newest** visible non-recurring record for that file; if only recurring records are visible, it snaps to the **oldest** recurring record. Cursor line does not affect which record is chosen.
   - For a short, bounded startup window, Epochgram will also try to refocus to a *newly opened* default note (e.g., Daily note / New note created by other plugins) if it appears after the initial snap.
@@ -59,7 +61,7 @@
 - Ribbon icon: `epochgram-logo` → Epochgram” (see `plugin/lifecycle.ts`).
 - Hover link source registered under `this.manifest.id` (see `plugin/lifecycle.ts`).
 - File context menu items (see `plugin/view.ts`):
-  - “Epochgram: Summary…” edits the configured YAML frontmatter description property (default: `description`) for the file, then clears any stored per-file manual summary overrides and cached AI summaries so the frontmatter description becomes the visible source of truth.
+  - “Epochgram: Edit summary…” edits the configured YAML frontmatter description property (default: `description`) for the file, then clears any stored per-file manual summary overrides and cached AI summaries so the frontmatter description becomes the visible source of truth.
   - “Epochgram: Pin” / “Epochgram: Unpin”
   - Review state (Simple mode off):
     - Shows only the actions that differ from the file’s current effective state (Draft vs Reviewed)
@@ -79,7 +81,11 @@
     - Otherwise, actions apply to the resolved ancestor (typically the resolved inherited source).
 
 - Settings UI (Verified):
+  - Pro activation/settings group is rendered at the top of settings (without a visible section title).
   - General settings include `Date property name` and `Description property name` inputs.
+  - General settings are grouped into:
+    - an untitled top group: `Open on startup`, `Show in sidebar`, `Enable animation`, `Record width limit`.
+    - `Indexer`: `Track changes` (Pro-gated/blurred when unavailable), `Parse dates in properties`, `Date property name`, `Description property name`, `Filename length`, `Summary length`, `Similarity` group, `Generative AI` group (desktop-only), and `Index` actions.
   - The bottom of the settings tab shows a compact metadata footer line in the format `v.<version>-<buildTimestamp>` (`YYYYMMDDHHmmss`).
   - These two inputs now commit/apply only on input blur (focus lost) or explicit reset, instead of applying on every keystroke.
 
