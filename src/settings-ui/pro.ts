@@ -217,6 +217,17 @@ export function renderProPanel(
 					plugin.proActivationPendingKey = value;
 				});
 			text.inputEl.type = "text";
+			if (isPro) {
+				window.requestAnimationFrame(() => {
+					try {
+						if (document.activeElement === text.inputEl) {
+							text.inputEl.blur();
+						}
+					} catch {
+						// ignore
+					}
+				});
+			}
 			text.inputEl.addEventListener("focus", () => {
 				if (!claimKeyPreview) return;
 				if (pendingKey.trim().length > 0) return;
@@ -282,6 +293,15 @@ export function renderProPanel(
 			const buttonEl = button.buttonEl;
 			buttonEl?.classList?.remove("mod-icon");
 			buttonEl?.classList?.add("epoch-pro-get-pro-button");
+			window.requestAnimationFrame(() => {
+				try {
+					if (document.activeElement === buttonEl) {
+						buttonEl.blur();
+					}
+				} catch {
+					// ignore
+				}
+			});
 			buttonEl?.empty();
 			const iconEl = buttonEl?.createSpan({ cls: "epoch-pro-get-pro-icon" });
 			if (iconEl) setIcon(iconEl, "epochgram-logo");
@@ -622,26 +642,25 @@ export function renderProPanel(
 				});
 		});
 
-			const bridgeStartupSetting = markLockedRow(new Setting(aiSection)
-				.setName("Open AI bridge on startup")
-				.setDesc(
-					canAiBridge
-						? "Auto-open AI bridge in Chrome and close it when Obsidian quits."
-						: "Requires Epochgram Pro."
-				));
-			bridgeStartupSetting.addToggle((toggle) => {
-				const canUse = canAiBridge;
-				toggle
-					.setValue(canUse ? plugin.settings.openAiBridgeOnStartup === true : false)
-					.setDisabled(!canUse)
-					.onChange(async (value) => {
-						if (!canUse) return;
-						plugin.settings.openAiBridgeOnStartup = value;
-						await plugin.onSettingsChanged("openAiBridgeOnStartup");
-					});
-			});
+		const bridgeStartupSetting = markLockedRow(new Setting(aiSection)
+			.setName("Open AI bridge on startup")
+			.setDesc(
+				canAiBridge
+					? "Auto-open AI bridge in Chrome and close it when Obsidian quits."
+					: "Requires Epochgram Pro."
+			));
+		bridgeStartupSetting.addToggle((toggle) => {
+			const canUse = canAiBridge;
+			toggle
+				.setValue(canUse ? plugin.settings.openAiBridgeOnStartup === true : false)
+				.setDisabled(!canUse)
+				.onChange(async (value) => {
+					if (!canUse) return;
+					plugin.settings.openAiBridgeOnStartup = value;
+					await plugin.onSettingsChanged("openAiBridgeOnStartup");
+				});
+		});
 	}
-
 	// Keep a lightweight “proof” we’re still in the same render path.
 	void formatDate;
 }
