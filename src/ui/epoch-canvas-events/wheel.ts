@@ -212,7 +212,7 @@ export function handleWheel(canvas: EpochCanvas, event: WheelEvent): void {
 		}
 		return;
 	}
-	if (s.epochsView && !event.ctrlKey && !event.metaKey) {
+	if (s.epochsView && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
 		resetScrollNavTargetState(canvas);
 		s.viewInteractionUntil = now + 140;
 		const dominantDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
