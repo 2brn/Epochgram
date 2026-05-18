@@ -101,11 +101,11 @@ The timeline is a scrollable, zoomable surface that collects records from all fi
 | <img src="images/calendar.svg" width="16" height="16" alt=""> **Content dates** | Parsed content date (ranges), including <img src="images/recurring.svg" width="16" height="16" alt=""> **Recurring dates** (Pro). |
 | -- Anchors -- | |
 | **Filename dates** | Parsed filename date. |
-| **Frontmatter dates** | YAML `date` property (configurable via **⛭ Date property name**). |
+| **Frontmatter dates** | YAML `date` property (configurable via **⛭ Anchor date property**). |
 | **Created dates** | File creation time. |
 
 > [!TIP]
-> Enable **⛭ Parse dates in properties** to extract dates from YAML frontmatter. The `date` property is always parsed.
+> Enable **⛭ Parse dates from other properties** to extract dates from all YAML frontmatter.
 
 Each file has one anchor record that represents its canonical date. All other record types are optional. Drag and drop works only for anchor records, it updates the YAML `date` property, and the filename for daily notes.
 
@@ -130,7 +130,7 @@ Each file has one anchor record that represents its canonical date. All other re
 > Added new line...		 ✐ tracked change
 > ```
 
-Each record appears as `file ⸱ summary`. You can control the length of each part using **⛭ Filename length** and **⛭ Summary length**. The summary is either the first `N` words extracted from Markdown or an AI-generated summary when **⛭ Auto summarize** is enabled (Pro). You can also set a manual summary using the YAML property **⛭ Description property name** or via context menu **<img src="images/square-pen.svg" width="18" height="18" alt=""> Edit summary…**; manual summaries are always preferred over AI-generated ones.
+Each record appears as `file ⸱ summary`. You can control the length of each part using **⛭ Filename length** and **⛭ Summary length**. The summary is either the first `N` words extracted from Markdown or an AI-generated summary when **⛭ Auto summarize** is enabled (Pro). You can also set a manual summary using the YAML **⛭ Summary property** or via context menu **<img src="images/square-pen.svg" width="18" height="18" alt=""> Edit summary…**; manual summaries are always preferred over AI-generated ones.
 
 > Use this [CSS snippet](https://obsidian.md/help/snippets) to make the timeline full width on mobile:
 > ```css

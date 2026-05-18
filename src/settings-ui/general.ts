@@ -124,26 +124,6 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 		await plugin.onSettingsChanged("trackChanges");
 	});
 
-	let parseDatesInFrontmatterToggle: any = null;
-	const parseDatesInFrontmatterSetting = new Setting(containerEl)
-		.setName("Parse dates in properties")
-		.setDesc("Includes YAML frontmatter dates.")
-		.addToggle((toggle: any) => {
-			parseDatesInFrontmatterToggle = toggle;
-			toggle
-				.setValue(plugin.settings.parseDatesInFrontmatter === true)
-				.onChange(async (value: boolean) => {
-					plugin.settings.parseDatesInFrontmatter = value;
-					await plugin.onSettingsChanged("parseDatesInFrontmatter");
-				});
-		});
-	registerInfoResetGesture(parseDatesInFrontmatterSetting, async () => {
-		const def = DEFAULT_SETTINGS.parseDatesInFrontmatter === true;
-		if (parseDatesInFrontmatterToggle) parseDatesInFrontmatterToggle.setValue(def);
-		plugin.settings.parseDatesInFrontmatter = def;
-		await plugin.onSettingsChanged("parseDatesInFrontmatter");
-	});
-
 	let yamlDatePropText: any = null;
 	let yamlDatePropPending = String(plugin.settings.yamlDateProperty || DEFAULT_SETTINGS.yamlDateProperty);
 	const commitYamlDateProperty = async (): Promise<void> => {
@@ -157,8 +137,8 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 		await plugin.onSettingsChanged("yamlDateProperty");
 	};
 	const yamlDatePropSetting = new Setting(containerEl)
-		.setName("Date property name")
-		.setDesc("YAML property used as the anchor date.")
+		.setName("Anchor date property")
+		.setDesc("Used as the note anchor date.")
 		.addText((text: any) => {
 			yamlDatePropText = text;
 			text.inputEl?.classList.add("epoch-frontmatter-prop-input");
@@ -193,8 +173,8 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 		await plugin.onSettingsChanged("yamlDescriptionProperty");
 	};
 	const yamlDescriptionPropSetting = new Setting(containerEl)
-		.setName("Description property name")
-		.setDesc("YAML property used as summary override.")
+		.setName("Summary property")
+		.setDesc("Used as manual summary override.")
 		.addText((text: any) => {
 			yamlDescriptionPropText = text;
 			text.inputEl?.classList.add("epoch-frontmatter-prop-input");
@@ -214,6 +194,26 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 		yamlDescriptionPropPending = def;
 		plugin.settings.yamlDescriptionProperty = def;
 		await plugin.onSettingsChanged("yamlDescriptionProperty");
+	});
+
+	let parseDatesInFrontmatterToggle: any = null;
+	const parseDatesInFrontmatterSetting = new Setting(containerEl)
+		.setName("Parse dates from other properties")
+		.setDesc("Scan all YAML properties for date values.")
+		.addToggle((toggle: any) => {
+			parseDatesInFrontmatterToggle = toggle;
+			toggle
+				.setValue(plugin.settings.parseDatesInFrontmatter === true)
+				.onChange(async (value: boolean) => {
+					plugin.settings.parseDatesInFrontmatter = value;
+					await plugin.onSettingsChanged("parseDatesInFrontmatter");
+				});
+		});
+	registerInfoResetGesture(parseDatesInFrontmatterSetting, async () => {
+		const def = DEFAULT_SETTINGS.parseDatesInFrontmatter === true;
+		if (parseDatesInFrontmatterToggle) parseDatesInFrontmatterToggle.setValue(def);
+		plugin.settings.parseDatesInFrontmatter = def;
+		await plugin.onSettingsChanged("parseDatesInFrontmatter");
 	});
 
 	const filenameSetting = new Setting(containerEl);
