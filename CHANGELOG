@@ -1,5 +1,11 @@
 # Epochgram changelog
 
+## [1.4.9] - 2026-05-18
+- Added **Anchor by mdate** setting: use mtime instead of ctime as the anchor fallback for files with no filename date or YAML date property.
+- Fixed hover right-column shift incorrectly triggering when hovering over a single-row record (no neighboring rows at the same Y position).
+- Fixed `yamlDateProperty`, `yamlDescriptionProperty`, and `anchorMdate` settings not persisting across reloads.
+- Updated AI feature descriptions ("using local Chrome AI" wording).
+
 ## [1.4.8] - 2026-05-18
 - Updated manifest and README.
 
