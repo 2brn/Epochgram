@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.4.7] - 2026-05-18
+- Settings UI: renamed frontmatter-related labels for clarity (Anchor date property, Summary property, Parse dates from other properties).
+
 ## [1.4.6] - 2026-05-17
 - Fix settings autofocus behaviour.
 
