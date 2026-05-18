@@ -33,7 +33,7 @@ export function computeHoverLayout(args: {
 	allowVerticalNeighborShift?: boolean;
 	allowRowHeightExpansion?: boolean;
 }): HoverLayoutResult {
-	const { ctx, columns, dayIndex, dayCenterY, xStart, rightWidth, scale, rowHeight, animSummary, fontSmallHover } = args;
+	const { columns, ctx, dayIndex, dayCenterY, xStart, rightWidth, scale, rowHeight, animSummary, fontSmallHover } = args;
 	const allowRightColumnShift = args.allowRightColumnShift !== false;
 	const allowVerticalNeighborShift = args.allowVerticalNeighborShift !== false;
 	const allowRowHeightExpansion = args.allowRowHeightExpansion !== false;
@@ -68,46 +68,56 @@ export function computeHoverLayout(args: {
 		}
 	}
 
+	type RowYRange = { yTop: number; yBottom: number };
+	const baseRowRangesByCol: RowYRange[][] = columns.map((col) => {
+		const ranges: RowYRange[] = [];
+		let y = dayCenterY - col.columnHeight / 2;
+		for (let row = 0; row < col.rowsThisCol; row++) {
+			const r = col.rows[row]!;
+			const yTop = y;
+			const yBottom = yTop + r.height;
+			ranges.push({ yTop, yBottom });
+			y = yBottom;
+		}
+		return ranges;
+	});
+
 	let shiftRightDx = 0;
-	if (allowRightColumnShift && hoveredColIdx >= 0 && hoveredColIdx < columns.length - 1 && hoveredT > 0) {
-		const hoveredCol = columns[hoveredColIdx]!;
-		const r = hoveredCol.rows[hoveredRowIdx]!;
-		const hasAnyText = r.lines.some((l) => String(l ?? "").trim().length > 0);
-		if (hasAnyText) {
-			const hoverFontStr = getHoverFontStrForRow(r, fontSmallHover);
-			const textGap = r.leadingIconMetrics.textGap;
-			const textStartX = hoveredCol.x + r.leadingIconMetrics.iconsWidth + (hasAnyText ? textGap : 0);
-			const otherLineStartX = r.leadingIconIds.length > 0 ? textStartX : hoveredCol.x;
-			const baseTagGap = r.hasTagIcon ? r.tagIconMetrics.textGap : 0;
-			const hoverTagSize = r.hasTagIcon ? r.tagIconMetrics.size : 0;
-			const hoverTagExtraWidth = r.hasTagIcon ? baseTagGap + hoverTagSize : 0;
-			const nextColBaseX = columns[hoveredColIdx + 1]!.x;
-			const rightEdge = xStart + rightWidth;
-			const linesNow = Array.isArray(r.lines) && r.lines.length ? r.lines : [""];
-
-			ctx.save();
-			ctx.font = hoverFontStr;
-			const textRightLimit = rightEdge - hoverTagExtraWidth - HOVER_BG_PAD;
-
-			const measureRight = (lines: string[]): number => {
-				let best = 0;
-				for (let li = 0; li < lines.length; li++) {
-					const startX = li === 0 ? textStartX : otherLineStartX;
-					const line = ellipsizeLineToRight(ctx, String(lines[li] ?? "").trimEnd(), startX, textRightLimit);
-					const right = startX + ctx.measureText(line).width;
-					if (right > best) best = right;
+	if (allowRightColumnShift && hoveredColIdx >= 0 && hoveredT > 0) {
+		const hoveredRowIsSingle = isSingleInRow(baseRowRangesByCol, hoveredColIdx, hoveredRowIdx);
+		if (hoveredRowIsSingle) {
+			shiftRightDx = 0;
+		} else {
+			const hoveredCol = columns[hoveredColIdx]!;
+			const hoveredRow = hoveredCol.rows[hoveredRowIdx]!;
+			const nextCol = columns[hoveredColIdx + 1] ?? null;
+			if (nextCol) {
+				const baseX = hoveredCol.x;
+				const hoverFontStr = hoveredRow.hoverFontStr || getHoverFontStrForRow(hoveredRow, fontSmallHover);
+				const hasAnyText = hoveredRow.lines.some((l) => String(l ?? "").trim().length > 0);
+				let hoverTextRight = baseX;
+				if (hasAnyText) {
+					const textGap = hoveredRow.leadingIconMetrics.textGap;
+					const textStartX = baseX + hoveredRow.leadingIconMetrics.iconsWidth + textGap;
+					const otherLineStartX = hoveredRow.leadingIconIds.length > 0 ? textStartX : baseX;
+					const baseTagGap = hoveredRow.hasTagIcon ? hoveredRow.tagIconMetrics.textGap : 0;
+					const hoverTagSize = hoveredRow.hasTagIcon ? hoveredRow.tagIconMetrics.size : 0;
+					const hoverTagExtraWidth = hoveredRow.hasTagIcon ? baseTagGap + hoverTagSize : 0;
+					const textRightLimit = xStart + rightWidth - hoverTagExtraWidth - HOVER_BG_PAD;
+					ctx.save();
+					ctx.font = hoverFontStr;
+					const hoverLines = Array.isArray(hoveredRow.lines) && hoveredRow.lines.length ? hoveredRow.lines : [""];
+					for (let li = 0; li < hoverLines.length; li++) {
+						const startX = li === 0 ? textStartX : otherLineStartX;
+						const line = ellipsizeLineToRight(ctx, String(hoverLines[li] ?? "").trimEnd(), startX, textRightLimit);
+						const right = startX + ctx.measureText(line).width + hoverTagExtraWidth;
+						if (right > hoverTextRight) hoverTextRight = right;
+					}
+					ctx.restore();
 				}
-				return best;
-			};
-
-			const currRight = measureRight(linesNow);
-			const hoverTextRight = currRight;
-			ctx.restore();
-
-			const hoverRight = hoverTextRight + hoverTagExtraWidth;
-			const desiredNextX = hoverRight + recordSafeGap;
-			const overlap = desiredNextX - nextColBaseX;
-			shiftRightDx = (overlap > 0 ? overlap : 0) * hoveredT;
+				const overlap = Math.max(0, hoverTextRight + recordSafeGap - nextCol.x);
+				shiftRightDx = overlap * hoveredT;
+			}
 		}
 	}
 
@@ -336,4 +346,26 @@ export function computeHoverLayout(args: {
 		shiftRightDx,
 		rowLayoutByCol
 	};
+}
+
+function isSingleInRow(baseRowRangesByCol: { yTop: number; yBottom: number }[][], colIdx: number, rowIdx: number): boolean {
+	const target = baseRowRangesByCol[colIdx]?.[rowIdx];
+	if (!target) return false;
+	const overlapAllowancePx = 1;
+	const targetCenter = (target.yTop + target.yBottom) / 2;
+	const targetTop = Math.min(targetCenter, target.yTop + overlapAllowancePx);
+	const targetBottom = Math.max(targetCenter, target.yBottom - overlapAllowancePx);
+	for (let cj = 0; cj < baseRowRangesByCol.length; cj++) {
+		const ranges = baseRowRangesByCol[cj];
+		if (!ranges) continue;
+		for (let rj = 0; rj < ranges.length; rj++) {
+			if (cj === colIdx && rj === rowIdx) continue;
+			const other = ranges[rj]!;
+			const overlapsY = !(targetBottom <= other.yTop || targetTop >= other.yBottom);
+			if (overlapsY) {
+				return false;
+			}
+		}
+	}
+	return true;
 }

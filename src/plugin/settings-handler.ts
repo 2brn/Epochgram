@@ -329,6 +329,7 @@ export const settingsHandlerMethods: SettingsHandlerMethods = {
 			key === "filenameWordsCount" ||
 			key === "summaryWordsCount" ||
 			key === "trackChanges" ||
+			key === "anchorMdate" ||
 			key === "parseDatesInFrontmatter" ||
 			key === "yamlDateProperty" ||
 			key === "yamlDescriptionProperty"

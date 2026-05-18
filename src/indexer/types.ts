@@ -89,6 +89,7 @@ export interface FileIndexData {
     trackedSnapshotDate: string | null;
     trackedBaselineSnapshot: string | null;
     trackedBaselineDate: string | null;
+	anchorUsesMdate?: boolean;
 	/** Last observed vault stat.mtime when this file was indexed (ms since epoch). */
 	indexedMtimeMs?: number;
 	/** Last observed vault stat.size when this file was indexed (bytes). */

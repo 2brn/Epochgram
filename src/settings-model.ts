@@ -3,6 +3,7 @@ export interface EpochSettings {
 	enableAnimation: boolean;
 	compactModeMinWidthPercent: number;
 	trackChanges: boolean;
+	anchorMdate?: boolean;
 	claimKeyPreview?: string;
 	installId?: string;
 	devicePublicKey?: string;
@@ -52,6 +53,7 @@ export const DEFAULT_SETTINGS: EpochSettings = {
 	enableAnimation: true,
 	compactModeMinWidthPercent: 30,
 	trackChanges: true,
+	anchorMdate: false,
 	timelineFilters: {
 		showDraftsOnly: false,
 		showAttachments: false,

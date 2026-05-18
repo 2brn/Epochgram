@@ -80,6 +80,28 @@ export function renderNormalColumnsPass(args: {
 		return ranges;
 	});
 
+	const isSingleInRow = (colIdx: number, rowIdx: number): boolean => {
+		const target = baseRowRangesByCol[colIdx]?.[rowIdx];
+		if (!target) return false;
+		const overlapAllowancePx = 1;
+		const targetCenter = (target.yTop + target.yBottom) / 2;
+		const targetTop = Math.min(targetCenter, target.yTop + overlapAllowancePx);
+		const targetBottom = Math.max(targetCenter, target.yBottom - overlapAllowancePx);
+		for (let cj = 0; cj < baseRowRangesByCol.length; cj++) {
+			const ranges = baseRowRangesByCol[cj];
+			if (!ranges) continue;
+			for (let rj = 0; rj < ranges.length; rj++) {
+				if (cj === colIdx && rj === rowIdx) continue;
+				const other = ranges[rj]!;
+				const overlapsY = !(targetBottom <= other.yTop || targetTop >= other.yBottom);
+				if (overlapsY) {
+					return false;
+				}
+			}
+		}
+		return true;
+	};
+
 	for (let colIdx = 0; colIdx < columns.length; colIdx++) {
 		const col = columns[colIdx]!;
 		const { x, maxWidth, rowsThisCol, rows } = col;
@@ -87,7 +109,16 @@ export function renderNormalColumnsPass(args: {
 		const baseX = x;
 		const layoutsForCol = rowLayoutByCol[colIdx] ?? null;
 
+		// Modify the logic to prevent other records from shifting when hovering over a single-row record
 		const getClipRightEdgeForRowShifted = (yTop: number, yBottom: number): number => {
+			if (isSingleInRow(hoveredColIdx, hoveredRowIdx)) {
+				// If the hovered row is a single-row record, prevent any shifting globally
+				return rightEdge;
+			}
+			if (isSingleInRow(colIdx, hoveredRowIdx)) {
+				// If the current column contains a single-row record, prevent shifting
+				return rightEdge;
+			}
 			for (let cj = colIdx + 1; cj < columns.length; cj++) {
 				const other = rowLayoutByCol[cj];
 				if (!other) continue;
@@ -133,6 +164,7 @@ export function renderNormalColumnsPass(args: {
 
 		for (let row = 0; row < rowsThisCol; row++) {
 			const r = rows[row]!;
+			const rowIsSingleInRow = isSingleInRow(colIdx, row);
 			const rowT = Math.max(0, Math.min(1, r.summaryHoverT)) * detailHoverScale;
 			const yRectTopBase = yCursorBase;
 			const yRectBottomBase = yRectTopBase + r.height;
@@ -198,13 +230,15 @@ export function renderNormalColumnsPass(args: {
 			// For non-hover rows, keep the *ellipsis width* stable while shifting the row,
 			// by shifting the clip edge alongside the row. This ensures hovering only
 			// re-ellipsizes the hovered (or animating-out) record.
-			const baseClipRight = getClipRightEdgeForRowBase(yRectTopBase, yRectBottomBase);
+			const baseClipRight = rowIsSingleInRow ? rightEdge : getClipRightEdgeForRowBase(yRectTopBase, yRectBottomBase);
 
 			const isActiveHoveredRow = colIdx === hoveredColIdx && row === hoveredRowIdx && isHoveredRow;
 			let clipRight = isActiveHoveredRow
-				? (hoverBandsForClip && hoverBandsForClip.length
-					? getClipRightEdgeForBandsShifted(hoverBandsForClip)
-					: getClipRightEdgeForRowShifted(yRectTop, yRectBottom))
+				? (rowIsSingleInRow
+					? rightEdge
+					: (hoverBandsForClip && hoverBandsForClip.length
+						? getClipRightEdgeForBandsShifted(hoverBandsForClip)
+						: getClipRightEdgeForRowShifted(yRectTop, yRectBottom)))
 				: baseClipRight;
 			if (!r.isHoverTarget && Number.isFinite(rowShift) && rowShift > 0.001) {
 				clipRight = Math.min(rightEdge, baseClipRight + rowShift);
@@ -290,7 +324,7 @@ export function renderNormalColumnsPass(args: {
 				x1: Math.min(baseX, rowX) - HOVER_HIT_PAD,
 				y1: yRectTopBase - HOVER_HIT_PAD,
 				x2:
-					getClipRightEdgeForRowBase(yRectTopBase, yRectBottomBase) +
+					(rowIsSingleInRow ? rightEdge : getClipRightEdgeForRowBase(yRectTopBase, yRectBottomBase)) +
 					(Math.max(0, rowShift) || 0) +
 					HOVER_HIT_PAD,
 				y2: yRectBottomBase + HOVER_HIT_PAD,

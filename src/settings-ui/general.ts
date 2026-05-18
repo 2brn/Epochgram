@@ -101,7 +101,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 	let trackChangesToggle: any = null;
 	const trackChangesSetting = new Setting(containerEl)
 		.setName("Track changes")
-		.setDesc(canTrackChanges ? "Track edits per note." : "Requires Epochgram Pro.")
+		.setDesc(canTrackChanges ? "Track note change history on the timeline." : "Requires Epochgram Pro.")
 		.addToggle((toggle: any) => {
 			trackChangesToggle = toggle;
 			toggle
@@ -124,6 +124,30 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 		await plugin.onSettingsChanged("trackChanges");
 	});
 
+	const getAnchorMdateDesc = () => {
+		const prop = plugin.settings.yamlDateProperty || DEFAULT_SETTINGS.yamlDateProperty;
+		return `Use mdate instead of cdate when no date is found in filename or YAML \`${prop}\`.`;
+	};
+	let anchorMdateToggle: any = null;
+	const anchorMdateSetting = new Setting(containerEl)
+		.setName("Anchor by mdate")
+		.setDesc(getAnchorMdateDesc())
+		.addToggle((toggle: any) => {
+			anchorMdateToggle = toggle;
+			toggle
+				.setValue(plugin.settings.anchorMdate === true)
+				.onChange(async (value: boolean) => {
+					plugin.settings.anchorMdate = value;
+					await plugin.onSettingsChanged("anchorMdate");
+				});
+		});
+	registerInfoResetGesture(anchorMdateSetting, async () => {
+		const def = DEFAULT_SETTINGS.anchorMdate === true;
+		if (anchorMdateToggle) anchorMdateToggle.setValue(def);
+		plugin.settings.anchorMdate = def;
+		await plugin.onSettingsChanged("anchorMdate");
+	});
+
 	let yamlDatePropText: any = null;
 	let yamlDatePropPending = String(plugin.settings.yamlDateProperty || DEFAULT_SETTINGS.yamlDateProperty);
 	const commitYamlDateProperty = async (): Promise<void> => {
@@ -134,6 +158,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 		yamlDatePropPending = normalized;
 		if (plugin.settings.yamlDateProperty === normalized) return;
 		plugin.settings.yamlDateProperty = normalized;
+		anchorMdateSetting.setDesc(getAnchorMdateDesc());
 		await plugin.onSettingsChanged("yamlDateProperty");
 	};
 	const yamlDatePropSetting = new Setting(containerEl)
@@ -157,6 +182,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 		if (yamlDatePropText) yamlDatePropText.setValue(def);
 		yamlDatePropPending = def;
 		plugin.settings.yamlDateProperty = def;
+		anchorMdateSetting.setDesc(getAnchorMdateDesc());
 		await plugin.onSettingsChanged("yamlDateProperty");
 	});
 

@@ -560,7 +560,7 @@ export function renderProPanel(
 
 		const summarizeSetting = markLockedRow(new Setting(aiSection)
 			.setName("Auto summarize")
-			.setDesc(canSummarize ? "Generate notes summaries via Google Chrome locally." : "Requires Epochgram Pro."));
+			.setDesc(canSummarize ? "Generate notes summaries using local Chrome AI." : "Requires Epochgram Pro."));
 		summarizeSetting.addToggle((toggle) => {
 			const canUse = canSummarize;
 			toggle
@@ -602,7 +602,7 @@ export function renderProPanel(
 
 		const epochsSetting = markLockedRow(new Setting(aiSection)
 			.setName(`Generate ${"Epochs"}`)
-			.setDesc(canGenerateEpochs ? "Generate period summaries via Google Chrome locally." : "Requires Epochgram Pro."));
+			.setDesc(canGenerateEpochs ? "Generate period summaries using local Chrome AI." : "Requires Epochgram Pro."));
 		epochsSetting.addToggle((toggle) => {
 			const canUse = canGenerateEpochs;
 			const current = plugin.settings.generateEpochs === true;

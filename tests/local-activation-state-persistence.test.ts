@@ -129,6 +129,9 @@ describe("local activation persistence", () => {
 			saveData,
 			settings: {
 				trackChanges: true,
+				anchorMdate: true,
+				yamlDateProperty: "anchorDate",
+				yamlDescriptionProperty: "anchorDescription",
 				claimKeyPreview: "EPO-ABCD-XXXX-XXXX-XXXX-XXXX",
 				unexpectedField: "drop-me"
 			}
@@ -137,6 +140,9 @@ describe("local activation persistence", () => {
 		await persistenceMethods.savePluginData.call(plugin);
 
 		const payload = saveData.mock.calls[0]?.[0] ?? {};
+		expect(payload.settings.anchorMdate).toBe(true);
+		expect(payload.settings.yamlDateProperty).toBe("anchorDate");
+		expect(payload.settings.yamlDescriptionProperty).toBe("anchorDescription");
 		expect(payload.settings.claimKeyPreview).toBeUndefined();
 		expect(payload.settings.unexpectedField).toBeUndefined();
 		const localState = readLocalActivationState(plugin);

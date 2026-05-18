@@ -129,6 +129,7 @@ export async function processFileInternal(
 		})(),
 		contentHash
 	};
+	const useAnchorMdate = (s.plugin as any)?.settings?.anchorMdate === true;
 
 	// Reset tracked-entry review state for the tracked bucket day when the file
 	// meaningfully changes. (Hidden stays separate and is preserved.)
@@ -150,13 +151,22 @@ export async function processFileInternal(
 	} else {
 		delete s.latestLines[file.path];
 	}
+	const ctime = Number((file as any)?.stat?.ctime);
+	const mtime = Number((file as any)?.stat?.mtime);
+	const anchorTimestamp =
+		useAnchorMdate && Number.isFinite(mtime) && mtime > 0
+			? mtime
+			: Number.isFinite(ctime) && ctime > 0
+				? ctime
+				: mtime;
 	fileData.cdate = s.buildFileDateEntry(
 		file,
 		lines,
-		normalizeDateFromTimestamp(file.stat.ctime),
+		normalizeDateFromTimestamp(anchorTimestamp),
 		isText,
 		"cdate"
 	);
+	fileData.anchorUsesMdate = useAnchorMdate;
 	let recurLine = 0;
 	let recurValue: string | null = null;
 	try {
@@ -248,7 +258,12 @@ export async function processFileInternal(
 	// file.stat.ctime which is device-specific after sync (mobile gets the sync
 	// timestamp, desktop keeps the original). Re-computing it would cause
 	// cross-device index divergence even when the file hasn't changed.
-	if (previousData.cdate !== null && previousData.cdate !== undefined) {
+	const previousAnchorUsesMdate = (previousData as any)?.anchorUsesMdate === true;
+	if (
+		previousData.cdate !== null &&
+		previousData.cdate !== undefined &&
+		previousAnchorUsesMdate === useAnchorMdate
+	) {
 		fileData.cdate = previousData.cdate;
 	}
 

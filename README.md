@@ -98,16 +98,16 @@ The timeline is a scrollable, zoomable surface that collects records from all fi
 | Source | Description |
 | --- | --- |
 | <img src="images/pen.svg" width="16" height="16" alt=""> **Tracked changes** | Per-block edit history excluding YAML. Requires **⛭ Track changes** (Pro). |
-| <img src="images/calendar.svg" width="16" height="16" alt=""> **Content dates** | Parsed content date (ranges), including <img src="images/recurring.svg" width="16" height="16" alt=""> **Recurring dates** (Pro). |
+| <img src="images/calendar.svg" width="16" height="16" alt=""> **Content date** | Parsed content date (ranges), including <img src="images/recurring.svg" width="16" height="16" alt=""> **Recurring dates** (Pro). |
 | -- Anchors -- | |
-| **Filename dates** | Parsed filename date. |
-| **Frontmatter dates** | YAML `date` property (configurable via **⛭ Anchor date property**). |
-| **Created dates** | File creation time. |
+| **Filename date** | Parsed filename date. |
+| **Frontmatter date** | YAML **⛭ Anchor date property**. |
+| **File cdate or mdate** | Configurable via **⛭ Anchor by mdate**. |
 
 > [!TIP]
 > Enable **⛭ Parse dates from other properties** to extract dates from all YAML frontmatter.
 
-Each file has one anchor record that represents its canonical date. All other record types are optional. Drag and drop works only for anchor records, it updates the YAML `date` property, and the filename for daily notes.
+Each file has one anchor record that represents its canonical date. All other record types are optional. Drag and drop works only for anchor records, it updates the YAML **⛭ Anchor date property**, and the filename for daily notes.
 
 <p align="center">
 <img src="images/create.gif" height="360" alt="Create note">
@@ -118,7 +118,7 @@ Each file has one anchor record that represents its canonical date. All other re
 > # EXAMPLE OF SOURCES
 > # FROM FILE PROPS:
 >
-> `my_note.md`			 ⚓︎ cdate
+> `my_note.md`			 ⚓︎ cdate or mdate
 > `daily-01.01.2026.md`	 ⚓︎ filename
 >
 > # FROM CONTENT:
@@ -130,7 +130,7 @@ Each file has one anchor record that represents its canonical date. All other re
 > Added new line...		 ✐ tracked change
 > ```
 
-Each record appears as `file ⸱ summary`. You can control the length of each part using **⛭ Filename length** and **⛭ Summary length**. The summary is either the first `N` words extracted from Markdown or an AI-generated summary when **⛭ Auto summarize** is enabled (Pro). You can also set a manual summary using the YAML **⛭ Summary property** or via context menu **<img src="images/square-pen.svg" width="18" height="18" alt=""> Edit summary…**; manual summaries are always preferred over AI-generated ones.
+Each record appears as `file ⸱ summary`. You can control the length of each part using **⛭ Filename length** and **⛭ Summary length**. The summary is either the first `N` words extracted from Markdown or an AI-generated summary when **⛭ Auto summarize** is enabled (Pro). You can also set a manual summary using YAML **⛭ Summary property** or via context menu **<img src="images/square-pen.svg" width="18" height="18" alt=""> Edit summary…**; manual summaries are always preferred over AI-generated ones.
 
 > Use this [CSS snippet](https://obsidian.md/help/snippets) to make the timeline full width on mobile:
 > ```css

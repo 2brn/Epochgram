@@ -80,10 +80,10 @@
 
 - Settings UI (Verified):
   - Pro activation/settings group is rendered at the top of settings (without a visible section title).
-  - General settings include `Anchor date property` and `Summary property` inputs.
+  - General settings include `Anchor by mdate`, `Anchor date property`, and `Summary property` inputs.
   - General settings are grouped into:
     - an untitled top group: `Open on startup`, `Enable animation`, `Record width limit`.
-    - `Indexer`: `Track changes` (Pro-gated/blurred when unavailable), `Anchor date property`, `Summary property`, `Parse dates from other properties`, `Filename length`, `Summary length`, `Similarity` group, `Generative AI` group (desktop-only), and `Index` actions.
+    - `Indexer`: `Track changes` (Pro-gated/blurred when unavailable), `Anchor by mdate`, `Anchor date property`, `Summary property`, `Parse dates from other properties`, `Filename length`, `Summary length`, `Similarity` group, `Generative AI` group (desktop-only), and `Index` actions.
   - The bottom of the settings tab shows a compact metadata footer line in the format `v.<version>-<buildTimestamp>` (`YYYYMMDDHHmmss`).
   - These two inputs now commit/apply only on input blur (focus lost) or explicit reset, instead of applying on every keystroke.
 
