@@ -347,8 +347,8 @@ epochs:
 **⛭ Generate Epochs** → when enabled, Epochgram creates a zoomable time map that groups many days into larger period summaries, helping you see the bigger picture without reading the timeline day by day. Epochs are generated hierarchically from day up to year, in essence, summaries of summaries. If marked records are present, Epochs are colored by the most common mark color in that range. You can regenerate a specific Epoch from the context menu.
 
 > [!TIP]
-> **⌘ Epochgram: Summarize current file** → generate AI summaries for all timeline records from the current file.</br>
-> **⌘ Epochgram: Summarize missing** → generate all missing AI summaries and Epochs across the entire vault.</br>
+> **⌘ Epochgram: Summarize current file** → generate AI summaries for current file records on timeline.</br>
+> **⌘ Epochgram: Summarize missing** → generate all missing summaries and Epochs across the entire vault.
 
 ## Custom YAML
 
