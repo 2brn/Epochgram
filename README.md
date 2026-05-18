@@ -15,10 +15,10 @@ A Timemap of Your Mind
 </br>
 
 > <font color="#c14d58">Pain</font>. Your vault fills up with quick capture notes. A week later, you've lost the thread. A month later, you can't reconstruct the story — and you don't see the themes, the slow stretches, or the bursts of activity.</br></br>
-> <font color="#c14d58">Solution</font>. Epochgram turns your notes into a scalable timeline retrospective. Browse day by day to scan changes in order, spot bigger patterns across unsorted notes, and edit directly on the timeline — so you can focus on what really matters.</br></br>
+> <font color="#c14d58">Solution</font>. Epochgram turns your notes into an AI-powered interactive timeline. Browse day by day to scan changes in order, spot bigger patterns across unsorted notes, and edit directly on the timeline — so you can focus on what really matters.</br></br>
 > <font color="#c14d58">Epochgram Pro</font> adds even more overview:
 > - On-device AI summaries via Google Chrome.
-> - Epochs: a zoomable time map, from daily detail to a year overview.
+> - Epochs: a zoomable timemap, from daily detail to a year overview.
 > - Find related notes through links, tags, titles, and semantic similarity.
 > - Topic clustering and marked related groups.
 > - Tracked content edits.
@@ -344,7 +344,7 @@ epochs:
 
 **⛭ Auto summarize** → when enabled, Epochgram automatically summarizes timeline records through the AI Bridge whenever the file changes. It does not modify the file content.
 
-**⛭ Generate Epochs** → when enabled, Epochgram creates a zoomable time map that groups many days into larger period summaries, helping you see the bigger picture without reading the timeline day by day. Epochs are generated hierarchically from day up to year, in essence, summaries of summaries. If marked records are present, Epochs are colored by the most common mark color in that range. You can regenerate a specific Epoch from the context menu.
+**⛭ Generate Epochs** → when enabled, Epochgram creates a zoomable timemap that groups many days into larger period summaries, helping you see the bigger picture without reading the timeline day by day. Epochs are generated hierarchically from day up to year, in essence, summaries of summaries. If marked records are present, Epochs are colored by the most common mark color in that range. You can regenerate a specific Epoch from the context menu.
 
 > [!TIP]
 > **⌘ Epochgram: Summarize current file** → generate AI summaries for current file records on timeline.</br>

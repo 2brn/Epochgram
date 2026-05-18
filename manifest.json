@@ -3,7 +3,7 @@
 	"name": "Epochgram",
 	"version": "1.4.7",
 	"minAppVersion": "1.12.4",
-	"description": "A timemap of your mind.",
+	"description": "A timemap of your mind. Epochgram turns your notes into an AI-powered interactive timeline.",
 	"author": "Andriy Babets",
 	"authorUrl": "https://www.epochgram.com",
 	"isDesktopOnly": false
