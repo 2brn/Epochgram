@@ -94,6 +94,7 @@
       - Each record stores summary text + input hash, plus a required visibility marker `v` (`0|1`) that controls whether that AI summary is allowed to display in the timeline/UI.
   - Epoch entries are identified by `file` starting with `epoch://` (not by `source`).
   - When loading `epochgram-summaries.json`, Epochgram only accepts epoch entries whose `file` starts with `epoch://` and whose `epochBucket` is a supported bucket (no bucket inference from the path).
+  - After index rebuild/refresh, Epochgram reapplies saved `aiSummaries` from `epochgram-summaries.json` to the fresh in-memory index before refreshing views, so settings-driven index refreshes keep previously generated AI summaries visible.
 
 MiniSearch cache (Verified)
 - Timeline search uses an in-memory MiniSearch index.
@@ -175,6 +176,7 @@ Timeline dense mode (Verified)
 - While using scroll navigation (Alt/Option+Wheel or Alt/Option+Up/Down) in normal view, hover is temporarily suppressed against incidental pointer jitter so the navigation target stays focused. Each step re-centers the target at the focus anchor (even if already visible). When navigation reaches the start/end in no-wrap mode, further navigation keeps the boundary target focused if hover was lost.
 - Manual panning/scrolling (wheel pan, mouse-drag pan, touch pan) resets the stored scroll-nav target so the next scroll-nav step re-anchors from the current viewport/context. Wheel pan uses a constant-speed animation; reversing wheel direction interrupts the in-flight wheel-pan animation and re-anchors from the current offset. Any left-click during an in-flight wheel/inertia motion cancels the motion and consumes the click (so it stops scrolling without opening a record).
 - Refreshing the timeline index (including rebuild/refresh flows) and changing timeline view state (filters/settings/view toggles) also resets the stored scroll-nav target so navigation re-anchors from the updated viewport/context.
+- Active-file sync now preserves existing scroll-nav anchors when the newly active file path is not present in the indexed timeline (for example, non-indexed attachments/non-md leaves), so Shift+Wheel anchor zoom can still lock to the current timeline target.
 - Enabling attachments in the timeline view also forces a semantic-related refresh for the active file so newly added embeds/links can immediately participate in related-highlights after the view filter changes.
 - Jumping back to Today (e.g. double-click on empty space to scroll to Today) resets the stored scroll-nav target as well.
 - If a scroll-nav group has only a single navigable record, scroll-nav highlights the **date marker/label** rather than the record.

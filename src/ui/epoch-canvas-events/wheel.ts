@@ -6,107 +6,148 @@ import {
 	MAX_SCALE,
 	ZOOM_INTENSITY
 } from "../epoch-canvas-constants";
+import { dateKeyToDate, getDayIndexForDate } from "../epoch-canvas-focus";
 import { resetScrollNavTargetState } from "../epoch-canvas/scroll-nav-reset";
 import { getEventState, type CanvasEventInternals } from "./state";
 
-function findSummaryCenterYFromLayouts(
-	s: CanvasEventInternals,
-	dayIndex: number,
-	itemIndex: number
-): number | null {
-	try {
-		const layout = s.layouts?.find((l: any) => l?.index === dayIndex) ?? null;
-		if (!layout) return null;
-		const rects: any[] =
-			(Array.isArray((layout as any).summaryHoverRects) && (layout as any).summaryHoverRects.length > 0)
-				? (layout as any).summaryHoverRects
-				: (layout as any).summaryRects ?? [];
-		const rect = rects.find((r: any) => r?.itemIndex === itemIndex) ?? null;
-		if (rect && Number.isFinite(rect.y1) && Number.isFinite(rect.y2)) {
-			return (Number(rect.y1) + Number(rect.y2)) / 2;
-		}
-	} catch {
-		// ignore
-	}
-	return null;
-}
-
-function findDateCenterYFromLayouts(s: CanvasEventInternals, dayIndex: number): number | null {
-	try {
-		const layout = s.layouts?.find((l: any) => l?.index === dayIndex) ?? null;
-		const rect = layout?.dateRect ?? null;
-		if (rect && Number.isFinite(rect.y1) && Number.isFinite(rect.y2)) {
-			return (Number(rect.y1) + Number(rect.y2)) / 2;
-		}
-	} catch {
-		// ignore
-	}
-	return null;
-}
-
 type ShiftZoomAnchorLock =
-	| { kind: "summary"; dayIndex: number; itemIndex: number; screenY: number }
 	| { kind: "date"; dayIndex: number; screenY: number };
 
-function resolveShiftZoomAnchorLock(canvas: EpochCanvas, s: CanvasEventInternals): ShiftZoomAnchorLock | null {
-	const summaryFocus = s.hoverSummary ?? s.animSummary;
-	if (summaryFocus) {
-		const screenY =
-			findSummaryCenterYFromLayouts(s, summaryFocus.dayIndex, summaryFocus.itemIndex) ??
-			summaryFocus.dayIndex * BASE_SPACING * s.scale + s.offsetY;
-		return { kind: "summary", dayIndex: summaryFocus.dayIndex, itemIndex: summaryFocus.itemIndex, screenY };
-	}
-	const dateFocus = s.hoverDateIndex ?? s.animDateIndex;
-	if (dateFocus != null) {
-		const screenY =
-			findDateCenterYFromLayouts(s, dateFocus) ??
-			dateFocus * BASE_SPACING * s.scale + s.offsetY;
-		return { kind: "date", dayIndex: dateFocus, screenY };
-	}
-
-	// Fallback: keep the last scroll-nav-focused (or previously hovered) item pinned even
-	// if hover got cleared (e.g., Alt key release, pointer leaving the canvas).
+function resolveCurrentScrollNavDayIndex(canvas: EpochCanvas): number | null {
+	const c: any = canvas as any;
 	try {
-		const now = performance.now();
-		const lastSummary = (s as any).__shiftZoomLastSummary as
-			| { dayIndex: number; itemIndex: number; at?: number }
-			| null
-			| undefined;
-		if (lastSummary && Number.isFinite(lastSummary.dayIndex) && Number.isFinite(lastSummary.itemIndex)) {
-			const atRaw = Number((lastSummary as any).at);
-			const ageOk = lastSummary.at == null || !Number.isFinite(atRaw) || atRaw <= 0 || now - atRaw <= 15000;
-			if (ageOk) {
-				const screenY =
-					findSummaryCenterYFromLayouts(s, lastSummary.dayIndex, lastSummary.itemIndex) ??
-					lastSummary.dayIndex * BASE_SPACING * s.scale + s.offsetY;
-				return {
-					kind: "summary",
-					dayIndex: lastSummary.dayIndex,
-					itemIndex: lastSummary.itemIndex,
-					screenY
-				};
+		const pending = c?.pendingScrollNavHighlight ?? null;
+		const pendingDay = pending?.dayIndex;
+		if (typeof pendingDay === "number" && Number.isFinite(pendingDay)) return pendingDay;
+	} catch {
+		// ignore
+	}
+	try {
+		const explicitDay = c?.scrollNavAnchorDayIndex;
+		if (typeof explicitDay === "number" && Number.isFinite(explicitDay)) return explicitDay;
+	} catch {
+		// ignore
+	}
+	try {
+		const anchorEntry: any = c?.scrollNavAnchorEntry ?? null;
+		const dk = String(anchorEntry?.date ?? "").trim();
+		if (!dk) return null;
+		const dt = dateKeyToDate(dk);
+		if (!dt) return null;
+		return getDayIndexForDate(canvas, dt);
+	} catch {
+		// ignore
+	}
+	return null;
+}
+
+function resolveActiveRecordDayIndex(canvas: EpochCanvas, activePath: string): number | null {
+	const c: any = canvas as any;
+	try {
+		const anchorEntry: any = c?.scrollNavAnchorEntry ?? null;
+		if (anchorEntry && String(anchorEntry.file ?? "") === activePath) {
+			const explicitDay = c?.scrollNavAnchorDayIndex;
+			if (typeof explicitDay === "number" && Number.isFinite(explicitDay)) {
+				return explicitDay;
 			}
-		}
-		const lastDate = (s as any).__shiftZoomLastDate as
-			| { dayIndex: number; at?: number }
-			| null
-			| undefined;
-		if (lastDate && Number.isFinite(lastDate.dayIndex)) {
-			const atRaw = Number((lastDate as any).at);
-			const ageOk = lastDate.at == null || !Number.isFinite(atRaw) || atRaw <= 0 || now - atRaw <= 15000;
-			if (ageOk) {
-				const screenY =
-					findDateCenterYFromLayouts(s, lastDate.dayIndex) ??
-					lastDate.dayIndex * BASE_SPACING * s.scale + s.offsetY;
-				return { kind: "date", dayIndex: lastDate.dayIndex, screenY };
+			const dk = String(anchorEntry.date ?? "").trim();
+			if (dk) {
+				const dt = dateKeyToDate(dk);
+				if (dt) return getDayIndexForDate(canvas, dt);
 			}
 		}
 	} catch {
 		// ignore
 	}
-	const scrollAnchorDayIndex = canvas.getScrollAnchorDayIndex();
+
+	try {
+		const pending: any = c?.pendingScrollNavHighlight ?? null;
+		const pendingEntry: any = pending?.entry ?? null;
+		if (pendingEntry && String(pendingEntry.file ?? "") === activePath) {
+			const idx = pending?.dayIndex;
+			if (typeof idx === "number" && Number.isFinite(idx)) return idx;
+		}
+	} catch {
+		// ignore
+	}
+
+	try {
+		const index = c?.index as Record<string, any[]> | undefined;
+		if (!index || typeof index !== "object") return null;
+
+		let bestNonRecurringMs: number | null = null;
+		let bestNonRecurringDate: Date | null = null;
+		let bestRecurringMs: number | null = null;
+		let bestRecurringDate: Date | null = null;
+
+		for (const [dateKey, entries] of Object.entries(index)) {
+			if (!Array.isArray(entries) || entries.length === 0) continue;
+			let hasNonRecurring = false;
+			let hasRecurring = false;
+			for (const entry of entries) {
+				if (!entry) continue;
+				if (String((entry as any).file ?? "") !== activePath) continue;
+				if ((entry as any).recurring === true) hasRecurring = true;
+				else hasNonRecurring = true;
+			}
+			if (!hasNonRecurring && !hasRecurring) continue;
+			const dt = dateKeyToDate(String(dateKey));
+			if (!dt) continue;
+			const ms = dt.getTime();
+			if (!Number.isFinite(ms)) continue;
+			if (hasNonRecurring && (bestNonRecurringMs == null || ms > bestNonRecurringMs)) {
+				bestNonRecurringMs = ms;
+				bestNonRecurringDate = dt;
+			}
+			if (hasRecurring && (bestRecurringMs == null || ms < bestRecurringMs)) {
+				bestRecurringMs = ms;
+				bestRecurringDate = dt;
+			}
+		}
+
+		const chosen = (() => {
+			if (!bestNonRecurringDate) return bestRecurringDate;
+			if (!bestRecurringDate) return bestNonRecurringDate;
+			return (bestNonRecurringMs ?? -Infinity) >= (bestRecurringMs ?? Infinity)
+				? bestNonRecurringDate
+				: bestRecurringDate;
+		})();
+		if (!chosen) return null;
+		return getDayIndexForDate(canvas, chosen);
+	} catch {
+		// ignore
+	}
+
+	return null;
+}
+
+function resolveShiftZoomAnchorLock(canvas: EpochCanvas, s: CanvasEventInternals): ShiftZoomAnchorLock | null {
+	const activePath = String((s as any)?.activeFilePath ?? (canvas as any)?.activeFilePath ?? "").trim();
+	const scrollAnchorDayIndex = resolveCurrentScrollNavDayIndex(canvas);
+
+	// Shift-zoom policy:
+	// - If there is an explicit current scroll-nav date, anchor to that first.
+	// - Otherwise, if there is an active/opened file, anchor to the day circle for that
+	//   opened record (resolved from active-file record state).
+	if (activePath) {
+		if (scrollAnchorDayIndex != null) {
+			return {
+				kind: "date",
+				dayIndex: scrollAnchorDayIndex,
+				screenY: scrollAnchorDayIndex * BASE_SPACING * s.scale + s.offsetY
+			};
+		}
+		const openedRecordDayIndex = resolveActiveRecordDayIndex(canvas, activePath);
+		if (openedRecordDayIndex != null) {
+			return {
+				kind: "date",
+				dayIndex: openedRecordDayIndex,
+				screenY: openedRecordDayIndex * BASE_SPACING * s.scale + s.offsetY
+			};
+		}
+	}
 	if (scrollAnchorDayIndex != null) {
-		// Only lock to a hovered/focused item for shift-zoom. Scroll-anchor lock is a fallback.
+		// No active file: use scroll-nav day fallback.
 		return { kind: "date", dayIndex: scrollAnchorDayIndex, screenY: scrollAnchorDayIndex * BASE_SPACING * s.scale + s.offsetY };
 	}
 	return null;
@@ -272,10 +313,7 @@ export function handleWheel(canvas: EpochCanvas, event: WheelEvent): void {
 				try {
 					// First draw computes the new layouts/rects at the updated scale.
 					s.draw();
-					const newCenterY =
-						shiftLock.kind === "summary"
-							? findSummaryCenterYFromLayouts(s, shiftLock.dayIndex, shiftLock.itemIndex)
-							: findDateCenterYFromLayouts(s, shiftLock.dayIndex);
+					const newCenterY = shiftLock.dayIndex * BASE_SPACING * s.scale + s.offsetY;
 					if (newCenterY != null && Number.isFinite(newCenterY)) {
 						s.offsetY += shiftLock.screenY - newCenterY;
 					}

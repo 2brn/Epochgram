@@ -278,6 +278,12 @@ export function focusFile(
 	if (useHoverHighlight && !highlighted) {
 		state.clearSummaryHover();
 	}
+	try {
+		(state as any).scrollNavAnchorEntry = bestEntry;
+		(state as any).scrollNavAnchorDayIndex = dayIndex;
+	} catch {
+		// ignore
+	}
 	return scrolled || highlighted;
 }
 

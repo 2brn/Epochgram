@@ -12,7 +12,10 @@ describe("shift+wheel zoom anchor", () => {
 
 		const canvas: any = {
 			epochsView: false,
+			activeFilePath: "a.md",
 			pendingScrollNavHighlight: null,
+			scrollNavAnchorEntry: { file: "a.md", date: "2026-05-13" },
+			scrollNavAnchorDayIndex: 5,
 			offsetY: 0,
 			scale: 1,
 			animatingView: false,
@@ -34,6 +37,7 @@ describe("shift+wheel zoom anchor", () => {
 			animSummary: { dayIndex: 5, itemIndex: 0 },
 			hoverDateIndex: null,
 			animDateIndex: null,
+			__shiftZoomLastSummary: { dayIndex: 5, itemIndex: 0, at: 0 },
 			hoverTarget: 1,
 			clearHover,
 			draw,
@@ -42,7 +46,7 @@ describe("shift+wheel zoom anchor", () => {
 				getBoundingClientRect: () => ({ top: 0, height: 800 })
 			},
 			advanceScrollNav: vi.fn(),
-			getScrollAnchorDayIndex: () => null
+			getScrollAnchorDayIndex: () => 5
 		};
 
 		// Simulate a layout model where the hovered item's screen position is not purely
@@ -72,11 +76,10 @@ describe("shift+wheel zoom anchor", () => {
 
 		handleWheel(canvas, ev);
 
-		// With anchorY=150 and prevScale=1, the first-pass linear zoom math would
-		// yield offsetY=150*(1-newScale). But if the layout shifts by +30 after zoom,
-		// we also need a -30 correction to keep the hovered item pinned.
+		// Active-file Shift+Wheel now anchors to opened-record day circle.
+		// For dayIndex=5, anchorY is 500 at scale=1/offset=0.
 		expect(canvas.scale).toBeGreaterThan(1);
-		const expected = 150 * (1 - canvas.scale) - layoutShiftAfterZoom;
+		const expected = 500 * (1 - canvas.scale);
 		expect(canvas.offsetY).toBeCloseTo(expected, 5);
 
 		expect(clearHover).toHaveBeenCalled();
@@ -93,6 +96,7 @@ describe("shift+wheel zoom anchor", () => {
 
 		const canvas: any = {
 			epochsView: true,
+			activeFilePath: "a.md",
 			pendingScrollNavHighlight: null,
 			offsetY: 0,
 			scale: 1,
@@ -114,6 +118,7 @@ describe("shift+wheel zoom anchor", () => {
 			animSummary: { dayIndex: 5, itemIndex: 0 },
 			hoverDateIndex: null,
 			animDateIndex: null,
+			__shiftZoomLastSummary: { dayIndex: 5, itemIndex: 0, at: 0 },
 			hoverTarget: 1,
 			clearHover,
 			draw,
@@ -122,7 +127,7 @@ describe("shift+wheel zoom anchor", () => {
 				getBoundingClientRect: () => ({ top: 0, height: 800 })
 			},
 			advanceScrollNav: vi.fn(),
-			getScrollAnchorDayIndex: () => null
+			getScrollAnchorDayIndex: () => 5
 		};
 
 		draw.mockImplementation(() => {
@@ -150,5 +155,74 @@ describe("shift+wheel zoom anchor", () => {
 		expect(clearHover).toHaveBeenCalled();
 		expect(draw).toHaveBeenCalled();
 		expect(requestHoverAnimation).toHaveBeenCalled();
+	});
+
+	test("keeps anchor when summary rect disappears at deep zoom-out", () => {
+		const layoutShiftAfterZoom = 30;
+		const draw = vi.fn();
+		const requestHoverAnimation = vi.fn();
+		const clearHover = vi.fn();
+
+		const canvas: any = {
+			epochsView: false,
+			activeFilePath: "a.md",
+			pendingScrollNavHighlight: null,
+			scrollNavAnchorEntry: { file: "a.md", date: "2026-05-13" },
+			scrollNavAnchorDayIndex: 5,
+			offsetY: 0,
+			scale: 1,
+			animatingView: false,
+			viewInteractionUntil: 0,
+			keepHoverUntilPointerMove: false,
+			suppressHoverUntil: 0,
+			suppressHoverUntilPointerMove: false,
+			layouts: [
+				{
+					index: 5,
+					summaryRects: [{ x1: 0, y1: 100, x2: 0, y2: 200, itemIndex: 0, entry: { file: "a.md" } }],
+					summaryHoverRects: [{ x1: 0, y1: 100, x2: 0, y2: 200, itemIndex: 0, entry: { file: "a.md" } }],
+					dateRect: { x1: 0, y1: 0, x2: 0, y2: 0 },
+					hasVisibleDate: true
+				}
+			],
+			hoverSummary: null,
+			animSummary: null,
+			hoverDateIndex: null,
+			animDateIndex: null,
+			__shiftZoomLastSummary: { dayIndex: 5, itemIndex: 0, at: 0 },
+			hoverTarget: 1,
+			clearHover,
+			draw,
+			requestHoverAnimation,
+			canvas: {
+				getBoundingClientRect: () => ({ top: 0, height: 800 })
+			},
+			advanceScrollNav: vi.fn(),
+			getScrollAnchorDayIndex: () => 5
+		};
+
+		draw.mockImplementation(() => {
+			const centerY = 150 * canvas.scale + canvas.offsetY + layoutShiftAfterZoom;
+			canvas.layouts[0].dateRect.y1 = centerY - 10;
+			canvas.layouts[0].dateRect.y2 = centerY + 10;
+			// Simulate dense/zoomed-out mode where summary rects are no longer rendered.
+			canvas.layouts[0].summaryRects = [];
+			canvas.layouts[0].summaryHoverRects = [];
+		});
+
+		handleWheel(canvas, {
+			preventDefault: vi.fn(),
+			clientY: 10,
+			deltaY: 1000,
+			deltaX: 0,
+			ctrlKey: false,
+			shiftKey: true,
+			altKey: false,
+			metaKey: false
+		} as any);
+
+		expect(canvas.scale).toBeLessThan(1);
+		const expected = 500 * (1 - canvas.scale);
+		expect(canvas.offsetY).toBeCloseTo(expected, 5);
 	});
 });

@@ -21,6 +21,22 @@ export function setActiveFile(
 	options?: { suppressFocus?: boolean }
 ): void {
 	const c: any = canvas as any;
+	const hasIndexedEntryForPath = (targetPath: string | null): boolean => {
+		if (!targetPath) return false;
+		try {
+			const index = (c as any).index as Record<string, any[]> | undefined;
+			if (!index || typeof index !== "object") return false;
+			for (const entries of Object.values(index)) {
+				if (!Array.isArray(entries)) continue;
+				for (const entry of entries) {
+					if (String((entry as any)?.file ?? "") === targetPath) return true;
+				}
+			}
+		} catch {
+			// ignore
+		}
+		return false;
+	};
 	if (c.pendingActiveFileFocus && c.pendingActiveFileFocus.path !== path) {
 		c.pendingActiveFileFocus = null;
 	}
@@ -28,8 +44,9 @@ export function setActiveFile(
 		clearFocusedEpochRange(canvas);
 	}
 	const suppressFocusFlag = !!path && c.suppressNextFocusScroll === path;
+	const shouldResetScrollNav = path == null || hasIndexedEntryForPath(path);
 	if (c.activeFilePath !== path) {
-		if (!suppressFocusFlag) {
+		if (!suppressFocusFlag && shouldResetScrollNav) {
 			c.scrollNavIndex = -1;
 			c.scrollNavFile = null;
 			c.pendingScrollNavHighlight = null;

@@ -70,4 +70,34 @@ describe("setActiveFile initial semantic refresh", () => {
 			Platform.isMobileApp = originalMobile;
 		}
 	});
+
+	it("preserves scroll-nav anchors when switching to a non-indexed path", () => {
+		const anchorEntry = { file: "A.md", date: "2026-01-01", source: "cdate", blockStart: 0, blockEnd: 0 };
+		const canvas: any = {
+			activeFilePath: "A.md",
+			index: {
+				"2026-01-01": [anchorEntry]
+			},
+			scrollNavIndex: 3,
+			scrollNavFile: "A.md",
+			pendingScrollNavHighlight: { dayIndex: 0 },
+			scrollNavAnchorEntry: anchorEntry,
+			scrollNavAnchorDayIndex: 0,
+			__scrollNavAnchorMode: "center",
+			root: { matches: () => false },
+			suppressNextFocusScroll: null,
+			suppressNextFocusHover: null,
+			forceNextFocusHover: null,
+			focusFile: () => false
+		};
+
+		setActiveFile(canvas, "photo.png", null, { suppressFocus: true });
+
+		expect(canvas.scrollNavIndex).toBe(3);
+		expect(canvas.pendingScrollNavHighlight).toEqual({ dayIndex: 0 });
+		expect(canvas.scrollNavAnchorEntry).toBe(anchorEntry);
+		expect(canvas.scrollNavAnchorDayIndex).toBe(0);
+		expect(canvas.__scrollNavAnchorMode).toBe("center");
+		expect(canvas.scrollNavFile).toBe("photo.png");
+	});
 });

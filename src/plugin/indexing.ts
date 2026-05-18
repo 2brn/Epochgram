@@ -2,6 +2,8 @@ import { Notice, Platform, TFile } from "obsidian";
 import type { SerializedEpochIndex } from "../indexer/types";
 import type { EpochPlugin } from "../main";
 import { normalizeSerializedEpochIndexForDisk } from "../indexer/disk-serialization";
+import { sortIndex } from "../indexer/indexer-utils";
+import { updateAggregatedEntriesInternal } from "../indexer/update-aggregated-entries";
 import {
 	applyAiSummaries,
 	applyEpochEntriesByDate,
@@ -26,6 +28,31 @@ interface IndexOperationOptions {
 interface RefreshOptions {
 	skipEnsure?: boolean;
 	suppressNotices?: boolean;
+}
+
+async function reapplySavedAiSummaries(plugin: EpochPlugin): Promise<void> {
+	try {
+		const loaded = await loadEpochSummariesFromDisk(plugin);
+		applyAiSummaries(plugin, loaded.aiSummaries);
+	} catch {
+		// ignore
+	}
+}
+
+function recomputeSummariesAfterAiRehydrate(plugin: EpochPlugin): void {
+	try {
+		const paths = plugin.indexer.getIndexedPaths();
+		for (const p of paths) {
+			try {
+				updateAggregatedEntriesInternal(plugin.indexer as any, p, { skipSort: true });
+			} catch {
+				// ignore per-file failures
+			}
+		}
+		plugin.indexer.index = sortIndex(plugin.indexer.index);
+	} catch {
+		// ignore
+	}
 }
 
 export interface IndexingMethods {
@@ -216,6 +243,9 @@ export const indexingMethods: IndexingMethods = {
 		} catch {
 			// ignore
 		}
+
+		await reapplySavedAiSummaries(this);
+		recomputeSummariesAfterAiRehydrate(this);
 
 		try {
 			if (mode === "rebuild") {
