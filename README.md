@@ -163,7 +163,7 @@ description: PKM
 
 And these Epochgram settings:
 
-| Settings | Value |
+| Setting | Value |
 | --- | --- |
 | **⛭ Anchor by mdate** | `off` |
 | **⛭ Anchor property** | `date` |
@@ -175,7 +175,7 @@ And these Epochgram settings:
 After indexing, you will see the following records on the timeline:
 
 <p align="center">
-<img src="images/timeline-example.png" height="540" alt="Timeline example" />
+<img src="images/timeline-example.png" width="360" alt="Timeline example" />
 </p>
 
 ## Filters
