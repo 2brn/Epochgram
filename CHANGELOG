@@ -1,5 +1,11 @@
 # Epochgram changelog
 
+## [1.4.11] - 2026-05-19
+- Fixed indexing for cached YAML dates and filename dates.
+- Added support for full weekday names.
+- Renamed Settings labels.
+- Updated README.
+
 ## [1.4.10] - 2026-05-18
 - Fixed disappeared AI summaries after index refresh.
 - Fixed Shift/Alt zoom anchoring and fallback behavior, including scroll-nav vs opened-record date handling.
