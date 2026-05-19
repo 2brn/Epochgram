@@ -49,6 +49,7 @@ describe("Auto summarize toggle", () => {
 
 		await settingsHandlerMethods.onSettingsChanged.call(plugin, "summarizeAI" as any);
 
+		expect(plugin.indexer.files["a.md"].contentDates[0].aiSummary).toBe("AI preserved summary");
 		expect(plugin.indexer.files["a.md"].contentDates[0].aiSummaryInputHash).toBe(CONTENT_HASH);
 
 		const indexed = plugin.indexer.index["2025-01-01"] ?? [];
