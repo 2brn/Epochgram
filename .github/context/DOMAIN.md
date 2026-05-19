@@ -363,8 +363,8 @@ License/Pro transition support (Verified)
   - Rationale: Obsidian Sync may sync plugin data between desktop/mobile, but device activation identity must remain local per installation.
 
 UI display of AI summaries (Verified)
-- Stored `aiSummary` text can exist without being eligible for timeline/UI display.
-- Timeline/UI display eligibility requires Pro and either Auto summarize ON (`summarizeAI === true`) or per-entry explicit visibility (`aiSummaryVisible === true`).
+- Stored `aiSummary` text is preferred for timeline/UI summary rendering whenever Pro access is available and the stored summary still validates for the entry.
+- The `summarizeAI` (Auto summarize) toggle controls automatic enqueue behavior, not whether an already-stored AI summary renders in the timeline.
 
 Tracked changes with mixed Pro activation (Verified)
 - Tracked-change settings can remain enabled in synced settings even when a given device is not currently Pro-activated.

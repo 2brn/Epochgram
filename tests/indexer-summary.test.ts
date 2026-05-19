@@ -487,4 +487,70 @@ describe("Indexer anchor summaries", () => {
 		const afterClear = indexer.index[dateKey]?.find(entry => entry.file === file.path);
 		expect(afterClear?.summary).toBe(makeSummary(fullText, pluginStub.settings.summaryWordsCount));
 	});
+
+	it("preserves visible AI summaries through rename reaggregation", async () => {
+		pluginStub.settings.summaryWordsCount = 3;
+		const ctime = Date.UTC(2025, 0, 7);
+		const file = makeFile("folder/rename-ai.md", ctime);
+		contents[file.path] = "First second third fourth";
+
+		await indexer.processFile(file, { reason: "modify" });
+
+		const oldPath = file.path;
+		const newPath = "folder/renamed-ai.md";
+		const renamedFile = makeFile(newPath, ctime);
+		contents[newPath] = contents[oldPath];
+		(pluginStub.app.vault.getAbstractFileByPath as any).mockImplementation((path: string) => {
+			if (path === newPath) return renamedFile;
+			return null;
+		});
+
+		const fileData: any = (indexer as any).files[oldPath];
+		const aiText = "AI SUMMARY WINS";
+		const oldHash = computeAiSummaryInputHash(oldPath, "anchor", contents[oldPath], 24000);
+		fileData.cdate.aiSummary = aiText;
+		fileData.cdate.aiSummaryInputHash = oldHash;
+		fileData.cdate.aiSummaryVisible = true;
+		(indexer as any).updateAggregatedEntries(oldPath);
+
+		await indexer.renameFile(oldPath, newPath);
+
+		const dateKey = normalizeDateFromTimestamp(ctime);
+		const renamed = indexer.index[dateKey]?.find(entry => entry.file === newPath);
+		expect(renamed?.summary).toBe(makeSummary(aiText, pluginStub.settings.summaryWordsCount));
+		expect((renamed as any)?.aiSummary).toBe(aiText);
+		expect((renamed as any)?.aiSummaryInputHash).toBe(oldHash);
+	});
+
+	it("preserves dateProp AI summary when frontmatter date changes (drag-drop modify) with Auto summarize on", async () => {
+		pluginStub.settings.summaryWordsCount = 3;
+		pluginStub.settings.summarizeAI = true;
+		const ctime = Date.UTC(2025, 0, 8);
+		const file = makeFile("folder/drag-ai.md", ctime);
+		const bodyText = "Alpha beta gamma delta";
+		contents[file.path] = ["---", "date: 2025-01-10", "---", bodyText].join("\n");
+
+		await indexer.processFile(file, { reason: "modify" });
+
+		const oldDateKey = "2025-01-10";
+		const fileData: any = (indexer as any).files[file.path];
+		const aiText = "AI DND SUMMARY";
+		const aiHash = computeAiSummaryInputHash(file.path, "anchor", contents[file.path], 24000);
+		fileData.dateProp.aiSummary = aiText;
+		fileData.dateProp.aiSummaryInputHash = aiHash;
+		fileData.dateProp.aiSummaryVisible = true;
+		(indexer as any).updateAggregatedEntries(file.path);
+
+		const before = indexer.index[oldDateKey]?.find(e => e.file === file.path);
+		expect(before?.summary).toBe(makeSummary(aiText, pluginStub.settings.summaryWordsCount));
+
+		// Simulate setYamlDateForPath writing a new frontmatter date (drag target)
+		const newDateKey = "2025-01-15";
+		contents[file.path] = ["---", "date: 2025-01-15", "---", bodyText].join("\n");
+		await indexer.processFile(file, { reason: "modify" });
+
+		const after = indexer.index[newDateKey]?.find(e => e.file === file.path);
+		expect(after).toBeDefined();
+		expect(after?.summary).toBe(makeSummary(aiText, pluginStub.settings.summaryWordsCount));
+	});
 });

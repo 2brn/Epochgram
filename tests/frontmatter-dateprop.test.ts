@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Indexer } from "../src/indexer/indexer";
+import { dateFrontmatterMethods } from "../src/plugin/date-frontmatter";
 import type { FileDateEntry } from "../src/indexer/types";
 import { TFile } from "obsidian";
 
@@ -216,5 +217,36 @@ describe("Frontmatter dateprop", () => {
 		expect(contentDates.filter(e => e.source === "content" && (e as any).fromFrontmatter === true).map(e => e.date)).toEqual(["2026-05-23"]);
 		expect(((indexer as any).index["2026-05-20"] ?? []).some((e: any) => e.file === file.path && e.source === "content" && e.fromFrontmatter === true)).toBe(false);
 		expect(((indexer as any).index["2026-05-23"] ?? []).some((e: any) => e.file === file.path && e.source === "content" && e.fromFrontmatter === true)).toBe(true);
+	});
+
+	it("preserves AI summaries during move-to-file", async () => {
+		const file = makeFile("2026-05-18.md");
+		let raw = ["---", "date: 2026-05-18", "---", "Body"].join("\n");
+
+		const plugin: any = {
+			app: {
+				vault: {
+					read: vi.fn(async () => raw),
+					modify: vi.fn(async (_file: TFile, next: string) => {
+						raw = next;
+					}),
+					getAbstractFileByPath: vi.fn((path: string) => (path === file.path ? file : null))
+				},
+				metadataCache: {
+					getFileCache: vi.fn(() => ({ frontmatter: { date: "2026-05-18" }, tags: [] }))
+				}
+			},
+			ensureIndexLoaded: vi.fn(async () => {}),
+			waitForExcludedSync: vi.fn(async () => {}),
+			shouldIndexFile: vi.fn(() => true),
+			setYamlDateForPath: vi.fn(async () => true),
+			refreshEpochViews: vi.fn()
+		};
+
+		const changed = await dateFrontmatterMethods.setYamlDateForFile.call(plugin, file, "2026-05-19");
+
+		expect(changed).toBe(true);
+		expect(raw).toBe(["---", "date: 2026-05-19", "---", "Body"].join("\n"));
+		expect(plugin.refreshEpochViews).toHaveBeenCalledTimes(1);
 	});
 });

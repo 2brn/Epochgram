@@ -308,7 +308,7 @@ export class EpochCanvas {
 		this.hoverSourceId = this.plugin?.manifest?.id ?? "epoch";
 
 		this.canvas = root.createEl("canvas");
-		const ctx = this.canvas.getContext("2d");
+		const ctx = this.canvas.getContext("2d", { willReadFrequently: true });
 		if (!ctx) {
 			throw new Error("Epochgram: Unable to acquire canvas context");
 		}

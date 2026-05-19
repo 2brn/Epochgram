@@ -319,7 +319,7 @@ function transferAiSingle(
 	next: FileDateEntry | null
 ): void {
 	if (!next || !previous) return;
-	if (!entriesMatch(previous, next)) return;
+	if (previous.file !== next.file || previous.source !== next.source) return;
 	const prevAny: any = previous as any;
 	const nextAny: any = next as any;
 	if (typeof prevAny.aiSummary === "string" && prevAny.aiSummary.trim()) {
@@ -381,12 +381,4 @@ function transferAiTracked(
 			if (saved.h) anyEntry.aiSummaryInputHash = saved.h;
 		}
 	}
-}
-
-function entriesMatch(
-	a: DateEntry | null | undefined,
-	b: DateEntry | null | undefined
-): boolean {
-	if (!a || !b) return false;
-	return entrySignature(a) === entrySignature(b);
 }

@@ -166,6 +166,118 @@ describe("Anchor drag-and-drop commit", () => {
 		expect(String((plugin.setYamlDateForPath as any).mock.calls[0]?.[1] ?? "")).toBe(dateKey);
 	});
 
+	it("cancels drag-drop when pointer coordinates are unavailable", async () => {
+		const dropped = new Date("2026-04-12T12:00:00.000Z");
+		const dateKey = resolveDateKeyForCanvasDrop(dropped);
+
+		const file = makeFile("2026-04-10.md");
+
+		const vault = {
+			getAbstractFileByPath: vi.fn((p: string) => {
+				return String(p) === String(file.path) ? file : null;
+			}),
+			rename: vi.fn(async (_af: any, newPath: string) => {
+				file.path = newPath;
+				const parts = String(newPath).split("/");
+				file.name = parts[parts.length - 1] ?? newPath;
+				const dot = String(file.name).lastIndexOf(".");
+				file.basename = dot >= 0 ? String(file.name).slice(0, dot) : String(file.name);
+			})
+		};
+
+		const plugin: any = {
+			app: { vault },
+			setYamlDateForPath: vi.fn(async () => true)
+		};
+
+		const entry: DateEntry = {
+			date: "2026-04-10",
+			file: file.path,
+			blockStart: 0,
+			blockEnd: 0,
+			summary: "",
+			source: "namedate"
+		};
+
+		const canvas: any = {
+			plugin,
+			canvas: {
+				style: {},
+				getBoundingClientRect: () => ({ left: 50, top: 50, right: 500, bottom: 500 })
+			},
+			getToday: () => dropped,
+			getDateForIndex: () => dropped,
+			draw: vi.fn(),
+			clearHover: vi.fn(),
+			entryDragActive: true,
+			entryDragEntry: entry,
+			entryDragTargetDayIndex: 0
+		};
+
+		await commitAnchorEntryDrag(canvas as any);
+
+		expect(vault.rename).not.toHaveBeenCalled();
+		expect(plugin.setYamlDateForPath).not.toHaveBeenCalled();
+	});
+
+	it("renames compact YYYYMMDD filenames on drag-drop", async () => {
+		const dropped = new Date("2026-05-19T12:00:00.000Z");
+		const dateKey = resolveDateKeyForCanvasDrop(dropped);
+
+		const file = makeFile("20260518.md");
+
+		const vault = {
+			getAbstractFileByPath: vi.fn((p: string) => {
+				return String(p) === String(file.path) ? file : null;
+			}),
+			rename: vi.fn(async (_af: any, newPath: string) => {
+				file.path = newPath;
+				const parts = String(newPath).split("/");
+				file.name = parts[parts.length - 1] ?? newPath;
+				const dot = String(file.name).lastIndexOf(".");
+				file.basename = dot >= 0 ? String(file.name).slice(0, dot) : String(file.name);
+			})
+		};
+
+		const plugin: any = {
+			app: { vault },
+			setYamlDateForPath: vi.fn(async () => true)
+		};
+
+		const entry: DateEntry = {
+			date: "2026-05-18",
+			file: file.path,
+			blockStart: 0,
+			blockEnd: 0,
+			summary: "",
+			source: "namedate"
+		};
+
+		const canvas: any = {
+			plugin,
+			canvas: {
+				style: {},
+				getBoundingClientRect: () => ({ left: 0, top: 0, right: 100, bottom: 100 })
+			},
+			getToday: () => dropped,
+			getDateForIndex: () => dropped,
+			draw: vi.fn(),
+			clearHover: vi.fn(),
+			entryDragActive: true,
+			entryDragEntry: entry,
+			entryDragTargetDayIndex: 0,
+			entryDragLastClientX: 10,
+			entryDragLastClientY: 10
+		};
+
+		await commitAnchorEntryDrag(canvas as any);
+
+		expect(vault.rename).not.toHaveBeenCalled();
+		expect(plugin.setYamlDateForPath).toHaveBeenCalledTimes(1);
+		expect(String((plugin.setYamlDateForPath as any).mock.calls[0]?.[0] ?? "")).toBe(file.path);
+		expect(String((plugin.setYamlDateForPath as any).mock.calls[0]?.[1] ?? "")).toBe(dateKey);
+	});
+
 	it("daily-note drag-drop keeps time tokens and changes only date", async () => {
 		const dropped = new Date("2026-05-09T12:00:00.000Z");
 		const dateKey = resolveDateKeyForCanvasDrop(dropped);
@@ -258,5 +370,129 @@ describe("Anchor drag-and-drop commit", () => {
 		expect(plugin.setYamlDateForPath).toHaveBeenCalledTimes(1);
 		expect(String((plugin.setYamlDateForPath as any).mock.calls[0]?.[0] ?? "")).toBe(renamedTo);
 		expect(String((plugin.setYamlDateForPath as any).mock.calls[0]?.[1] ?? "")).toBe(dateKey);
+	});
+
+	it("daily-note drag-drop renames with lowercase date format tokens", async () => {
+		const dropped = new Date("2026-05-19T12:00:00.000Z");
+		const dateKey = resolveDateKeyForCanvasDrop(dropped);
+
+		const file = makeFile("daily/2026-05-22.md");
+
+		const vault = {
+			getAbstractFileByPath: vi.fn((p: string) => {
+				return String(p) === String(file.path) ? file : null;
+			}),
+			createFolder: vi.fn(async () => {}),
+			rename: vi.fn(async (_af: any, newPath: string) => {
+				file.path = newPath;
+				const parts = String(newPath).split("/");
+				file.name = parts[parts.length - 1] ?? newPath;
+				const dot = String(file.name).lastIndexOf(".");
+				file.basename = dot >= 0 ? String(file.name).slice(0, dot) : String(file.name);
+			})
+		};
+
+		const plugin: any = {
+			app: { vault },
+			getDailyNoteFolder: () => "daily",
+			getDailyNoteFormat: () => "yyyy-MM-dd",
+			setYamlDateForPath: vi.fn(async () => true)
+		};
+
+		const entry: DateEntry = {
+			date: "2026-05-22",
+			file: file.path,
+			blockStart: 0,
+			blockEnd: 0,
+			summary: "",
+			source: "namedate"
+		};
+
+		const canvas: any = {
+			plugin,
+			canvas: {
+				style: {},
+				getBoundingClientRect: () => ({ left: 0, top: 0, right: 100, bottom: 100 })
+			},
+			getToday: () => dropped,
+			getDateForIndex: () => dropped,
+			draw: vi.fn(),
+			clearHover: vi.fn(),
+			entryDragActive: true,
+			entryDragEntry: entry,
+			entryDragTargetDayIndex: 0,
+			entryDragLastClientX: 10,
+			entryDragLastClientY: 10
+		};
+
+		await commitAnchorEntryDrag(canvas as any);
+
+		expect(vault.rename).not.toHaveBeenCalled();
+		expect(plugin.setYamlDateForPath).toHaveBeenCalledTimes(1);
+		expect(String((plugin.setYamlDateForPath as any).mock.calls[0]?.[0] ?? "")).toBe(file.path);
+		expect(String((plugin.setYamlDateForPath as any).mock.calls[0]?.[1] ?? "")).toBe(dateKey);
+	});
+
+	it("preserves AI summaries during drag-and-drop", async () => {
+		const dropped = new Date("2026-05-19T12:00:00.000Z");
+		const dateKey = resolveDateKeyForCanvasDrop(dropped);
+
+		const file = makeFile("2026-05-18.md");
+
+		const vault = {
+			getAbstractFileByPath: vi.fn((p: string) => {
+				return String(p) === String(file.path) ? file : null;
+			}),
+			rename: vi.fn(async (_af: any, newPath: string) => {
+				file.path = newPath;
+				const parts = String(newPath).split("/");
+				file.name = parts[parts.length - 1] ?? newPath;
+				const dot = String(file.name).lastIndexOf(".");
+				file.basename = dot >= 0 ? String(file.name).slice(0, dot) : String(file.name);
+			})
+		};
+
+		const plugin: any = {
+			app: { vault },
+			setYamlDateForPath: vi.fn(async () => true),
+			refreshEpochViews: vi.fn()
+		};
+
+		const entry: DateEntry = {
+			date: "2026-05-18",
+			file: file.path,
+			blockStart: 0,
+			blockEnd: 0,
+			summary: "",
+			source: "namedate"
+		};
+
+		const canvas: any = {
+			plugin,
+			canvas: {
+				style: {},
+				getBoundingClientRect: () => ({ left: 0, top: 0, right: 100, bottom: 100 })
+			},
+			getToday: () => dropped,
+			getDateForIndex: () => dropped,
+			draw: vi.fn(),
+			clearHover: vi.fn(),
+			entryDragActive: true,
+			entryDragEntry: entry,
+			entryDragTargetDayIndex: 0,
+			entryDragLastClientX: 10,
+			entryDragLastClientY: 10
+		};
+
+		await commitAnchorEntryDrag(canvas as any);
+
+		expect(vault.rename).toHaveBeenCalledTimes(1);
+		const renamedTo = String((vault.rename as any).mock.calls[0]?.[1] ?? "");
+		expect(renamedTo).toBe(`${dateKey}.md`);
+
+		expect(plugin.setYamlDateForPath).toHaveBeenCalledTimes(1);
+		expect(String((plugin.setYamlDateForPath as any).mock.calls[0]?.[0] ?? "")).toBe(renamedTo);
+		expect(String((plugin.setYamlDateForPath as any).mock.calls[0]?.[1] ?? "")).toBe(dateKey);
+		expect(plugin.refreshEpochViews).not.toHaveBeenCalled();
 	});
 });

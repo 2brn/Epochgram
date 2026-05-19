@@ -145,8 +145,11 @@ export function updateAggregatedEntriesInternal(
 		const currentHash = computeGroupHash(entry, groupInput);
 		if (currentHash === storedHash) return aiSummary;
 		// Tracked-change records can drift as new tracked rows are added on the same date.
-		// Preserve the AI summary in the UI even if the group input has changed.
-		return gt === "tracked" ? aiSummary : null;
+		// Anchor entries survive rename and frontmatter-date changes (drag-drop): the file
+		// path or date line changes but the body content is the same. The AI is always
+		// re-enqueued on modify, so the stale window is short. Show the old summary rather
+		// than blinking to normal while waiting for the AI to re-run.
+		return gt === "content" ? null : aiSummary;
 	};
 
 	const summarizeRange = (entry: FileDateEntry): FileDateEntry => {

@@ -178,6 +178,25 @@ After indexing, you will see the following records on the timeline:
 <img src="images/timeline-example.png" width="360" alt="Timeline example" />
 </p>
 
+**⛭ Track changes** lets you review file history on the timeline. For example, you have a long document you edit every day:
+
+`campaign-notes.md`
+```text
+Added the first draft of the Black Hollow region, including the mining town, nearby ruins, and the main faction leaders.
+
+Updated Seraphine’s backstory and connected her father’s disappearance to House Vaelor. Also added notes for the underground smuggler tunnels.
+
+Reworked the final dungeon encounter after the last session. Added shadow creatures, new traps, and alternative paths for stealth-focused players.
+```
+
+Then you will see your edit history on the timeline, day by day:
+
+<p align="center">
+<img src="images/track-changes-example.png" width="360" alt="Timeline example" />
+</p>
+
+Each day you edit the document, the latest changed block is shown as <img src="images/pen.svg" width="16" height="16" alt=""> added, <img src="images/pen.svg" width="16" height="16" alt=""> changed, or <img src="images/pen-line.svg" width="16" height="16" alt=""> removed.
+
 ## Filters
 
 <p align="center">
