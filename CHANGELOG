@@ -1,5 +1,10 @@
 # Epochgram changelog
 
+## [1.4.12] - 2026-05-20
+- Fixed blinking state for AI summaries.
+- Added more README examples.
+- Added/updated tests.
+
 ## [1.4.11] - 2026-05-19
 - Fixed indexing for cached YAML dates and filename dates.
 - Added support for full weekday names.
