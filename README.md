@@ -28,6 +28,7 @@ A Timemap of Your Mind
 
 - [Get Started](#get-started)
 - [Timeline](#timeline)
+- [Examples](#examples)
 - [Filters](#filters)
 - [Search](#search)
 - [Actions](#actions)
@@ -93,7 +94,7 @@ Manual install
 <img src="images/zoom.gif" height="360" alt="Timeline zoom" />
 </p>
 
-The timeline is a scrollable, zoomable surface that collects records from all files in the vault, excluding paths ignored in Obsidian settings. It detects dates and date ranges in different formats and renders *one record per file per day*, in the following priority order:
+The timeline is a scrollable, zoomable surface that collects records from all files in the vault, excluding paths ignored in Obsidian settings. It detects dates and date ranges in different formats and renders **one record per file per day**, in the following **priority order**:
 
 | Source | Description |
 | --- | --- |
@@ -101,34 +102,18 @@ The timeline is a scrollable, zoomable surface that collects records from all fi
 | <img src="images/calendar.svg" width="16" height="16" alt=""> **Content date** | Parsed content date (ranges), including <img src="images/recurring.svg" width="16" height="16" alt=""> **Recurring dates** (Pro). |
 | -- Anchors -- | |
 | **Filename date** | Parsed filename date. |
-| **Frontmatter date** | YAML **⛭ Anchor date property**. |
+| **Frontmatter date** | YAML **⛭ Anchor property**. |
 | **File cdate or mdate** | Configurable via **⛭ Anchor by mdate**. |
 
-> [!TIP]
-> Enable **⛭ Parse dates from other properties** to extract dates from all YAML frontmatter.
+Each file has one anchor record that represents its canonical date. All other record types are optional. Drag and drop works only for anchor records, it updates the YAML **⛭ Anchor property**, and the filename for daily notes.
 
-Each file has one anchor record that represents its canonical date. All other record types are optional. Drag and drop works only for anchor records, it updates the YAML **⛭ Anchor date property**, and the filename for daily notes.
+> [!TIP]
+> Enable **⛭ Parse all properties** to extract dates from all YAML frontmatter.
 
 <p align="center">
 <img src="images/create.gif" height="360" alt="Create note">
 <img src="images/dragndrop.gif" height="360" alt="Drag-n-drop">
 </p>
-
-> ```text
-> # EXAMPLE OF SOURCES
-> # FROM FILE PROPS:
->
-> `my_note.md`			 ⚓︎ cdate or mdate
-> `daily-01.01.2026.md`	 ⚓︎ filename
->
-> # FROM CONTENT:
->
-> ---
-> date: 2026-02-02		 ⚓︎ frontmatter
-> ---
-> May 1, 2026 diary		 🗓 parsed content
-> Added new line...		 ✐ tracked change
-> ```
 
 Each record appears as `file ⸱ summary`. You can control the length of each part using **⛭ Filename length** and **⛭ Summary length**. The summary is either the first `N` words extracted from Markdown or an AI-generated summary when **⛭ Auto summarize** is enabled (Pro). You can also set a manual summary using YAML **⛭ Summary property** or via context menu **<img src="images/square-pen.svg" width="18" height="18" alt=""> Edit summary…**; manual summaries are always preferred over AI-generated ones.
 
@@ -144,13 +129,62 @@ Timeline draws today as <img src="images/circle-today.svg" width="18" height="18
 > [!TIP]
 > A top label shows the current date, and a vertical red line marks the distance from Today — at the default zoom, each day of redshift represents one month.
 
+## Examples
+
+Let's assume you have the following notes in your vault:
+
+`backup.md`
+```text
+---
+repeat: every week on wednesday
+---
+```
+
+`Local RAG workshop.md`
+```text
+---
+date: 2026-05-18
+---
+
+Workshop focused on building local RAG pipelines with Ollama, vector embeddings, and semantic search across Markdown knowledge bases.
+
+Event was originally planned for May 16, 2026, but was later postponed due to severe weather conditions.
+```
+
+`daily-17-05-2026.md`
+```text
+---
+published: 2026-05-15T15:04:17
+description: PKM
+---
+
+[Personal knowledge management](https://en.wikipedia.org/wiki/Personal_knowledge_management)
+```
+
+And these Epochgram settings:
+
+| Settings | Value |
+| --- | --- |
+| **⛭ Anchor by mdate** | `off` |
+| **⛭ Anchor property** | `date` |
+| **⛭ Summary property** | `description` |
+| **⛭ Parse all properties** | `on` |
+| **⛭ Filename length** | `2 words` |
+| **⛭ Summary length** | `5 words` |
+
+After indexing, you will see the following records on the timeline:
+
+<p align="center">
+<img src="images/timeline-example.png" height="540" alt="Timeline example" />
+</p>
+
 ## Filters
 
 <p align="center">
 <img src="images/filters.gif" height="360" alt="Filters" />
 </p>
 
-There are collapsible filters under the <img src="images/settings.svg" width="18" height="18" alt=""> button.
+You can show or hide specific types of records using collapsible filters under the <img src="images/settings.svg" width="18" height="18" alt=""> button:
 
 | Filter | Description |
 | --- | --- |
@@ -166,7 +200,7 @@ There are collapsible filters under the <img src="images/settings.svg" width="18
 <img src="images/search.gif" height="360" alt="Search" />
 </p>
 
-A search bar at the bottom lets you search timeline records and shows the number of matches. Click it or run **⌘ Epochgram: Search timeline**. Search covers file names, content, AI summaries, Epochs, with support for fuzzy search.
+A search bar at the bottom lets you search timeline records and shows the number of matches. Click it or run **⌘ Epochgram: Search timeline**. Search supports fuzzy matching across filenames, content, summaries, Epochs, and all indexed attributes.
   
 | Search shortcut | Description |
 | --- | --- |
@@ -184,31 +218,31 @@ A search bar at the bottom lets you search timeline records and shows the number
 <img src="images/actions.gif" height="360" alt="Actions">
 </p>
 
-Files in the vault are never modified unless you run an explicit file action. All attributes *except the date and manual summary* are stored in Epochgram data files, not in vault files.
+Files in the vault are never modified unless you run an explicit file action. All attributes except the **date** and **manual summary** are stored in Epochgram data files, not in vault files.
 
 | Record menu | Description |
 | --- | --- |
 | **<img src="images/square-pen.svg" width="18" height="18" alt=""> Edit summary…** | Update the file manual summary. |
 | **<img src="images/tag.svg" width="18" height="18" alt=""> Set topic…** | Open the topics assignment popup; to remove topics, clear the input (Pro). |
-| **<img src="images/pin.svg" width="18" height="18" alt=""> Pin** | Pin the file at the *Today* position; or **⌘ Epochgram: Toggle pin for current file**. |
+| **<img src="images/pin.svg" width="18" height="18" alt=""> Pin** | Pin the file at the **Today** position; or **⌘ Epochgram: Toggle pin for current file**. |
 | **<img src="images/highlighter.svg" width="18" height="18" alt=""> Mark** | Mark similar records with a color; or **⌘ Epochgram: Toggle mark for current file**. |
 | **<img src="images/pencil-ruler.svg" width="18" height="18" alt=""> Draft**</br>**<img src="images/eye.svg" width="18" height="18" alt=""> Review**</br>**<img src="images/eye-off.svg" width="18" height="18" alt=""> Hide** | Change the file review state. |
 | **<img src="images/pen-line.svg" width="18" height="18" alt=""> Rename…** | Rename the file in the vault. |
 | **<img src="images/folder-tree.svg" width="18" height="18" alt=""> Move to…** | Move the file to another folder. |
-| **<img src="images/trash2.svg" width="18" height="18" alt=""> Delete** | **Permanently delete the file**, or move it to trash, depending on Obsidian settings. |
+| **<img src="images/trash2.svg" width="18" height="18" alt=""> Delete** | **Permanently delete** the file, or move it to trash, depending on Obsidian settings. |
 
 > [!TIP]
 > **⌘ Epochgram: Clear tracked changes for current file** → clear all file history at once.
 
 | Date menu | Description |
 | --- | --- |
-| **<img src="images/file-plus.svg" width="18" height="18" alt=""> Create daily note** | Uses **⛭ Daily notes** core plugin settings for that date: date format, location, and template. Also available by **Double-click**. |
+| **<img src="images/file-plus.svg" width="18" height="18" alt=""> Create daily note** | Uses **⛭ Daily notes** core plugin settings for that date: date format, location, and template. You can also create daily records by **Double-click** a date. |
 
 ## Review State
 
-Epochgram is designed around the [C.O.D.E.](https://fortelabs.com/blog/basboverview/) process (Capture → Organize → Distill → Express). New or indexed files appear as ***Draft***. After organizing the file and extracting the key points, the record can be set as **Reviewed**. If the file changes later, the record returns to *Draft*, indicating it may need review again.
+Epochgram is designed around the [C.O.D.E.](https://fortelabs.com/blog/basboverview/) process (Capture → Organize → Distill → Express). New or indexed files appear as ***Draft***. After organizing the file and extracting the key points, the record can be set as **Reviewed**. If the file changes later, the record returns to ***Draft***, indicating it may need review again.
 
-Not every record deserves space on the timeline. Some, such as minor tracked changes, can be set **Hidden**. Hidden records disappear from the timeline by default. Use **`!hidden`** in search to show only hidden records — they are rendered muted.
+Not every record deserves space on the timeline. Some, such as minor tracked changes, can be set **Hidden**. Hidden records disappear from the timeline by default. Use `!hidden` in search to show only hidden records — they are rendered muted.
 
 > [!TIP]
 > **⌘ Epochgram: Review all** → set all records across the vault as reviewed.</br>
@@ -224,7 +258,7 @@ You can create recurring records, which will appear on the timeline. To add one,
 ---
 repeat: every day
 repeat: every N days
-repeat: every week on mon,tue
+repeat: every week on monday,tuesday
 repeat: every N weeks on mon,tue
 repeat: every month on D
 repeat: every month on -D # D days from end of month; -1 = last day
@@ -248,7 +282,7 @@ Similarity helps find related records. When you open a note, similar records on 
 | **⛭ Tags** | Treat notes as related when they share tags. |
 | **⛭ Title threshold** | Use Jaro–Winkler matching to group notes with similar names or paths. Higher values match more; `0` disables it. |
 | **⛭ Semantic threshold** | Use an embedding [default model](https://huggingface.co/Xenova/all-MiniLM-L6-v2) to find notes with similar meaning across the vault. Useful for notes that describe the same idea in different words. |
-| **⛭ Topic threshold** | Use a zero-shot [default model](https://huggingface.co/MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33) for similarity grouping. When you assign a topic to a note, Epochgram finds related records across the vault. Useful for broad themes like travel, projects, health, or photography, where notes may share meaning without direct links or tags. |
+| **⛭ Topic threshold** | Use a zero-shot [default model](https://huggingface.co/MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33) for similarity grouping. When you assign a topic to a note, Epochgram finds related records across the vault. Useful for broad themes like travel, health, or photography, where notes may share meaning without direct links or tags. |
 
 > [!TIP]
 > Use **⛭** to open the model picker, or <img src="images/globe.svg" width="18" height="18" alt=""> to browse Hugging Face models.</br>
@@ -272,9 +306,9 @@ In addition to the standard red-to-violet palette, an extended palette is availa
 
 <p align="center"><img src="images/epochs.gif" height="360" alt="Epochs"></p>
 
-Epochgram Pro includes an **AI Bridge** that uses Google Chrome's on-device AI APIs for local summarization. When started, it runs a small local server on an available port at `http://127.0.0.1`. The bridge page can be opened from **⌘ Epochgram: Open AI bridge**, from the **⌀ AI** status bar button (button absent = server not started, button red = client disconnected), or automatically on startup if **⛭ Open AI bridge on startup** is enabled. This page processes summary jobs in Chrome and returns the results to the plugin. All summarization data stays **only on your device** and is not sent to external services.
+Epochgram Pro includes an **AI Bridge** that uses Google Chrome's on-device AI APIs for local summarization. When started, it runs a small local server on an available port at `http://127.0.0.1`. The bridge page can be opened from **⌘ Epochgram: Open AI bridge**, from the **⌀ AI** status bar button (button absent → server not started; button red → client disconnected), or automatically on startup if **⛭ Open AI bridge on startup** is enabled. This page processes summary jobs in Chrome and returns the results to the plugin. All summarization data stays **only on your device** and is not sent to external services.
 
-On first use, Chrome may need a user gesture to download the built-in Gemini Nano model, and the drive with your Chrome profile [should have](https://developer.chrome.com/docs/ai/summarizer-api#hardware-requirements) at least **22 GB** of free space. The bridge page also serves as a control panel, showing connection and model status, queue progress, the current text preview, the latest result, and a chart with progress in gray and processing speed in blue. Keep it open while summaries are running. You can also adjust API settings and prompt/context texts in the YAML settings editor. For larger notes, Epochgram can split input into chunks, summarize them separately, then merge the results.
+On first use, Chrome may need a user gesture to download the built-in Gemini Nano model, and the drive with your Chrome profile [should have](https://developer.chrome.com/docs/ai/summarizer-api#hardware-requirements) at least **22 GB** of free space. The bridge page also serves as a control panel, showing connection and model status, queue progress, the current text preview, the latest result, and a chart with progress in gray and processing speed in blue. Keep it open while summaries are running. For larger notes, Epochgram can split input into chunks, summarize them separately, then merge the results. You can also adjust API settings and prompt/context texts in the YAML settings editor:
 
 ```yaml
 sharedContext: | # Shared instructions across all summarization jobs

@@ -162,7 +162,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 		await plugin.onSettingsChanged("yamlDateProperty");
 	};
 	const yamlDatePropSetting = new Setting(containerEl)
-		.setName("Anchor date property")
+		.setName("Anchor property")
 		.setDesc("Used as the note anchor date.")
 		.addText((text: any) => {
 			yamlDatePropText = text;
@@ -224,7 +224,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 
 	let parseDatesInFrontmatterToggle: any = null;
 	const parseDatesInFrontmatterSetting = new Setting(containerEl)
-		.setName("Parse dates from other properties")
+		.setName("Parse all properties")
 		.setDesc("Scan all YAML properties for date values.")
 		.addToggle((toggle: any) => {
 			parseDatesInFrontmatterToggle = toggle;

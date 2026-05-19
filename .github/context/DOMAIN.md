@@ -19,6 +19,7 @@ Frontmatter date property (Verified)
 - Parsed/content extraction from YAML frontmatter is controlled by `settings.parseDatesInFrontmatter` (default `false`).
   - When `false`, body-parsed content dates still index normally, but frontmatter-derived parsed/content dates are not emitted.
   - When `true`, frontmatter-derived parsed/content dates are emitted and continue to be flagged with `fromFrontmatter: true`.
+  - Raw YAML frontmatter remains the source of truth for top-level scalar keys; metadata-cache fallback token parsing supplements only nested paths so cache-normalized scalar values cannot introduce phantom parsed dates.
 - Frontmatter suppression flags (Verified):
   - `notracked: <any>` suppresses tracked-change indexing for the file (no tracked entries are indexed or shown on the timeline).
   - `noparsed: <any>` suppresses parsed content-date indexing for the file (content-derived entries are not indexed or shown on the timeline).

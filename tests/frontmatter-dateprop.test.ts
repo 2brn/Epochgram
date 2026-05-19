@@ -187,4 +187,34 @@ describe("Frontmatter dateprop", () => {
 		expect(((indexer as any).index["2025-01-02"] ?? []).some((e: any) => e.file === file.path && e.source === "dateprop")).toBe(false);
 		expect(((indexer as any).index["2025-01-01"] ?? []).some((e: any) => e.file === file.path && e.source === "cdate")).toBe(true);
 	});
+
+	it("ignores conflicting top-level metadata-cache date normalization for scalar YAML fields", async () => {
+		const ctime = Date.UTC(2026, 4, 21);
+		const file = makeFile("folder/21-05-2026.md", ctime);
+
+		contents[file.path] = [
+			"---",
+			"published: 23-05-2026",
+			"description: PKM",
+			"---",
+			"",
+			"[Personal knowledge management](https://en.wikipedia.org/wiki/Personal_knowledge_management)"
+		].join("\n");
+
+		(pluginStub.app.metadataCache.getFileCache as any).mockImplementation(() => ({
+			frontmatter: {
+				published: new Date(Date.UTC(2026, 4, 20, 21, 0, 0)),
+				description: "PKM"
+			},
+			tags: []
+		}));
+
+		await indexer.processFile(file, { reason: "modify" });
+
+		const fileData = (indexer as any).files[file.path];
+		const contentDates: FileDateEntry[] = fileData?.contentDates ?? [];
+		expect(contentDates.filter(e => e.source === "content" && (e as any).fromFrontmatter === true).map(e => e.date)).toEqual(["2026-05-23"]);
+		expect(((indexer as any).index["2026-05-20"] ?? []).some((e: any) => e.file === file.path && e.source === "content" && e.fromFrontmatter === true)).toBe(false);
+		expect(((indexer as any).index["2026-05-23"] ?? []).some((e: any) => e.file === file.path && e.source === "content" && e.fromFrontmatter === true)).toBe(true);
+	});
 });

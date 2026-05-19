@@ -59,7 +59,7 @@ import { removeFile, renameFile } from "./file-ops";
 
 export interface ProcessOptions {
 	skipTrackedUpdate?: boolean;
-	reason?: "rebuild" | "modify" | "track" | "create" | "open";
+	reason?: "rebuild" | "modify" | "track" | "create" | "open" | "rename";
 	previous?: FileIndexData;
 	skipSort?: boolean;
 }
@@ -529,7 +529,16 @@ export class Indexer {
 						excludeKeys: ["repeat", "recur", datePropertyKeyLower]
 					});
 					if (tokens.length > 0) {
-						for (const tok of tokens) addFrontmatterTokenDates(tok);
+						for (const tok of tokens) {
+							const raw = String(tok ?? "");
+							const sep = raw.indexOf(":");
+							const keyPath = sep >= 0 ? raw.slice(0, sep).trim() : "";
+							// Raw YAML line scanning already covers top-level scalar keys.
+							// Restrict metadata-cache fallback token parsing to nested paths,
+							// which avoids cache-normalized date values introducing phantom dates.
+							if (!keyPath || !keyPath.includes(".")) continue;
+							addFrontmatterTokenDates(raw);
+						}
 					}
 				}
 			} catch {

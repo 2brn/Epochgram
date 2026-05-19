@@ -269,7 +269,7 @@ export async function processFileInternal(
 
 	// When content is unchanged, also preserve the other parsed date fields to
 	// avoid spurious diff from ctime/metadata-cache timing differences.
-	if (contentUnchanged) {
+	if (contentUnchanged && options.reason !== "rename") {
 		fileData.namedDate = previousData.namedDate ?? null;
 		fileData.dateProp = previousData.dateProp ?? null;
 		fileData.contentDates = previousData.contentDates ?? [];

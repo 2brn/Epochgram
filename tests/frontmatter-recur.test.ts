@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Indexer } from "../src/indexer/indexer";
 import { TFile } from "obsidian";
 import { expandRecurrenceToDateKeys } from "../src/indexer/recurrence";
+import { parseWeekdayList } from "../src/indexer/recurrence";
 
 function makeFile(path: string, ctime: number): TFile {
 	const name = path.split("/").pop() ?? path;
@@ -675,5 +676,17 @@ describe("Frontmatter repeat", () => {
 
 		const recurringBefore = (idx["2026-03-02"] ?? []).find((e) => e && e.file === file.path && e.recurring === true);
 		expect(recurringBefore).toBeTruthy();
+	});
+
+	it("parses full weekday names and additional abbreviations", () => {
+		const input = "Monday, Tues, Wednesday, Thur, Friday, Sat, Sunday";
+		const expected = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
+		const result = parseWeekdayList(input);
+
+		console.log("Input:", input);
+		console.log("Result:", result);
+		console.log("Expected:", expected);
+
+		expect(result).toEqual(expected);
 	});
 });

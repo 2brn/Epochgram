@@ -58,30 +58,34 @@ function normalizeRruleString(raw: string): string {
 }
 
 const WEEKDAY_MAP: Record<string, WeekdayCode> = {
-	mon: "MO",
-	tue: "TU",
-	wed: "WE",
-	thu: "TH",
-	fri: "FR",
-	sat: "SA",
-	sun: "SU"
+    mon: "MO", monday: "MO",
+    tue: "TU", tues: "TU", tuesday: "TU",
+    wed: "WE", wednesday: "WE",
+    thu: "TH", thur: "TH", thurs: "TH", thursday: "TH",
+    fri: "FR", friday: "FR",
+    sat: "SA", saturday: "SA",
+    sun: "SU", sunday: "SU",
+    // Additional variations
+    mo: "MO", tu: "TU", we: "WE", th: "TH", fr: "FR", sa: "SA", su: "SU"
 };
 
 type WeekdayCode = "MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "SU";
 
 function parseWeekdayList(raw: string): WeekdayCode[] {
-	const out: WeekdayCode[] = [];
-	const seen = new Set<string>();
-	for (const seg of String(raw || "").split(/\s*,\s*/g)) {
-		const k = String(seg || "").trim().toLowerCase();
-		const code = WEEKDAY_MAP[k];
-		if (!code) continue;
-		if (seen.has(code)) continue;
-		seen.add(code);
-		out.push(code);
-	}
-	return out;
+    const out: WeekdayCode[] = [];
+    const seen = new Set<string>();
+    for (const seg of String(raw || "").split(/\s*,\s*/g)) {
+        const k = String(seg || "").trim().toLowerCase();
+        const code = WEEKDAY_MAP[k];
+        if (!code) continue;
+        if (seen.has(code)) continue;
+        seen.add(code);
+        out.push(code);
+    }
+    return out;
 }
+
+export { parseWeekdayList };
 
 function extractModifierDate(raw: string, key: "from" | "until"): { value: string | null; stripped: string } {
 	const re = key === "from" ? /\bfrom\s+(\d{4}-\d{2}-\d{2})\b/i : /\buntil\s+(\d{4}-\d{2}-\d{2})\b/i;
@@ -147,8 +151,8 @@ export function parseRecurrenceFrontmatter(params: {
 	// Friendly formats
 	const everyDay = core.match(/^every\s+day$/i);
 	const everyNDays = core.match(/^every\s+(\d+)\s+days?$/i);
-	const everyWeekOn = core.match(/^every\s+week\s+on\s+([a-z]{3}(?:\s*,\s*[a-z]{3})*)$/i);
-	const everyNWeeksOn = core.match(/^every\s+(\d+)\s+weeks?\s+on\s+([a-z]{3}(?:\s*,\s*[a-z]{3})*)$/i);
+	const everyWeekOn = core.match(/^every\s+week\s+on\s+([a-z]+(?:\s*,\s*[a-z]+)*)$/i);
+	const everyNWeeksOn = core.match(/^every\s+(\d+)\s+weeks?\s+on\s+([a-z]+(?:\s*,\s*[a-z]+)*)$/i);
 	const everyMonthOn = core.match(/^every\s+month\s+on\s+(-?\d{1,2})$/i);
 	const everyYearOn = core.match(/^every\s+year\s+on\s+(\d{2})-(\d{2})$/i);
 

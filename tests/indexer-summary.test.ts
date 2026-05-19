@@ -106,6 +106,30 @@ describe("Indexer anchor summaries", () => {
 		expect((indexer as any).files[file.path]).toBeUndefined();
 	});
 
+	it("recomputes namedate anchor on rename when content is unchanged", async () => {
+		const ctime = Date.UTC(2026, 4, 22);
+		const oldPath = "daily-22-05-2026.md";
+		const newPath = "daily-23-05-2026.md";
+		const file = makeFile(oldPath, ctime);
+		contents[oldPath] = "Same body";
+
+		await indexer.processFile(file, { reason: "modify" });
+
+		const renamedFile = makeFile(newPath, ctime);
+		contents[newPath] = contents[oldPath];
+		pluginStub.app.vault.getAbstractFileByPath.mockImplementation((path: string) => {
+			if (path === renamedFile.path) return renamedFile;
+			return null;
+		});
+
+		await indexer.renameFile(oldPath, newPath);
+
+		const renamedData = (indexer as any).files[newPath];
+		expect(renamedData?.namedDate?.date).toBe("2026-05-23");
+		expect(((indexer as any).index["2026-05-22"] ?? []).some((e: any) => e.file === newPath && e.source === "namedate")).toBe(false);
+		expect(((indexer as any).index["2026-05-23"] ?? []).some((e: any) => e.file === newPath && e.source === "namedate")).toBe(true);
+	});
+
 	it("summarizes content without filename/separator", async () => {
 		pluginStub.settings.summaryWordsCount = 3;
 		const ctime = Date.UTC(2025, 0, 3);

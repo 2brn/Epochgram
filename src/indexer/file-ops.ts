@@ -132,7 +132,7 @@ export async function renameFile(indexer: any, oldPath: string, newPath: string)
 	const abstract = s.plugin.app.vault.getAbstractFileByPath(newPath);
 	if (abstract instanceof TFile) {
 		await s.processFile(abstract, {
-			reason: "modify",
+			reason: "rename",
 			skipTrackedUpdate: true,
 			previous: previous
 		});
