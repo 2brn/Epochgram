@@ -453,7 +453,7 @@ describe("touch pan", () => {
 			state.velocityY = 0.3;
 			state.animatingWheelPan = true;
 			state.animatingWheelZoom = true;
-			handleTouchMove(state as any, makeEvent([{ clientX: 40, clientY: 12 }]) as any);
+			handleTouchMove(state as any, makeEvent([{ clientX: 42, clientY: 12 }]) as any);
 
 			expect(collapse).toHaveBeenCalledTimes(1);
 			expect(state.velocityY).toBe(0);
@@ -540,7 +540,7 @@ describe("touch pan", () => {
 			};
 
 			handleTouchStart(state as any, makeEvent([{ clientX: 10, clientY: 10 }]) as any);
-			handleTouchMove(state as any, makeEvent([{ clientX: 40, clientY: 12 }]) as any);
+			handleTouchMove(state as any, makeEvent([{ clientX: 42, clientY: 12 }]) as any);
 			handleTouchMove(state as any, makeEvent([{ clientX: 45, clientY: 60 }]) as any);
 
 			expect(collapse).toHaveBeenCalledTimes(1);

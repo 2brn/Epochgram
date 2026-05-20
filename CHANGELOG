@@ -1,5 +1,10 @@
 # Epochgram changelog
 
+## [1.4.13] - 2026-05-20
+- Updated README hero/content and examples.
+- Stopped timeline inertia when collapsing sidebar on mobile swipe.
+- Tuned mobile swipe-collapse horizontal threshold (`dx`/`dy`) to avoid accidental triggers.
+
 ## [1.4.12] - 2026-05-20
 - Fixed blinking state for AI summaries.
 - Added more README examples.
