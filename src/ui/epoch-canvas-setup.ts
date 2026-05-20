@@ -64,6 +64,24 @@ export const canvasSetupMethods: CanvasSetupMethods = {
 		if (!width || !height) {
 			const wasHidden = (state as any).__epochCanvasHidden === true;
 			(state as any).__epochCanvasHidden = true;
+			try {
+				state.velocityY = 0;
+				state.animatingView = false;
+				(state as any).animatingWheelPan = false;
+				(state as any).animatingWheelZoom = false;
+				(state as any).wheelZoomDir = 0;
+				state.lastFrameTime = null;
+			} catch {
+				// ignore
+			}
+			if (state.animFrame != null) {
+				try {
+					cancelAnimationFrame(state.animFrame);
+				} catch {
+					// ignore
+				}
+				state.animFrame = null;
+			}
 			if (!wasHidden) {
 				try {
 					state.keepHoverAfterMenu = false;

@@ -46,4 +46,32 @@ describe("panel collapse", () => {
 		canvasSetupMethods.resize.call(c);
 		expect(c.clearHover).toHaveBeenCalledTimes(1);
 	});
+
+	it("stops in-flight motion when resized to 0x0", () => {
+		const originalCancel = (globalThis as any).cancelAnimationFrame;
+		const cancel = vi.fn();
+		(globalThis as any).cancelAnimationFrame = cancel;
+		try {
+			const c = makeCollapsedCanvas({
+				velocityY: 0.35,
+				animatingView: true,
+				animatingWheelPan: true,
+				animatingWheelZoom: true,
+				wheelZoomDir: 1,
+				lastFrameTime: 123,
+				animFrame: 77
+			});
+			canvasSetupMethods.resize.call(c);
+			expect(c.velocityY).toBe(0);
+			expect(c.animatingView).toBe(false);
+			expect(c.animatingWheelPan).toBe(false);
+			expect(c.animatingWheelZoom).toBe(false);
+			expect(c.wheelZoomDir).toBe(0);
+			expect(c.lastFrameTime).toBe(null);
+			expect(c.animFrame).toBe(null);
+			expect(cancel).toHaveBeenCalledWith(77);
+		} finally {
+			(globalThis as any).cancelAnimationFrame = originalCancel;
+		}
+	});
 });

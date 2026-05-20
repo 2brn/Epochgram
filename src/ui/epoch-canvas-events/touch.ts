@@ -223,6 +223,8 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 
 	if (event.touches.length === 1) {
 		const touch = event.touches[0];
+		(s as any)._swipeHideTriggered = false;
+		(s as any).__touchSwipeHideLock = false;
 
 		s.pendingScrollNavHighlight = null;
 		s.touchHadMultipleTouches = false;
@@ -513,13 +515,23 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 	const touch = event.touches[0];
 
 	try {
-		
+		const isMobileSurface = Platform.isMobileApp || Platform.isMobile === true;
 		const plugin = (canvas as any).plugin;
-		if (plugin && typeof plugin === "object" && plugin.app?.workspace && Platform.isMobile && (s as any).__touchGestureStartedDuringMotion !== true) {
+		if (plugin && typeof plugin === "object" && plugin.app?.workspace && isMobileSurface && (s as any).__touchGestureStartedDuringMotion !== true) {
 			const dx = touch.clientX - s.touchStartX;
 			const dy = touch.clientY - s.touchStartY;
-			if (!(s as any)._swipeHideTriggered && dx > 0 && Math.abs(dx) > Math.abs(dy) * 2) {
+			console.debug("Touch move", { dx, dy});	
+			if (!(s as any)._swipeHideTriggered && dx > 30 && dx > Math.abs(dy) * 2) {
 				(s as any)._swipeHideTriggered = true;
+				(s as any).__touchSwipeHideLock = true;
+				s.touchMode = "swipehide" as any;
+				s.touchMoved = true;
+				s.dragSource = null;
+				if (s.touchLongPressTimeout != null) {
+					clearTimeout(s.touchLongPressTimeout);
+					s.touchLongPressTimeout = null;
+				}
+				stopViewMotion(s);
 				try {
 					if (typeof plugin.app.workspace.detachLeavesOfType === "function") {
 						plugin.app.workspace.rightSplit.collapse();
@@ -531,6 +543,9 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 			}
 		}
 	} catch {}
+	if ((s as any).__touchSwipeHideLock === true) {
+		return;
+	}
 	if (s.touchMode === "entrydrag" || (s as any).entryDragActive) {
 		if (s.touchLongPressTimeout != null) {
 			clearTimeout(s.touchLongPressTimeout);

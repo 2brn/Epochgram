@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import { Platform } from "obsidian";
 import { handleTouchEnd, handleTouchMove, handleTouchStart } from "../src/ui/epoch-canvas-events/touch";
 import { handleHoverMouse } from "../src/ui/epoch-canvas-events/mouse";
 
@@ -371,6 +372,183 @@ describe("touch pan", () => {
 
 		expect(collapse).not.toHaveBeenCalled();
 		expect(state.touchMode).toBe("pan");
+	});
+
+	test("swipe hide stops view motion before collapse", () => {
+		const collapse = vi.fn();
+		const originalMobile = (Platform as any).isMobile;
+		try {
+			(Platform as any).isMobile = true;
+			const state: any = {
+				animatingView: false,
+				velocityY: 0,
+				animatingWheelPan: false,
+				animatingWheelZoom: false,
+				offsetY: 0,
+				targetOffsetY: 10,
+				scale: 1,
+				targetScale: 1.2,
+				touchMode: null,
+				touchMoved: false,
+				touchStartX: 10,
+				touchStartY: 10,
+				touchStartOffsetY: 0,
+				touchStartTime: 0,
+				touchHadMultipleTouches: false,
+				touchLongPressTimeout: null,
+				lastTapTime: 0,
+				lastTapX: 0,
+				lastTapY: 0,
+				keepHoverAfterMenu: false,
+				keepHoverUntilPointerMove: false,
+				pendingScrollNavHighlight: null,
+				dragSource: null,
+				lastPanY: 10,
+				lastPanTime: performance.now() - 16,
+				viewInteractionUntil: 0,
+				isPointerDeviceEvent: () => false,
+				attemptHoverPreview: vi.fn(),
+				clearHover: vi.fn(),
+				updateHover: vi.fn(),
+				findSummaryEntryAtPoint: vi.fn(() => null),
+				findDayLayoutAtPoint: vi.fn(() => null),
+				canvas: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }) },
+				layouts: [
+					{
+						index: 0,
+						hasVisibleDate: false,
+						dateRect: { x1: 0, y1: 0, x2: 0, y2: 0 },
+						summaryRects: []
+					}
+				],
+				draw: vi.fn(),
+				startInertia: vi.fn(),
+				resetScrollNavToToday: vi.fn(),
+				advanceScrollNav: vi.fn(() => false),
+				epochsView: false,
+				toggleEmptyAreaView: vi.fn(),
+				showSummaryMenu: vi.fn(),
+				showDateMenu: vi.fn(),
+				openEntry: vi.fn(async () => undefined),
+				openDateNote: vi.fn(async () => false),
+				createNoteForDate: vi.fn(async () => undefined),
+				getToday: () => new Date("2026-01-19T12:00:00.000Z"),
+				getDateForIndex: () => new Date("2026-01-19T00:00:00.000Z"),
+				suppressHoverUntil: 0,
+				suppressHoverUntilPointerMove: false,
+				previewLockedUntilAltRelease: false,
+				lastPointerEvent: null,
+				plugin: {
+					app: {
+						workspace: {
+							detachLeavesOfType: vi.fn(),
+							rightSplit: { collapse }
+						}
+					}
+				}
+			};
+
+			handleTouchStart(state as any, makeEvent([{ clientX: 10, clientY: 10 }]) as any);
+			state.animatingView = true;
+			state.velocityY = 0.3;
+			state.animatingWheelPan = true;
+			state.animatingWheelZoom = true;
+			handleTouchMove(state as any, makeEvent([{ clientX: 40, clientY: 12 }]) as any);
+
+			expect(collapse).toHaveBeenCalledTimes(1);
+			expect(state.velocityY).toBe(0);
+			expect(state.animatingView).toBe(false);
+			expect(state.animatingWheelPan).toBe(false);
+			expect(state.animatingWheelZoom).toBe(false);
+		} finally {
+			(Platform as any).isMobile = originalMobile;
+		}
+	});
+
+	test("swipe hide gesture does not start pan on later moves", () => {
+		const collapse = vi.fn();
+		const originalMobile = (Platform as any).isMobile;
+		try {
+			(Platform as any).isMobile = true;
+			const state: any = {
+				animatingView: false,
+				velocityY: 0,
+				animatingWheelPan: false,
+				animatingWheelZoom: false,
+				offsetY: 0,
+				targetOffsetY: 0,
+				scale: 1,
+				targetScale: 1,
+				touchMode: null,
+				touchMoved: false,
+				touchStartX: 10,
+				touchStartY: 10,
+				touchStartOffsetY: 0,
+				touchStartTime: 0,
+				touchHadMultipleTouches: false,
+				touchLongPressTimeout: null,
+				lastTapTime: 0,
+				lastTapX: 0,
+				lastTapY: 0,
+				keepHoverAfterMenu: false,
+				keepHoverUntilPointerMove: false,
+				pendingScrollNavHighlight: null,
+				dragSource: null,
+				lastPanY: 10,
+				lastPanTime: performance.now() - 16,
+				viewInteractionUntil: 0,
+				isPointerDeviceEvent: () => false,
+				attemptHoverPreview: vi.fn(),
+				clearHover: vi.fn(),
+				updateHover: vi.fn(),
+				findSummaryEntryAtPoint: vi.fn(() => null),
+				findDayLayoutAtPoint: vi.fn(() => null),
+				canvas: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }) },
+				layouts: [
+					{
+						index: 0,
+						hasVisibleDate: false,
+						dateRect: { x1: 0, y1: 0, x2: 0, y2: 0 },
+						summaryRects: []
+					}
+				],
+				draw: vi.fn(),
+				startInertia: vi.fn(),
+				resetScrollNavToToday: vi.fn(),
+				advanceScrollNav: vi.fn(() => false),
+				epochsView: false,
+				toggleEmptyAreaView: vi.fn(),
+				showSummaryMenu: vi.fn(),
+				showDateMenu: vi.fn(),
+				openEntry: vi.fn(async () => undefined),
+				openDateNote: vi.fn(async () => false),
+				createNoteForDate: vi.fn(async () => undefined),
+				getToday: () => new Date("2026-01-19T12:00:00.000Z"),
+				getDateForIndex: () => new Date("2026-01-19T00:00:00.000Z"),
+				suppressHoverUntil: 0,
+				suppressHoverUntilPointerMove: false,
+				previewLockedUntilAltRelease: false,
+				lastPointerEvent: null,
+				plugin: {
+					app: {
+						workspace: {
+							detachLeavesOfType: vi.fn(),
+							rightSplit: { collapse }
+						}
+					}
+				}
+			};
+
+			handleTouchStart(state as any, makeEvent([{ clientX: 10, clientY: 10 }]) as any);
+			handleTouchMove(state as any, makeEvent([{ clientX: 40, clientY: 12 }]) as any);
+			handleTouchMove(state as any, makeEvent([{ clientX: 45, clientY: 60 }]) as any);
+
+			expect(collapse).toHaveBeenCalledTimes(1);
+			expect(state.touchMode).toBe("swipehide");
+			expect(state.offsetY).toBe(0);
+		} finally {
+			(Platform as any).isMobile = originalMobile;
+		}
 	});
 
 	test("touchstart during motion suppresses touch hover feedback", () => {

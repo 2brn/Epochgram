@@ -11,7 +11,7 @@ A Timemap of Your Mind
 </p>
 
 </br>
-<p align="center"><img src="images/epochgram-full.png" alt="Epochgram screenshot"></p>
+<p align="center"><img src="images/epochgram-hero.png" alt="Epochgram screenshot"></p>
 </br>
 
 > <font color="#c14d58">Pain</font>. Your vault fills up with quick capture notes. A week later, you've lost the thread. A month later, you can't reconstruct the story — and you don't see the themes, the slow stretches, or the bursts of activity.</br></br>
@@ -172,6 +172,9 @@ And these Epochgram settings:
 | **⛭ Filename length** | `2 words` |
 | **⛭ Summary length** | `5 words` |
 
+> [!TIP]
+> You can hide all content dates by turning off the <img src="images/calendar.svg" width="18" height="18" alt=""> toggle.
+
 After indexing, you will see the following records on the timeline:
 
 <p align="center">
@@ -188,6 +191,9 @@ Updated Seraphine’s backstory and connected her father’s disappearance to Ho
 
 Reworked the final dungeon encounter after the last session. Added shadow creatures, new traps, and alternative paths for stealth-focused players.
 ```
+
+> [!TIP]
+> You can hide all tracked changes by turning off the <img src="images/history.svg" width="18" height="18" alt=""> toggle.
 
 Then you will see your edit history on the timeline, day by day:
 

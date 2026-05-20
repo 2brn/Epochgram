@@ -188,6 +188,9 @@ Timeline dense mode (Verified)
 Touch interactions (Verified)
 - Touch long-press can open context menus for both summary entries and date labels (see `ui/epoch-canvas-events/touch.ts`).
 - Date label hit-testing uses extra touch-only padding so long-press is easier on mobile (see `ui/epoch-canvas-constants.ts:DATE_TOUCH_HIT_PAD`).
+- Mobile right-swipe sidebar collapse explicitly cancels in-flight timeline view motion (inertia / wheel-pan / wheel-zoom / animated pan) before collapsing, so the hidden panel does not continue animating.
+- Once the right-swipe hide gesture is recognized on mobile (`dx > 0` and predominantly horizontal), the active touch sequence is locked to swipe-hide and does not transition into timeline pan/scroll.
+- When the timeline canvas is resized to hidden (`0x0`, e.g. panel collapsed), Epochgram force-stops in-flight view motion and cancels any pending canvas animation frame so motion cannot continue while hidden.
 - When the view is in motion (inertia / animated pan/zoom), a 1-finger touch is treated as “stop momentum” only: the gesture consumes tap/long-press actions so it does not open records, open date labels, toggle Epochs view, or open context menus.
 - While stopping momentum, touch hover feedback is suppressed (no hover/preview flash). The consumed tap still arms the double-tap window so a second tap can trigger the intended double-tap action.
 - Deferred “date label tap opens after a short delay” is canceled as soon as a pan starts, and is also gated against in-flight view motion.
