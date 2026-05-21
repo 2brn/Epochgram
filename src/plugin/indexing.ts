@@ -108,7 +108,7 @@ export const indexingMethods: IndexingMethods = {
 		await this.waitForExcludedSync();
 
 		const files = this.getIndexableFiles();
-		const progressLabel = mode === "rebuild" ? "Indexing…" : "Refreshing…";
+		const progressLabel = mode === "rebuild" ? "Indexing…" : "Indexing…";
 		const successLabel = mode === "rebuild" ? "Epochgram index rebuilt" : "Epochgram index refreshed";
 		if (!suppressNotices && Platform.isDesktopApp) {
 			announceEpochDesktopTaskAfter(this, `index:${mode}:start`, mode === "rebuild" ? "Epochgram indexing started" : "Epochgram refresh started", {

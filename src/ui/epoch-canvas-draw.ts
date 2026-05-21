@@ -13,6 +13,11 @@ import { drawVisibleDays } from "./epoch-canvas-draw/draw-days";
 import { resolveEpochBucketState } from "./epoch-canvas-draw/epoch-bucket";
 import { getDrawState } from "./epoch-canvas-draw/state";
 import { focusFirstFilteredTimelineRecord } from "./epoch-canvas/scroll-nav";
+import {
+    clampTimelineOffsetToBounds,
+    getTimelineViewportBounds,
+    resolveViewportHeight
+} from "./epoch-canvas/viewport-limits";
 
 function drawTodayDistanceIndicator(params: {
     canvas: EpochCanvas;
@@ -78,6 +83,87 @@ function drawTodayDistanceIndicator(params: {
     ctx.restore();
 }
 
+function colorWithAlpha(color: string, alpha: number): string {
+    const a = Math.max(0, Math.min(1, alpha));
+    const raw = String(color || "").trim();
+    const hex = raw.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+    if (hex) {
+        const value = hex[1]!;
+        const full = value.length === 3
+            ? `${value[0]}${value[0]}${value[1]}${value[1]}${value[2]}${value[2]}`
+            : value;
+        const r = parseInt(full.slice(0, 2), 16);
+        const g = parseInt(full.slice(2, 4), 16);
+        const b = parseInt(full.slice(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${a})`;
+    }
+    const rgb = raw.match(/^rgba?\(([^)]+)\)$/i);
+    if (rgb) {
+        const parts = rgb[1]!.split(",").map((p) => Number(p.trim()));
+        if (parts.length >= 3 && parts.slice(0, 3).every((n) => Number.isFinite(n))) {
+            const r = Math.max(0, Math.min(255, Math.round(parts[0]!)));
+            const g = Math.max(0, Math.min(255, Math.round(parts[1]!)));
+            const b = Math.max(0, Math.min(255, Math.round(parts[2]!)));
+            return `rgba(${r}, ${g}, ${b}, ${a})`;
+        }
+    }
+    return `rgba(0, 0, 0, ${a})`;
+}
+
+function drawTimelineFadeMask(params: {
+    s: ReturnType<typeof getDrawState>;
+    ctx: CanvasRenderingContext2D;
+    w: number;
+    h: number;
+    backgroundColor: string;
+    today: Date;
+}): void {
+    const { s, ctx, w, h, backgroundColor, today } = params;
+    if (!(w > 0 && h > 0)) return;
+
+    const bounds = getTimelineViewportBounds(today);
+    const pxPerDay = BASE_SPACING * s.scale;
+    if (!Number.isFinite(pxPerDay) || pxPerDay <= 0) return;
+
+    const yHardMin = bounds.hardMinIndex * pxPerDay + s.offsetY;
+    const yCoreMin = bounds.coreMinIndex * pxPerDay + s.offsetY;
+    const yCoreMax = bounds.coreMaxIndex * pxPerDay + s.offsetY;
+    const yHardMax = bounds.hardMaxIndex * pxPerDay + s.offsetY;
+
+    const opaque = colorWithAlpha(backgroundColor, 1);
+    const transparent = colorWithAlpha(backgroundColor, 0);
+
+    ctx.save();
+
+    if (yHardMin > 0) {
+        ctx.fillStyle = opaque;
+        ctx.fillRect(0, 0, w, Math.min(h, yHardMin));
+    }
+
+    if (yCoreMin > yHardMin) {
+        const g = ctx.createLinearGradient(0, yHardMin, 0, yCoreMin);
+        g.addColorStop(0, opaque);
+        g.addColorStop(1, transparent);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, Math.max(0, yHardMin), w, Math.min(h, yCoreMin) - Math.max(0, yHardMin));
+    }
+
+    if (yHardMax > yCoreMax) {
+        const g = ctx.createLinearGradient(0, yCoreMax, 0, yHardMax);
+        g.addColorStop(0, transparent);
+        g.addColorStop(1, opaque);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, Math.max(0, yCoreMax), w, Math.min(h, yHardMax) - Math.max(0, yCoreMax));
+    }
+
+    if (yHardMax < h) {
+        ctx.fillStyle = opaque;
+        ctx.fillRect(0, Math.max(0, yHardMax), w, h - Math.max(0, yHardMax));
+    }
+
+    ctx.restore();
+}
+
 export function drawCanvas(canvas: EpochCanvas): void {
     const s = getDrawState(canvas);
     const ctx = s.ctx;
@@ -90,6 +176,22 @@ export function drawCanvas(canvas: EpochCanvas): void {
     const rect = s.root.getBoundingClientRect();
     const w = rect.width;
     const h = rect.height;
+    const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+    if (viewportHeight > 0) {
+        const nowToday = s.getToday();
+        s.offsetY = clampTimelineOffsetToBounds({
+            offsetY: s.offsetY,
+            scale: s.scale,
+            viewportHeight,
+            today: nowToday
+        });
+        s.targetOffsetY = clampTimelineOffsetToBounds({
+            offsetY: s.targetOffsetY,
+            scale: s.targetScale,
+            viewportHeight,
+            today: nowToday
+        });
+    }
     if (!w || !h) {
         s.pendingVisibilityDraw = true;
         s.scheduleVisibilityCheck();
@@ -293,6 +395,15 @@ export function drawCanvas(canvas: EpochCanvas): void {
     } catch {
         // ignore
     }
+
+    drawTimelineFadeMask({
+        s,
+        ctx,
+        w,
+        h,
+        backgroundColor: colSummaryHoverBg,
+        today
+    });
 
     try {
         const pending = (canvas as any)?.pendingActiveFileFocus as { path: string; line: number | null } | null | undefined;

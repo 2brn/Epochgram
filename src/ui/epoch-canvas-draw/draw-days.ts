@@ -19,6 +19,7 @@ import { computePackedEpochDayCenterY } from "./draw-days/packing";
 import { computeRenderIndicesAndEntries } from "./draw-days-entries";
 import { computeDenseState } from "./draw-days-dense";
 import { drawDayLayouts } from "./draw-days-render";
+import { getTimelineViewportBounds } from "../epoch-canvas/viewport-limits";
 
 export function drawVisibleDays(params: {
     canvas: EpochCanvas;
@@ -141,8 +142,11 @@ export function drawVisibleDays(params: {
 
     const minScreenY = -VERTICAL_PADDING;
     const maxScreenY = h + VERTICAL_PADDING;
-    const minIndex = Math.floor((minScreenY - s.offsetY) / (BASE_SPACING * s.scale));
-    const maxIndex = Math.ceil((maxScreenY - s.offsetY) / (BASE_SPACING * s.scale));
+    const requestedMinIndex = Math.floor((minScreenY - s.offsetY) / (BASE_SPACING * s.scale));
+    const requestedMaxIndex = Math.ceil((maxScreenY - s.offsetY) / (BASE_SPACING * s.scale));
+    const viewportBounds = getTimelineViewportBounds(today);
+    const minIndex = Math.max(viewportBounds.hardMinIndex, requestedMinIndex);
+    const maxIndex = Math.min(viewportBounds.hardMaxIndex, requestedMaxIndex);
 
 	const { renderIndices, entriesByIndex, prevEntriesByIndex, totalVisibleEntries } = computeRenderIndicesAndEntries({
 		canvas,

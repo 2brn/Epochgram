@@ -23,6 +23,16 @@ import {
 	resolveDraggableAnchorEntry,
 	updateAnchorEntryDrag
 } from "./anchor-dnd";
+import { clampTimelineOffsetToBounds, resolveViewportHeight } from "../epoch-canvas/viewport-limits";
+
+function resolveToday(state: any): Date {
+	try {
+		if (typeof state?.getToday === "function") return state.getToday();
+	} catch {
+		// ignore
+	}
+	return new Date();
+}
 
 function suppressIncidentalHoverAfterTouch(state: any, durationMs: number = 450): void {
 	try {
@@ -506,6 +516,15 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 		s.touchMoved = true;
 		s.scale = newScale;
 		s.offsetY = midY - s.pinchAnchorWorldY * s.scale;
+		const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+		if (viewportHeight > 0) {
+			s.offsetY = clampTimelineOffsetToBounds({
+				offsetY: s.offsetY,
+				scale: s.scale,
+				viewportHeight,
+				today: resolveToday(s)
+			});
+		}
 		s.draw();
 		return;
 	}
@@ -656,6 +675,15 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 		s.viewInteractionUntil = perfNow + 140;
 		const dyPan = touch.clientY - s.touchStartY;
 		s.offsetY = s.touchStartOffsetY + dyPan;
+		const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+		if (viewportHeight > 0) {
+			s.offsetY = clampTimelineOffsetToBounds({
+				offsetY: s.offsetY,
+				scale: s.scale,
+				viewportHeight,
+				today: resolveToday(s)
+			});
+		}
 
 		const now = performance.now();
 		const dt = now - s.lastPanTime;

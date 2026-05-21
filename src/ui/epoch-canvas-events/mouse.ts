@@ -3,6 +3,16 @@ import { resetScrollNavTargetState } from "../epoch-canvas/scroll-nav-reset";
 import { getEventState, isViewMotionActive, isWheelInteractionSuppressed, stopViewMotion } from "./state";
 import { beginAnchorEntryDrag, commitAnchorEntryDrag, resolveDraggableAnchorEntry, updateAnchorEntryDrag } from "./anchor-dnd";
 import { setCssStyles } from "../../dom";
+import { clampTimelineOffsetToBounds, resolveViewportHeight } from "../epoch-canvas/viewport-limits";
+
+function resolveToday(state: any): Date {
+	try {
+		if (typeof state?.getToday === "function") return state.getToday();
+	} catch {
+		// ignore
+	}
+	return new Date();
+}
 
 export function handleMouseDown(canvas: EpochCanvas, event: MouseEvent): void {
 	const s = getEventState(canvas);
@@ -159,6 +169,15 @@ export function handleMouseMove(canvas: EpochCanvas, event: MouseEvent): void {
 	const now = performance.now();
 	const dy = event.clientY - s.dragStartY;
 	s.offsetY = s.dragStartOffsetY + dy;
+	const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+	if (viewportHeight > 0) {
+		s.offsetY = clampTimelineOffsetToBounds({
+			offsetY: s.offsetY,
+			scale: s.scale,
+			viewportHeight,
+			today: resolveToday(s)
+		});
+	}
 	if (dy !== 0) {
 		try {
 			setCssStyles(s.canvas, { cursor: "grabbing" });

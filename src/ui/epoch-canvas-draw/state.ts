@@ -9,6 +9,8 @@ export interface CanvasDrawState {
     root: HTMLElement;
     scale: number;
     offsetY: number;
+    targetScale: number;
+    targetOffsetY: number;
     index: Record<string, DateEntry[]>;
     layouts: DayLayout[];
     lastVisibleEntryCount: number | null;

@@ -6,12 +6,23 @@ import {
 	MAX_SCALE,
 	ZOOM_INTENSITY
 } from "../epoch-canvas-constants";
+import { clampTimelineOffsetToBounds, resolveViewportHeight } from "../epoch-canvas/viewport-limits";
 import { dateKeyToDate, getDayIndexForDate } from "../epoch-canvas-focus";
 import { resetScrollNavTargetState } from "../epoch-canvas/scroll-nav-reset";
 import { getEventState, type CanvasEventInternals } from "./state";
 
 type ShiftZoomAnchorLock =
 	| { kind: "date"; dayIndex: number; screenY: number };
+
+function resolveToday(state: CanvasEventInternals): Date | null {
+	try {
+		const fn = (state as any)?.getToday;
+		if (typeof fn === "function") return fn.call(state);
+	} catch {
+		// ignore
+	}
+	return null;
+}
 
 function resolveCurrentScrollNavDayIndex(canvas: EpochCanvas): number | null {
 	const c: any = canvas as any;
@@ -176,7 +187,20 @@ function applyWheelPan(s: CanvasEventInternals, delta: number): void {
 		(s as any).animatingWheelPan === true && Number.isFinite(s.targetOffsetY)
 			? s.targetOffsetY
 			: s.offsetY;
-	s.targetOffsetY = base - delta;
+	const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+	const nextTargetOffset = base - delta;
+	const today = resolveToday(s);
+	s.targetOffsetY = viewportHeight > 0
+		? clampTimelineOffsetToBounds({
+			offsetY: nextTargetOffset,
+			scale: s.scale,
+			viewportHeight,
+			today: today ?? new Date()
+		})
+		: nextTargetOffset;
+	if (!today) {
+		s.targetOffsetY = nextTargetOffset;
+	}
 	s.targetScale = s.scale;
 	(s as any).animatingWheelPan = true;
 }
@@ -214,6 +238,16 @@ function applyWheelZoomAnimated(
 
 	const worldY = (anchorY - baseOffsetY) / baseScale;
 	const nextOffsetY = anchorY - worldY * nextScale;
+	const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+	const today = resolveToday(s);
+	const clampedOffsetY = viewportHeight > 0
+		? clampTimelineOffsetToBounds({
+			offsetY: nextOffsetY,
+			scale: nextScale,
+			viewportHeight,
+			today: today ?? new Date()
+		})
+		: nextOffsetY;
 
 	// Cancel other view motion modes; wheel zoom owns scale/offset while active.
 	s.animatingView = false;
@@ -224,7 +258,7 @@ function applyWheelZoomAnimated(
 	(s as any).wheelZoomAnchorWorldY = worldY;
 
 	s.targetScale = nextScale;
-	s.targetOffsetY = nextOffsetY;
+	s.targetOffsetY = today ? clampedOffsetY : nextOffsetY;
 }
 
 export function handleWheel(canvas: EpochCanvas, event: WheelEvent): void {
@@ -306,6 +340,19 @@ export function handleWheel(canvas: EpochCanvas, event: WheelEvent): void {
 			const worldY = (anchorY - s.offsetY) / prevScale;
 			s.scale = newScale;
 			s.offsetY = anchorY - worldY * s.scale;
+			const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+			if (viewportHeight > 0) {
+				const today = resolveToday(s);
+				s.offsetY = clampTimelineOffsetToBounds({
+					offsetY: s.offsetY,
+					scale: s.scale,
+					viewportHeight,
+					today: today ?? new Date()
+				});
+				if (!today) {
+					s.offsetY = anchorY - worldY * s.scale;
+				}
+			}
 
 			// Shift+zoom is expected to keep the hovered item pinned, even if the layout changes
 			// due to hover suppression, dense/compact transitions, or packing rules.
@@ -316,6 +363,15 @@ export function handleWheel(canvas: EpochCanvas, event: WheelEvent): void {
 					const newCenterY = shiftLock.dayIndex * BASE_SPACING * s.scale + s.offsetY;
 					if (newCenterY != null && Number.isFinite(newCenterY)) {
 						s.offsetY += shiftLock.screenY - newCenterY;
+						if (viewportHeight > 0) {
+							const today = resolveToday(s);
+							s.offsetY = clampTimelineOffsetToBounds({
+								offsetY: s.offsetY,
+								scale: s.scale,
+								viewportHeight,
+								today: today ?? new Date()
+							});
+						}
 					}
 				} catch {
 					// ignore

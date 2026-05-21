@@ -6,6 +6,7 @@ import {
 	INERTIA_MIN_VELOCITY,
 	SUMMARY_MIN_SCALE
 } from "./epoch-canvas-constants";
+import { clampTimelineOffsetToBounds, resolveViewportHeight } from "./epoch-canvas/viewport-limits";
 
 const DENSE_INSTANT_HOVER_SCALE_THRESHOLD = 0.85;
 
@@ -333,6 +334,32 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 		if (Math.abs(s.velocityY) < inertia.minVel) {
 			s.velocityY = 0;
 		}
+	}
+
+	try {
+		const anyCanvas: any = canvas as any;
+		const viewportHeight = resolveViewportHeight(anyCanvas?.root, Number(anyCanvas?.__lastKnownCanvasCssHeight ?? 0));
+		if (viewportHeight > 0) {
+			const today = typeof anyCanvas?.getToday === "function" ? anyCanvas.getToday() : new Date();
+			const prevOffset = s.offsetY;
+			s.offsetY = clampTimelineOffsetToBounds({
+				offsetY: s.offsetY,
+				scale: s.scale,
+				viewportHeight,
+				today
+			});
+			s.targetOffsetY = clampTimelineOffsetToBounds({
+				offsetY: s.targetOffsetY,
+				scale: s.targetScale,
+				viewportHeight,
+				today
+			});
+			if (s.offsetY !== prevOffset) {
+				s.velocityY = 0;
+			}
+		}
+	} catch {
+		// ignore
 	}
 
 	if (dt > 0 && (s as any).animatingWheelPan) {

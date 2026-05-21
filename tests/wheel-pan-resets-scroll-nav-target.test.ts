@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
 import { handleWheel } from "../src/ui/epoch-canvas-events/wheel";
+import { clampTimelineOffsetToBounds } from "../src/ui/epoch-canvas/viewport-limits";
 
 describe("wheel pan resets scroll-nav target", () => {
 	test("wheel direction change interrupts in-flight wheel pan", () => {
@@ -22,6 +23,7 @@ describe("wheel pan resets scroll-nav target", () => {
 			keepHoverUntilPointerMove: false,
 			canvas: { getBoundingClientRect: () => ({ top: 0, height: 800 }) },
 			root: { getBoundingClientRect: () => ({ height: 800 }) },
+			getToday: () => new Date(2026, 4, 21),
 			layouts: [],
 			clearHover: vi.fn(),
 			draw,
@@ -43,7 +45,14 @@ describe("wheel pan resets scroll-nav target", () => {
 			shiftKey: false
 		} as any);
 
-		expect(canvas.targetOffsetY).toBe(120);
+		expect(canvas.targetOffsetY).toBe(
+			clampTimelineOffsetToBounds({
+				offsetY: 120,
+				scale: 1,
+				viewportHeight: 800,
+				today: new Date(2026, 4, 21)
+			})
+		);
 		expect(canvas.animatingWheelPan).toBe(true);
 		expect(canvas.offsetY).toBe(0);
 	});
@@ -67,6 +76,7 @@ describe("wheel pan resets scroll-nav target", () => {
 			keepHoverUntilPointerMove: false,
 			canvas: { getBoundingClientRect: () => ({ top: 0, height: 800 }) },
 			root: { getBoundingClientRect: () => ({ height: 800 }) },
+			getToday: () => new Date(2026, 4, 21),
 			layouts: [],
 			clearHover: vi.fn(),
 			draw,
@@ -89,7 +99,14 @@ describe("wheel pan resets scroll-nav target", () => {
 		expect(canvas.scrollNavAnchorEntry).toBe(null);
 		expect(canvas.scrollNavAnchorDayIndex).toBe(null);
 		expect(canvas.pendingScrollNavHighlight).toBe(null);
-		expect(canvas.targetOffsetY).toBe(10 - 120);
+		expect(canvas.targetOffsetY).toBe(
+			clampTimelineOffsetToBounds({
+				offsetY: 10 - 120,
+				scale: 1,
+				viewportHeight: 800,
+				today: new Date(2026, 4, 21)
+			})
+		);
 		expect(canvas.offsetY).toBe(10);
 		expect(canvas.animatingWheelPan).toBe(true);
 		expect(canvas.animatingView).toBeFalsy();

@@ -181,9 +181,9 @@ async function rebuildSemanticVectorsWithProgress(plugin: EpochPlugin): Promise<
 			shouldAllowSimilarityProgressNotice(plugin, "similarityRebuildStartedAt")
 		) {
 			if (Platform.isDesktopApp) {
-				setEpochProgress(plugin, "semanticBuild", `Semantics build… ${processed}/${total}`);
+				setEpochProgress(plugin, "semanticBuild", `Semantics… ${processed}/${total}`);
 			} else {
-				new Notice(`Semantics build… ${processed}/${total}`, 900);
+				new Notice(`Semantics… ${processed}/${total}`, 900);
 			}
 		}
 		const elapsedSinceWrite = now() - lastWriteAt;
