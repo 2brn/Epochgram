@@ -46,7 +46,7 @@ export function isTrackChangesEffective(plugin: EpochPlugin): boolean {
 
 export function isSummarizeAIEffective(plugin: EpochPlugin): boolean {
 	const settings: any = plugin.settings;
-	return hasSummarizeAIAccess(plugin) && (settings?.summarizeAI === true || settings?.summarizeAi === true);
+	return hasSummarizeAIAccess(plugin) && settings?.summarizeAI === true;
 }
 
 export function isGenerateEpochsEffective(plugin: EpochPlugin): boolean {

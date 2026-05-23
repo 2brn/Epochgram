@@ -25,7 +25,6 @@ export function renderAiContextTemplate(
 	}
 
 	const out = tpl
-		.replace(/\{\{(context|jobContext)\}\}/g, "")
 		.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in dict ? dict[k] : m));
 
 	return out;

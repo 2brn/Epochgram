@@ -304,7 +304,7 @@ function getSearchHaystackForEntry(canvas: EpochCanvas, entry: DateEntry): strin
 						tagsOut.push(t);
 					}
 
-					const fmAliases = fm?.aliases ?? fm?.alias ?? (fm ? (fm as any)["Aliases"] : undefined);
+					const fmAliases = fm?.aliases;
 					if (typeof fmAliases === "string") {
 						const s = fmAliases.trim();
 						if (s.includes(",") || s.includes(";") ) {

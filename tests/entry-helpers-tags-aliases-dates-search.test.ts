@@ -83,6 +83,38 @@ describe("timeline search haystack includes tags, aliases, and dates", () => {
 		expect(entries.map((e: any) => e.file)).toEqual(["note.md"]);
 	});
 
+	it("matches frontmatter aliases only from the canonical aliases key", () => {
+		const dateKey = "2026-02-18";
+		const index: any = {
+			[dateKey]: [
+				{ date: dateKey, file: "note.md", source: "cdate", summary: "", blockStart: 0, blockEnd: 0 }
+			]
+		};
+		const canvas = makeCanvasBase(index, { searchQuery: "canonical alias" });
+		canvas.plugin.app.metadataCache.getFileCache = () => ({
+			frontmatter: { aliases: ["Canonical Alias"], alias: ["Legacy Alias"] },
+			tags: []
+		});
+		const entries = getEntriesForDate(canvas as any, new Date(2026, 1, 18));
+		expect(entries.map((e: any) => e.file)).toEqual(["note.md"]);
+	});
+
+	it("does not match legacy singular frontmatter alias keys", () => {
+		const dateKey = "2026-02-18";
+		const index: any = {
+			[dateKey]: [
+				{ date: dateKey, file: "note.md", source: "cdate", summary: "", blockStart: 0, blockEnd: 0 }
+			]
+		};
+		const canvas = makeCanvasBase(index, { searchQuery: "legacy alias" });
+		canvas.plugin.app.metadataCache.getFileCache = () => ({
+			frontmatter: { alias: ["Legacy Alias"] },
+			tags: []
+		});
+		const entries = getEntriesForDate(canvas as any, new Date(2026, 1, 18));
+		expect(entries).toEqual([]);
+	});
+
 	it("matches by full file text content (MiniSearch)", () => {
 		const dateKey = "2026-02-18";
 		const index: any = {

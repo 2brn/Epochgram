@@ -197,7 +197,6 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 				related
 			};
 		return tpl
-			.replace(/\{\{(context|jobContext)\}\}/g, "")
 			.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in dict ? dict[k] : m));
 	}
 

@@ -285,7 +285,7 @@ Epoch (period) generation input (Verified)
   - Reduce follow-ups are capped by bridge YAML `reduce.maxDepth` (default `4`) to bound queue fanout.
   - Epoch chunk sizing shares the same bridge YAML `reduce.maxChunkChars` value used by per-note reduce jobs.
   - Epoch jobs can now attach semantic-related note summaries in `job.related`; the same root `maxRelatedChars` cap applies to both per-note jobs and epoch jobs.
-  - Any epoch bucket can respect a matching epoch-rule `maxFileChars` cap from bridge YAML when the selected `epochs[]` rule sets it (default built-in config sets `625` on the `3month-year` rule).
+  - Any epoch bucket can respect a matching epoch-rule `maxFileChars` cap from bridge YAML when the selected `epochs[]` rule sets it (default built-in config sets `625` on the `3months-year` rule).
 - Day epoch AI inputs are derived from both:
   - the aggregated index (`indexer.index` date keys/entries), and
   - the per-file extracted dates (`indexer.files` cdate/namedDate/dateProp/contentDates/trackedDates)
@@ -337,6 +337,7 @@ AI bridge startup behavior (Verified)
   - Summary jobs: `{{filePath}}`, `{{fileName}}`, `{{related}}`.
   - Epoch jobs (including reduce stages): `{{related}}`.
 - Context placeholders support double-brace syntax only (for example `{{filePath}}`); single-brace placeholders like `{filePath}` are rejected by YAML validation.
+- Legacy placeholders `{{context}}` and `{{jobContext}}` are not supported.
 - `{{bucket}}` is not supported and is rejected by YAML validation.
 - `sharedContext` is passed to `Summarizer.create(...)`, while per-job `context` is passed to `summarize(..., { context })`.
 - “Reset to defaults” restores the built-in bridge YAML from `src/plugin/ai-bridge-page/settings/default-bridge-settings.yaml`.

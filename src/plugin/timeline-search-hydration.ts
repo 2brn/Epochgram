@@ -135,7 +135,7 @@ export function hydrateTimelineSearchIndexFromLoadedState(plugin: EpochPlugin): 
 							if (tag) metaParts.push(tag)
 						}
 						const fm: any = cache?.frontmatter
-						for (const a of coerceStringArray(fm?.aliases ?? fm?.alias)) {
+						for (const a of coerceStringArray(fm?.aliases)) {
 							metaParts.push(`alias:${a}`)
 						}
 						for (const tok of frontmatterToIndexTokens(fm)) metaParts.push(tok)

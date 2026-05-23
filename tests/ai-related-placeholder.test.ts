@@ -25,4 +25,11 @@ describe("AI context templates", () => {
 		expect(DEFAULT_EPOCH_CONTEXT_TEMPLATE.includes("Related context:"))
 			.toBe(true);
 	});
+
+	it("does not special-case legacy placeholders at render time", () => {
+		const out = renderAiContextTemplate("{{context}} :: {{jobContext}} :: {{filePath}}", {
+			filePath: "note.md"
+		});
+		expect(out).toBe("{{context}} :: {{jobContext}} :: note.md");
+	});
 });

@@ -59,7 +59,7 @@ describe("maintenance rebuild ordering", () => {
 			},
 			settings: {
 				enableAi: true,
-				summarizeAi: true,
+				summarizeAI: true,
 				generateEpochs: true,
 				enableSimilaritySearch: false,
 				enableTopics: false,
@@ -112,7 +112,7 @@ describe("maintenance rebuild ordering", () => {
 			},
 			settings: {
 				enableAi: true,
-				summarizeAi: true,
+				summarizeAI: true,
 				generateEpochs: true,
 				enableSimilaritySearch: false,
 				enableTopics: false,

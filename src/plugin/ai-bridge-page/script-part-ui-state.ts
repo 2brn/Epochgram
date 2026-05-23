@@ -167,10 +167,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 	}
 
 	function normalizeEpochBucket(raw) {
-		const v = String(raw || "").trim().toLowerCase();
-		if (v === "3month") return "3months";
-		if (v === "6month") return "6months";
-		return v;
+		return String(raw || "").trim().toLowerCase();
 	}
 
 	function normalizeSummarizerType(raw) {
@@ -258,7 +255,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 			const d = Number(job && job.reduceDepth != null ? job.reduceDepth : 0);
 			contextTemplate = contextTemplate.replace(/\{\{reduceDepth\}\}/g, String(Number.isFinite(d) ? d : 0));
 		} else if (isEpoch) {
-			const bucket = normalizeEpochBucket(job && (job.epochBucket || job.bucket));
+			const bucket = normalizeEpochBucket(job && job.epochBucket);
 			const rules = Array.isArray(root.epochs) ? root.epochs : [];
 			for (const r of rules) {
 				if (!r || typeof r !== "object") continue;

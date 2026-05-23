@@ -20,7 +20,7 @@ describe("AI bridge sanitizeBridgeOptions", () => {
 			"  maxChunkChars: 987",
 			"  maxOutputWords: 18",
 			"epochs:",
-			"  - period: 3month-year",
+			"  - period: 3months-year",
 			"    maxFileChars: 4321",
 			"    maxOutputWords: 9"
 		].join("\n"));
@@ -48,7 +48,7 @@ describe("AI bridge sanitizeBridgeOptions", () => {
 			"  maxChunkChars: -2",
 			"  maxOutputWords: -1",
 			"epochs:",
-			"  - period: 3month-year",
+			"  - period: 3months-year",
 			"    maxFileChars: 0",
 			"    maxOutputWords: nope"
 		].join("\n"));
@@ -112,14 +112,14 @@ describe("AI bridge sanitizeBridgeOptions", () => {
 		expect(checked.errors.some((e) => e.includes("overlaps"))).toBe(true);
 	});
 
-	it("normalizes period aliases", () => {
+	it("rejects legacy singular period aliases", () => {
 		const checked = validateBridgeOptionsYaml([
 			"epochs:",
 			"  - period: 6month-year",
 			"    context: long period"
 		].join("\n"));
-		expect(checked.valid).toBe(true);
-		expect(checked.resolved.epochs[0]?.period).toBe("6months-year");
+		expect(checked.valid).toBe(false);
+		expect(checked.errors.some((e) => e.includes("epochs[0].period is invalid"))).toBe(true);
 	});
 
 	it("auto-format output is generated for valid YAML", () => {

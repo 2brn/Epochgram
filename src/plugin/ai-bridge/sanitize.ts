@@ -34,14 +34,11 @@ const SUPPORTED_LANGUAGES = new Set(["en", "ja", "es"]);
 const PERIOD_ALIASES: Record<string, (typeof PERIOD_ORDER)[number]> = {
 	day: "day",
 	"2days": "2days",
-	"4day": "4days",
 	"4days": "4days",
 	week: "week",
 	"2weeks": "2weeks",
 	month: "month",
-	"3month": "3months",
 	"3months": "3months",
-	"6month": "6months",
 	"6months": "6months",
 	year: "year"
 };
