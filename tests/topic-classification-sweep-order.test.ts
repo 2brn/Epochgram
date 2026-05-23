@@ -16,6 +16,7 @@ vi.mock("../src/plugin/similarity-term-store", () => {
 
 vi.mock("../src/plugin/similarity/topic", () => {
 	return {
+		getEmbeddingTermForPath: vi.fn(() => ""),
 		getTermVocabulary: vi.fn(() => ({ terms: ["foo"], sig: "v1" }))
 	};
 });
@@ -27,6 +28,7 @@ vi.mock("../src/plugin/similarity/worker-factory", () => {
 });
 
 import { methodsTopic } from "../src/plugin/similarity/methods-topic";
+import { getEmbeddingTermForPath } from "../src/plugin/similarity/topic";
 
 describe("topics: missing classification sweep order", () => {
 	beforeEach(() => {
@@ -70,5 +72,42 @@ describe("topics: missing classification sweep order", () => {
 		await vi.runAllTimersAsync();
 
 		expect(queued).toEqual(["c.md", "b.md", "a.md"]);
+	});
+
+	it("skips files with explicit topics", async () => {
+		const queued: string[] = [];
+		const files = [
+			{ path: "a.md", stat: { mtime: 1 } },
+			{ path: "c.md", stat: { mtime: 3 } },
+			{ path: "b.md", stat: { mtime: 2 } }
+		];
+
+		vi.mocked(getEmbeddingTermForPath).mockImplementation((_plugin: any, path: string) => {
+			return path === "b.md" ? "topic" : "";
+		});
+
+		const plugin: any = {
+			hasProAccess: () => true,
+			app: {
+				vault: {
+					getMarkdownFiles: () => files as any
+				}
+			},
+			shouldIndexFile: () => true
+		};
+		withTrustedPro(plugin);
+
+		plugin.queueTermSimilarityUpdate = (p: string) => {
+			queued.push(p);
+			if (!(plugin.termSimilarityPendingFiles instanceof Set)) {
+				plugin.termSimilarityPendingFiles = new Set<string>();
+			}
+			plugin.termSimilarityPendingFiles.add(p);
+		};
+
+		methodsTopic.scheduleMissingTopicClassificationSweep.call(plugin, "topic-vocab");
+		await vi.runAllTimersAsync();
+
+		expect(queued).toEqual(["c.md", "a.md"]);
 	});
 });

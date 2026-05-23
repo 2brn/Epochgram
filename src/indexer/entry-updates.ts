@@ -1,8 +1,5 @@
 import { MAX_MARK_COLORS } from "../ui/mark-colors";
 import type { DateEntry, FileIndexData, FileReviewState } from "./types";
-import { canonicalizeTopicTerm, isNoTopicSentinel, computeAiSummaryInputHash } from "../utils";
-import { readTermStore, writeTermStore } from "../plugin/similarity-term-store";
-import { getTermVocabulary } from "../plugin/similarity/topic";
 import {
 	applyHighlightState,
 	entryEffectiveDate,
@@ -10,64 +7,6 @@ import {
 	gatherFileEntries,
 	trackedEntryKey
 } from "./entry-state";
-
-async function syncExplicitTopicToTermStore(plugin: any, filePath: string, nextTermRaw: string): Promise<void> {
-	try {
-		if (!plugin?.hasProAccess?.()) return;
-	} catch {
-		return;
-	}
-	const p = String(filePath || "");
-	if (!p) return;
-
-	const nextTerm = canonicalizeTopicTerm(String(nextTermRaw ?? "").trim());
-	const shouldDelete = !nextTerm || isNoTopicSentinel(nextTerm);
-
-	try {
-		await plugin?.ensureTermSimilarityStoreLoaded?.();
-	} catch {
-		// ignore
-	}
-
-	let store;
-	try {
-		store = await readTermStore(plugin);
-	} catch {
-		return;
-	}
-
-	if (shouldDelete) {
-		if (store.files && store.files[p]) {
-			delete store.files[p];
-			try {
-				await writeTermStore(plugin, store);
-			} catch {
-				// ignore
-			}
-		}
-		return;
-	}
-
-	let vocabSig = "";
-	try {
-		vocabSig = String(getTermVocabulary(plugin).sig || "");
-	} catch {
-		vocabSig = "";
-	}
-	const h = computeAiSummaryInputHash(p, "topic:explicit", nextTerm, 250);
-	store.files[p] = {
-		term: nextTerm,
-		score: 1,
-		h,
-		vocabularySig: vocabSig,
-		updatedAt: Date.now()
-	};
-	try {
-		await writeTermStore(plugin, store);
-	} catch {
-		// ignore
-	}
-}
 
 interface EntryUpdatesState {
 	files: Record<string, FileIndexData>;
@@ -761,11 +700,6 @@ export function setFileEmbeddingTerm(indexer: any, path: string, term: string): 
 	}
 	try {
 		s.updateAggregatedEntries(normalizedPath);
-	} catch {
-		// ignore
-	}
-	try {
-		void syncExplicitTopicToTermStore(s.plugin, normalizedPath, normalized);
 	} catch {
 		// ignore
 	}

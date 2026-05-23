@@ -2,7 +2,7 @@ import type { EpochPlugin } from "../../main";
 import type { SimilarityMethods } from "./api-types";
 import { isSimilarityEnabled, isTopicSimilarityEnabled } from "./config";
 import { now } from "./time";
-import { getTermVocabulary } from "./topic";
+import { getEmbeddingTermForPath, getTermVocabulary } from "./topic";
 import { sortFilesNewestRecordFirst } from "./files";
 import { scheduleProcessPendingTermSimilarityQueue, ensureTermStoreExistsSoon } from "./topic-queue";
 import { readTermStore, writeTermStore } from "../similarity-term-store";
@@ -68,6 +68,12 @@ export const methodsTopic: Pick<
 						const mdFiles = sortFilesNewestRecordFirst(this, all.filter((f) => this.shouldIndexFile(f)));
 						let enq = 0;
 						for (const f of mdFiles) {
+							try {
+								const explicit = getEmbeddingTermForPath(this, f.path);
+								if (explicit) continue;
+							} catch {
+								// ignore
+							}
 							const rec: any = (store.files as any)?.[f.path];
 							const termOk = typeof rec?.term === "string" && rec.term.trim().length > 0;
 							const hashOk = typeof rec?.h === "string" && rec.h.trim().length > 0;
