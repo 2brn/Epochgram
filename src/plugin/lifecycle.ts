@@ -93,10 +93,9 @@ export const lifecycleMethods: LifecycleMethods = {
 		const timelineDefaults = DEFAULT_SETTINGS.timelineFilters ?? {};
 		const rawTimelineFilters = this.settings.timelineFilters ?? {};
 		const mergedTimelineFilters: any = Object.assign({}, timelineDefaults, rawTimelineFilters);
-		const showDraftsOnly = mergedTimelineFilters.showDraftsOnly === true;
+		const showDraftsOnly = false;
 		const showParsed = mergedTimelineFilters.showParsed !== false;
 		const normalizedTimelineFilters: any = {
-			showDraftsOnly,
 			showAttachments: mergedTimelineFilters.showAttachments === true,
 			showTrackedChanges: mergedTimelineFilters.showTrackedChanges !== false,
 			showParsed

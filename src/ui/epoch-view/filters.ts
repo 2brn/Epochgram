@@ -19,13 +19,11 @@ function persistTimelineFilterPatch(view: any, patch: Record<string, any>): void
 		const current: any = settings?.timelineFilters;
 		const baseRaw = current && typeof current === "object" ? current : {};
 		const base: any = {
-			showDraftsOnly: baseRaw.showDraftsOnly === true,
 			showAttachments: baseRaw.showAttachments === true,
 			showTrackedChanges: baseRaw.showTrackedChanges !== false,
 			showParsed: baseRaw.showParsed !== false
 		};
 		const allowed: any = {};
-		if (Object.prototype.hasOwnProperty.call(patch, "showDraftsOnly")) allowed.showDraftsOnly = patch.showDraftsOnly;
 		if (Object.prototype.hasOwnProperty.call(patch, "showAttachments")) allowed.showAttachments = patch.showAttachments;
 		if (Object.prototype.hasOwnProperty.call(patch, "showTrackedChanges")) allowed.showTrackedChanges = patch.showTrackedChanges;
 		if (Object.prototype.hasOwnProperty.call(patch, "showParsed")) allowed.showParsed = patch.showParsed;
@@ -256,7 +254,6 @@ export function epochViewSetReviewFilterMode(view: any, mode: "reviewed+draft" |
 	if (view.plugin?.viewPreferences) {
 		view.plugin.viewPreferences.showDraftsOnly = view.reviewFilterMode === "draft";
 	}
-	persistTimelineFilterPatch(view, { showDraftsOnly: view.reviewFilterMode === "draft" });
 	epochViewUpdateFilterButtons(view);
 }
 

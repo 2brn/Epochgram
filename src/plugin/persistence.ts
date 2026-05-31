@@ -119,6 +119,12 @@ export const persistenceMethods: PersistenceMethods = {
 
 		writeLocalActivationState(this, this.settings);
 		const syncedSettings = stripLocalActivationState(this.settings);
+		const timelineFiltersRaw = (syncedSettings as any).timelineFilters;
+		if (timelineFiltersRaw && typeof timelineFiltersRaw === "object") {
+			const timelineFilters = { ...(timelineFiltersRaw as Record<string, unknown>) };
+			delete (timelineFilters as any).showDraftsOnly;
+			(syncedSettings as any).timelineFilters = timelineFilters;
+		}
 		const payload = {
 			settings: (() => {
 				return { ...syncedSettings };

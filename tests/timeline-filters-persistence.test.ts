@@ -49,17 +49,17 @@ function createView(overrides: Record<string, any> = {}): any {
 }
 
 describe("timeline filters persistence", () => {
-	it("persists supported filters into settings.timelineFilters", () => {
+	it("persists non-drafts filters into settings.timelineFilters", () => {
 		const view = createView({ showAttachments: false, showTrackedChanges: false });
 
 		epochViewSetReviewFilterMode(view, "draft");
 		epochViewSetShowAttachments(view, true);
 		epochViewSetShowTrackedChanges(view, true);
 
-		expect(view.plugin.settings.timelineFilters.showDraftsOnly).toBe(true);
+		expect(view.plugin.settings.timelineFilters.showDraftsOnly).toBeUndefined();
 		expect(view.plugin.settings.timelineFilters.showAttachments).toBe(true);
 		expect(view.plugin.settings.timelineFilters.showTrackedChanges).toBe(true);
-		expect(view.plugin.saveSettings).toHaveBeenCalled();
+		expect(view.plugin.saveSettings).toHaveBeenCalledTimes(2);
 	});
 
 	it("does not persist session-only filters (epochs view)", () => {

@@ -98,9 +98,6 @@ Per-file UI-facing state includes:
 
 ## View Preferences (Verified)
 Persisted (stored in `settings.timelineFilters`):
-- `showDraftsOnly: boolean`
-  - `false`: show Draft + Reviewed (exclude Hidden)
-  - `true`: show Draft only
 - `showAttachments` (controls visibility of non-Markdown files; all files other than `.md` are treated as attachments for timeline filtering)
 - `showTrackedChanges`
 - `showParsed: boolean`
@@ -108,6 +105,9 @@ Persisted (stored in `settings.timelineFilters`):
   - `true`: show parsed content-derived dates
 
 Session-only (not persisted):
+- `showDraftsOnly: boolean`
+  - `false`: show Draft + Reviewed (exclude Hidden)
+  - `true`: show Draft only
 - `showEpochsView` (epochs view toggle)
 
 Epoch range focus (Verified)

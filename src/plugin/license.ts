@@ -187,7 +187,7 @@ function clearStoredActivationKeepClaimKeyPreview(plugin: EpochPlugin, status: s
 
 function restoreEffectiveProViewPreferences(plugin: EpochPlugin): void {
 	const timelineDefaults = plugin.settings.timelineFilters ?? {};
-	const showDraftsOnly = timelineDefaults.showDraftsOnly === true;
+	const showDraftsOnly = false;
 	if (plugin.viewPreferences) {
 		plugin.viewPreferences.showDraftsOnly = showDraftsOnly;
 		plugin.viewPreferences.showTrackedChanges = timelineDefaults.showTrackedChanges !== false;
