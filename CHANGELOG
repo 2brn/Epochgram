@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.4.16] - 2026-05-31
+- Drafts filter state: session-only (no persistence in data.json).
+
 ## [1.4.15] - 2026-05-24
 - Remove legacy compatibility shims; enforce canonical alias handling in search/bridge flows.
 - Stop mirroring explicit topics to `epochgram-topics.json`.
