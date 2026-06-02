@@ -29,6 +29,7 @@ type FakePlugin = {
 		version: string;
 	};
 	__epochSettingTab?: { display: () => void };
+	maybeOpenAiBridgeOnStartup: () => Promise<void>;
 	settings: AnySettings;
 	viewPreferences: {
 		reviewFilterMode: "reviewed+draft" | "draft" | "all";
@@ -130,6 +131,7 @@ function createFakePlugin(settingsOverrides: AnySettings = {}, preferenceOverrid
 		onSettingsChanged: vi.fn(async () => {}),
 		registerFileEvents: vi.fn(),
 		refreshEpochViews: vi.fn(),
+		maybeOpenAiBridgeOnStartup: vi.fn(async () => {}),
 		disableProViewPreferences: function () {
 			return licenseMethods.disableProViewPreferences.call(this as any);
 		},
@@ -406,6 +408,40 @@ describe("license: signed activation certificates", () => {
 
 		expect(plugin.proActive).toBe(true);
 		expect(display).toHaveBeenCalled();
+	});
+
+	it("re-runs AI bridge startup after Pro activation when AI is enabled", async () => {
+		const plugin = createFakePlugin({ summarizeAI: true });
+
+		await activatePlugin(plugin);
+
+		expect(plugin.proActive).toBe(true);
+		expect(plugin.maybeOpenAiBridgeOnStartup).toHaveBeenCalledTimes(1);
+	});
+
+	it("re-runs AI bridge startup after successful startup validation when AI is enabled", async () => {
+		const plugin = createFakePlugin({ summarizeAI: false });
+		plugin.manifest.version = "0.4.2-test";
+		await activatePlugin(plugin);
+
+		plugin.settings.summarizeAI = true;
+		plugin.manifest.version = "0.4.3-test";
+		await plugin.refreshLicenseState();
+		expect(plugin.proActive).toBe(false);
+
+		vi.mocked(plugin.maybeOpenAiBridgeOnStartup).mockClear();
+		setRequestUrlHandler(async (request) => {
+			const body = JSON.parse(String(request.body ?? "{}"));
+			return mockResponse(200, {
+				valid: true,
+				certificate: buildResponseEnvelope(body)
+			});
+		});
+
+		await plugin.validateStoredActivationToken({ source: "startup" });
+
+		expect(plugin.proActive).toBe(true);
+		expect(plugin.maybeOpenAiBridgeOnStartup).toHaveBeenCalledTimes(1);
 	});
 
 	it("rejects refreshed certificates that do not bind the issued challenge", async () => {

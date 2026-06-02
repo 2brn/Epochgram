@@ -522,6 +522,7 @@ export const licenseMethods: LicenseMethods = {
 			deactivateProRuntimeState(this);
 		}
 
+		const proActivated = !prevPro && this.proActive;
 		const changed = dirty || this.proActive !== prevPro || this.licenseHolder !== prevHolder;
 		if (changed) {
 			try {
@@ -544,6 +545,13 @@ export const licenseMethods: LicenseMethods = {
 			void (this as any).refreshAiBridgeStatusBar?.();
 		} catch {
 			// ignore
+		}
+		if (proActivated) {
+			try {
+				void (this as any).maybeOpenAiBridgeOnStartup?.();
+			} catch {
+				// ignore
+			}
 		}
 		if (saveIfChanged && changed) {
 			await this.saveSettings();
