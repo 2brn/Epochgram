@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.4.17] - 2026-06-02
+- Fix: AI bridge auto-start after Pro activation/validation when AI features are enabled.
+
 ## [1.4.16] - 2026-05-31
 - Drafts filter state: session-only (no persistence in data.json).
 
