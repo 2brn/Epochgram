@@ -50,7 +50,7 @@ function drawTodayDistanceIndicator(params: {
 
     const ctx = s.ctx;
     ctx.save();
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.7;
     ctx.strokeStyle = colToday;
     ctx.lineWidth = 2;
 
