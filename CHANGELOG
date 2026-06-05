@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.4.18] - 2026-06-05
+- Increased today distance indicator opacity for improved timeline visibility.
+
 ## [1.4.17] - 2026-06-02
 - Fix: AI bridge auto-start after Pro activation/validation when AI features are enabled.
 
