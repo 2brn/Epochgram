@@ -746,7 +746,7 @@ export const licenseMethods: LicenseMethods = {
 					data.trackedBaselineDate = today;
 					touched++;
 					if (touched % 25 === 0) {
-						await new Promise((r) => setTimeout(r, 0));
+						await new Promise((r) => window.setTimeout(r, 0));
 					}
 				}
 				if (touched > 0) {

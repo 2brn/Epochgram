@@ -46,7 +46,7 @@ async function preflightFullRebuild(plugin: EpochPlugin): Promise<void> {
 		// so users don't see both "Updating" and "Building" notices for the same action.
 		try {
 			if (anyPlugin.similarityQueueTimer) {
-				clearTimeout(anyPlugin.similarityQueueTimer);
+					window.clearTimeout(anyPlugin.similarityQueueTimer);
 				anyPlugin.similarityQueueTimer = null;
 			}
 			anyPlugin.similarityPendingFiles = new Set<string>();

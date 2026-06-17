@@ -299,7 +299,7 @@ export const indexingMethods: IndexingMethods = {
 			try {
 				// Give Obsidian a moment to finish writing the file on startup/mobile.
 				const delayMs = Platform.isMobileApp ? 350 : 75;
-				await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+				await new Promise<void>((resolve) => window.setTimeout(resolve, delayMs));
 
 				await this.ensureIndexLoaded();
 				await this.waitForExcludedSync();

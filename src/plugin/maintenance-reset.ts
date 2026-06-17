@@ -133,7 +133,7 @@ async function postBridgeClearQueue(url: string): Promise<void> {
 				return;
 			}
 			const httpModule = (globalThis as any).__epochNodeHttpModule ?? "node:http";
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			// eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require allows runtime selection of http module for testing
 			const http = require(httpModule) as typeof import("http");
 			const req = http.request(
 				{
@@ -248,7 +248,7 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 					delete anyPlugin.__epochDidSimilarityStartupMaintenance;
 					try {
 						if (anyPlugin.__epochHugeSimilarityBackfillTimer != null) {
-							clearTimeout(anyPlugin.__epochHugeSimilarityBackfillTimer);
+						window.clearTimeout(anyPlugin.__epochHugeSimilarityBackfillTimer);
 							anyPlugin.__epochHugeSimilarityBackfillTimer = null;
 						}
 					} catch {
@@ -270,7 +270,7 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 				anyPlugin.similarityVectorsLoaded = true;
 				try {
 					if (anyPlugin.similarityQueueTimer) {
-						clearTimeout(anyPlugin.similarityQueueTimer);
+						window.clearTimeout(anyPlugin.similarityQueueTimer);
 						anyPlugin.similarityQueueTimer = null;
 					}
 					anyPlugin.similarityPendingFiles = new Set<string>();
@@ -321,7 +321,7 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 					delete anyPlugin.__epochDidSimilarityStartupMaintenance;
 					try {
 						if (anyPlugin.__epochHugeSimilarityBackfillTimer != null) {
-							clearTimeout(anyPlugin.__epochHugeSimilarityBackfillTimer);
+							window.clearTimeout(anyPlugin.__epochHugeSimilarityBackfillTimer);
 							anyPlugin.__epochHugeSimilarityBackfillTimer = null;
 						}
 					} catch {

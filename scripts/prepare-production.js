@@ -139,14 +139,6 @@ function isDirectory(p) {
 }
 
 function findDefaultVaultPluginsDirs(repoRoot) {
-	// Note: These are default vault folder names for local development/testing.
-	const expectedRels = [
-		path.join("AKUPARA", ".obsidian", "plugins"),
-		path.join("nicolevanderhoeven_202204", ".obsidian", "plugins"),
-		path.join("Timestripe", ".obsidian", "plugins"),
-		path.join("epoch-demo-vault", ".obsidian", "plugins")
-	];
-
 	const found = [];
 	const seen = new Set();
 	const addIfDir = (candidate) => {
@@ -163,41 +155,11 @@ function findDefaultVaultPluginsDirs(repoRoot) {
 	const envOverride = normalizePath(process.env.EPOCHGRAM_OBSIDIAN_PLUGINS_DIR);
 	if (envOverride && isDirectory(envOverride)) return [envOverride];
 
-	// 2) A few common locations (prefer user vault locations)
-	const home = os.homedir();
-	const bases = [
-		path.join(home, "OneDrive", "Documents"),
-		path.join(home, "Documents"),
-		home,
-		path.join(home, "Desktop")
-	];
-	for (const base of bases) {
-		if (!base) continue;
-		for (const expectedRel of expectedRels) {
-			const candidate = path.join(base, expectedRel);
-			addIfDir(candidate);
-		}
-	}
-
-	// 3) Walk up from repo root (common when vault is sibling of repo folder)
-	let cur = repoRoot;
-	while (true) {
-		for (const expectedRel of expectedRels) {
-			const candidate = path.join(cur, expectedRel);
-			addIfDir(candidate);
-		}
-		const parent = path.dirname(cur);
-		if (parent === cur) break;
-		cur = parent;
-	}
-
-	// 4) Drive root (fallback)
-	const root = path.parse(repoRoot).root;
-	if (root) {
-		for (const expectedRel of expectedRels) {
-			const candidate = path.join(root, expectedRel);
-			addIfDir(candidate);
-		}
+	// 2) Check Docs/Obsidian/AKUPARA on all drives
+	const driveLetters = "CDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+	for (const letter of driveLetters) {
+		const candidate = path.join(`${letter}:\\`, "Docs", "Obsidian", "AKUPARA", ".obsidian", "plugins");
+		addIfDir(candidate);
 	}
 
 	return found;

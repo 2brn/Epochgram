@@ -561,7 +561,7 @@ export class EpochCanvas {
 
 	private requestHoverAnimation() {
 		if (this.animFrame != null) return;
-		this.animFrame = requestAnimationFrame(() => this.animate());
+		this.animFrame = window.requestAnimationFrame(() => this.animate());
 	}
 
 	private animate() {

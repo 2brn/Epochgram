@@ -177,7 +177,7 @@ export function renderProPanel(
 		};
 		const scheduleLicenseLayout = (): void => {
 			if (licenseLayoutFrame) cancelAnimationFrame(licenseLayoutFrame);
-			licenseLayoutFrame = requestAnimationFrame(() => {
+			licenseLayoutFrame = window.requestAnimationFrame(() => {
 				licenseLayoutFrame = 0;
 				updateLicenseLayout();
 			});

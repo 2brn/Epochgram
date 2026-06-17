@@ -299,7 +299,7 @@ export function updateHover(canvas: EpochCanvas, x: number, y: number): void {
 				try {
 					const prevTimer = Number((state as any).__hoverGraceTimerId);
 					if (Number.isFinite(prevTimer) && prevTimer > 0) {
-						clearTimeout(prevTimer);
+						window.clearTimeout(prevTimer);
 					}
 				} catch {
 					// ignore

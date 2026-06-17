@@ -48,7 +48,7 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 				// Backoff a bit to avoid hammering the API.
 				const delay = 500 * attempt;
 				try { setErrText((label ? (String(label) + ": ") : "") + "error; retrying (" + attempt + "/3)...\n\n" + msg); } catch {}
-				await new Promise(r => setTimeout(r, delay));
+				await new Promise(r => window.setTimeout(r, delay));
 			}
 		}
 		throw lastErr || new Error("Retry failed");
@@ -130,7 +130,7 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 					job = await get("nextJob");
           if (!job || !job.id) {
             curEl.textContent = "idle";
-            await new Promise(r => setTimeout(r, 500));
+            await new Promise(r => window.setTimeout(r, 500));
             continue;
           }
 
@@ -245,7 +245,7 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 				} else {
 				try { await post("submitResult", { id: null, error: details }); } catch {}
 				}
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => window.setTimeout(r, 1000));
         }
       }
     }

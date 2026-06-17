@@ -21,7 +21,7 @@ export function scheduleProcessPendingTermSimilarityQueue(plugin: EpochPlugin, d
 	if (anyPlugin.termSimilarityQueueTimer) return;
 	const MIN_DELAY_MS = 150;
 	const delay = Math.max(MIN_DELAY_MS, Math.floor(delayMs));
-	anyPlugin.termSimilarityQueueTimer = setTimeout(() => {
+	anyPlugin.termSimilarityQueueTimer = window.setTimeout(() => {
 		anyPlugin.termSimilarityQueueTimer = null;
 		void processPendingTermSimilarityQueue(plugin);
 	}, delay);
@@ -30,7 +30,7 @@ export function scheduleProcessPendingTermSimilarityQueue(plugin: EpochPlugin, d
 export function ensureTermStoreExistsSoon(plugin: EpochPlugin): void {
 	const anyPlugin: any = plugin as any;
 	if (anyPlugin.termSimilarityEnsureTimer) return;
-	anyPlugin.termSimilarityEnsureTimer = setTimeout(() => {
+	anyPlugin.termSimilarityEnsureTimer = window.setTimeout(() => {
 		anyPlugin.termSimilarityEnsureTimer = null;
 		void ensureTermStoreFileExists(plugin).catch(() => {
 			// ignore

@@ -92,7 +92,7 @@ export const methodsTopic: Pick<
 								// ignore
 							}
 							if (enq % 50 === 0) {
-								await new Promise((r) => setTimeout(r, 0));
+							await new Promise((r) => window.setTimeout(r, 0));
 							}
 						}
 					} catch {

@@ -198,7 +198,7 @@ export function requestCancelEpochTask(plugin: EpochPlugin, kind: EpochProgressK
 		if (kind === "semantic") {
 			try {
 				if (anyPlugin.similarityQueueTimer) {
-					clearTimeout(anyPlugin.similarityQueueTimer);
+				window.clearTimeout(anyPlugin.similarityQueueTimer);
 					anyPlugin.similarityQueueTimer = null;
 				}
 			} catch {
@@ -221,7 +221,7 @@ export function requestCancelEpochTask(plugin: EpochPlugin, kind: EpochProgressK
 		if (kind === "topics") {
 			try {
 				if (anyPlugin.termSimilarityQueueTimer) {
-					clearTimeout(anyPlugin.termSimilarityQueueTimer);
+				window.clearTimeout(anyPlugin.termSimilarityQueueTimer);
 					anyPlugin.termSimilarityQueueTimer = null;
 				}
 			} catch {

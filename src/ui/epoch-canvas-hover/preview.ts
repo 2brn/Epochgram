@@ -15,7 +15,7 @@ function stopScrollNavKeyHold(canvas: EpochCanvas): void {
 	const startHandle = s.__scrollNavKeyHoldStartHandle as number | null | undefined;
 	if (startHandle != null) {
 		try {
-			globalThis.clearTimeout(startHandle);
+			window.clearTimeout(startHandle);
 		} catch {
 			// ignore
 		}
@@ -60,7 +60,7 @@ function scheduleScrollNavKeyHoldStart(canvas: EpochCanvas, direction: number): 
 	if (existingStart != null) return;
 	try {
 		s.__scrollNavKeyHoldStartAt = performance.now();
-		s.__scrollNavKeyHoldStartHandle = globalThis.setTimeout(() => {
+		s.__scrollNavKeyHoldStartHandle = window.setTimeout(() => {
 			s.__scrollNavKeyHoldStartHandle = null;
 			const dir = Number((s as any).__scrollNavKeyHoldDirection);
 			if (!Number.isFinite(dir) || dir === 0) return;

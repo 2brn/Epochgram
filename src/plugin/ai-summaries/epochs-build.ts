@@ -397,7 +397,7 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 	const maybeYield = async () => {
 		const now = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
 		if (now - lastYieldAt >= 12) {
-			await new Promise((r) => setTimeout(r, 0));
+			await new Promise((r) => window.setTimeout(r, 0));
 			lastYieldAt = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
 		}
 	};

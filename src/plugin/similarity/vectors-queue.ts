@@ -17,7 +17,7 @@ export function scheduleProcessPendingQueue(plugin: EpochPlugin, delayMs: number
 	const anyPlugin: any = plugin as any;
 	if (anyPlugin.similarityQueueRunning) return;
 	if (anyPlugin.similarityQueueTimer) return;
-	anyPlugin.similarityQueueTimer = setTimeout(() => {
+	anyPlugin.similarityQueueTimer = window.setTimeout(() => {
 		anyPlugin.similarityQueueTimer = null;
 		void processPendingQueue(plugin);
 	}, Math.max(0, Math.floor(delayMs)));

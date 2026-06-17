@@ -477,10 +477,10 @@ function ensureAutoScrollLoop(canvas: EpochCanvas): void {
 			s.offsetY += delta * (dt / 16.6667);
 			s.draw();
 		}
-		s.entryDragAutoScrollRaf = requestAnimationFrame(step);
+		s.entryDragAutoScrollRaf = window.requestAnimationFrame(step);
 	};
 
-	s.entryDragAutoScrollRaf = requestAnimationFrame(step);
+	s.entryDragAutoScrollRaf = window.requestAnimationFrame(step);
 }
 
 export function beginAnchorEntryDrag(

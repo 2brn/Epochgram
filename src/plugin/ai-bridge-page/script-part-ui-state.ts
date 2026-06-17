@@ -459,7 +459,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 			} catch {}
 			// Abort this request if the page is closing.
 			try { linkAbort(PAGE_ABORT, ctrl); } catch {}
-			const timer = setTimeout(() => {
+			const timer = window.setTimeout(() => {
 				try { if (ctrl) ctrl.abort(); } catch {}
 			}, ms);
 			try {
@@ -473,7 +473,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 				}
 				throw e;
 			} finally {
-				clearTimeout(timer);
+				window.clearTimeout(timer);
 			}
 		}
 

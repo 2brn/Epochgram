@@ -98,7 +98,7 @@ export function hideDateOverlay(canvas: EpochCanvas, immediate: boolean = false)
 	if (shouldHideImmediately) {
 		el.classList.remove("is-visible");
 	} else {
-		requestAnimationFrame(() => el.classList.remove("is-visible"));
+		window.requestAnimationFrame(() => el.classList.remove("is-visible"));
 	}
 }
 

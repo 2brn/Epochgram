@@ -174,7 +174,7 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 		s.hoverTarget = 1;
 		s.requestHoverAnimation();
 
-		await new Promise(resolve => setTimeout(resolve, 120));
+		await new Promise(resolve => window.setTimeout(resolve, 120));
 		if (s.epochsView && isEpochEntry(best.entry)) {
 			await openEpochEntryTarget(canvas, best.entry, { ctrlKey: false, metaKey: false }, true);
 			if (s.isPointerDeviceEvent()) {
@@ -210,7 +210,7 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 			s.hoverTarget = 1;
 			s.requestHoverAnimation();
 
-			await new Promise(resolve => setTimeout(resolve, 120));
+			await new Promise(resolve => window.setTimeout(resolve, 120));
 			const today = s.getToday();
 			const date = s.getDateForIndex(day.index, today);
 			await s.openDateNote(date, undefined, true, { allowFallbackToFirstEntry: false });

@@ -241,7 +241,7 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 	};
 	view.registerEvent(view.app.workspace.on("css-change", refreshStyles));
 
-	requestAnimationFrame(() => {
+	window.requestAnimationFrame(() => {
 		let snapFile: TFile | null = null;
 		let cursorLine: number | null = null;
 		try {
@@ -312,7 +312,7 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 		view.updateActiveFile();
 		// Reconcile one frame later: some startup layouts settle after the first
 		// snap, which can produce a slight offset compared to manual ribbon open.
-		requestAnimationFrame(() => {
+		window.requestAnimationFrame(() => {
 			try {
 				if (!view.canvas) return;
 				if (Platform.isMobileApp && view.startupDeferredSnapPath) return;

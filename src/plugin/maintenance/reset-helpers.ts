@@ -123,7 +123,7 @@ export function clearTopicRuntimeState(plugin: EpochPlugin): void {
 	}
 	try {
 		const t = anyPlugin?.__epochTopicClassificationSweepTimer;
-		if (t != null) clearTimeout(t);
+	if (t != null) window.clearTimeout(t);
 	} catch {
 		// ignore
 	}
@@ -134,13 +134,13 @@ export function clearTopicRuntimeState(plugin: EpochPlugin): void {
 	}
 	try {
 		const t = anyPlugin?.termSimilarityQueueTimer;
-		if (t) clearTimeout(t);
+	if (t) window.clearTimeout(t);
 	} catch {
 		// ignore
 	}
 	try {
 		const t = anyPlugin?.termSimilarityEnsureTimer;
-		if (t) clearTimeout(t);
+	if (t) window.clearTimeout(t);
 	} catch {
 		// ignore
 	}
@@ -174,7 +174,7 @@ export function clearSemanticRuntimeState(plugin: EpochPlugin): void {
 	}
 	try {
 		const t = anyPlugin?.similarityQueueTimer;
-		if (t) clearTimeout(t);
+	if (t) window.clearTimeout(t);
 	} catch {
 		// ignore
 	}

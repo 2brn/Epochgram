@@ -88,7 +88,7 @@ export class AiBridgeServer {
 		};
 		this.plugin.settings.aiBridgeServer = payload;
 		if (this.serverPersistTimer) {
-			clearTimeout(this.serverPersistTimer);
+			window.clearTimeout(this.serverPersistTimer);
 			this.serverPersistTimer = null;
 		}
 		try {
@@ -188,7 +188,7 @@ export class AiBridgeServer {
 			   (this.plugin as any).onAiBridgeOptionsChanged?.(prev, next);
 		   } catch {}
 		if (this.optionsPersistTimer) {
-			clearTimeout(this.optionsPersistTimer);
+			window.clearTimeout(this.optionsPersistTimer);
 			this.optionsPersistTimer = null;
 		}
 		this.optionsPersistTimer = setTimeout(() => {
@@ -409,7 +409,7 @@ export class AiBridgeServer {
 			throw new Error("AI Bridge server is only available on desktop");
 		}
 		const httpModule = (globalThis as any).__epochNodeHttpModule ?? "node:http";
-		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require allows runtime selection of http module for testing
 		const http = require(httpModule) as typeof import("http");
 
 		this.server = http.createServer((req: any, res: any) => {
@@ -706,7 +706,7 @@ export class AiBridgeServer {
 
 		let bound: number | null = null;
 		if (this.preferredPort != null) {
-			const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+			const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 			const preferred = this.preferredPort;
 			let lastErr: any = null;
 			for (let attempt = 0; attempt < 12; attempt++) {
@@ -766,11 +766,11 @@ export class AiBridgeServer {
 			// ignore
 		}
 		if (this.optionsPersistTimer) {
-			clearTimeout(this.optionsPersistTimer);
+			window.clearTimeout(this.optionsPersistTimer);
 			this.optionsPersistTimer = null;
 		}
 		if (this.serverPersistTimer) {
-			clearTimeout(this.serverPersistTimer);
+			window.clearTimeout(this.serverPersistTimer);
 			this.serverPersistTimer = null;
 		}
 	}

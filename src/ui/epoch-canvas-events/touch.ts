@@ -85,7 +85,7 @@ function clearPendingDateTapOpen(s: any): void {
 	try {
 		const id = Number((s as any).__touchPendingDateTapTimeoutId);
 		if (Number.isFinite(id) && id > 0) {
-			clearTimeout(id);
+			window.clearTimeout(id);
 		}
 	} catch {
 		// ignore
@@ -119,7 +119,7 @@ function scheduleDeferredDateTapOpen(canvas: EpochCanvas, s: any, x: number, y: 
 	}
 
 	try {
-		(s as any).__touchPendingDateTapTimeoutId = setTimeout(() => {
+		(s as any).__touchPendingDateTapTimeoutId = window.setTimeout(() => {
 			try {
 				const st: any = getEventState(canvas) as any;
 				if (Number(st.__touchPendingDateTapToken) !== token) return;
@@ -202,7 +202,7 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 	try {
 		const prev = Number((s as any).__touchHoverDelayTimerId);
 		if (Number.isFinite(prev) && prev > 0) {
-			clearTimeout(prev);
+			window.clearTimeout(prev);
 		}
 	} catch {
 		// ignore
@@ -226,7 +226,7 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 
 	if (event.touches.length > 1) {
 		if (s.touchLongPressTimeout != null) {
-			clearTimeout(s.touchLongPressTimeout);
+			window.clearTimeout(s.touchLongPressTimeout);
 			s.touchLongPressTimeout = null;
 		}
 	}
@@ -251,7 +251,7 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 		s.velocityY = 0;
 
 		if (s.touchLongPressTimeout != null) {
-			clearTimeout(s.touchLongPressTimeout);
+			window.clearTimeout(s.touchLongPressTimeout);
 		}
 		const rect0 = s.canvas.getBoundingClientRect();
 		const x0 = s.touchStartX - rect0.left;
@@ -293,7 +293,7 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 				const token = (Number((s as any).__touchHoverDelayToken) || 0) + 1;
 				(s as any).__touchHoverDelayToken = token;
 				const HOVER_DELAY_MS = 50;
-				(s as any).__touchHoverDelayTimerId = setTimeout(() => {
+				(s as any).__touchHoverDelayTimerId = window.setTimeout(() => {
 					try {
 						const st: any = getEventState(canvas) as any;
 						if (Number(st.__touchHoverDelayToken) !== token) return;
@@ -332,7 +332,7 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 				? LONG_PRESS_MS
 				: LONG_PRESS_TOGGLE_VIEW_MS;
 
-		s.touchLongPressTimeout = setTimeout(() => {
+		s.touchLongPressTimeout = window.setTimeout(() => {
 			try {
 				const st: any = getEventState(canvas) as any;
 				const consumeToken = Number((st as any).__touchConsumeActionsToken ?? 0) || 0;
@@ -436,7 +436,7 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 		}, longPressDelay) as unknown as number;
 	} else if (event.touches.length === 2) {
 		if (s.touchLongPressTimeout != null) {
-			clearTimeout(s.touchLongPressTimeout);
+			window.window.clearTimeout(s.touchLongPressTimeout);
 			s.touchLongPressTimeout = null;
 		}
 
@@ -470,7 +470,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 		// Two-finger gestures are always high-frequency and should engage perf gating.
 		s.viewInteractionUntil = perfNow + 140;
 		if (s.touchLongPressTimeout != null) {
-			clearTimeout(s.touchLongPressTimeout);
+			window.clearTimeout(s.touchLongPressTimeout);
 			s.touchLongPressTimeout = null;
 		}
 		const t1 = event.touches.item(0);
@@ -547,7 +547,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 				s.touchMoved = true;
 				s.dragSource = null;
 				if (s.touchLongPressTimeout != null) {
-					clearTimeout(s.touchLongPressTimeout);
+					window.window.clearTimeout(s.touchLongPressTimeout);
 					s.touchLongPressTimeout = null;
 				}
 				stopViewMotion(s);
@@ -567,7 +567,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 	}
 	if (s.touchMode === "entrydrag" || (s as any).entryDragActive) {
 		if (s.touchLongPressTimeout != null) {
-			clearTimeout(s.touchLongPressTimeout);
+			window.clearTimeout(s.touchLongPressTimeout);
 			s.touchLongPressTimeout = null;
 		}
 		updateAnchorEntryDrag(canvas, touch.clientX, touch.clientY);
@@ -581,7 +581,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 			const distVal = Math.hypot(dx, dy);
 			if (distVal > 12) {
 				if (s.touchLongPressTimeout != null) {
-					clearTimeout(s.touchLongPressTimeout);
+					window.clearTimeout(s.touchLongPressTimeout);
 					s.touchLongPressTimeout = null;
 				}
 				try {
@@ -637,7 +637,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 			(s as any).__touchHoverDelayCancelled = true;
 			const t = Number((s as any).__touchHoverDelayTimerId);
 			if (Number.isFinite(t) && t > 0) {
-				clearTimeout(t);
+				window.clearTimeout(t);
 			}
 		} catch {
 			// ignore
@@ -645,7 +645,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 		(s as any).__touchHoverDelayTimerId = null;
 		resetScrollNavTargetState(canvas);
 		if (s.touchLongPressTimeout != null) {
-			clearTimeout(s.touchLongPressTimeout);
+			window.clearTimeout(s.touchLongPressTimeout);
 			s.touchLongPressTimeout = null;
 		}
 		// Once the finger moves beyond the tap threshold, treat this as a pan.
@@ -729,7 +729,7 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 		// ignore
 	}
 	if (s.touchLongPressTimeout != null) {
-		clearTimeout(s.touchLongPressTimeout);
+		window.clearTimeout(s.touchLongPressTimeout);
 		s.touchLongPressTimeout = null;
 	}
 	try {
@@ -1006,7 +1006,7 @@ export function handleTouchCancel(canvas: EpochCanvas, event: TouchEvent): void 
 		// ignore
 	}
 	if (s.touchLongPressTimeout != null) {
-		clearTimeout(s.touchLongPressTimeout);
+		window.clearTimeout(s.touchLongPressTimeout);
 		s.touchLongPressTimeout = null;
 	}
 	try {
