@@ -1,5 +1,8 @@
 import { App, Modal, Setting } from "obsidian";
 
+const activeDocument = window.document;
+
+
 export type MaintenanceChoice = {
 	key: string;
 	label: string;
@@ -55,7 +58,7 @@ class MaintenanceModal extends Modal {
 		resolve: (value: Record<string, boolean> | null) => void
 	) {
 		super(app);
-		this.priorActiveElement = (typeof document !== "undefined" ? (document.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
 		this.titleText = options.title;
 		this.descriptionText = options.description ?? "";
 		this.confirmText = options.confirmText;
@@ -240,7 +243,7 @@ class MaintenanceModal extends Modal {
 				} catch {
 					try {
 						el.focus();
-					} catch {}
+					} catch { void 0; }
 				}
 			});
 		}

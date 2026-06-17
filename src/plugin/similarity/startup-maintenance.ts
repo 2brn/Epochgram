@@ -22,15 +22,15 @@ function scheduleHugeVaultSimilarityBackfill(plugin: EpochPlugin, delayMs: numbe
 	const anyPlugin: any = plugin as any;
 	try {
 		if (anyPlugin.__epochHugeSimilarityBackfillTimer != null) return;
-	} catch {}
+	} catch { void 0; }
 	try {
-		anyPlugin.__epochHugeSimilarityBackfillTimer = setTimeout(() => {
+		anyPlugin.__epochHugeSimilarityBackfillTimer = window.setTimeout(() => {
 			try {
 				anyPlugin.__epochHugeSimilarityBackfillTimer = null;
-			} catch {}
+			} catch { void 0; }
 			void runHugeVaultSimilarityBackfillTick(plugin);
 		}, Math.max(0, Math.floor(delayMs)));
-	} catch {}
+	} catch { void 0; }
 }
 
 async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<void> {
@@ -38,7 +38,7 @@ async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<
 	try {
 		if (anyPlugin.__epochHugeSimilarityBackfillRunning) return;
 		anyPlugin.__epochHugeSimilarityBackfillRunning = true;
-	} catch {}
+	} catch { void 0; }
 	try {
 		try {
 				if (!hasSimilarityAccess(plugin)) return;
@@ -114,10 +114,10 @@ async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<
 			const ext = getLowerFileExtension(f);
 			try {
 				if (!plugin.shouldIndexFile(f)) continue;
-			} catch {}
+			} catch { void 0; }
 			try {
 				if (!isLikelyTextFileExtension(ext)) continue;
-			} catch {}
+			} catch { void 0; }
 
 			if (!vectorsQueuedAll && vectorsEnabled) {
 				try {
@@ -128,14 +128,14 @@ async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<
 					if (!(hasHash && hasVector)) {
 						(plugin as any).queueVectorUpdate?.(p);
 					}
-				} catch {}
+				} catch { void 0; }
 			}
 
 			if (topicsEnabled && enqTopics < MAX_ENQUEUE_TOPICS_PER_TICK && ext === "md") {
 				try {
 					const explicit = String(getEmbeddingTermForPath(plugin, p) || "").trim();
 					if (explicit) continue;
-				} catch {}
+				} catch { void 0; }
 				try {
 					if (!vocab) vocab = getTermVocabulary(plugin);
 					if (!vocab.terms || vocab.terms.length === 0) {
@@ -150,7 +150,7 @@ async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<
 						(plugin as any).queueTermSimilarityUpdate?.(p);
 						enqTopics++;
 					}
-				} catch {}
+				} catch { void 0; }
 			}
 
 			if ((nextIndex + 1) % 50 === 0) {
@@ -181,7 +181,7 @@ async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<
 	} finally {
 		try {
 			anyPlugin.__epochHugeSimilarityBackfillRunning = false;
-		} catch {}
+		} catch { void 0; }
 	}
 }
 
@@ -189,7 +189,7 @@ export async function runSimilarityStartupMaintenance(plugin: EpochPlugin): Prom
 	const anyPlugin: any = plugin as any;
 	try {
 		if (anyPlugin.__epochDidSimilarityStartupMaintenance === true) return;
-	} catch {}
+	} catch { void 0; }
 
 	try {
 		if (!hasSimilarityAccess(plugin)) return;
@@ -199,7 +199,7 @@ export async function runSimilarityStartupMaintenance(plugin: EpochPlugin): Prom
 
 	try {
 		anyPlugin.__epochDidSimilarityStartupMaintenance = true;
-	} catch {}
+	} catch { void 0; }
 
 	// Give Obsidian time to settle; avoid doing vault-wide scans during startup.
 	// In tests, do not delay.
@@ -273,18 +273,18 @@ export async function runSimilarityStartupMaintenance(plugin: EpochPlugin): Prom
 		if (Platform.isDesktopApp) {
 			(plugin as any).ensureTermSimilarityStoreLoaded?.();
 		}
-	} catch {}
+	} catch { void 0; }
 	try {
 		const anyPlugin2: any = plugin as any;
 		anyPlugin2.__epochHugeSimilarityBackfillFiles = files;
 		anyPlugin2.__epochHugeSimilarityBackfillIndex = 0;
-	} catch {}
+	} catch { void 0; }
 	if (isHuge && vectorsEnabled && !topicsEnabled) {
 		try {
 			const anyPlugin2: any = plugin as any;
 			anyPlugin2.__epochHugeSimilarityBackfillFiles = null;
 			anyPlugin2.__epochHugeSimilarityBackfillIndex = 0;
-		} catch {}
+		} catch { void 0; }
 		return;
 	}
 	scheduleHugeVaultSimilarityBackfill(plugin, isTestEnv ? 0 : Platform.isMobileApp ? 2000 : 0);

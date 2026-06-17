@@ -43,13 +43,13 @@ export async function ensureTermStoreFileExists(plugin: EpochPlugin): Promise<vo
 			await plugin.app.vault.adapter.write(p, JSON.stringify(emptyTopicsStore(plugin)));
 			try {
 				await (plugin as any).updateTermSimilarityFileStat?.();
-			} catch {}
+			} catch { void 0; }
 			return;
 		}
 		try {
 			await (plugin as any).updateTermSimilarityFileStat?.();
-		} catch {}
-	} catch {}
+		} catch { void 0; }
+	} catch { void 0; }
 }
 
 export async function readTermStore(plugin: EpochPlugin): Promise<TermClassificationStore> {
@@ -102,9 +102,9 @@ export async function writeTermStore(plugin: EpochPlugin, store: TermClassificat
 		try {
 			const anyPlugin: any = plugin as any;
 			anyPlugin.termSimilarityStoreRev = (typeof anyPlugin.termSimilarityStoreRev === "number" ? anyPlugin.termSimilarityStoreRev : 0) + 1;
-		} catch {}
+		} catch { void 0; }
 		try {
 			(plugin as any).scheduleInheritedMarkRecompute?.("termSimilarity");
-		} catch {}
-	} catch {}
+		} catch { void 0; }
+	} catch { void 0; }
 }

@@ -180,8 +180,7 @@ export const persistenceMethods: PersistenceMethods = {
 				await this.app.vault.adapter.mkdir(this.pluginDirPath);
 			}
 			this.pluginDirEnsured = true;
-		} catch {
-		}
+		} catch { void 0; }
 	},
 
 	computeDataSignature(_data: unknown): string | null {

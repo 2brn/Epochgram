@@ -1,5 +1,8 @@
 import { MarkdownView, Notice, type App } from "obsidian";
 
+const activeDocument = window.document;
+
+
 function formatErrorForNotice(err: unknown): string {
 	try {
 		if (err instanceof Error) {
@@ -57,8 +60,8 @@ export function isUserEditingMarkdown(app: App): boolean {
 		if (editor && typeof editor.hasFocus === "function" && editor.hasFocus()) return true;
 
 		// Fallback: check DOM focus within the markdown editor.
-		if (typeof document === "undefined") return false;
-		const activeEl = document.activeElement as HTMLElement | null;
+		if (typeof activeDocument === "undefined") return false;
+		const activeEl = activeDocument.activeElement as HTMLElement | null;
 		if (!activeEl) return false;
 		const contentEl: HTMLElement | null = ((view as any).contentEl as HTMLElement) ?? ((view as any).containerEl as HTMLElement) ?? null;
 		if (!contentEl || !contentEl.contains(activeEl)) return false;

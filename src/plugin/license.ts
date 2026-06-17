@@ -83,21 +83,17 @@ function normalizeText(value: unknown): string {
 }
 
 function getPlatformLabel(): string {
+	if (Platform.isMobileApp) {
+		const mobileOs = String((window as any)?.process?.platform ?? "").trim().toLowerCase();
+		if (mobileOs === "darwin") return "iOS";
+		if (mobileOs === "android") return "Android";
+		return "Mobile";
+	}
 	try {
-		const p = String((globalThis as any)?.process?.platform ?? "").trim().toLowerCase();
+		const p = String((window as any)?.process?.platform ?? "").trim().toLowerCase();
 		if (p === "win32") return "Windows";
 		if (p === "darwin") return "macOS";
 		if (p === "linux") return "Linux";
-	} catch {
-		// ignore
-	}
-	try {
-		const ua = String(globalThis.navigator?.userAgent ?? "");
-		if (/Windows/i.test(ua)) return "Windows";
-		if (/Mac OS X|Macintosh/i.test(ua)) return "macOS";
-		if (/Android/i.test(ua)) return "Android";
-		if (/iPhone|iPad|iPod/i.test(ua)) return "iOS";
-		if (/Linux/i.test(ua)) return "Linux";
 	} catch {
 		// ignore
 	}
@@ -604,15 +600,13 @@ export const licenseMethods: LicenseMethods = {
 				const anyThis: any = this as any;
 				if (anyThis.__epochProStartupValidationFailureNoticeShown) return;
 				anyThis.__epochProStartupValidationFailureNoticeShown = true;
-			} catch {
-			}
+			} catch { void 0; }
 			try {
 				new Notice(
 					"Epochgram Pro: couldn't validate license on startup. Pro stays locked until validation succeeds.",
 					8000
 				);
-			} catch {
-			}
+			} catch { void 0; }
 		};
 
 		const anyThis: any = this as any;
@@ -624,7 +618,7 @@ export const licenseMethods: LicenseMethods = {
 			const nowText = new Date().toISOString();
 			const installId = ensureInstallId(this);
 			const { publicKey } = await ensureDeviceProofMaterial(this);
-			const challenge = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+			const challenge = window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 			const challengePayload = buildChallengePayload(this, challenge, installId, publicKey);
 			try {
 				setActivationMetadata(this, { status: PRO_STATUS_VALIDATING, error: "" });

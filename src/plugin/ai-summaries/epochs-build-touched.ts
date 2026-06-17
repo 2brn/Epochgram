@@ -370,8 +370,7 @@ export async function buildEpochJobsForDateKeys(
 			for (const list of Object.values(tracked)) {
 				for (const e of Array.isArray(list) ? list : []) recordEntry(e);
 			}
-		} catch {
-		}
+		} catch { void 0; }
 	}
 	for (const k of Object.keys(index)) {
 		if (isDateKey(k)) dateKeySet.add(k);

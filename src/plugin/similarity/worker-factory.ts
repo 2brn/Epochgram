@@ -168,7 +168,7 @@ function createWorkerMaybeModule(WorkerCtor: any, url: string): Worker | null {
 
 function tryCreateWorkerFromFactory(factory: any): Worker | null {
 	if (!factory) return null;
-	const WorkerCtor: any = (globalThis as any)?.Worker ?? (globalThis as any)?.window?.Worker;
+	const WorkerCtor: any = (window as any)?.Worker ?? (window as any)?.window?.Worker;
 	if (isWorkerLike(factory)) return factory as any;
 	if (typeof factory === "string" && WorkerCtor) {
 		return createWorkerMaybeModule(WorkerCtor, factory);
@@ -199,7 +199,7 @@ function tryCreateWorkerFromFactory(factory: any): Worker | null {
 export function getSimilarityWorker(plugin: EpochPlugin): Worker | null {
 	const anyPlugin: any = plugin as any;
 	if (anyPlugin.similarityWorkerDisabled === true) return null;
-	const WorkerCtor: any = (globalThis as any)?.Worker ?? (globalThis as any)?.window?.Worker;
+	const WorkerCtor: any = (window as any)?.Worker ?? (window as any)?.window?.Worker;
 	if (!WorkerCtor) {
 		anyPlugin.similarityWorkerLastCreateError = "Worker is undefined";
 		return null;
@@ -210,7 +210,7 @@ export function getSimilarityWorker(plugin: EpochPlugin): Worker | null {
 	if (w) return w;
 	try {
 		const factory: any = SimilarityEmbedWorker as any;
-		const g: any = globalThis as any;
+		const g: any = window as any;
 		const originalWorker = g?.Worker;
 		let spoofedWorker = false;
 		let wrappedWorker = false;
@@ -310,7 +310,7 @@ export function getSimilarityWorker(plugin: EpochPlugin): Worker | null {
 					for (const [, entry] of pending) {
 						try {
 							entry.reject(new Error("Worker crashed"));
-						} catch {}
+						} catch { void 0; }
 					}
 					pending.clear();
 				}

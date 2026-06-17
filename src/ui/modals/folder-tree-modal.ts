@@ -1,5 +1,8 @@
 import { App, SuggestModal, TFolder, normalizePath } from "obsidian";
 
+const activeDocument = window.document;
+
+
 export class FolderTreeModal extends SuggestModal<TFolder> {
 	private resolveChoice: (folder: TFolder | null) => void;
 	private initialFolder: TFolder | null;
@@ -10,7 +13,7 @@ export class FolderTreeModal extends SuggestModal<TFolder> {
 
 	constructor(app: App, initial: TFolder | null, resolve: (folder: TFolder | null) => void) {
 		super(app);
-		this.priorActiveElement = (typeof document !== "undefined" ? (document.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
 		this.resolveChoice = resolve;
 		this.initialFolder = initial ?? app.vault.getRoot();
 		this.folders = this.collectFolders();
@@ -76,7 +79,7 @@ export class FolderTreeModal extends SuggestModal<TFolder> {
 				} catch {
 					try {
 						el.focus();
-					} catch {}
+					} catch { void 0; }
 				}
 			}
 			if (this.resolved) return;

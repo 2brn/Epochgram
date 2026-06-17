@@ -354,7 +354,7 @@ export const indexingMethods: IndexingMethods = {
 							const anyThis: any = this as any;
 							if (anyThis.__timelineSearchAutoRebuildScheduled !== true && Platform.isDesktopApp) {
 								anyThis.__timelineSearchAutoRebuildScheduled = true;
-								(globalThis as any).setTimeout?.(() => {
+								(window as any).setTimeout?.(() => {
 									try {
 										void (this as any).rebuildTimelineSearchIndex?.();
 									} catch {

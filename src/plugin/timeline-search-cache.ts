@@ -261,7 +261,7 @@ export function scheduleTimelineSearchCacheSave(plugin: EpochPlugin, delayMs = 1
 		const prior = anyPlugin.__timelineSearchCacheSaveTimer as any
 		if (prior != null) {
 			try {
-				;(globalThis as any).clearTimeout?.(prior)
+				;(window as any).clearTimeout?.(prior)
 			} catch {
 				// ignore
 			}
@@ -276,7 +276,7 @@ export function scheduleTimelineSearchCacheSave(plugin: EpochPlugin, delayMs = 1
 			// ignore
 		}
 
-		anyPlugin.__timelineSearchCacheSaveTimer = (globalThis as any).setTimeout?.(() => {
+		anyPlugin.__timelineSearchCacheSaveTimer = (window as any).setTimeout?.(() => {
 			try {
 				anyPlugin.__timelineSearchCacheSaveTimer = null
 			} catch {
@@ -319,7 +319,7 @@ export async function deleteTimelineSearchCache(plugin: EpochPlugin): Promise<vo
 			const t: any = anyPlugin.__timelineSearchCacheSaveTimer
 			if (t != null) {
 				try {
-					;(globalThis as any).clearTimeout?.(t)
+					;(window as any).clearTimeout?.(t)
 				} catch {
 					// ignore
 				}

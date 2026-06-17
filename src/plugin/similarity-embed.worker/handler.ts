@@ -2,7 +2,7 @@ import type { WorkerRequest, WorkerResponse } from "./types";
 import { embedPooled, ensureEmbedder, ensureZeroShotClassifier, zeroShotScoreBatch, zeroShotScoreLabels } from "./models";
 import { primeOrtWasmFromBuffers } from "./wasm";
 
-const workerCtx: any = typeof self !== "undefined" ? (self as any) : (globalThis as any);
+const workerCtx: any = typeof self !== "undefined" ? (self as any) : (self as any);
 
 function post(msg: WorkerResponse): void {
 	if (typeof workerCtx?.postMessage === "function") {

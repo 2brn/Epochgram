@@ -56,7 +56,7 @@ type LocalActivationPayload = {
 };
 
 function getStorage(): StorageLike | null {
-	const storage = (globalThis as any)?.localStorage;
+	const storage = (window as any)?.localStorage;
 	if (!storage) return null;
 	if (typeof storage.getItem !== "function") return null;
 	if (typeof storage.setItem !== "function") return null;

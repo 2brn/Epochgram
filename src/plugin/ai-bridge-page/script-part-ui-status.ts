@@ -24,7 +24,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 		setStatusBackground(mode);
 		try {
 			if (downloadBtn) downloadBtn.style.display = (mode === "downloadable") ? "inline-block" : "none";
-		} catch {}
+		} catch { void 0; }
 		if (mode === "unknown") {
 			statusEl.textContent = "Checking…";
 			return;
@@ -339,15 +339,15 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 					s = await get("status");
 				} catch (e) {
 					const msg = String(e && e.message ? e.message : e);
-					try { setErrText(msg); } catch {}
+					try { setErrText(msg); } catch { void 0; }
 					running = false;
 					statusFreshForPerf = false;
-					try { handleBridgeDisconnected(msg); } catch {}
+					try { handleBridgeDisconnected(msg); } catch { void 0; }
 					return;
 				}
 				lastStatus = s;
 				statusFreshForPerf = true;
-				try { if (bridgeDisconnected) handleBridgeReconnected(); } catch {}
+				try { if (bridgeDisconnected) handleBridgeReconnected(); } catch { void 0; }
 
 		const now = Date.now();
 		const inStartupGrace = (now - BRIDGE_STARTUP_AT) < BRIDGE_STARTUP_GRACE_MS;
@@ -380,8 +380,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 				lastAutoStartAt = now;
 				try {
 					await start();
-				} catch {
-				}
+				} catch { void 0; }
 			}
 		}
 

@@ -88,8 +88,7 @@ export async function enqueueThrottledJobs(
 					if (!Platform.isDesktopApp) return;
 					if (!options?.allowWhenSummarizeAIDisabled && !isSummarizeAIEffective(plugin)) return;
 					await enqueueNow(pending);
-				} catch {
-				}
+				} catch { void 0; }
 			})();
 		}, Math.max(0, remaining));
 	}

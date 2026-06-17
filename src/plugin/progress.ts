@@ -2,6 +2,9 @@ import { Notice, Platform } from "obsidian";
 import type { EpochPlugin } from "../main";
 import { setCssStyles } from "../dom";
 
+const activeDocument = window.document;
+
+
 type EpochProgressKind = "index" | "search" | "semantic" | "topics" | "semanticBuild" | "ai";
 
 const KIND_PRIORITY: EpochProgressKind[] = ["ai", "topics", "semantic", "semanticBuild", "index", "search"];
@@ -9,7 +12,7 @@ const KIND_PRIORITY: EpochProgressKind[] = ["ai", "topics", "semantic", "semanti
 function clearPlannedAiWork(plugin: EpochPlugin): void {
 	try {
 		const anyPlugin: any = plugin as any;
-		const g: any = globalThis as any;
+		const g: any = window as any;
 
 		try {
 			anyPlugin.__epochAiEnqueueCancelKey = (Number(anyPlugin.__epochAiEnqueueCancelKey) || 0) + 1;
@@ -97,7 +100,7 @@ function getProgressParts(plugin: EpochPlugin): { root: HTMLElement; text: HTMLE
 
 	try {
 		root.textContent = "";
-		const text = document.createElement("span");
+		const text = activeDocument.createElement("span");
 		text.addClass?.("epoch-status-progress-text");
 		try {
 			if (!anyPlugin.__epochStatusBarProgressClickBound) {

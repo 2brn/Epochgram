@@ -27,14 +27,14 @@ export function toggleEmptyAreaView(canvas: EpochCanvas): void {
 		try {
 			const activePath = state.plugin?.app?.workspace?.getActiveFile?.()?.path ?? null;
 			(canvas as any).suppressNextFocusScrollForPath?.(activePath);
-		} catch {}
+		} catch { void 0; }
 		try {
 			(canvas as any).setEpochsViewWithToolbar?.(false);
 			return;
-		} catch {}
+		} catch { void 0; }
 		try {
 			(canvas as any).setEpochsView?.(false);
-		} catch {}
+		} catch { void 0; }
 		return;
 	}
 
@@ -53,8 +53,8 @@ export function toggleEmptyAreaView(canvas: EpochCanvas): void {
 	try {
 		(canvas as any).setEpochsViewWithToolbar?.(true);
 		return;
-	} catch {}
+	} catch { void 0; }
 	try {
 		(canvas as any).setEpochsView?.(true);
-	} catch {}
+	} catch { void 0; }
 }

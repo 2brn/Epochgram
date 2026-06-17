@@ -1,14 +1,14 @@
 function openExternal(url: string): void {
 	try {
-		const electron = (globalThis as any).require?.("electron");
+		const electron = (window as any).require?.("electron");
 		if (electron?.shell?.openExternal) {
 			void electron.shell.openExternal(url);
 			return;
 		}
-	} catch {}
+	} catch { void 0; }
 	try {
 		window.open(url);
-	} catch {}
+	} catch { void 0; }
 }
 
 export function openAiBridgeInChrome(url: string): void {

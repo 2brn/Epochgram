@@ -2,21 +2,21 @@ import { withProcessMasked } from "./process-mask";
 import { workerState } from "./state";
 
 function installNetworkFetchGuard(): void {
-	const anyGlobal: any = globalThis as any;
+	const anyGlobal: any = self as any;
 	if (anyGlobal.__epochNetworkFetchGuardInstalled) return;
 	anyGlobal.__epochNetworkFetchGuardInstalled = true;
 
-	const origFetch: any = (globalThis as any).fetch;
+	const origFetch: any = (self as any).fetch;
 	if (typeof origFetch !== "function") return;
 
-	(globalThis as any).fetch = (input: any, init?: any) => {
+	(self as any).fetch = (input: any, init?: any) => {
 		let url: string | undefined;
 		if (typeof input === "string") url = input;
 		else if (input && typeof input.url === "string") url = input.url;
 
 		if (url) {
 			try {
-				const base = (globalThis as any)?.location?.href;
+				const base = (self as any)?.location?.href;
 				const parsed = base ? new URL(url, base) : new URL(url);
 				if (parsed.protocol === "http:" || parsed.protocol === "https:") {
 					const host = String(parsed.host || "").toLowerCase();

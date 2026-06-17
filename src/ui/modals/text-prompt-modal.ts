@@ -1,6 +1,9 @@
 import { App, Modal } from "obsidian";
 import { setCssStyles } from "../../dom";
 
+const activeDocument = window.document;
+
+
 export class TextPromptModal extends Modal {
 	private titleText: string;
 	private initialValue: string;
@@ -10,7 +13,7 @@ export class TextPromptModal extends Modal {
 
 	constructor(app: App, title: string, initialValue: string, resolve: (value: string | null) => void) {
 		super(app);
-		this.priorActiveElement = (typeof document !== "undefined" ? (document.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
 		this.titleText = title;
 		this.initialValue = initialValue;
 		this.resolver = resolve;
@@ -77,7 +80,7 @@ export class TextPromptModal extends Modal {
 				} catch {
 					try {
 						el.focus();
-					} catch {}
+					} catch { void 0; }
 				}
 			});
 		}

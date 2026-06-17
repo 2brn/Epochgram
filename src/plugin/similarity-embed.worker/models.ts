@@ -1,4 +1,4 @@
-﻿import { workerState } from "./state";
+import { workerState } from "./state";
 import { withProcessMasked } from "./process-mask";
 import { assertOrtAvailable, getOrt, getTransformers } from "./runtime";
 import { getOrtWasmCdnBase, getWorkerLocationDebug } from "./wasm";
@@ -163,7 +163,7 @@ async function ensureOrtConfigured(): Promise<void> {
 function supportsWebGpu(): boolean {
 	return false;
 	try {
-		return !!((globalThis as any)?.navigator?.gpu);
+		return !!((self as any)?.navigator?.gpu);
 	} catch {
 		return false;
 	}
@@ -209,8 +209,8 @@ export async function ensureEmbedder(modelId: string): Promise<any> {
 		}
 
 		try {
-			(globalThis as any).ort = ort as any;
-			(globalThis as any).onnxruntime = ort as any;
+			(self as any).ort = ort as any;
+			(self as any).onnxruntime = ort as any;
 		} catch {
 			// ignore
 		}
@@ -269,8 +269,8 @@ export async function ensureZeroShotClassifier(modelId?: string): Promise<any> {
 			// ignore
 		}
 		try {
-			(globalThis as any).ort = ort as any;
-			(globalThis as any).onnxruntime = ort as any;
+			(self as any).ort = ort as any;
+			(self as any).onnxruntime = ort as any;
 		} catch {
 			// ignore
 		}

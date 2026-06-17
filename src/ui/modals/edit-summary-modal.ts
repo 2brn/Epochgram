@@ -2,6 +2,9 @@ import { App, Modal, Notice } from "obsidian";
 import { truncateToChars } from "./text-utils";
 import { setCssStyles } from "../../dom";
 
+const activeDocument = window.document;
+
+
 export class EditSummaryModal extends Modal {
 	private titleText: string;
 	private initialValue: string;
@@ -31,7 +34,7 @@ export class EditSummaryModal extends Modal {
 	}
 
 	onOpen() {
-		this.priorActiveElement = (typeof document !== "undefined" ? (document.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
 		this.modalEl.addClass("mod-file-rename");
 		this.modalEl.addClass("mod-epochgram-edit-summary");
 		this.titleEl.setText(this.titleText);
@@ -113,7 +116,7 @@ export class EditSummaryModal extends Modal {
 				} catch {
 					try {
 						el.focus();
-					} catch {}
+					} catch { void 0; }
 				}
 			});
 		}

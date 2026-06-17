@@ -9,6 +9,8 @@ import {
 import { getMenuState } from "./menu-state";
 import { addMenuTitle, formatMenuTitleWithPath } from "./menu-title";
 
+const activeDocument = window.document;
+
 export function showDateMenu(
 	canvas: EpochCanvas,
 	dayIndex: number,
@@ -25,7 +27,7 @@ export function showDateMenu(
 		if (removeOutsideListener) {
 			try {
 				removeOutsideListener();
-			} catch {}
+			} catch { void 0; }
 			removeOutsideListener = null;
 		}
 		state.keepHoverAfterMenu = false;
@@ -62,11 +64,11 @@ export function showDateMenu(
 			}
 		};
 		removeOutsideListener = () => {
-			document.removeEventListener("pointerdown", onOutside, true);
-			document.removeEventListener("touchstart", onOutside, true);
+			activeDocument.removeEventListener("pointerdown", onOutside, true);
+			activeDocument.removeEventListener("touchstart", onOutside, true);
 		};
-		document.addEventListener("pointerdown", onOutside, true);
-		document.addEventListener("touchstart", onOutside, true);
+		activeDocument.addEventListener("pointerdown", onOutside, true);
+		activeDocument.addEventListener("touchstart", onOutside, true);
 	} catch {
 		// ignore
 	}

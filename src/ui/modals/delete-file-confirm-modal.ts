@@ -1,6 +1,9 @@
 import type { App } from "obsidian";
 import { Modal, TFile } from "obsidian";
 
+const activeDocument = window.document;
+
+
 function getVaultConfigString(app: App, key: string): string | null {
 	const vault: any = (app as any)?.vault;
 	try {
@@ -123,7 +126,7 @@ class DeleteFileConfirmModal extends Modal {
 	}
 
 	onOpen() {
-		this.priorActiveElement = (typeof document !== "undefined" ? (document.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
 		try {
 			(this.modalEl as any)?.addClass?.("mod-confirm");
 		} catch {
@@ -197,7 +200,7 @@ class DeleteFileConfirmModal extends Modal {
 				} catch {
 					try {
 						el.focus();
-					} catch {}
+					} catch { void 0; }
 				}
 			});
 		}
@@ -205,7 +208,7 @@ class DeleteFileConfirmModal extends Modal {
 }
 
 export async function confirmDeleteFileIfNeeded(app: App, file: TFile): Promise<boolean> {
-	if (typeof document === "undefined") {
+	if (typeof activeDocument === "undefined") {
 		return true;
 	}
 

@@ -39,8 +39,7 @@ function formatWithMomentOrFallback(date: Date, pattern: string): string {
 		if (typeof win?.moment === "function") {
 			return String(win.moment(date).format(fmt) ?? "");
 		}
-	} catch {
-	}
+	} catch { void 0; }
 	return fmt.replace(/YYYY|SSS|YY|MM|DD|HH|hh|mm|ss|A|a/g, (tok) => formatDateTimeToken(date, tok));
 }
 

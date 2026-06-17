@@ -10,6 +10,8 @@ import {
 } from "../../ui/mark-colors";
 import type { EpochPlugin } from "../../main";
 
+const activeDocument = window.document;
+
 
 export function registerFileMenu(plugin: EpochPlugin): void {
 	plugin.registerEvent(
@@ -50,9 +52,9 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 				const hideContextMenu = () => {
 					try {
 						(menu as any)?.hide?.();
-					} catch {}
+					} catch { void 0; }
 				};
-				const rootEl: HTMLElement = (plugin as any).app.workspace?.containerEl ?? document.body;
+				const rootEl: HTMLElement = (plugin as any).app.workspace?.containerEl ?? activeDocument.body;
 				const groups = getEpochMarkColorGroups(rootEl);
 				const colors = getEpochMarkColorSet(rootEl);
 				const hasAnyMark = explicitMark != null || inheritedMark != null;
@@ -79,7 +81,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 					(menu as any)?.onHide?.(() => {
 						activeGroupSubmenu = null;
 					});
-				} catch {}
+				} catch { void 0; }
 				submenu.addItem((it: any) => {
 					it
 						.setTitle(useTextLabels ? "Clear mark" : ICON_ONLY_LABEL)
@@ -107,7 +109,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 								el.style.color = group.base.css;
 								setCssStyles(el, { opacity: "1", filter: "none", webkitFilter: "none" });
 							}
-						} catch {}
+						} catch { void 0; }
 
 						const groupSub = (it as any).setSubmenu?.();
 						if (!groupSub) return;
@@ -117,7 +119,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 								if (typeof dom.addClass === "function") dom.addClass("epoch-menu-no-arrow");
 								else dom.classList?.add?.("epoch-menu-no-arrow");
 							}
-						} catch {}
+						} catch { void 0; }
 
 						for (const shade of group.shades) {
 							const idx = shade.index;
@@ -142,7 +144,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 										el.style.color = css;
 										setCssStyles(el, { opacity: "1", filter: "none", webkitFilter: "none" });
 									}
-								} catch {}
+								} catch { void 0; }
 							});
 						}
 
@@ -157,7 +159,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 								try {
 									evt.preventDefault?.();
 									evt.stopPropagation?.();
-								} catch {}
+								} catch { void 0; }
 								void Promise.resolve(
 									applyMarkColorWithContext(plugin as any, {
 										entryPath: file.path,
@@ -169,7 +171,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 							for (const t of targets) {
 								t.addEventListener?.("click", handler, { capture: true });
 							}
-						} catch {}
+						} catch { void 0; }
 
 						try {
 							const domAny: any = (it as any)?.dom ?? null;
@@ -181,7 +183,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 								if (activeGroupSubmenu && activeGroupSubmenu !== groupSub) {
 									try {
 										(activeGroupSubmenu as any)?.hide?.();
-									} catch {}
+									} catch { void 0; }
 								}
 								activeGroupSubmenu = groupSub;
 							});
@@ -190,12 +192,12 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 									if (activeGroupSubmenu && activeGroupSubmenu !== groupSub) {
 										try {
 											(activeGroupSubmenu as any)?.hide?.();
-										} catch {}
+										} catch { void 0; }
 									}
 									activeGroupSubmenu = groupSub;
 								});
 							}
-						} catch {}
+						} catch { void 0; }
 					});
 				}
 			});
@@ -221,7 +223,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 				const hideContextMenu = () => {
 					try {
 						(menu as any)?.hide?.();
-					} catch {}
+					} catch { void 0; }
 				};
 				const applyReviewState = async (next: "draft" | "reviewed") => {
 					try {
@@ -287,7 +289,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 				const hideContextMenu = () => {
 					try {
 						(menu as any)?.hide?.();
-					} catch {}
+					} catch { void 0; }
 				};
 				const apply = async () => {
 					try {

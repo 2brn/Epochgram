@@ -81,13 +81,13 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 								if (typeof agg.progress !== "number") return;
 								setModelDownloadingStatus(agg.progress);
 							});
-						} catch {}
+						} catch { void 0; }
 					}
 				});
 				setModelReadyStatus();
 			} catch (e) {
 				const msg = String(e && e.message ? e.message : e);
-				try { setErrText(msg); } catch { try { errEl.textContent = msg; } catch {} }
+				try { setErrText(msg); } catch { try { errEl.textContent = msg; } catch { void 0; } }
 			}
 		});
 	}
@@ -222,7 +222,7 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 						const normalized = applyDownloadProgress(agg.progress, false, { reset: agg.reset });
 						if (typeof normalized !== "number") return;
 					});
-				} catch {}
+				} catch { void 0; }
 			}
 		};
 

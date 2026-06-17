@@ -179,8 +179,7 @@ export function drawVisibleDays(params: {
     })();
     try {
         (canvas as any).inheritedMarkSourceByPath = inheritedMarkSourceByPath;
-    } catch {
-    }
+    } catch { void 0; }
 
     const ctx = s.ctx;
     ctx.textBaseline = "middle";

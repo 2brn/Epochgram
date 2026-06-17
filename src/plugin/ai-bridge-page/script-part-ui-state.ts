@@ -3,7 +3,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 		try { return window.localStorage.getItem(key); } catch { return null; }
 	}
 	function safeSetLocalStorage(key, value) {
-		try { window.localStorage.setItem(key, value); } catch {}
+		try { window.localStorage.setItem(key, value); } catch { void 0; }
 	}
 
 	function makeDefaultOptionsState() {
@@ -157,7 +157,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 		const prevYaml = optionsState && typeof optionsState.settingsYaml === "string" ? String(optionsState.settingsYaml) : "";
 		optionsState = nextState;
 		if (prevYaml !== nextState.settingsYaml) {
-			try { summarizersByKey.clear(); } catch {}
+			try { summarizersByKey.clear(); } catch { void 0; }
 		}
 		if (shouldPersist) {
 			writeOptionsState(nextState);
@@ -344,8 +344,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 				settingsYaml: String(o && typeof o.settingsYaml === "string" ? o.settingsYaml : "")
 			};
 			await post("options", payload);
-		} catch {
-		}
+		} catch { void 0; }
 	}
 
 	function wireOptionsPersistence() {
@@ -354,7 +353,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 			renderYamlHighlight(String(settingsYamlEl.value || ""));
 			syncYamlOverlayScroll();
 			if (optionsValidationTimer) {
-				try { window.clearTimeout(optionsValidationTimer); } catch {}
+				try { window.clearTimeout(optionsValidationTimer); } catch { void 0; }
 				optionsValidationTimer = 0;
 			}
 			optionsValidationTimer = window.setTimeout(() => {
@@ -386,18 +385,18 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 				if (wasAtEnd) {
 					try {
 						el.scrollTop = el.scrollHeight;
-					} catch {}
+					} catch { void 0; }
 				}
 				queueValidate();
 			});
-		} catch {}
-		try { settingsYamlEl.addEventListener("input", queueValidate); } catch {}
-		try { settingsYamlEl.addEventListener("scroll", syncYamlOverlayScroll); } catch {}
+		} catch { void 0; }
+		try { settingsYamlEl.addEventListener("input", queueValidate); } catch { void 0; }
+		try { settingsYamlEl.addEventListener("scroll", syncYamlOverlayScroll); } catch { void 0; }
 		try {
 			settingsYamlEl.addEventListener("blur", () => {
 				void validateAndPersistYaml({ persist: true, format: true });
 			});
-		} catch {}
+		} catch { void 0; }
 	}
 
 	if (resetDefaultsBtn) {
@@ -419,22 +418,21 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 					const t = await res.text().catch(() => "");
 					if (t) details = " " + t;
 				}
-			} catch {
-			}
+			} catch { void 0; }
 			return new Error("Bridge request failed: HTTP " + res.status + " (" + String(path) + ")" + details);
 		}
 
 		function makeAbortController() {
 			try {
 				if (typeof AbortController !== "undefined") return new AbortController();
-			} catch {}
+			} catch { void 0; }
 			return null;
 		}
 
 		// Global abort used to stop all in-flight HTTP polls on tab close.
 		let PAGE_ABORT = makeAbortController();
 		function abortAllBridgeRequests() {
-			try { if (PAGE_ABORT) PAGE_ABORT.abort(); } catch {}
+			try { if (PAGE_ABORT) PAGE_ABORT.abort(); } catch { void 0; }
 			PAGE_ABORT = makeAbortController();
 		}
 
@@ -443,9 +441,9 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 				if (!from || !to) return;
 				if (!from.signal || !to.abort) return;
 				from.signal.addEventListener("abort", () => {
-					try { to.abort(); } catch {}
+					try { to.abort(); } catch { void 0; }
 				}, { once: true });
-			} catch {}
+			} catch { void 0; }
 		}
 
 		async function fetchWithTimeout(url, init, timeoutMs) {
@@ -456,11 +454,11 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 				if (PAGE_ABORT && PAGE_ABORT.signal && PAGE_ABORT.signal.aborted) {
 					throw new Error("Bridge request aborted (page closing)");
 				}
-			} catch {}
+			} catch { void 0; }
 			// Abort this request if the page is closing.
-			try { linkAbort(PAGE_ABORT, ctrl); } catch {}
+			try { linkAbort(PAGE_ABORT, ctrl); } catch { void 0; }
 			const timer = window.setTimeout(() => {
-				try { if (ctrl) ctrl.abort(); } catch {}
+				try { if (ctrl) ctrl.abort(); } catch { void 0; }
 			}, ms);
 			try {
 				const merged = Object.assign({}, init || {});
@@ -506,12 +504,12 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 	}
 	function setErrText(text) {
 		if (!errEl) return;
-		try { errEl.textContent = String(text || ""); } catch {}
+		try { errEl.textContent = String(text || ""); } catch { void 0; }
 		syncErrVisibility();
 	}
 	function setText(el, text) {
 		el.textContent = text;
-		try { if (el === errEl) syncErrVisibility(); } catch {}
+		try { if (el === errEl) syncErrVisibility(); } catch { void 0; }
 	}
 
 	function rangeMaxPow2(value) {
@@ -550,7 +548,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 				if (!isFiniteNumber(v)) continue;
 				if (v > maxValue) maxValue = v;
 			}
-		} catch {}
+		} catch { void 0; }
 		const maxY = rangeMaxPow2(maxValue);
 		const padL = 40;
 		const padR = 6;
@@ -675,17 +673,17 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 		if (!bridgeDisconnected) return;
 		bridgeDisconnected = false;
 		resetBridgeRetryState();
-		try { if (statusEl) statusEl.textContent = "Reconnected"; } catch {}
-		try { if (curEl) curEl.textContent = "idle"; } catch {}
-		try { if (clearQueueBtn) clearQueueBtn.disabled = false; } catch {}
+		try { if (statusEl) statusEl.textContent = "Reconnected"; } catch { void 0; }
+		try { if (curEl) curEl.textContent = "idle"; } catch { void 0; }
+		try { if (clearQueueBtn) clearQueueBtn.disabled = false; } catch { void 0; }
 		try {
 			const t = String(errEl && errEl.textContent ? errEl.textContent : "");
 			// Only clear errors that were likely caused by transient bridge disconnects.
 			if (t && /(failed to fetch|networkerror|bridge request timed out|timed out\. retrying|load failed|fetch\b)/i.test(t)) {
 				setErrText("");
 			}
-		} catch {}
-		try { if (typeof renderStatusText === "function") renderStatusText(); } catch {}
+		} catch { void 0; }
+		try { if (typeof renderStatusText === "function") renderStatusText(); } catch { void 0; }
 	}
 
 	function handleBridgeDisconnected(message) {
@@ -695,27 +693,27 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 
 		if (!bridgeDisconnected) {
 			bridgeDisconnected = true;
-			try { if (statusEl) statusEl.textContent = "Disconnected"; } catch {}
-			try { if (curEl) curEl.textContent = "disconnected"; } catch {}
-			try { if (clearQueueBtn) clearQueueBtn.disabled = true; } catch {}
+			try { if (statusEl) statusEl.textContent = "Disconnected"; } catch { void 0; }
+			try { if (curEl) curEl.textContent = "disconnected"; } catch { void 0; }
+			try { if (clearQueueBtn) clearQueueBtn.disabled = true; } catch { void 0; }
 		}
 		try {
 			if (msg) setErrText(msg);
-		} catch {}
+		} catch { void 0; }
 
 		// Stop processing work; the tab should auto-resume when the bridge comes back.
-		try { running = false; } catch {}
+		try { running = false; } catch { void 0; }
 
 		if (fatal) {
 			// Ensure loops/polls/timers are stopped.
-			try { if (typeof teardownBridgePage === "function") teardownBridgePage("disconnected"); } catch {}
+			try { if (typeof teardownBridgePage === "function") teardownBridgePage("disconnected"); } catch { void 0; }
 			// Best-effort: browsers often block closing tabs not opened by script.
 			try {
 				if (shouldClose && !bridgeTriedWindowClose) {
 					bridgeTriedWindowClose = true;
 					window.close();
 				}
-			} catch {}
+			} catch { void 0; }
 			return;
 		}
 

@@ -16,6 +16,8 @@ import { getMenuState } from "../menu-state";
 import { getTopicGroupForPath } from "./topic-group";
 import { setCssStyles } from "../../../dom";
 
+const activeDocument = window.document;
+
 export function addMarkSubmenu(
 	menu: Menu,
 	state: ReturnType<typeof getMenuState>,
@@ -37,7 +39,7 @@ export function addMarkSubmenu(
 		const useTextLabels = nativeMenusEnabled;
 		const labelOrIconOnly = (label: string): string => (useTextLabels ? label : "\u00A0");
 
-		const root = (canvas as any)?.root ?? document.body;
+		const root = (canvas as any)?.root ?? activeDocument.body;
 		const palette = getEpochMarkColorSet(root);
 		const groups = getEpochMarkColorGroups(root);
 		const current = normalizeMarkColorIndex(currentMarkColor);

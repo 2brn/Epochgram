@@ -281,7 +281,7 @@ export function buildEpochRows(args: EpochsSummaryRenderArgs): {
 									ctx.restore();
 								}
 							} catch {
-								try { ctx.restore(); } catch {}
+								try { ctx.restore(); } catch { void 0; }
 							}
 
 							if (restFirstLineW > 0 && firstTokenW > 0 && restFirstLineW < firstTokenW) {

@@ -98,8 +98,7 @@ function storeEntrySummaries(plugin: EpochPlugin, job: AiSummaryJob, entries: Fi
 				void (plugin as any).enqueueEpochsForDateKeys(dateKeys, { force: false, showNotice: false });
 			}
 		}
-	} catch {
-	}
+	} catch { void 0; }
 }
 
 function isRejectedAiSummary(raw: string): boolean {
@@ -562,6 +561,5 @@ export function clearResultHandlerState(plugin: EpochPlugin): void {
 		const anyPlugin: any = plugin as any;
 		if (anyPlugin.aiBridgeChunkGroups) anyPlugin.aiBridgeChunkGroups.clear();
 		if (anyPlugin.aiBridgeReduceFallbackByJobId) anyPlugin.aiBridgeReduceFallbackByJobId.clear();
-	} catch {
-	}
+	} catch { void 0; }
 }

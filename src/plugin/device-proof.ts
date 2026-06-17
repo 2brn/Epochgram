@@ -35,7 +35,7 @@ function fastStringHash(input: string): string {
 }
 
 function getStorage(): StorageLike | null {
-	const storage = (globalThis as any)?.localStorage;
+	const storage = (window as any)?.localStorage;
 	if (!storage) return null;
 	if (typeof storage.getItem !== "function") return null;
 	if (typeof storage.setItem !== "function") return null;
@@ -68,7 +68,7 @@ function getDeviceMaterialStorageKey(plugin: any): string {
 }
 
 function getSubtle(): SubtleCrypto {
-	const subtle = globalThis.crypto?.subtle;
+	const subtle = window.crypto?.subtle;
 	if (!subtle) {
 		throw new Error("WebCrypto unavailable");
 	}
@@ -106,14 +106,14 @@ function formatUuidV4(bytes: Uint8Array): string {
 
 function createUuid(): string {
 	try {
-		const value = globalThis.crypto?.randomUUID?.();
+		const value = window.crypto?.randomUUID?.();
 		if (value) return value;
 	} catch {
 		// ignore
 	}
 	try {
 		const bytes = new Uint8Array(16);
-		globalThis.crypto?.getRandomValues?.(bytes);
+		window.crypto?.getRandomValues?.(bytes);
 		if (bytes.some((value) => value !== 0)) return formatUuidV4(bytes);
 	} catch {
 		// ignore
@@ -142,7 +142,7 @@ function normalizeStoredMaterial(raw: unknown): StoredKeyRecord | null {
 }
 
 async function openIndexedDb(): Promise<IDBDatabase | null> {
-	const factory = (globalThis as any)?.indexedDB;
+	const factory = (window as any)?.indexedDB;
 	if (!factory || typeof factory.open !== "function") return null;
 	return await new Promise((resolve) => {
 		const request = factory.open(KEY_DB_NAME, KEY_DB_VERSION);

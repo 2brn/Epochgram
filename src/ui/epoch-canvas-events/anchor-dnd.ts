@@ -8,6 +8,9 @@ import { parseAnyDate, parseAnyDates } from "../../indexer/extractor";
 import { entrySummaryComponents } from "../epoch-canvas-utils";
 import { setCssStyles } from "../../dom";
 
+const activeDocument = window.document;
+
+
 type DragSource = "mouse" | "touch";
 
 function isEpochEntry(entry: any): boolean {
@@ -380,7 +383,7 @@ function captureEntryRowSnapshot(canvas: EpochCanvas, entry: DateEntry): {
 		}
 		if (!imgData) return null;
 
-		const off = document.createElement("canvas");
+		const off = activeDocument.createElement("canvas");
 		off.width = sw;
 		off.height = sh;
 		const offCtx = off.getContext("2d");

@@ -3,6 +3,9 @@ import type { EpochPlugin } from "../../main";
 import { DEFAULT_SIMILARITY_MODEL, DEFAULT_ZERO_SHOT_MODEL, NO_SIMILARITY_MODEL } from "../../plugin/similarity/config";
 import { hasSimilarityAccess } from "../../plugin/pro-feature-state";
 
+const activeDocument = window.document;
+
+
 export type SimilarityModelSuggestFocus = "semantics" | "topics";
 
 type ModelSuggestItem =
@@ -64,7 +67,7 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 		options: { focus: SimilarityModelSuggestFocus; onDone?: () => void }
 	) {
 		super(app);
-		this.priorActiveElement = (typeof document !== "undefined" ? (document.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
 		this.plugin = plugin;
 		this.focus = options.focus;
 		this.resolveDone = typeof options.onDone === "function" ? options.onDone : null;
@@ -94,7 +97,7 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 		this.handleInput = () => {
 			try {
 				(this as any).onInputChanged?.();
-			} catch {}
+			} catch { void 0; }
 		};
 	}
 
@@ -119,7 +122,7 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 			}
 			try {
 				this.inputEl.setSelectionRange(0, this.inputEl.value.length);
-			} catch {}
+			} catch { void 0; }
 		});
 	}
 
@@ -136,7 +139,7 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 				} catch {
 					try {
 						el.focus();
-					} catch {}
+					} catch { void 0; }
 				}
 			});
 		}
@@ -271,7 +274,7 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 		} finally {
 			try {
 				this.resolveDone?.();
-			} catch {}
+			} catch { void 0; }
 			this.close();
 		}
 	}

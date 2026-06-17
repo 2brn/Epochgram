@@ -11,7 +11,7 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 				.then(resolve)
 				.catch(reject)
 				.finally(() => {
-					try { window.clearTimeout(timer); } catch {}
+					try { window.clearTimeout(timer); } catch { void 0; }
 				});
 		});
 	}
@@ -47,7 +47,7 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 				if (!canRetry || attempt >= 3) throw e;
 				// Backoff a bit to avoid hammering the API.
 				const delay = 500 * attempt;
-				try { setErrText((label ? (String(label) + ": ") : "") + "error; retrying (" + attempt + "/3)...\n\n" + msg); } catch {}
+				try { setErrText((label ? (String(label) + ": ") : "") + "error; retrying (" + attempt + "/3)...\n\n" + msg); } catch { void 0; }
 				await new Promise(r => window.setTimeout(r, delay));
 			}
 		}
@@ -65,7 +65,7 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 	}
 
 	function teardownBridgePage(reason) {
-		try { void reason; } catch {}
+		try { void reason; } catch { void 0; }
 		if (pageClosing) return;
 		pageClosing = true;
 		try {
@@ -79,14 +79,14 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 		} catch {
 			// ignore
 		}
-		try { running = false; } catch {}
-		try { if (autoStartTimer) window.clearTimeout(autoStartTimer); } catch {}
+		try { running = false; } catch { void 0; }
+		try { if (autoStartTimer) window.clearTimeout(autoStartTimer); } catch { void 0; }
 		autoStartTimer = 0;
-		try { if (statusPollTimer) window.clearInterval(statusPollTimer); } catch {}
+		try { if (statusPollTimer) window.clearInterval(statusPollTimer); } catch { void 0; }
 		statusPollTimer = 0;
-		try { if (perfUiTimer) window.clearInterval(perfUiTimer); } catch {}
-		try { if (optionsSaveTimer) window.clearTimeout(optionsSaveTimer); } catch {}
-		try { abortAllBridgeRequests(); } catch {}
+		try { if (perfUiTimer) window.clearInterval(perfUiTimer); } catch { void 0; }
+		try { if (optionsSaveTimer) window.clearTimeout(optionsSaveTimer); } catch { void 0; }
+		try { abortAllBridgeRequests(); } catch { void 0; }
 	}
 	function onWakeOrFocus(reason) {
 		try {
@@ -95,12 +95,11 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 			lastWakeTickAt = now;
 			// After long sleep, clear cached summarizers (Chrome can invalidate them).
 			if (gap > 45_000) {
-				try { summarizersByKey.clear(); } catch {}
-				try { languageDetector = null; } catch {}
+				try { summarizersByKey.clear(); } catch { void 0; }
+				try { languageDetector = null; } catch { void 0; }
 			}
 			void refreshStatus();
-		} catch {
-		}
+		} catch { void 0; }
 	}
 
 	try {
@@ -110,12 +109,11 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 		});
 		window.addEventListener("pagehide", () => teardownBridgePage("pagehide"));
 		window.addEventListener("beforeunload", () => teardownBridgePage("beforeunload"));
-	} catch {
-	}
+	} catch { void 0; }
 
     async function loop() {
       running = true;
-		try { setErrText(""); } catch { try { errEl.textContent = ""; } catch {} }
+		try { setErrText(""); } catch { try { errEl.textContent = ""; } catch { void 0; } }
       while (running) {
 				if (pageClosing) break;
 				let job = null;
@@ -190,8 +188,8 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 			const out = await retryUpTo3(async (attempt) => {
 				// After a failure, clear cached summarizers; Chrome can invalidate them.
 				if (attempt > 1) {
-					try { summarizersByKey.clear(); } catch {}
-					try { languageDetector = null; } catch {}
+					try { summarizersByKey.clear(); } catch { void 0; }
+					try { languageDetector = null; } catch { void 0; }
 				}
 				const s = await ensureSummarizer({
 					outputLanguage,
@@ -205,7 +203,7 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 				});
 				// If a queue built up while the model was downloading, refresh once
 				// so the status UI flips to ready before heavy processing begins.
-				try { await refreshStatus(); } catch {}
+				try { await refreshStatus(); } catch { void 0; }
 				return await withTimeout(
 					summarizeQuotaAware(s, job.input, perCallContext, 0),
 					120000,
@@ -217,14 +215,14 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
           if (/^Model not available in Chromium\b/i.test(outStr)) {
             throw new Error("Summarizer model not available in this Chromium runtime");
           }
-			try { applyDownloadProgress(1, true); } catch {}
+			try { applyDownloadProgress(1, true); } catch { void 0; }
           await post("submitResult", { id: job.id, summary: outStr, outputChars: outStr.length });
 			{
 				const clipped = outStr.length > 20000 ? (outStr.slice(0, 20000) + "\n…(truncated)") : outStr;
 				lastSummaryPreview = clipped;
 				if (sumResultEl) sumResultEl.textContent = clipped;
 			}
-				try { setErrText(""); } catch { try { errEl.textContent = ""; } catch {} }
+				try { setErrText(""); } catch { try { errEl.textContent = ""; } catch { void 0; } }
         } catch (e) {
 					const msg = String(e && e.message ? e.message : e);
 					let details = msg;
@@ -237,13 +235,12 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 							expectedContextLanguages: (Array.isArray(expectedContextLanguages) ? expectedContextLanguages : null)
 						};
 						details = formatJobErrorMessage({ msg, job, opts: opt, langs: langPayload, context: perCallContext });
-					} catch {
-					}
-					try { setErrText(details); } catch { try { errEl.textContent = details; } catch {} }
+					} catch { void 0; }
+					try { setErrText(details); } catch { try { errEl.textContent = details; } catch { void 0; } }
 				if (job && job.id) {
-				try { await post("submitResult", { id: job.id, error: details }); } catch {}
+				try { await post("submitResult", { id: job.id, error: details }); } catch { void 0; }
 				} else {
-				try { await post("submitResult", { id: null, error: details }); } catch {}
+				try { await post("submitResult", { id: null, error: details }); } catch { void 0; }
 				}
           await new Promise(r => window.setTimeout(r, 1000));
         }
@@ -253,8 +250,8 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 		async function start() {
 			if (pageClosing) return;
 			if (running) return;
-			try { setErrText(""); } catch { try { errEl.textContent = ""; } catch {} }
-			try { await detect(); } catch {}
+			try { setErrText(""); } catch { try { errEl.textContent = ""; } catch { void 0; } }
+			try { await detect(); } catch { void 0; }
 			loop();
 		}
 
@@ -268,14 +265,14 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 				wireOptionsPersistence();
 				void postSavedOptionsToObsidian(merged);
 			} catch {
-				try { applyOptionsStateToUi(loadOptionsState()); wireOptionsPersistence(); } catch {}
+				try { applyOptionsStateToUi(loadOptionsState()); wireOptionsPersistence(); } catch { void 0; }
 			}
 		})();
 
 		if (clearQueueBtn) {
 			clearQueueBtn.addEventListener("click", async () => {
 				try {
-					try { setErrText(""); } catch { try { errEl.textContent = ""; } catch {} }
+					try { setErrText(""); } catch { try { errEl.textContent = ""; } catch { void 0; } }
 					await post("clearQueue", {});
 					curEl.textContent = "idle";
 					lastSummaryPreview = "";
@@ -284,12 +281,12 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 					await refreshStatus();
 				} catch (e) {
 					const msg = String(e && e.message ? e.message : e);
-					try { setErrText(msg); } catch { try { errEl.textContent = msg; } catch {} }
+					try { setErrText(msg); } catch { try { errEl.textContent = msg; } catch { void 0; } }
 				}
 			});
 		}
 
-		try { startPerfUiTicker(); } catch {}
+		try { startPerfUiTicker(); } catch { void 0; }
 		function startStatusPolling() {
 			if (statusPollTimer) return;
 			statusPollTimer = window.setInterval(() => {

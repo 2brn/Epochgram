@@ -2,6 +2,9 @@ import { App, SuggestModal } from "obsidian";
 import { canonicalizeTopicTerm, isNoTopicSentinel, sortTopicTermsIgnorePrefix } from "utils";
 import { truncateToChars, truncateToWords } from "./text-utils";
 
+const activeDocument = window.document;
+
+
 type TopicSuggestItem =
 	| { kind: "clear" }
 	| { kind: "set"; term: string }
@@ -32,7 +35,7 @@ class TopicSuggestModal extends SuggestModal<TopicSuggestItem> {
 		resolve: (value: TopicEditResult | null) => void
 	) {
 		super(app);
-		this.priorActiveElement = (typeof document !== "undefined" ? (document.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
 		this.titleText = options.title;
 		this.initialValue = String(options.initialValue ?? "");
 		this.topics = Array.isArray(options.topics)
@@ -72,7 +75,7 @@ class TopicSuggestModal extends SuggestModal<TopicSuggestItem> {
 		this.handleInput = () => {
 			try {
 				(this as any).onInputChanged?.();
-			} catch {}
+			} catch { void 0; }
 		};
 	}
 
@@ -98,7 +101,7 @@ class TopicSuggestModal extends SuggestModal<TopicSuggestItem> {
 				} catch {
 					try {
 						el.focus();
-					} catch {}
+					} catch { void 0; }
 				}
 			});
 		}

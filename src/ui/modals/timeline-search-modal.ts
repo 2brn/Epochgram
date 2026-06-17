@@ -3,6 +3,9 @@ import type { DateEntry } from "../../indexer/types";
 import { SUMMARY_SEPARATOR_SYMBOL } from "../epoch-canvas-constants";
 import { setCssStyles } from "../../dom";
 
+const activeDocument = window.document;
+
+
 export type TimelineSearchSuggestion =
 	| { kind: "empty" }
 	| { kind: "filter"; query: string }
@@ -38,7 +41,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 		}
 	) {
 		super(app);
-		this.priorActiveElement = (typeof document !== "undefined" ? (document.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
 		this.titleText = String(options?.title ?? "Search");
 		this.initialValue = String(options?.initial ?? "");
 		this.onCommit = typeof options?.onCommit === "function" ? options.onCommit : null;
@@ -67,10 +70,10 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 					this.effectiveQuery = "";
 					TimelineSearchModal.sessionLastNonEmptyQuery = "";
 				}
-			} catch {}
+			} catch { void 0; }
 			try {
 				(this as any).onInputChanged?.();
-			} catch {}
+			} catch { void 0; }
 		};
 		this.handleKeyDown = (evt: KeyboardEvent) => {
 			try {
@@ -147,18 +150,18 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 			window.addEventListener("keyup", this.handleWindowKeyUp);
 		}
 
-		(globalThis as any).setTimeout?.(() => {
+		(window as any).setTimeout?.(() => {
 			try {
 				this.inputEl.focus();
 				const n = String(this.inputEl.value || "").length;
 				this.inputEl.setSelectionRange(n, n);
-			} catch {}
+			} catch { void 0; }
 		}, 0);
 
 		// Emit once to ensure the UI is in sync with the prefilled value.
 		try {
 			(this as any).onInputChanged?.();
-		} catch {}
+		} catch { void 0; }
 	}
 
 	onClose() {
@@ -224,7 +227,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 		const toggleHasSuggestions = () => {
 			try {
 				this.modalEl.toggleClass("has-suggestions", out.length > 0);
-			} catch {}
+			} catch { void 0; }
 		};
 
 		if (!qTrim) {
@@ -293,7 +296,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 			try {
 				(el as any).textContent = "";
 				el.addClass("epoch-timeline-search-match");
-				const titleEl = (globalThis as any)?.document?.createElement?.("div") as HTMLElement | null;
+				const titleEl = (window as any)?.activeDocument?.createElement?.("div") as HTMLElement | null;
 				if (!titleEl) {
 					(el as any).setText?.(title);
 					return;
@@ -302,18 +305,18 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 				titleEl.textContent = title;
 				el.appendChild(titleEl);
 				if (meta) {
-					const metaEl = (globalThis as any).document.createElement("small");
+					const metaEl = (window as any).activeDocument.createElement("small");
 					metaEl.addClass("epoch-timeline-search-match-meta");
 					try {
 						setCssStyles(metaEl as any, { fontSize: "0.7em", lineHeight: "1.15" });
-					} catch {}
+					} catch { void 0; }
 					metaEl.textContent = meta;
 					el.appendChild(metaEl);
 				}
 			} catch {
 				try {
 					(el as any).setText?.(title);
-				} catch {}
+				} catch { void 0; }
 			}
 			return;
 		}
@@ -337,9 +340,9 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 				TimelineSearchModal.sessionLastNonEmptyQuery = "";
 				try {
 					this.inputEl.value = v;
-				} catch {}
+				} catch { void 0; }
 				this.onCommit?.(v);
-			} catch {}
+			} catch { void 0; }
 			this.committed = true;
 			this.close();
 			return;
@@ -361,7 +364,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 				: _evt;
 			try {
 				this.onChooseRecord?.(entry, q, eventForOpen as any);
-			} catch {}
+			} catch { void 0; }
 			this.committed = true;
 			this.close();
 			return;
@@ -373,7 +376,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 				this.effectiveQuery = q;
 				TimelineSearchModal.sessionLastNonEmptyQuery = q.trim();
 				this.onCommit?.(q);
-			} catch {}
+			} catch { void 0; }
 			this.committed = true;
 			this.close();
 			return;

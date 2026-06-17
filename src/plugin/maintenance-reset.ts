@@ -24,14 +24,14 @@ import { hasVerifiedEntitlement, isTrackChangesEffective } from "./pro-feature-s
 function clearPlannedEpochWork(plugin: EpochPlugin): void {
 	try {
 		const anyPlugin: any = plugin as any;
-		const g: any = globalThis as any;
+		const g: any = window as any;
 		try {
 			anyPlugin.__epochAiEnqueueCancelKey = (Number(anyPlugin.__epochAiEnqueueCancelKey) || 0) + 1;
-		} catch {}
+		} catch { void 0; }
 		if (anyPlugin?.epochRegenAfterAiTimer != null) {
 			try {
 				g?.clearInterval?.(anyPlugin.epochRegenAfterAiTimer);
-			} catch {}
+			} catch { void 0; }
 			anyPlugin.epochRegenAfterAiTimer = null;
 		}
 		anyPlugin.epochRegenAfterAiMode = null;
@@ -47,7 +47,7 @@ function clearPlannedEpochWork(plugin: EpochPlugin): void {
 function clearPlannedAiWork(plugin: EpochPlugin): void {
 	try {
 		const anyPlugin: any = plugin as any;
-		const g: any = globalThis as any;
+		const g: any = window as any;
 
 		clearPlannedEpochWork(plugin);
 
@@ -66,16 +66,16 @@ function clearPlannedAiWork(plugin: EpochPlugin): void {
 				for (const st of throttle.values()) {
 					try {
 						if (st?.timerId != null) g?.clearTimeout?.(st.timerId);
-					} catch {}
+					} catch { void 0; }
 					try {
 						if (st) {
 							st.timerId = null;
 							st.pendingJobs = null;
 						}
-					} catch {}
+					} catch { void 0; }
 				}
 				throttle.clear();
-			} catch {}
+			} catch { void 0; }
 		}
 
 		// Drop reduce/chunk aggregation state so it can't enqueue follow-up reduce jobs.
@@ -132,7 +132,7 @@ async function postBridgeClearQueue(url: string): Promise<void> {
 				resolve();
 				return;
 			}
-			const httpModule = (globalThis as any).__epochNodeHttpModule ?? "node:http";
+			const httpModule = (window as any).__epochNodeHttpModule ?? "node:http";
 			// eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require allows runtime selection of http module for testing
 			const http = require(httpModule) as typeof import("http");
 			const req = http.request(
@@ -149,7 +149,7 @@ async function postBridgeClearQueue(url: string): Promise<void> {
 				(res) => {
 					try {
 						res.resume();
-					} catch {}
+					} catch { void 0; }
 					res.on("end", () => resolve());
 					res.on("close", () => resolve());
 				}

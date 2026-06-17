@@ -21,6 +21,8 @@ import {
 	hasVerifiedEntitlement
 } from "../plugin/pro-feature-state";
 
+const activeDocument = window.document;
+
 type ProPanelOptions = {
 	advancedGroupsParentEl?: HTMLElement;
 };
@@ -37,7 +39,7 @@ export function renderProPanel(
 
 	const openExternalUrl = (url: string): void => {
 		try {
-			const electron = (globalThis as any).require?.("electron");
+			const electron = (window as any).require?.("electron");
 			if (electron?.shell?.openExternal) {
 				void electron.shell.openExternal(url);
 				return;
@@ -108,10 +110,10 @@ export function renderProPanel(
 		if (activationStatus === "inactive") return "mod-warning";
 		return "mod-warning";
 	})();
-	const statusFragment = document.createDocumentFragment();
-	const statusWrapper = document.createElement("span");
+	const statusFragment = activeDocument.createDocumentFragment();
+	const statusWrapper = activeDocument.createElement("span");
 	statusWrapper.classList.add("epoch-license-status", statusClass);
-	const statusStrong = document.createElement("strong");
+	const statusStrong = activeDocument.createElement("strong");
 	statusStrong.textContent = statusText;
 	statusWrapper.append(statusStrong);
 	statusFragment.append(statusWrapper);
@@ -220,7 +222,7 @@ export function renderProPanel(
 			if (isPro) {
 				window.requestAnimationFrame(() => {
 					try {
-						if (document.activeElement === text.inputEl) {
+						if (activeDocument.activeElement === text.inputEl) {
 							text.inputEl.blur();
 						}
 					} catch {
@@ -269,8 +271,8 @@ export function renderProPanel(
 	};
 
 	if (!isPro) {
-		const upsellDesc = document.createDocumentFragment();
-		const upsellList = document.createElement("ul");
+		const upsellDesc = activeDocument.createDocumentFragment();
+		const upsellList = activeDocument.createElement("ul");
 		for (const item of [
 			"Summarize records on-device via Google Chrome AI",
 			"Generate multi-day Epochs for broader time retrospectives",
@@ -295,7 +297,7 @@ export function renderProPanel(
 			buttonEl?.classList?.add("epoch-pro-get-pro-button");
 			window.requestAnimationFrame(() => {
 				try {
-					if (document.activeElement === buttonEl) {
+					if (activeDocument.activeElement === buttonEl) {
 						buttonEl.blur();
 					}
 				} catch {

@@ -10,7 +10,7 @@ function makeBridgeToken(): string {
 	const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	const bytes = new Uint8Array(24);
 	try {
-		const c: any = (globalThis as any).crypto;
+		const c: any = (window as any).crypto;
 		if (c && typeof c.getRandomValues === "function") {
 			c.getRandomValues(bytes);
 		} else {
@@ -96,7 +96,7 @@ export class AiBridgeServer {
 			if (typeof anyPlugin?.saveSettings === "function") {
 				void anyPlugin.saveSettings();
 			}
-		} catch {}
+		} catch { void 0; }
 	}
 
 	private makeJobDedupKey(job: AiSummaryJob): string {
@@ -186,17 +186,17 @@ export class AiBridgeServer {
 		   this.plugin.settings.aiBridgeOptions = next as any;
 		   try {
 			   (this.plugin as any).onAiBridgeOptionsChanged?.(prev, next);
-		   } catch {}
+		   } catch { void 0; }
 		if (this.optionsPersistTimer) {
 			window.clearTimeout(this.optionsPersistTimer);
 			this.optionsPersistTimer = null;
 		}
-		this.optionsPersistTimer = setTimeout(() => {
+		this.optionsPersistTimer = window.setTimeout(() => {
 			this.optionsPersistTimer = null;
 			try {
 				void this.plugin.saveSettings();
-			} catch {}
-		}, 350);
+			} catch { void 0; }
+		}, 350) as unknown as NodeJS.Timeout;
 	}
 
 	getUrl(options?: { closeOnDisconnect?: boolean }): string {
@@ -326,21 +326,21 @@ export class AiBridgeServer {
 		// Example: epoch regeneration scheduled to run after AI becomes idle.
 		try {
 			const anyPlugin: any = this.plugin as any;
-			const w: any = globalThis as any;
+			const w: any = window as any;
 			try {
 				// Cancels in-flight producers that are still enqueueing jobs.
 				anyPlugin.__epochAiEnqueueCancelKey = (Number(anyPlugin.__epochAiEnqueueCancelKey) || 0) + 1;
-			} catch {}
+			} catch { void 0; }
 			try {
 				anyPlugin.aiSummaryPendingFiles = new Set<string>();
 				anyPlugin.aiSummaryQueueRunning = false;
-			} catch {}
+			} catch { void 0; }
 
 			// Cancel epoch regeneration that was deferred until AI is idle.
 			if (anyPlugin?.epochRegenAfterAiTimer != null) {
 				try {
 					w?.clearInterval?.(anyPlugin.epochRegenAfterAiTimer);
-				} catch {}
+				} catch { void 0; }
 				anyPlugin.epochRegenAfterAiTimer = null;
 			}
 			anyPlugin.epochRegenAfterAiMode = null;
@@ -363,25 +363,25 @@ export class AiBridgeServer {
 					for (const st of throttle.values()) {
 						try {
 							if (st?.timerId != null) w?.clearTimeout?.(st.timerId);
-						} catch {}
+						} catch { void 0; }
 						try {
 							if (st) {
 								st.timerId = null;
 								st.pendingJobs = null;
 							}
-						} catch {}
+						} catch { void 0; }
 					}
 					throttle.clear();
-				} catch {}
+				} catch { void 0; }
 			}
 
 			// Drop reduce/chunk aggregation state so it can't enqueue follow-up reduce jobs.
 			try {
 				anyPlugin?.aiBridgeChunkGroups?.clear?.();
-			} catch {}
+			} catch { void 0; }
 			try {
 				anyPlugin?.aiBridgeReduceFallbackByJobId?.clear?.();
-			} catch {}
+			} catch { void 0; }
 		} catch {
 			// ignore
 		}
@@ -408,7 +408,7 @@ export class AiBridgeServer {
 		if (!Platform.isDesktopApp) {
 			throw new Error("AI Bridge server is only available on desktop");
 		}
-		const httpModule = (globalThis as any).__epochNodeHttpModule ?? "node:http";
+		const httpModule = (window as any).__epochNodeHttpModule ?? "node:http";
 		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require allows runtime selection of http module for testing
 		const http = require(httpModule) as typeof import("http");
 
@@ -485,7 +485,7 @@ export class AiBridgeServer {
 						// ignore
 					}
 					try {
-						const g: any = globalThis as any;
+						const g: any = window as any;
 						g.__epochAiBridgeLastCloseAt = Date.now();
 					} catch {
 						// ignore
@@ -614,7 +614,7 @@ export class AiBridgeServer {
 					let body: any = {};
 					try {
 						body = JSON.parse(raw || "{}");
-					} catch {}
+					} catch { void 0; }
 					const id = typeof body.id === "string" ? body.id : null;
 					const error = typeof body.error === "string" ? body.error : null;
 					if (!id) {
@@ -643,7 +643,7 @@ export class AiBridgeServer {
 						this.lastError = error;
 						try {
 							this.onResult(job, { id, error });
-						} catch {}
+						} catch { void 0; }
 						safeJson(req, res, 200, { ok: true });
 						return;
 					}

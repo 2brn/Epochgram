@@ -101,8 +101,7 @@ export async function createNoteForDate(
 				if (typeof fromTemplate === "string") {
 					return fromTemplate;
 				}
-			} catch {
-			}
+			} catch { void 0; }
 		}
 		const ymd = formatDate(date);
 		const datePropertyKey = getYamlDatePropertyKey(state.plugin);

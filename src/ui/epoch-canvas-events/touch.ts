@@ -561,7 +561,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 				return;
 			}
 		}
-	} catch {}
+	} catch { void 0; }
 	if ((s as any).__touchSwipeHideLock === true) {
 		return;
 	}

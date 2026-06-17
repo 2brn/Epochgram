@@ -179,7 +179,7 @@ export function addReviewSubmenu(menu: Menu, state: CanvasMenuState, entry: Date
 						void Promise.resolve(applyRecord("draft")).finally(() => {
 							try {
 								(menu as any)?.hide?.();
-							} catch {}
+							} catch { void 0; }
 						});
 					});
 				return;
@@ -193,7 +193,7 @@ export function addReviewSubmenu(menu: Menu, state: CanvasMenuState, entry: Date
 						void Promise.resolve(applyRecord("reviewed")).finally(() => {
 							try {
 								(menu as any)?.hide?.();
-							} catch {}
+							} catch { void 0; }
 						});
 					});
 				return;
@@ -206,7 +206,7 @@ export function addReviewSubmenu(menu: Menu, state: CanvasMenuState, entry: Date
 					void Promise.resolve(applyHidden()).finally(() => {
 						try {
 							(menu as any)?.hide?.();
-						} catch {}
+						} catch { void 0; }
 					});
 				});
 		});

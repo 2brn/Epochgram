@@ -1,11 +1,11 @@
-﻿import { workerState, type OrtWasmBlobUrls } from "./state";
+import { workerState, type OrtWasmBlobUrls } from "./state";
 
 // Keep in sync with package-lock.json (onnxruntime-web version used by similarity worker).
 export const ONNX_RUNTIME_WEB_VERSION = "1.24.3";
 export const PLUGIN_ID = "epoch";
 
 export function getWorkerLocationDebug(): { href: string; origin: string } {
-	const loc: any = (globalThis as any)?.location;
+	const loc: any = (self as any)?.location;
 	const href = String(loc?.href || "");
 	const origin = String(loc?.origin || "");
 	return { href, origin };

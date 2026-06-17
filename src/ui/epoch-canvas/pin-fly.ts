@@ -2,6 +2,9 @@ import type { DateEntry } from "../../indexer/types";
 import { BASE_SPACING, TOUCH_HIT_PAD } from "../epoch-canvas-constants";
 import type { EpochCanvas } from "../epoch-canvas";
 
+const activeDocument = window.document;
+
+
 export function startPinFlyToToday(canvas: EpochCanvas, entry: DateEntry, onDone?: () => void): boolean {
 	try {
 		if (!entry) return false;
@@ -74,7 +77,7 @@ export function startPinFlyToToday(canvas: EpochCanvas, entry: DateEntry, onDone
 		}
 		if (!imgData) return false;
 
-		const off = document.createElement("canvas");
+		const off = activeDocument.createElement("canvas");
 		off.width = sw;
 		off.height = sh;
 		const offCtx = off.getContext("2d");

@@ -32,7 +32,7 @@ export function setEpochsView(canvas: EpochCanvas, value: boolean): void {
 		c.focusedEpochRange = null;
 		c.semanticRelatedRequestId++;
 		if (/[!$]similar\b/i.test(String(c.searchQuery || ""))) {
-			try { c.refreshSemanticRelatedForActiveFile?.(true); } catch { }
+			try { c.refreshSemanticRelatedForActiveFile?.(true); } catch { void 0; }
 		}
 		c.cancelFocusClear();
 		c.keepHoverUntilPointerMove = false;

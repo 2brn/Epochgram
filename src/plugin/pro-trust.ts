@@ -257,13 +257,13 @@ function claimsMatchRuntime(plugin: any, claims: EntitlementClaims): boolean {
 }
 
 async function sha256Base64Url(input: string): Promise<string> {
-	const digest = await globalThis.crypto.subtle.digest("SHA-256", toBufferSource(utf8Bytes(input)));
+	const digest = await window.crypto.subtle.digest("SHA-256", toBufferSource(utf8Bytes(input)));
 	return bytesToBase64Url(new Uint8Array(digest));
 }
 
 async function getVerifyKey(): Promise<CryptoKey> {
 	if (!verifyKeyPromise) {
-		verifyKeyPromise = globalThis.crypto.subtle.importKey(
+		verifyKeyPromise = window.crypto.subtle.importKey(
 			"spki",
 			toBufferSource(base64UrlToBytes(serverVerifyKeyDer)),
 			{ name: "ECDSA", namedCurve: "P-256" },
@@ -280,7 +280,7 @@ async function verifySignature(envelope: SignedEntitlementEnvelope): Promise<boo
 		const verifyKey = await getVerifyKey();
 		const payloadBytes = toBufferSource(utf8Bytes(envelope.payload));
 		const signatureBytes = base64UrlToBytes(envelope.signature);
-		if (await globalThis.crypto.subtle.verify(
+		if (await window.crypto.subtle.verify(
 			{ name: "ECDSA", hash: "SHA-256" },
 			verifyKey,
 			toBufferSource(signatureBytes),
@@ -290,7 +290,7 @@ async function verifySignature(envelope: SignedEntitlementEnvelope): Promise<boo
 		}
 		const converted = derSignatureToP1363(signatureBytes);
 		if (!converted) return false;
-		return await globalThis.crypto.subtle.verify(
+		return await window.crypto.subtle.verify(
 			{ name: "ECDSA", hash: "SHA-256" },
 			verifyKey,
 			toBufferSource(converted),

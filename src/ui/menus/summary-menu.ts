@@ -17,6 +17,8 @@ import {
 } from "./summary-menu/entry-actions";
 import { addEditTopic } from "./summary-menu/topic-menu";
 
+const activeDocument = window.document;
+
 export function showSummaryMenu(canvas: EpochCanvas, entry: DateEntry, clientX: number, clientY: number): Menu {
 	const state = getMenuState(canvas);
 	const menu = new Menu();
@@ -35,7 +37,7 @@ export function showSummaryMenu(canvas: EpochCanvas, entry: DateEntry, clientX: 
 		if (removeOutsideListener) {
 			try {
 				removeOutsideListener();
-			} catch {}
+			} catch { void 0; }
 			removeOutsideListener = null;
 		}
 
@@ -116,11 +118,11 @@ export function showSummaryMenu(canvas: EpochCanvas, entry: DateEntry, clientX: 
 			}
 		};
 		removeOutsideListener = () => {
-			document.removeEventListener("pointerdown", onOutside, true);
-			document.removeEventListener("touchstart", onOutside, true);
+			activeDocument.removeEventListener("pointerdown", onOutside, true);
+			activeDocument.removeEventListener("touchstart", onOutside, true);
 		};
-		document.addEventListener("pointerdown", onOutside, true);
-		document.addEventListener("touchstart", onOutside, true);
+		activeDocument.addEventListener("pointerdown", onOutside, true);
+		activeDocument.addEventListener("touchstart", onOutside, true);
 	} catch {
 		// ignore
 	}

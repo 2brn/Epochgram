@@ -1,7 +1,7 @@
 const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 function getBufferCtor(): any {
-	const maybe = (globalThis as any)?.Buffer;
+	const maybe = (window as any)?.Buffer;
 	return typeof maybe === "function" ? maybe : null;
 }
 

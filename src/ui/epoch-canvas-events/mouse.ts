@@ -114,7 +114,7 @@ export function handleMouseDown(canvas: EpochCanvas, event: MouseEvent): void {
 		try {
 			s.targetOffsetY = s.offsetY;
 			s.targetScale = s.scale;
-		} catch {}
+		} catch { void 0; }
 		s.isDragging = true;
 		s.dragSource = "mouse";
 		(s as any).mousePanButton = isMiddleButton ? 1 : 0;

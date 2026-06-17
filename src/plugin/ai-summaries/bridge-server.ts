@@ -12,11 +12,11 @@ export async function ensureAiBridgeServerRunning(plugin: EpochPlugin): Promise<
 	// This prevents creating a second server on a new port, which would force-opening a
 	// duplicate Chrome bridge tab.
 	try {
-		const g: any = globalThis as any;
+		const g: any = window as any;
 		const globalBridge: AiBridgeServer | null = g.__epochAiBridgeServer ?? null;
 		if (globalBridge) {
 			globalBridge.rebind(plugin, (job, result) => {
-				try { handleBridgeResult(plugin, job, result); } catch {}
+				try { handleBridgeResult(plugin, job, result); } catch { void 0; }
 			});
 			(plugin as any).aiBridge = globalBridge;
 			return;
@@ -37,12 +37,12 @@ export async function ensureAiBridgeServerRunning(plugin: EpochPlugin): Promise<
 	const startPromise = (async () => {
 		const { AiBridgeServer } = await loadAiBridgeServer();
 		const bridge = new AiBridgeServer(plugin, (job, result) => {
-			try { handleBridgeResult(plugin, job, result); } catch {}
+			try { handleBridgeResult(plugin, job, result); } catch { void 0; }
 		});
 		(plugin as any).aiBridge = bridge;
 		await bridge.start();
 		try {
-			const g: any = globalThis as any;
+			const g: any = window as any;
 			g.__epochAiBridgeServer = bridge;
 		} catch {
 			// ignore

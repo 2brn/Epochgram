@@ -1,6 +1,9 @@
 import { getIcon } from "obsidian";
 import { setCssStyles } from "../dom";
 
+const activeDocument = window.document;
+
+
 type IconPathSpec = {
 	path: Path2D;
 	strokeWidth: number;
@@ -73,9 +76,9 @@ function parsePoints(points: string): Array<{ x: number; y: number }> {
 }
 
 function ensureMeasureRoot(): SVGSVGElement {
-	let root = document.querySelector("svg[data-epoch-measure-root]") as SVGSVGElement | null;
+	let root = activeDocument.querySelector("svg[data-epoch-measure-root]") as SVGSVGElement | null;
 	if (root) return root;
-	root = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+	root = activeDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
 	root.setAttribute("data-epoch-measure-root", "true");
 	root.setAttribute("width", "0");
 	root.setAttribute("height", "0");
@@ -87,12 +90,12 @@ function ensureMeasureRoot(): SVGSVGElement {
 		top: "-9999px",
 		overflow: "visible"
 	});
-	document.body.appendChild(root);
+	activeDocument.body.appendChild(root);
 	return root;
 }
 
 function measureIconBounds(svg: SVGElement): { x: number; y: number; width: number; height: number } | null {
-	if (!(svg instanceof SVGGraphicsElement)) return null;
+	if (typeof (svg as any)?.getBBox !== "function") return null;
 	try {
 		const root = ensureMeasureRoot();
 		const clone = svg.cloneNode(true) as SVGGraphicsElement;

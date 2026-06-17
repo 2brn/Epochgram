@@ -10,7 +10,7 @@ function delay(ms: number): Promise<void> {
 
 function getGlobalAiBridgeLastOpenAt(): number {
 	try {
-		const g: any = globalThis as any;
+		const g: any = window as any;
 		const v = g.__epochAiBridgeLastOpenAt;
 		return typeof v === "number" && Number.isFinite(v) ? v : 0;
 	} catch {
@@ -20,7 +20,7 @@ function getGlobalAiBridgeLastOpenAt(): number {
 
 function setGlobalAiBridgeLastOpenAt(value: number): void {
 	try {
-		const g: any = globalThis as any;
+		const g: any = window as any;
 		g.__epochAiBridgeLastOpenAt = value;
 	} catch {
 		// ignore
@@ -29,7 +29,7 @@ function setGlobalAiBridgeLastOpenAt(value: number): void {
 
 function getGlobalAiBridgeLastCloseAt(): number {
 	try {
-		const g: any = globalThis as any;
+		const g: any = window as any;
 		const v = g.__epochAiBridgeLastCloseAt;
 		return typeof v === "number" && Number.isFinite(v) ? v : 0;
 	} catch {
@@ -39,7 +39,7 @@ function getGlobalAiBridgeLastCloseAt(): number {
 
 function tryAcquireGlobalAiBridgeOpenLock(lockMs: number): boolean {
 	try {
-		const g: any = globalThis as any;
+		const g: any = window as any;
 		const now = Date.now();
 		const until = g.__epochAiBridgeOpenLockUntil;
 		if (typeof until === "number" && Number.isFinite(until) && until > now) return false;
@@ -121,8 +121,7 @@ export async function openAiBridgeWindow(
 				const now = Date.now();
 				(this as any).aiBridgeLastOpenAt = now;
 				setGlobalAiBridgeLastOpenAt(now);
-			} catch {
-			}
+			} catch { void 0; }
 		}
 		return;
 	}
@@ -150,8 +149,7 @@ export async function openAiBridgeWindow(
 			const now = Date.now();
 			(this as any).aiBridgeLastOpenAt = now;
 			setGlobalAiBridgeLastOpenAt(now);
-		} catch {
-		}
+		} catch { void 0; }
 		return;
 	}
 
@@ -164,8 +162,7 @@ export async function openAiBridgeWindow(
 		const now = Date.now();
 		(this as any).aiBridgeLastOpenAt = now;
 		setGlobalAiBridgeLastOpenAt(now);
-	} catch {
-	}
+	} catch { void 0; }
 }
 
 export async function maybeOpenAiBridgeOnStartup(this: EpochPlugin): Promise<void> {
@@ -253,7 +250,7 @@ export async function stopAiBridge(this: EpochPlugin): Promise<void> {
 	const bridge: AiBridgeServer | null = (this as any).aiBridge ?? null;
 	const isGlobalBridge = (() => {
 		try {
-			const g: any = globalThis as any;
+			const g: any = window as any;
 			return g.__epochAiBridgeServer === bridge;
 		} catch {
 			return false;
@@ -294,6 +291,6 @@ export async function stopAiBridge(this: EpochPlugin): Promise<void> {
 export function onAiBridgeOptionsChanged(this: EpochPlugin, _prev: Record<string, any>, _next: Record<string, any>): void {
 	try {
 		void this.reloadIndexFromPluginData?.();
-	} catch {}
+	} catch { void 0; }
 	return;
 }

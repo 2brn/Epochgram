@@ -1,5 +1,8 @@
 import { App, Modal } from "obsidian";
 
+const activeDocument = window.document;
+
+
 export class ConfirmModal extends Modal {
 	private titleText: string;
 	private descriptionText: string;
@@ -38,7 +41,7 @@ export class ConfirmModal extends Modal {
 	}
 
 	onOpen() {
-		this.priorActiveElement = (typeof document !== "undefined" ? (document.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
 		this.modalEl.addClass("mod-epochgram-topic");
 		this.titleEl.setText(this.titleText);
 		this.contentEl.empty();
@@ -51,7 +54,7 @@ export class ConfirmModal extends Modal {
 		yesButton.addEventListener("click", () => {
 			try {
 				this.onYes?.();
-			} catch {}
+			} catch { void 0; }
 			this.finish(true);
 		});
 		const noButton = buttons.createEl("button", { text: this.noText, cls: "mod-cancel" });
@@ -73,7 +76,7 @@ export class ConfirmModal extends Modal {
 				} catch {
 					try {
 						el.focus();
-					} catch {}
+					} catch { void 0; }
 				}
 			});
 		}

@@ -10,7 +10,7 @@ function getEl(plugin: EpochPlugin): HTMLElement | null {
 	const anyPlugin: any = plugin as any;
 	const cached = anyPlugin.__epochStatusBarAiBridgeEl;
 	try {
-		const HTMLElementAny: any = (globalThis as any).HTMLElement;
+		const HTMLElementAny: any = (window as any).HTMLElement;
 		if (cached && (typeof HTMLElementAny === "undefined" || cached instanceof HTMLElementAny)) {
 			return cached;
 		}

@@ -26,7 +26,7 @@ function stopScrollNavKeyHold(canvas: EpochCanvas): void {
 	const handle = s.__scrollNavKeyHoldHandle as number | null | undefined;
 	if (handle != null) {
 		try {
-			globalThis.clearInterval(handle);
+			window.clearInterval(handle);
 		} catch {
 			// ignore
 		}
@@ -41,7 +41,7 @@ function startScrollNavKeyHold(canvas: EpochCanvas, direction: number): void {
 	s.__scrollNavKeyHoldDirection = direction;
 	if (existing != null) return;
 	try {
-		s.__scrollNavKeyHoldHandle = globalThis.setInterval(() => {
+		s.__scrollNavKeyHoldHandle = window.setInterval(() => {
 			const dir = Number((s as any).__scrollNavKeyHoldDirection);
 			if (!Number.isFinite(dir) || dir === 0) return;
 			s.advanceScrollNav(dir);

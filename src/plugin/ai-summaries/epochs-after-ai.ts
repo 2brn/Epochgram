@@ -325,8 +325,7 @@ export function scheduleEpochRegenerationAfterAiIdleForDateKeys(
 			if (!regenAll && Array.isArray(remainingQueueRaw) && (remainingQueueRaw as EpochBucket[]).length > 0) {
 				scheduleEpochRegenerationAfterAiIdleForDateKeys(plugin, pendingKeysArr, chosen, undefined, false);
 			}
-			} catch {
-			}
+			} catch { void 0; }
 		})();
 	}, 1500);
 }

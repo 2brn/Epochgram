@@ -98,6 +98,5 @@ export function storeEpochSummary(plugin: EpochPlugin, job: AiSummaryJob, rawSum
 	schedulePersist(plugin);
 	try {
 		(plugin as any).scheduleInheritedMarkRecompute?.("epoch");
-	} catch {
-	}
+	} catch { void 0; }
 }

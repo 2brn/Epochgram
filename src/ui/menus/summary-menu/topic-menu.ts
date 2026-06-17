@@ -18,7 +18,7 @@ async function listKnownTopics(state: CanvasMenuState): Promise<string[]> {
 	const indexer = plugin?.indexer;
 	try {
 		await plugin?.ensureTermSimilarityStoreLoaded?.();
-	} catch {}
+	} catch { void 0; }
 	const topics = new Set<string>();
 	try {
 		const indexedPaths: unknown = indexer.getIndexedPaths();
@@ -29,7 +29,7 @@ async function listKnownTopics(state: CanvasMenuState): Promise<string[]> {
 			const t = canonicalizeTopicTerm(t0);
 			if (t && !isNoTopicSentinel(t)) topics.add(t);
 		}
-	} catch {}
+	} catch { void 0; }
 	try {
 		const filesObj = plugin?.termSimilarityIndex?.files;
 		if (filesObj && typeof filesObj === "object") {
@@ -39,7 +39,7 @@ async function listKnownTopics(state: CanvasMenuState): Promise<string[]> {
 				if (t && !isNoTopicSentinel(t)) topics.add(t);
 			}
 		}
-	} catch {}
+	} catch { void 0; }
 	return Array.from(topics).sort(sortTopicTermsIgnorePrefix);
 }
 
@@ -64,7 +64,7 @@ export function addEditTopic(menu: Menu, state: CanvasMenuState, entry: DateEntr
 						(state as any).__suppressExternalAutoScrollUntil = performance.now() + 1000;
 						const activePath = plugin?.app?.workspace?.getActiveFile?.()?.path ?? null;
 						(state as any).suppressNextFocusScrollForPath?.(activePath);
-					} catch {}
+					} catch { void 0; }
 
 					const queueNotice = (): void => {
 						try {
@@ -104,15 +104,15 @@ export function addEditTopic(menu: Menu, state: CanvasMenuState, entry: DateEntr
 						if (topic && typeof plugin?.renameTopicGroup === "function") {
 							try {
 								await plugin.renameTopicGroup(topic, "");
-							} catch {}
+							} catch { void 0; }
 							try {
 								queueNotice();
 								plugin.scheduleMissingTopicClassificationSweep?.("topic-remove");
-							} catch {}
+							} catch { void 0; }
 						}
 						try {
 							plugin.refreshEpochViews?.();
-						} catch {}
+						} catch { void 0; }
 						state.clearHover(true);
 						state.refreshIndex();
 						return;
@@ -136,16 +136,16 @@ export function addEditTopic(menu: Menu, state: CanvasMenuState, entry: DateEntr
 						try {
 							queueNotice();
 							plugin.queueVectorUpdate?.(entry.file);
-						} catch {}
+						} catch { void 0; }
 						try {
 							plugin.scheduleInheritedMarkRecompute?.("topic-clear");
-						} catch {}
+						} catch { void 0; }
 						if (changed) {
 							if (typeof plugin?.persistIndex === "function") await plugin.persistIndex({ skipEnsure: true });
 						}
 						try {
 							plugin.refreshEpochViews?.();
-						} catch {}
+						} catch { void 0; }
 						state.clearHover(true);
 						state.refreshIndex();
 						return;
@@ -165,31 +165,31 @@ export function addEditTopic(menu: Menu, state: CanvasMenuState, entry: DateEntr
 						try {
 							queueNotice();
 							plugin.scheduleMissingTopicClassificationSweep?.("topic-rename");
-						} catch {}
+						} catch { void 0; }
 					} else {
 						if (!indexer.setFileEmbeddingTerm(entry.file, next)) return;
 						try {
 							queueNotice();
 							plugin.queueVectorUpdate?.(entry.file);
-						} catch {}
+						} catch { void 0; }
 						try {
 							plugin.queueTermSimilarityUpdate?.(entry.file);
-						} catch {}
+						} catch { void 0; }
 						try {
 							plugin.scheduleMissingTopicClassificationSweep?.("topic-vocab");
-						} catch {}
+						} catch { void 0; }
 						try {
 							plugin.scheduleInheritedMarkRecompute?.("topic-change");
-						} catch {}
+						} catch { void 0; }
 						if (typeof plugin?.persistIndex === "function") await plugin.persistIndex({ skipEnsure: true });
 					}
 
 					try {
 						plugin.refreshEpochViews?.();
-					} catch {}
+					} catch { void 0; }
 					state.clearHover(true);
 					state.refreshIndex();
 				});
 		});
-	} catch {}
+	} catch { void 0; }
 }
