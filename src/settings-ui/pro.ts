@@ -21,7 +21,7 @@ import {
 	hasVerifiedEntitlement
 } from "../plugin/pro-feature-state";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 type ProPanelOptions = {
 	advancedGroupsParentEl?: HTMLElement;

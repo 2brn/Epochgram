@@ -10,7 +10,7 @@ import {
 } from "../../ui/mark-colors";
 import type { EpochPlugin } from "../../main";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 
 export function registerFileMenu(plugin: EpochPlugin): void {

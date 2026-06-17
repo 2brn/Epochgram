@@ -1,6 +1,6 @@
 import { MarkdownView, Notice, type App } from "obsidian";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 
 function formatErrorForNotice(err: unknown): string {

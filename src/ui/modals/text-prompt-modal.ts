@@ -1,7 +1,7 @@
 import { App, Modal } from "obsidian";
 import { setCssStyles } from "../../dom";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 
 export class TextPromptModal extends Modal {

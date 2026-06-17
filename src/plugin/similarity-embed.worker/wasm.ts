@@ -5,7 +5,8 @@ export const ONNX_RUNTIME_WEB_VERSION = "1.24.3";
 export const PLUGIN_ID = "epoch";
 
 export function getWorkerLocationDebug(): { href: string; origin: string } {
-	const loc: any = (self as any)?.location;
+	const workerGlobal: any = typeof self !== "undefined" ? (self as any) : (typeof global !== "undefined" ? (global as any) : {});
+	const loc: any = workerGlobal?.location;
 	const href = String(loc?.href || "");
 	const origin = String(loc?.origin || "");
 	return { href, origin };

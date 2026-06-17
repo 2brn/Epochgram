@@ -2,7 +2,7 @@ import { App, SuggestModal } from "obsidian";
 import { canonicalizeTopicTerm, isNoTopicSentinel, sortTopicTermsIgnorePrefix } from "utils";
 import { truncateToChars, truncateToWords } from "./text-utils";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 
 type TopicSuggestItem =

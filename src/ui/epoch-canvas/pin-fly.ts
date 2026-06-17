@@ -2,7 +2,7 @@ import type { DateEntry } from "../../indexer/types";
 import { BASE_SPACING, TOUCH_HIT_PAD } from "../epoch-canvas-constants";
 import type { EpochCanvas } from "../epoch-canvas";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 
 export function startPinFlyToToday(canvas: EpochCanvas, entry: DateEntry, onDone?: () => void): boolean {

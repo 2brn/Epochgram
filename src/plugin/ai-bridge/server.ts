@@ -6,11 +6,13 @@ import { sanitizeBridgeOptions, sanitizeBridgeServerState, validateBridgeOptions
 import { estimateTokens } from "./tokens";
 import type { AiBridgeStatus, AiSummaryJob, AiSummaryJobResult } from "./types";
 
+const runtimeGlobal: any = typeof window !== "undefined" ? (window as any) : (typeof global !== "undefined" ? (global as any) : {});
+
 function makeBridgeToken(): string {
 	const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	const bytes = new Uint8Array(24);
 	try {
-		const c: any = (window as any).crypto;
+		const c: any = runtimeGlobal.crypto;
 		if (c && typeof c.getRandomValues === "function") {
 			c.getRandomValues(bytes);
 		} else {
@@ -326,7 +328,7 @@ export class AiBridgeServer {
 		// Example: epoch regeneration scheduled to run after AI becomes idle.
 		try {
 			const anyPlugin: any = this.plugin as any;
-			const w: any = window as any;
+			const w: any = runtimeGlobal;
 			try {
 				// Cancels in-flight producers that are still enqueueing jobs.
 				anyPlugin.__epochAiEnqueueCancelKey = (Number(anyPlugin.__epochAiEnqueueCancelKey) || 0) + 1;
@@ -408,7 +410,7 @@ export class AiBridgeServer {
 		if (!Platform.isDesktopApp) {
 			throw new Error("AI Bridge server is only available on desktop");
 		}
-		const httpModule = (window as any).__epochNodeHttpModule ?? "node:http";
+		const httpModule = runtimeGlobal.__epochNodeHttpModule ?? "node:http";
 		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require allows runtime selection of http module for testing
 		const http = require(httpModule) as typeof import("http");
 
@@ -485,7 +487,7 @@ export class AiBridgeServer {
 						// ignore
 					}
 					try {
-						const g: any = window as any;
+						const g: any = runtimeGlobal;
 						g.__epochAiBridgeLastCloseAt = Date.now();
 					} catch {
 						// ignore

@@ -1,6 +1,6 @@
 import { App, SuggestModal, TFolder, normalizePath } from "obsidian";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 
 export class FolderTreeModal extends SuggestModal<TFolder> {

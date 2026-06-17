@@ -9,13 +9,14 @@ import { hoverState } from "./internals";
 
 const SCROLL_NAV_HOLD_INTERVAL_MS = 90;
 const SCROLL_NAV_HOLD_START_DELAY_MS = 180;
+const timerHost: any = typeof window !== "undefined" ? (window as any) : (typeof global !== "undefined" ? (global as any) : {});
 
 function stopScrollNavKeyHold(canvas: EpochCanvas): void {
 	const s: any = state(canvas) as any;
 	const startHandle = s.__scrollNavKeyHoldStartHandle as number | null | undefined;
 	if (startHandle != null) {
 		try {
-			window.clearTimeout(startHandle);
+			timerHost.clearTimeout?.(startHandle);
 		} catch {
 			// ignore
 		}
@@ -26,7 +27,7 @@ function stopScrollNavKeyHold(canvas: EpochCanvas): void {
 	const handle = s.__scrollNavKeyHoldHandle as number | null | undefined;
 	if (handle != null) {
 		try {
-			window.clearInterval(handle);
+			timerHost.clearInterval?.(handle);
 		} catch {
 			// ignore
 		}
@@ -41,7 +42,7 @@ function startScrollNavKeyHold(canvas: EpochCanvas, direction: number): void {
 	s.__scrollNavKeyHoldDirection = direction;
 	if (existing != null) return;
 	try {
-		s.__scrollNavKeyHoldHandle = window.setInterval(() => {
+		s.__scrollNavKeyHoldHandle = timerHost.setInterval?.(() => {
 			const dir = Number((s as any).__scrollNavKeyHoldDirection);
 			if (!Number.isFinite(dir) || dir === 0) return;
 			s.advanceScrollNav(dir);
@@ -60,7 +61,7 @@ function scheduleScrollNavKeyHoldStart(canvas: EpochCanvas, direction: number): 
 	if (existingStart != null) return;
 	try {
 		s.__scrollNavKeyHoldStartAt = performance.now();
-		s.__scrollNavKeyHoldStartHandle = window.setTimeout(() => {
+		s.__scrollNavKeyHoldStartHandle = timerHost.setTimeout?.(() => {
 			s.__scrollNavKeyHoldStartHandle = null;
 			const dir = Number((s as any).__scrollNavKeyHoldDirection);
 			if (!Number.isFinite(dir) || dir === 0) return;

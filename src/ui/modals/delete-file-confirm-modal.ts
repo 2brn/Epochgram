@@ -1,7 +1,7 @@
 import type { App } from "obsidian";
 import { Modal, TFile } from "obsidian";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 
 function getVaultConfigString(app: App, key: string): string | null {

@@ -9,7 +9,7 @@ import {
 import { getMenuState } from "./menu-state";
 import { addMenuTitle, formatMenuTitleWithPath } from "./menu-title";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 export function showDateMenu(
 	canvas: EpochCanvas,

@@ -4,6 +4,8 @@ import { assertOrtAvailable, getOrt, getTransformers } from "./runtime";
 import { getOrtWasmCdnBase, getWorkerLocationDebug } from "./wasm";
 import { coerceVector, meanPool } from "./vectors";
 
+const workerGlobal: any = typeof self !== "undefined" ? (self as any) : (typeof global !== "undefined" ? (global as any) : {});
+
 // Zero-shot classification (term similarity)
 const DEFAULT_ZERO_SHOT_MODEL_ID = "MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33";
 
@@ -20,7 +22,7 @@ type WorkerProgressMsg = {
 
 function postProgress(msg: WorkerProgressMsg): void {
 	try {
-		(self as any).postMessage(msg);
+		workerGlobal.postMessage?.(msg);
 	} catch {
 		// ignore
 	}
@@ -163,7 +165,7 @@ async function ensureOrtConfigured(): Promise<void> {
 function supportsWebGpu(): boolean {
 	return false;
 	try {
-		return !!((self as any)?.navigator?.gpu);
+		return !!(workerGlobal?.navigator?.gpu);
 	} catch {
 		return false;
 	}
@@ -209,8 +211,8 @@ export async function ensureEmbedder(modelId: string): Promise<any> {
 		}
 
 		try {
-			(self as any).ort = ort as any;
-			(self as any).onnxruntime = ort as any;
+			workerGlobal.ort = ort as any;
+			workerGlobal.onnxruntime = ort as any;
 		} catch {
 			// ignore
 		}
@@ -269,8 +271,8 @@ export async function ensureZeroShotClassifier(modelId?: string): Promise<any> {
 			// ignore
 		}
 		try {
-			(self as any).ort = ort as any;
-			(self as any).onnxruntime = ort as any;
+			workerGlobal.ort = ort as any;
+			workerGlobal.onnxruntime = ort as any;
 		} catch {
 			// ignore
 		}

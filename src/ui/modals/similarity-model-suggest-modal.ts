@@ -3,7 +3,7 @@ import type { EpochPlugin } from "../../main";
 import { DEFAULT_SIMILARITY_MODEL, DEFAULT_ZERO_SHOT_MODEL, NO_SIMILARITY_MODEL } from "../../plugin/similarity/config";
 import { hasSimilarityAccess } from "../../plugin/pro-feature-state";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 
 export type SimilarityModelSuggestFocus = "semantics" | "topics";

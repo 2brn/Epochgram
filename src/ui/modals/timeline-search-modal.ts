@@ -3,7 +3,7 @@ import type { DateEntry } from "../../indexer/types";
 import { SUMMARY_SEPARATOR_SYMBOL } from "../epoch-canvas-constants";
 import { setCssStyles } from "../../dom";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 
 export type TimelineSearchSuggestion =

@@ -2,7 +2,7 @@ import { Notice, Platform } from "obsidian";
 import type { EpochPlugin } from "../main";
 import { setCssStyles } from "../dom";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 
 type EpochProgressKind = "index" | "search" | "semantic" | "topics" | "semanticBuild" | "ai";
@@ -12,7 +12,7 @@ const KIND_PRIORITY: EpochProgressKind[] = ["ai", "topics", "semantic", "semanti
 function clearPlannedAiWork(plugin: EpochPlugin): void {
 	try {
 		const anyPlugin: any = plugin as any;
-		const g: any = window as any;
+		const g: any = typeof window !== "undefined" ? (window as any) : (typeof global !== "undefined" ? (global as any) : {});
 
 		try {
 			anyPlugin.__epochAiEnqueueCancelKey = (Number(anyPlugin.__epochAiEnqueueCancelKey) || 0) + 1;

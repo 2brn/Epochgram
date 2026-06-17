@@ -17,7 +17,7 @@ import {
 } from "./summary-menu/entry-actions";
 import { addEditTopic } from "./summary-menu/topic-menu";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 export function showSummaryMenu(canvas: EpochCanvas, entry: DateEntry, clientX: number, clientY: number): Menu {
 	const state = getMenuState(canvas);

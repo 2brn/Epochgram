@@ -6,6 +6,8 @@ export type { AiBridgeServer } from "./ai-bridge/server";
 
 import { Platform } from "obsidian";
 
+const runtimeGlobal: any = typeof window !== "undefined" ? (window as any) : (typeof global !== "undefined" ? (global as any) : {});
+
 function canLoadNodeBuiltinsForAiBridge(): boolean {
 	// Treat mobile emulation as mobile: Obsidian may set both isDesktopApp and isMobileApp.
 	if (!Platform.isDesktopApp) return false;
@@ -15,11 +17,11 @@ function canLoadNodeBuiltinsForAiBridge(): boolean {
 
 	// Do NOT probe Node built-ins via require("http") etc:
 	// in sandboxed contexts this can log noisy console errors even if caught.
-	const req: any = (window as any)?.require;
+	const req: any = runtimeGlobal?.require;
 	if (typeof req !== "function") return false;
 
 	// Basic Node presence check.
-	const proc: any = (window as any)?.process;
+	const proc: any = runtimeGlobal?.process;
 	if (!proc?.versions?.node) return false;
 	return true;
 }

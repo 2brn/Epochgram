@@ -16,7 +16,7 @@ import { getMenuState } from "../menu-state";
 import { getTopicGroupForPath } from "./topic-group";
 import { setCssStyles } from "../../../dom";
 
-const activeDocument = window.document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
 
 export function addMarkSubmenu(
 	menu: Menu,
