@@ -1,5 +1,12 @@
 # Epochgram changelog
 
+## [1.5.0] - 2026-07-01
+- Refactored a large number of lint warnings and errors, including UI label casing updates.
+- Fixed two-digit year parsing and date format positioning issues.
+- Added a **Search results** slider to control suggestion count.
+- Expanded search behavior to work across all files with query-aware filtering.
+- Added same-folder similarity via **Title threshold = 1.0** and updated record/search ordering by modified date.
+
 ## [1.4.20] - 2026-06-17
 - Fixed lint warning issues across plugin.
 - Improved popout window compatibility by using window/activeDocument-safe APIs.
