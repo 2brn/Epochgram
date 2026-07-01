@@ -245,6 +245,8 @@ export function openSearchModal(view: SearchViewLike): void {
 			...(canvas as unknown as Record<string, unknown>),
 			searchQuery: q,
 		} as unknown) as EpochCanvas;
+		const epochsViewActive = canvas.epochsView === true;
+		const currentEpochBucket = String(canvas.epochsViewBucket ?? "");
 		const hiddenOnly = (() => {
 			try {
 				const toks = String(parsed?.fuzzyText || "")
@@ -314,6 +316,11 @@ export function openSearchModal(view: SearchViewLike): void {
 					if (out.length >= limit) break;
 					const fp = String(e.file ?? "");
 					if (!fp) continue;
+					const isEpoch = fp.startsWith("epoch://");
+					if (epochsViewActive && isEpoch && currentEpochBucket) {
+						const b = String(e.epochBucket ?? "");
+						if (b !== currentEpochBucket) continue;
+					}
 					if (excludeFiles.has(fp)) continue;
 					if (hiddenOnly && e.reviewState !== "hidden") continue;
 					let ok = false;
@@ -322,7 +329,8 @@ export function openSearchModal(view: SearchViewLike): void {
 					} catch {
 						ok = false;
 					}
-					if (!ok) continue;
+					const includeEpochContext = epochsViewActive && isEpoch && (!currentEpochBucket || String(e.epochBucket ?? "") === currentEpochBucket);
+					if (!ok && !includeEpochContext) continue;
 					excludeFiles.add(fp);
 					out.push({ entry: e, label: labelForEntry(e, fp) });
 				}

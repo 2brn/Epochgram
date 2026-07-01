@@ -73,7 +73,7 @@ export default defineConfig([
         {
           enforceCamelCaseLower: true,
           brands: ["Epochgram", "Pro", "Obsidian", "Google", "Chrome"],
-          ignoreRegex: ["^Epochgram:\\s"],
+          ignoreRegex: ["^Epochgram:\\s", "^\\(Clear\\)$"],
         },
       ],
       "epochgram-internal/ui-prefix-case": "error",

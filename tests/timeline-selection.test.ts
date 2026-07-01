@@ -9,10 +9,12 @@ const makeEntry = (overrides: Partial<DateEntry> = {}): DateEntry => ({
 	blockEnd: overrides.blockEnd ?? overrides.blockStart ?? 0,
 	summary: overrides.summary ?? "summary",
 	source: overrides.source ?? "content",
-	hidden: overrides.hidden,
 	pinned: overrides.pinned,
 	trackedChange: overrides.trackedChange,
-	trackedTime: overrides.trackedTime
+	trackedTime: overrides.trackedTime,
+	fileMtimeMs: overrides.fileMtimeMs,
+	reviewState: overrides.reviewState,
+	...overrides,
 });
 
 describe("timeline selection", () => {
