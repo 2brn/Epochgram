@@ -5,18 +5,27 @@ import { requestSimilarityWorker } from "./worker-rpc";
 import { primeOrtWasmForWorker } from "./worker-ort";
 import { clearEpochProgress } from "../progress";
 
+type WorkerLoadResponse = { ok?: boolean } | null;
+
+type WorkerEmbedPluginState = {
+	similarityWorkerLastLoadError?: string | null;
+	similarityWorkerLastLoadErrorAt?: number | null;
+	similarityWorkerLastLoadErrorModelId?: string | null;
+	similarityWorkerDisabled?: boolean;
+};
+
 export async function loadEmbeddingsModelViaWorker(plugin: EpochPlugin, modelId: string): Promise<boolean> {
 	const normalized = String(modelId || "").trim();
 	try {
 		await primeOrtWasmForWorker(plugin);
-		const resp = await requestSimilarityWorker(plugin, { type: "loadModel", modelId: normalized } as any);
-		if (!!resp && (resp as any).ok === true) {
+		const resp = await requestSimilarityWorker(plugin, { type: "loadModel", modelId: normalized }) as WorkerLoadResponse;
+		if (!!resp && resp.ok === true) {
 			devConsoleLogOnce(plugin, `embeddings:${normalized}`, `[epoch] embeddings model loaded: ${normalized}`);
 			try {
-				const anyPlugin: any = plugin as any;
-				anyPlugin.similarityWorkerLastLoadError = null;
-				anyPlugin.similarityWorkerLastLoadErrorAt = null;
-				anyPlugin.similarityWorkerLastLoadErrorModelId = null;
+				const state = plugin as EpochPlugin & WorkerEmbedPluginState;
+				state.similarityWorkerLastLoadError = null;
+				state.similarityWorkerLastLoadErrorAt = null;
+				state.similarityWorkerLastLoadErrorModelId = null;
 			} catch {
 				// ignore
 			}
@@ -28,28 +37,28 @@ export async function loadEmbeddingsModelViaWorker(plugin: EpochPlugin, modelId:
 			// ignore
 		}
 		try {
-			const anyPlugin: any = plugin as any;
-			const createErr = String(anyPlugin?.similarityWorkerLastCreateError ?? "").trim();
-			anyPlugin.similarityWorkerLastLoadError = createErr ? `Worker unavailable: ${createErr}` : "Worker unavailable";
-			anyPlugin.similarityWorkerLastLoadErrorAt = now();
-			anyPlugin.similarityWorkerLastLoadErrorModelId = normalized;
+			const state = plugin as EpochPlugin & WorkerEmbedPluginState & { similarityWorkerLastCreateError?: string | null };
+			const createErr = String(state.similarityWorkerLastCreateError ?? "").trim();
+			state.similarityWorkerLastLoadError = createErr ? `Worker unavailable: ${createErr}` : "Worker unavailable";
+			state.similarityWorkerLastLoadErrorAt = now();
+			state.similarityWorkerLastLoadErrorModelId = normalized;
 		} catch {
 			// ignore
 		}
 		return false;
-	} catch (e: any) {
-		const msg = String(e?.message || e || "Worker loadModel failed");
-		debugLog("embed:worker-loadModel-failed", { model: normalized, err: safeStringify(e, 2000) });
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : typeof error === "string" && error ? error : "Worker loadModel failed";
+		debugLog("embed:worker-loadModel-failed", { model: normalized, err: safeStringify(error, 2000) });
 		try {
 			clearEpochProgress(plugin, "semantic", 1500);
 		} catch {
 			// ignore
 		}
 		try {
-			const anyPlugin: any = plugin as any;
-			anyPlugin.similarityWorkerLastLoadError = msg;
-			anyPlugin.similarityWorkerLastLoadErrorAt = now();
-			anyPlugin.similarityWorkerLastLoadErrorModelId = normalized;
+			const state = plugin as EpochPlugin & WorkerEmbedPluginState;
+			state.similarityWorkerLastLoadError = msg;
+			state.similarityWorkerLastLoadErrorAt = now();
+			state.similarityWorkerLastLoadErrorModelId = normalized;
 		} catch {
 			// ignore
 		}
@@ -63,8 +72,8 @@ async function embedPooledViaWorker(plugin: EpochPlugin, modelId: string, chunks
 		modelId: String(modelId || "").trim(),
 		chunks: Array.isArray(chunks) ? chunks.map((c) => String(c || "")).filter(Boolean) : []
 	});
-	if (!resp || (resp as any).ok !== true || (resp as any).type !== "embedPooled") return null;
-	return Array.isArray((resp as any).vector) ? (resp as any).vector : [];
+	if (!resp || resp.ok !== true || resp.type !== "embedPooled") return null;
+	return Array.isArray(resp.vector) ? resp.vector : [];
 }
 
 export async function embedPooledChunks(plugin: EpochPlugin, modelId: string, chunks: string[]): Promise<number[]> {
@@ -74,8 +83,8 @@ export async function embedPooledChunks(plugin: EpochPlugin, modelId: string, ch
 	} catch (e) {
 		debugLog("embed:worker-failed", { err: safeStringify(e, 1500) });
 		try {
-			const anyPlugin: any = plugin as any;
-			anyPlugin.similarityWorkerDisabled = true;
+			const state = plugin as EpochPlugin & WorkerEmbedPluginState;
+			state.similarityWorkerDisabled = true;
 		} catch {
 			// ignore
 		}

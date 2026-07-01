@@ -4,6 +4,39 @@ import type { EpochCanvas } from "../epoch-canvas";
 import { dateKeyToDate as dateKeyToDateHelper, getDayIndexForDate as getDayIndexForDateHelper } from "../epoch-canvas-focus";
 import { getEntriesForDate, pickEntryForFile } from "../entry-helpers";
 
+type StartupScrollNavCanvasState = {
+	index: Record<string, DateEntry[]>;
+	layouts: Array<{ summaryRects?: Array<{ entry?: DateEntry | null }> }>;
+	scrollNavFile: string | null;
+	scrollNavIndex: number;
+	pendingScrollNavHighlight: unknown;
+	showContentDates?: boolean;
+	showPropDates?: boolean;
+	showAttachments?: boolean;
+	reviewFilterMode?: string;
+	showDraftOnly?: boolean;
+	showHidden?: boolean;
+	root?: HTMLElement;
+	clearHover(force?: boolean): void;
+	draw(): void;
+	recurring?: unknown;
+	scrollNavAnchorEntry?: DateEntry | null;
+	__scrollNavLastModeKey?: string | null;
+	__scrollNavAnchorMode?: string | null;
+};
+
+function state(canvas: EpochCanvas): StartupScrollNavCanvasState {
+	return canvas as unknown as StartupScrollNavCanvasState;
+}
+
+function entryFile(entry: DateEntry): string {
+	return String(entry.file ?? "");
+}
+
+function entryBlockStart(entry: DateEntry): number {
+	return Number(entry.blockStart ?? -1);
+}
+
 function getSourcePriority(source: DateEntry["source"]): number {
 	switch (source) {
 		case "namedate":
@@ -21,9 +54,8 @@ function getSourcePriority(source: DateEntry["source"]): number {
 	}
 }
 
-function entriesMatch(a: any, b: any): boolean {
+function entriesMatch(a: DateEntry, b: DateEntry): boolean {
 	if (a === b) return true;
-	if (!a || !b) return false;
 	const af = String(a.file ?? "");
 	const bf = String(b.file ?? "");
 	if (af !== bf) return false;
@@ -39,7 +71,7 @@ function entriesMatch(a: any, b: any): boolean {
 }
 
 export function setScrollNavTargetForFile(canvas: EpochCanvas, filePath: string, cursorLine: number | null = null): boolean {
-	const c: any = canvas as any;
+	const c = state(canvas);
 	const path = String(filePath ?? "");
 	if (!path) {
 		c.scrollNavFile = null;
@@ -57,16 +89,16 @@ export function setScrollNavTargetForFile(canvas: EpochCanvas, filePath: string,
 		if (!date) continue;
 		const entries = getEntriesForDate(canvas, date);
 		if (!entries || entries.length === 0) continue;
-		const picked = pickEntryForFile(canvas, entries as any, path, null);
+		const picked = pickEntryForFile(canvas, entries, path, null);
 		if (!picked) continue;
 		const dayIndex0 = getDayIndexForDateHelper(canvas, date);
 		const dayIndex = Number.isFinite(dayIndex0) ? dayIndex0 : Number.POSITIVE_INFINITY;
-		let entryIndex = (entries as any).indexOf(picked);
+		let entryIndex = entries.indexOf(picked);
 		if (entryIndex < 0) {
-			const pf = String((picked as any)?.file ?? "");
-			const pbs = Number((picked as any)?.blockStart ?? -1);
-			const pbe = Number((picked as any)?.blockEnd ?? -1);
-			entryIndex = (entries as any).findIndex((e: any) => {
+			const pf = String(picked.file ?? "");
+			const pbs = Number(picked.blockStart ?? -1);
+			const pbe = Number(picked.blockEnd ?? -1);
+			entryIndex = entries.findIndex((e) => {
 				if (!e) return false;
 				if (String(e.file ?? "") !== pf) return false;
 				const ebs = Number(e.blockStart ?? -1);
@@ -83,12 +115,12 @@ export function setScrollNavTargetForFile(canvas: EpochCanvas, filePath: string,
 		if (di !== 0) return di;
 		const ei = a.entryIndex - b.entryIndex;
 		if (ei !== 0) return ei;
-		const af = String((a.entry as any)?.file ?? "");
-		const bf = String((b.entry as any)?.file ?? "");
+		const af = entryFile(a.entry);
+		const bf = entryFile(b.entry);
 		if (af < bf) return -1;
 		if (af > bf) return 1;
-		const abs = Number((a.entry as any)?.blockStart ?? -1);
-		const bbs = Number((b.entry as any)?.blockStart ?? -1);
+		const abs = entryBlockStart(a.entry);
+		const bbs = entryBlockStart(b.entry);
 		return abs - bbs;
 	});
 
@@ -100,10 +132,10 @@ export function setScrollNavTargetForFile(canvas: EpochCanvas, filePath: string,
 	let preferredEntry: DateEntry | null = null;
 	if (typeof cursorLine === "number" && Number.isFinite(cursorLine)) {
 		for (const layout of c.layouts ?? []) {
-			const rects: any[] = (layout as any)?.summaryRects ?? [];
-			if (!Array.isArray(rects) || rects.length === 0) continue;
+			const rects = layout.summaryRects ?? [];
+			if (rects.length === 0) continue;
 			const hit = rects.find((r) => {
-				const e = (r as any)?.entry;
+				const e = r?.entry;
 				if (!e) return false;
 				if (String(e.file ?? "") !== path) return false;
 				const start0 = Number(e.blockStart ?? 0);
@@ -121,14 +153,14 @@ export function setScrollNavTargetForFile(canvas: EpochCanvas, filePath: string,
 
 	let chosenIndex = -1;
 	if (preferredEntry) {
-		chosenIndex = matches.findIndex((m) => entriesMatch(m.entry as any, preferredEntry as any));
+		chosenIndex = matches.findIndex((m) => entriesMatch(m.entry, preferredEntry));
 		if (chosenIndex >= 0) {
 			c.scrollNavIndex = chosenIndex;
 			return true;
 		}
 	}
 
-	const isRecurring = (entry: DateEntry): boolean => (entry as any)?.recurring === true;
+	const isRecurring = (entry: DateEntry): boolean => entry.recurring === true;
 	let bestAny: { priority: number; dateMs: number; idx: number } | null = null;
 	let bestNonRecurring: { priority: number; dateMs: number; idx: number } | null = null;
 	let oldestRecurring: { dateMs: number; idx: number } | null = null;

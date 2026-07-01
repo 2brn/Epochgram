@@ -16,16 +16,24 @@ export function normalizeFrontmatterPropertyKey(value: string, fallback: string)
 	return fallback;
 }
 
-export function getYamlDatePropertyKey(plugin: any): string {
+function readPluginSettingString(plugin: unknown, key: "yamlDateProperty" | "yamlDescriptionProperty"): string {
+	if (!plugin || typeof plugin !== "object") return "";
+	const settings = (plugin as { settings?: unknown }).settings;
+	if (!settings || typeof settings !== "object") return "";
+	const value = (settings as Record<string, unknown>)[key];
+	return typeof value === "string" ? value : "";
+}
+
+export function getYamlDatePropertyKey(plugin: unknown): string {
 	return normalizeFrontmatterPropertyKey(
-		plugin?.settings?.yamlDateProperty,
+		readPluginSettingString(plugin, "yamlDateProperty"),
 		DEFAULT_YAML_DATE_PROPERTY
 	);
 }
 
-export function getYamlDescriptionPropertyKey(plugin: any): string {
+export function getYamlDescriptionPropertyKey(plugin: unknown): string {
 	return normalizeFrontmatterPropertyKey(
-		plugin?.settings?.yamlDescriptionProperty,
+		readPluginSettingString(plugin, "yamlDescriptionProperty"),
 		DEFAULT_YAML_DESCRIPTION_PROPERTY
 	);
 }
@@ -34,13 +42,15 @@ export function buildFrontmatterPropertyLineRegex(key: string): RegExp {
 	return new RegExp(`^\\s*${escapeRegexLiteral(String(key || ""))}\\s*:\\s*(.*?)\\s*$`, "i");
 }
 
-export function readFrontmatterProperty(frontmatter: any, keyRaw: string): any {
+export function readFrontmatterProperty(frontmatter: unknown, keyRaw: string): unknown {
 	if (!frontmatter || typeof frontmatter !== "object") return null;
 	const key = String(keyRaw ?? "").trim();
 	if (!key) return null;
-	if (Object.prototype.hasOwnProperty.call(frontmatter, key)) return (frontmatter as any)[key];
+	if (Object.prototype.hasOwnProperty.call(frontmatter, key)) {
+		return (frontmatter as Record<string, unknown>)[key];
+	}
 	const target = key.toLowerCase();
-	for (const [k, v] of Object.entries(frontmatter)) {
+	for (const [k, v] of Object.entries(frontmatter as Record<string, unknown>)) {
 		if (String(k ?? "").trim().toLowerCase() === target) return v;
 	}
 	return null;

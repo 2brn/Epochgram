@@ -78,19 +78,65 @@ export interface LicenseMethods {
 	validateStoredActivationToken(options?: ValidationOptions): Promise<boolean>;
 }
 
+type LicenseWindowLike = Window & {
+	process?: { platform?: string };
+};
+
+type HeaderLookupLike = {
+	get?: (name: string) => unknown;
+	[key: string]: unknown;
+};
+
+type LicenseRuntime = {
+	__epochSettingTab?: { display?: () => void };
+	refreshAiBridgeStatusBar?: () => void;
+	maybeOpenAiBridgeOnStartup?: () => void;
+	__epochProStartupValidationFailureNoticeShown?: boolean;
+	__proValidationPromise?: Promise<boolean> | null;
+	ensureIndexLoaded?: () => Promise<void>;
+	persist?: (options: { skipEnsure: true }) => Promise<void>;
+	recomputeInheritedMarksNow?: (reason: string) => void;
+};
+
+type LicenseIndexerRuntime = {
+	files?: Record<string, {
+		trackedDates?: Record<string, unknown[]>;
+		trackedSnapshot?: string | null;
+		trackedSnapshotDate?: string | null;
+		trackedBaselineSnapshot?: string | null;
+		trackedBaselineDate?: string | null;
+	}>;
+	latestLines?: Record<string, string[]>;
+	refreshSyntheticEntries?: () => void;
+};
+
+type LicenseSettingsRuntime = {
+	claimKeyPreview?: string;
+	installId?: string;
+	devicePublicKey?: string;
+	activationEnvelope?: string;
+	activationWitness?: string;
+	activationGenerationFloor?: number;
+	activationStatus?: string;
+	activationError?: string;
+	lastValidationAt?: string;
+	lastValidatedAt?: string;
+};
+
 function normalizeText(value: unknown): string {
 	return typeof value === "string" ? String(value).trim() : "";
 }
 
 function getPlatformLabel(): string {
+	const win = window as LicenseWindowLike;
 	if (Platform.isMobileApp) {
-		const mobileOs = String((window as any)?.process?.platform ?? "").trim().toLowerCase();
+		const mobileOs = String(win.process?.platform ?? "").trim().toLowerCase();
 		if (mobileOs === "darwin") return "iOS";
 		if (mobileOs === "android") return "Android";
 		return "Mobile";
 	}
 	try {
-		const p = String((window as any)?.process?.platform ?? "").trim().toLowerCase();
+		const p = String(win.process?.platform ?? "").trim().toLowerCase();
 		if (p === "win32") return "Windows";
 		if (p === "darwin") return "macOS";
 		if (p === "linux") return "Linux";
@@ -146,38 +192,41 @@ function setActivationMetadata(
 		lastValidatedAt?: string;
 	}
 ): void {
+	const settingsRuntime = plugin.settings as unknown as LicenseSettingsRuntime;
 	if (typeof data.claimKeyPreview === "string") plugin.settings.claimKeyPreview = data.claimKeyPreview;
-	if (typeof data.installId === "string") (plugin.settings as any).installId = data.installId;
-	if (typeof data.devicePublicKey === "string") (plugin.settings as any).devicePublicKey = data.devicePublicKey;
-	if (typeof data.envelope === "string") (plugin.settings as any).activationEnvelope = data.envelope;
-	if (typeof data.witness === "string") (plugin.settings as any).activationWitness = data.witness;
+	if (typeof data.installId === "string") settingsRuntime.installId = data.installId;
+	if (typeof data.devicePublicKey === "string") settingsRuntime.devicePublicKey = data.devicePublicKey;
+	if (typeof data.envelope === "string") settingsRuntime.activationEnvelope = data.envelope;
+	if (typeof data.witness === "string") settingsRuntime.activationWitness = data.witness;
 	if (typeof data.generationFloor === "number" && Number.isFinite(data.generationFloor)) {
-		(plugin.settings as any).activationGenerationFloor = Math.max(0, Math.floor(data.generationFloor));
+		settingsRuntime.activationGenerationFloor = Math.max(0, Math.floor(data.generationFloor));
 	}
 	if (typeof data.status === "string") plugin.settings.activationStatus = data.status;
 	if (typeof data.error === "string") plugin.settings.activationError = data.error;
 	if (typeof data.lastValidationAt === "string") plugin.settings.lastValidationAt = data.lastValidationAt;
-	if (typeof data.lastValidatedAt === "string") (plugin.settings as any).lastValidatedAt = data.lastValidatedAt;
+	if (typeof data.lastValidatedAt === "string") settingsRuntime.lastValidatedAt = data.lastValidatedAt;
 }
 
 function clearStoredActivation(plugin: EpochPlugin, status: string, error: string): void {
+	const settingsRuntime = plugin.settings as unknown as LicenseSettingsRuntime;
 	plugin.settings.claimKeyPreview = "";
-	(plugin.settings as any).devicePublicKey = "";
-	(plugin.settings as any).activationEnvelope = "";
-	(plugin.settings as any).activationWitness = "";
+	settingsRuntime.devicePublicKey = "";
+	settingsRuntime.activationEnvelope = "";
+	settingsRuntime.activationWitness = "";
 	plugin.settings.activationStatus = status;
 	plugin.settings.activationError = error;
-	(plugin.settings as any).lastValidatedAt = "";
+	settingsRuntime.lastValidatedAt = "";
 	clearTrustedActivationCache(plugin);
 }
 
 function clearStoredActivationKeepClaimKeyPreview(plugin: EpochPlugin, status: string, error: string): void {
-	(plugin.settings as any).devicePublicKey = "";
-	(plugin.settings as any).activationEnvelope = "";
-	(plugin.settings as any).activationWitness = "";
+	const settingsRuntime = plugin.settings as unknown as LicenseSettingsRuntime;
+	settingsRuntime.devicePublicKey = "";
+	settingsRuntime.activationEnvelope = "";
+	settingsRuntime.activationWitness = "";
 	plugin.settings.activationStatus = status;
 	plugin.settings.activationError = error;
-	(plugin.settings as any).lastValidatedAt = "";
+	settingsRuntime.lastValidatedAt = "";
 	clearTrustedActivationCache(plugin);
 }
 
@@ -220,12 +269,18 @@ function applyFirstTimeProDefaults(plugin: EpochPlugin, hasActivatedProOnce: boo
 	return activatedFirstTime;
 }
 
-async function postBackendJson(path: string, body: Record<string, unknown>): Promise<{ status: number; json: any; text: string }> {
+async function postBackendJson(path: string, body: Record<string, unknown>): Promise<{ status: number; json: unknown; text: string }> {
 	const requestBody = JSON.stringify(body);
 	let url = `${DEFAULT_PRO_BACKEND_BASE_URL}${path}`;
-	let lastResponse: any = null;
+	type BackendResponseLike = {
+		status?: unknown;
+		json?: unknown;
+		text?: unknown;
+		headers?: unknown;
+	};
+	let lastResponse: BackendResponseLike | null = null;
 	for (let attempt = 0; attempt <= MAX_BACKEND_REDIRECTS; attempt++) {
-		const response = await requestUrl({
+		const response = (await requestUrl({
 			url,
 			method: "POST",
 			contentType: "application/json",
@@ -234,7 +289,7 @@ async function postBackendJson(path: string, body: Record<string, unknown>): Pro
 			},
 			body: requestBody,
 			throw: false
-		});
+		})) as BackendResponseLike;
 		lastResponse = response;
 		const status = Number(response?.status ?? 0);
 		const location = getHeaderValue(response?.headers, "location");
@@ -262,11 +317,15 @@ function getHeaderValue(headers: unknown, name: string): string {
 	const rawName = String(name ?? "").trim();
 	const key = rawName.toLowerCase();
 	if (!headers || !key) return "";
-	const anyHeaders: any = headers as any;
+	const anyHeaders = headers as HeaderLookupLike;
 	try {
 		if (typeof anyHeaders.get === "function") {
 			const value = anyHeaders.get(key) ?? anyHeaders.get(rawName);
-			return String(value ?? "").trim();
+			if (typeof value === "string") return value.trim();
+			if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+				return String(value).trim();
+			}
+			return "";
 		}
 	} catch {
 		// ignore
@@ -285,7 +344,7 @@ function getHeaderValue(headers: unknown, name: string): string {
 		} catch {
 			// ignore
 		}
-		for (const [rawKey, rawValue] of Object.entries(anyHeaders)) {
+		for (const [rawKey, rawValue] of Object.entries(anyHeaders as Record<string, unknown>)) {
 			if (String(rawKey).trim().toLowerCase() !== key) continue;
 			if (typeof rawValue === "string") return rawValue.trim();
 			if (typeof rawValue === "number" || typeof rawValue === "boolean" || typeof rawValue === "bigint") return String(rawValue).trim();
@@ -427,22 +486,24 @@ async function acceptSignedEnvelope(
 
 export const licenseMethods: LicenseMethods = {
 	async refreshLicenseState(this: EpochPlugin, saveIfChanged: boolean = false): Promise<boolean> {
+		const settingsRuntime = this.settings as unknown as LicenseSettingsRuntime;
 		const prevPro = this.proActive;
 		const prevHolder = this.licenseHolder;
 		let dirty = false;
 		const normalizeField = (key: string): string => {
-			const current = normalizeText((this.settings as any)[key]);
-			if ((this.settings as any)[key] !== current) {
-				(this.settings as any)[key] = current;
+			const bag = settingsRuntime as unknown as Record<string, unknown>;
+			const current = normalizeText(bag[key]);
+			if (bag[key] !== current) {
+				bag[key] = current;
 				dirty = true;
 			}
 			return current;
 		};
 		const normalizeGenerationFloor = (): number => {
-			const raw = Number((this.settings as any).activationGenerationFloor ?? 0);
+			const raw = Number(settingsRuntime.activationGenerationFloor ?? 0);
 			const current = Number.isInteger(raw) && raw > 0 ? raw : 0;
-			if ((this.settings as any).activationGenerationFloor !== current) {
-				(this.settings as any).activationGenerationFloor = current;
+			if (settingsRuntime.activationGenerationFloor !== current) {
+				settingsRuntime.activationGenerationFloor = current;
 				dirty = true;
 			}
 			return current;
@@ -476,7 +537,7 @@ export const licenseMethods: LicenseMethods = {
 				dirty = true;
 			}
 			if (witness) {
-				(this.settings as any).activationWitness = "";
+				settingsRuntime.activationWitness = "";
 				dirty = true;
 			}
 			clearTrustedActivationCache(this);
@@ -484,13 +545,13 @@ export const licenseMethods: LicenseMethods = {
 
 		const verified = envelope ? await verifyStoredActivationEnvelope(this) : null;
 		if (verified) {
-			const generationFloor = Number((this.settings as any).activationGenerationFloor ?? 0);
+			const generationFloor = Number(settingsRuntime.activationGenerationFloor ?? 0);
 			if (!Number.isInteger(generationFloor) || generationFloor < verified.claims.licenseGeneration) {
-				(this.settings as any).activationGenerationFloor = verified.claims.licenseGeneration;
+				settingsRuntime.activationGenerationFloor = verified.claims.licenseGeneration;
 				dirty = true;
 			}
 			if (getStoredActivationWitness(this) !== verified.witness) {
-				(this.settings as any).activationWitness = verified.witness;
+				settingsRuntime.activationWitness = verified.witness;
 				dirty = true;
 			}
 			if (this.settings.activationStatus !== PRO_STATUS_ACTIVE) {
@@ -505,7 +566,7 @@ export const licenseMethods: LicenseMethods = {
 				dirty = true;
 			}
 			if (witness) {
-				(this.settings as any).activationWitness = "";
+				settingsRuntime.activationWitness = "";
 				dirty = true;
 			}
 		}
@@ -522,7 +583,7 @@ export const licenseMethods: LicenseMethods = {
 		const changed = dirty || this.proActive !== prevPro || this.licenseHolder !== prevHolder;
 		if (changed) {
 			try {
-				(this.indexer as any)?.refreshSyntheticEntries?.();
+				(this.indexer as unknown as LicenseIndexerRuntime).refreshSyntheticEntries?.();
 			} catch {
 				// ignore
 			}
@@ -532,19 +593,19 @@ export const licenseMethods: LicenseMethods = {
 				// ignore
 			}
 			try {
-				(this as any).__epochSettingTab?.display?.();
+				(this as unknown as LicenseRuntime).__epochSettingTab?.display?.();
 			} catch {
 				// ignore
 			}
 		}
 		try {
-			void (this as any).refreshAiBridgeStatusBar?.();
+			void (this as unknown as LicenseRuntime).refreshAiBridgeStatusBar?.();
 		} catch {
 			// ignore
 		}
 		if (proActivated) {
 			try {
-				void (this as any).maybeOpenAiBridgeOnStartup?.();
+				void (this as unknown as LicenseRuntime).maybeOpenAiBridgeOnStartup?.();
 			} catch {
 				// ignore
 			}
@@ -596,10 +657,10 @@ export const licenseMethods: LicenseMethods = {
 
 		const maybeShowStartupValidationFailureNotice = (): void => {
 			if (source !== "startup") return;
+			const runtime = this as unknown as LicenseRuntime;
 			try {
-				const anyThis: any = this as any;
-				if (anyThis.__epochProStartupValidationFailureNoticeShown) return;
-				anyThis.__epochProStartupValidationFailureNoticeShown = true;
+				if (runtime.__epochProStartupValidationFailureNoticeShown) return;
+				runtime.__epochProStartupValidationFailureNoticeShown = true;
 			} catch { void 0; }
 			try {
 				new Notice(
@@ -609,12 +670,12 @@ export const licenseMethods: LicenseMethods = {
 			} catch { void 0; }
 		};
 
-		const anyThis: any = this as any;
-		if (anyThis.__proValidationPromise) {
-			return await anyThis.__proValidationPromise;
+		const runtime = this as unknown as LicenseRuntime;
+		if (runtime.__proValidationPromise) {
+			return await runtime.__proValidationPromise;
 		}
 
-		anyThis.__proValidationPromise = (async () => {
+		runtime.__proValidationPromise = (async () => {
 			const nowText = new Date().toISOString();
 			const installId = ensureInstallId(this);
 			const { publicKey } = await ensureDeviceProofMaterial(this);
@@ -687,16 +748,16 @@ export const licenseMethods: LicenseMethods = {
 				await this.saveSettings();
 				return changed || true;
 			} finally {
-				anyThis.__proValidationPromise = null;
+				runtime.__proValidationPromise = null;
 				try {
-					void (this as any).refreshAiBridgeStatusBar?.();
+					void runtime.refreshAiBridgeStatusBar?.();
 				} catch {
 					// ignore
 				}
 			}
 		})();
 
-		return await anyThis.__proValidationPromise;
+		return await runtime.__proValidationPromise;
 	},
 
 	async applyClaimKey(this: EpochPlugin, rawKey: string): Promise<{ valid: boolean; message: string }> {
@@ -706,19 +767,20 @@ export const licenseMethods: LicenseMethods = {
 		let activatedFirstTime = false;
 
 		const seedTrackedBaselineLightweight = async (): Promise<void> => {
+			const runtime = this as unknown as LicenseRuntime;
 			try {
-				if (typeof (this as any)?.ensureIndexLoaded !== "function") return;
-				if (typeof (this as any)?.persist !== "function") return;
+				if (typeof runtime.ensureIndexLoaded !== "function") return;
+				if (typeof runtime.persist !== "function") return;
 				if (!this.app?.vault?.adapter || typeof this.app.vault.adapter.read !== "function") return;
-				await (this as any).ensureIndexLoaded();
-				const indexerAny: any = this.indexer as any;
-				const files: Record<string, any> = indexerAny?.files ?? {};
-				const latestLines: Record<string, string[]> = indexerAny?.latestLines ?? {};
+				await runtime.ensureIndexLoaded();
+				const indexerAny = this.indexer as unknown as LicenseIndexerRuntime;
+				const files = indexerAny.files ?? {};
+				const latestLines = indexerAny.latestLines ?? {};
 				const today = formatDate(new Date());
 				const paths = Object.keys(files).filter((p) => String(p).toLowerCase().endsWith(".md"));
 				let touched = 0;
 				for (let i = 0; i < paths.length; i++) {
-					const path = paths[i] as string;
+					const path = paths[i];
 					const data = files[path];
 					if (!data) continue;
 					let content = "";
@@ -744,7 +806,7 @@ export const licenseMethods: LicenseMethods = {
 					}
 				}
 				if (touched > 0) {
-					await (this as any).persist({ skipEnsure: true });
+					await runtime.persist({ skipEnsure: true });
 				}
 			} catch {
 				// ignore
@@ -754,8 +816,9 @@ export const licenseMethods: LicenseMethods = {
 		if (!trimmed) {
 			this.settings.activationStatus = PRO_STATUS_INVALID_CLAIM;
 			this.settings.activationError = "";
-			(this.settings as any).activationEnvelope = "";
-			(this.settings as any).activationWitness = "";
+			const settingsRuntime = this.settings as unknown as LicenseSettingsRuntime;
+			settingsRuntime.activationEnvelope = "";
+			settingsRuntime.activationWitness = "";
 			await this.saveSettings();
 			return {
 				valid: false,
@@ -809,9 +872,10 @@ export const licenseMethods: LicenseMethods = {
 					}
 					if (activatedFirstTime) {
 						try {
-							void (this as any).recomputeInheritedMarksNow?.("similarityUseLinks");
-							void (this as any).recomputeInheritedMarksNow?.("similarityUseTags");
-							void (this as any).recomputeInheritedMarksNow?.("similarityTitleJwThreshold");
+									const runtime = this as unknown as LicenseRuntime;
+									void runtime.recomputeInheritedMarksNow?.("similarityUseLinks");
+									void runtime.recomputeInheritedMarksNow?.("similarityUseTags");
+									void runtime.recomputeInheritedMarksNow?.("similarityTitleJwThreshold");
 						} catch {
 							// ignore
 						}
@@ -825,7 +889,7 @@ export const licenseMethods: LicenseMethods = {
 						return;
 					}
 					try {
-						await (this as any).ensureIndexLoaded?.();
+								await (this as unknown as LicenseRuntime).ensureIndexLoaded?.();
 					} catch {
 						// ignore
 					}

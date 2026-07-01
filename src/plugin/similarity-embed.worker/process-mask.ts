@@ -3,8 +3,10 @@ import {
 	restoreNodeDetectionMask
 } from "../worker-env";
 
+declare const self: unknown;
+
 export async function withProcessMasked<T>(fn: () => Promise<T>): Promise<T> {
-	const g: any = typeof self !== "undefined" ? (self as any) : (typeof global !== "undefined" ? (global as any) : {});
+	const g = self as Record<string, unknown>;
 	const snapshot = maskNodeDetectionForBrowserLibraries(g);
 	try {
 		return await fn();

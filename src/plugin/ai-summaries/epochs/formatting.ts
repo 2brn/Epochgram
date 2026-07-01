@@ -4,6 +4,26 @@ import { normalizeIsoDatePrefix } from "../../../utils";
 import { hasEpochInputAiSummaryError } from "../epoch-input-ai-fallback";
 import { getYamlDescriptionPropertyKey, readFrontmatterProperty } from "../../frontmatter-keys";
 
+type EpochFormatEntry = {
+	aiSummary?: string;
+	summary?: string;
+	file?: string;
+	source?: string;
+	date?: string;
+	trackedChange?: string;
+	blockStart?: number;
+	blockEnd?: number;
+};
+
+type EpochFormatAppLike = {
+	vault?: {
+		getAbstractFileByPath?: (path: string) => unknown;
+	};
+	metadataCache?: {
+		getFileCache?: (file: unknown) => { frontmatter?: unknown } | null | undefined;
+	};
+};
+
 const isDateKey = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(String(s || "").trim());
 
 const toUtcDateKey = (ms: number): string => {
@@ -78,8 +98,8 @@ export function getPreferredEpochFileLabel(plugin: EpochPlugin, filePath: string
 	return path;
 }
 
-export function formatEpochItemText(plugin: EpochPlugin, e: any): string {
-	const hasAiError = hasEpochInputAiSummaryError(plugin as any, e);
+export function formatEpochItemText(plugin: EpochPlugin, e: EpochFormatEntry): string {
+	const hasAiError = hasEpochInputAiSummaryError(plugin, e);
 	const ai = !hasAiError && typeof e?.aiSummary === "string" ? String(e.aiSummary).trim() : "";
 	const base = typeof e?.summary === "string" ? String(e.summary).trim() : "";
 	const filePath = typeof e?.file === "string" ? String(e.file) : "";
@@ -87,10 +107,10 @@ export function formatEpochItemText(plugin: EpochPlugin, e: any): string {
 		try {
 			if (!filePath) return "";
 			const descriptionKey = getYamlDescriptionPropertyKey(plugin);
-			const appAny: any = (plugin as any)?.app;
-			const file = appAny?.vault?.getAbstractFileByPath?.(filePath);
+			const app = plugin.app as EpochFormatAppLike;
+			const file = app.vault?.getAbstractFileByPath?.(filePath);
 			if (!file) return "";
-			const cache = appAny?.metadataCache?.getFileCache?.(file);
+			const cache = app.metadataCache?.getFileCache?.(file);
 			const raw = readFrontmatterProperty(cache?.frontmatter, descriptionKey);
 			if (typeof raw === "string") return raw.trim();
 			if (typeof raw === "number") return String(raw);
@@ -101,8 +121,8 @@ export function formatEpochItemText(plugin: EpochPlugin, e: any): string {
 	})();
 	const summaryText = yamlDescription || ai || base;
 	const fileLabel = filePath ? getPreferredEpochFileLabel(plugin, filePath) : "";
-	const src = typeof e?.source === "string" ? String(e.source) : "";
-	const entryDate = typeof e?.date === "string" ? String(e.date).trim() : "";
+	const src = typeof e.source === "string" ? String(e.source) : "";
+	const entryDate = typeof e.date === "string" ? String(e.date).trim() : "";
 
 	// Suppress empty “daily note” stubs.
 	// Key off the date-named filename so this also suppresses cdate-on-creation-day
@@ -112,7 +132,7 @@ export function formatEpochItemText(plugin: EpochPlugin, e: any): string {
 
 	// Tracked change entries should read like actions.
 	if (src === "tracked") {
-		const change = typeof e?.trackedChange === "string" ? String(e.trackedChange) : "";
+		const change = typeof e.trackedChange === "string" ? String(e.trackedChange) : "";
 		// When summary comes from YAML description, normalize to "Edited" regardless of tracked change type
 		// to avoid showing redundant prefixes (Added TODO, Edited TODO, Removed TODO) for the same item
 		const usesYamlDescription = yamlDescription && summaryText === yamlDescription;

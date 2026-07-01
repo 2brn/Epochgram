@@ -2,20 +2,30 @@ import type { EpochPlugin } from "../../main";
 import type { WorkerEmbedResponse } from "./types";
 import { getSimilarityWorker } from "./worker-factory";
 
+type PendingWorkerRequest = {
+	resolve: (value: WorkerEmbedResponse) => void;
+	reject: (reason?: unknown) => void;
+};
+
+type SimilarityWorkerState = {
+	similarityWorkerPending?: Map<number, PendingWorkerRequest>;
+	similarityWorkerNextId?: number;
+};
+
 export async function requestSimilarityWorker(
 	plugin: EpochPlugin,
-	msg: any,
+	msg: Record<string, unknown>,
 	transfer?: Transferable[]
 ): Promise<WorkerEmbedResponse | null> {
 	const w = getSimilarityWorker(plugin);
 	if (!w) return null;
-	const anyPlugin: any = plugin as any;
-	const pending: Map<number, any> = anyPlugin.similarityWorkerPending;
+	const state = plugin as EpochPlugin & SimilarityWorkerState;
+	const pending = state.similarityWorkerPending;
 	if (!pending) return null;
 
-	const nextId = typeof anyPlugin.similarityWorkerNextId === "number" ? anyPlugin.similarityWorkerNextId : 1;
+	const nextId = typeof state.similarityWorkerNextId === "number" ? state.similarityWorkerNextId : 1;
 	const id = nextId;
-	anyPlugin.similarityWorkerNextId = nextId + 1;
+	state.similarityWorkerNextId = nextId + 1;
 
 	const promise = new Promise<WorkerEmbedResponse>((resolve, reject) => {
 		pending.set(id, { resolve, reject });
@@ -23,9 +33,9 @@ export async function requestSimilarityWorker(
 
 	try {
 		if (transfer && Array.isArray(transfer) && transfer.length > 0) {
-			(w as any).postMessage({ ...(msg as any), id } as any, transfer as any);
+			w.postMessage({ ...msg, id }, transfer);
 		} else {
-			w.postMessage({ ...(msg as any), id } as any);
+			w.postMessage({ ...msg, id });
 		}
 	} catch (e) {
 		pending.delete(id);

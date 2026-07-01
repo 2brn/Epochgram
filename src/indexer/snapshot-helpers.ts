@@ -12,7 +12,7 @@ export function normalizeSnapshotValue(text: string | null | undefined): string 
 		.replace(/\u2028|\u2029/g, "\n");
 	// Normalize Unicode to reduce cross-platform differences (e.g. NFC vs NFD).
 	try {
-		if (typeof (normalized as any).normalize === "function") {
+		if (typeof normalized.normalize === "function") {
 			normalized = normalized.normalize("NFC");
 		}
 	} catch {

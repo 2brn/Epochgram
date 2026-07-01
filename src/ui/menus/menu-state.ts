@@ -1,7 +1,8 @@
 import type { EpochCanvas } from "../epoch-canvas";
+import type { EpochPlugin } from "../../main";
 
 export interface CanvasMenuState {
-	plugin: any;
+	plugin: EpochPlugin;
 	keepHoverAfterMenu: boolean;
 	clearHover(force?: boolean): void;
 	refreshIndex(): void;

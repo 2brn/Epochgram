@@ -161,4 +161,24 @@ describe("TimelineSearchModal suggestions", () => {
 		expect((suggestions[maxRecords] as any).kind).toBe("filter");
 		expect((suggestions[maxRecords + 1] as any).kind).toBe("empty");
 	});
+
+	it("uses maxSuggestions override when provided", () => {
+		const getTopMatches = vi.fn((_query: string, _max: number) => {
+			return Array.from({ length: 10 }).map((_, i) => ({
+				entry: { date: "2020-01-01", file: `notes/${i}.md` },
+				label: `L${i}`
+			}));
+		});
+		const modal: any = new TimelineSearchModal({} as any, {
+			initial: "",
+			maxSuggestions: 3,
+			getTopMatches
+		});
+		const suggestions = modal.getSuggestions("alpha");
+		expect(getTopMatches).toHaveBeenCalledWith("alpha", 3);
+		expect(suggestions.length).toBe(5);
+		expect((suggestions[0] as any).kind).toBe("record");
+		expect((suggestions[3] as any).kind).toBe("filter");
+		expect((suggestions[4] as any).kind).toBe("empty");
+	});
 });

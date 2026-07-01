@@ -16,9 +16,13 @@ import {
 import { matchesEpochEntrySearch, matchesSearch } from "./search";
 import { getEpochsViewChildVisibilityByDateKey } from "./epochs-view";
 
+type EntryWithEpochExtras = DateEntry & {
+	namedDateRange?: boolean;
+};
+
 function inferEpochBucketFromEntry(entry: DateEntry | null | undefined): EpochBucket | null {
 	if (!entry) return null;
-	const raw = String((entry as any).epochBucket || "");
+	const raw = String(entry.epochBucket || "");
 	if (raw && isEpochBucket(raw)) return raw;
 	return null;
 }
@@ -45,7 +49,7 @@ export function getEntriesForDate(
 	const effective = computeEffectiveFilters(canvas, s, parsed);
 	const { index, epochsView } = s;
 	const key = formatDate(date);
-	const rawEntries = (index as any)[key] as DateEntry[] | undefined;
+	const rawEntries = (index as Record<string, DateEntry[] | undefined>)[key];
 	if (!Array.isArray(rawEntries) || rawEntries.length === 0) {
 		return [];
 	}
@@ -102,14 +106,14 @@ export function getEntriesForDate(
 		entries = entries.filter(shouldRenderEntry);
 	}
 	if (!effective.showContentDates && !effective.showPropDates) {
-		entries = entries.filter(entry => !(entry.source === "namedate" && (entry as any)?.namedDateRange === true));
+		entries = entries.filter(entry => !(entry.source === "namedate" && (entry as EntryWithEpochExtras).namedDateRange === true));
 	}
 	if (!effective.showContentDates) {
 		entries = entries.filter(entry => entry.source !== "content");
 	}
 	if (!effective.showPropDates) {
 		entries = entries.filter(entry => {
-			if ((entry as any)?.recurring === true) return true;
+			if (entry.recurring === true) return true;
 			return !(entry.source === "content" && isPropDateEntry(entry));
 		});
 	}
@@ -128,7 +132,7 @@ export function getEntriesCountForDateFast(
 	const parsed = getParsedTimelineQuery(canvas);
 	const effective = computeEffectiveFilters(canvas, s, parsed);
 	const key = formatDate(date);
-	const rawEntries = (index as any)[key] as DateEntry[] | undefined;
+	const rawEntries = (index as Record<string, DateEntry[] | undefined>)[key];
 	if (!Array.isArray(rawEntries) || rawEntries.length === 0) {
 		return 0;
 	}
@@ -171,11 +175,11 @@ export function getEntriesCountForDateFast(
 	let count = 0;
 	for (const entry of rawEntries) {
 		if (!entry) continue;
-		if (String((entry as any)?.file || "").startsWith("epoch://")) continue;
+		if (String(entry.file || "").startsWith("epoch://")) continue;
 		if (effective.showDraftOnly && !effective.hiddenOnly && entry.reviewState !== "draft") continue;
 		if (!effective.showAttachments && isAttachmentEntry(entry)) continue;
-		const isRecurring = (entry as any)?.recurring === true;
-		const isNamedDateRange = entry.source === "namedate" && (entry as any)?.namedDateRange === true;
+		const isRecurring = entry.recurring === true;
+		const isNamedDateRange = entry.source === "namedate" && (entry as EntryWithEpochExtras).namedDateRange === true;
 		if (isNamedDateRange && !effective.showContentDates && !effective.showPropDates) continue;
 		if (!effective.showContentDates && entry.source === "content") continue;
 		if (!effective.showPropDates && entry.source === "content" && isPropDateEntry(entry) && !isRecurring) continue;
@@ -246,14 +250,14 @@ export function pickEntryForFile(
 	}
 	if (!options?.bypassDateFilters) {
 		if (!effective.showContentDates && !effective.showPropDates) {
-			candidates = candidates.filter(entry => !(entry.source === "namedate" && (entry as any)?.namedDateRange === true));
+				candidates = candidates.filter(entry => !(entry.source === "namedate" && (entry as EntryWithEpochExtras).namedDateRange === true));
 		}
 		if (!effective.showContentDates) {
 			candidates = candidates.filter(entry => entry.source !== "content");
 		}
 		if (!effective.showPropDates) {
 			candidates = candidates.filter(entry => {
-				if ((entry as any)?.recurring === true) return true;
+					if (entry.recurring === true) return true;
 				return !(entry.source === "content" && isPropDateEntry(entry));
 			});
 		}

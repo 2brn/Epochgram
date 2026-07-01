@@ -2,17 +2,58 @@ import type { DateEntry } from "../../indexer/types";
 import { BASE_SPACING, TOUCH_HIT_PAD } from "../epoch-canvas-constants";
 import type { EpochCanvas } from "../epoch-canvas";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+type SummaryRect = {
+	entry: DateEntry;
+	x1: number;
+	y1: number;
+	x2: number;
+	y2: number;
+};
+
+type CanvasLayout = {
+	index: number;
+	summaryRects: SummaryRect[];
+};
+
+type PinFlyState = {
+	img: HTMLCanvasElement;
+	fromX: number;
+	fromY: number;
+	toX: number;
+	toY: number;
+	w: number;
+	h: number;
+	startAt: number;
+	durationMs: number;
+	t: number;
+};
+
+type CanvasPinFlyInternals = {
+	canvas: HTMLCanvasElement;
+	ctx: CanvasRenderingContext2D;
+	root: HTMLElement;
+	layouts: CanvasLayout[];
+	win?: Window;
+	scale: number;
+	offsetY: number;
+	pinFly: PinFlyState | null;
+	pinFlyOnDone: (() => void) | null;
+	requestHoverAnimation(): void;
+};
+
+const activeDocument: Document =
+	window.document;
 
 
 export function startPinFlyToToday(canvas: EpochCanvas, entry: DateEntry, onDone?: () => void): boolean {
 	try {
 		if (!entry) return false;
-		if (!(canvas as any).canvas || !(canvas as any).ctx) return false;
+		const c = canvas as unknown as CanvasPinFlyInternals;
+		if (!c.canvas || !c.ctx) return false;
 
 		let rect: { x1: number; y1: number; x2: number; y2: number } | null = null;
 		let fromLayoutIndex: number | null = null;
-		for (const layout of (canvas as any).layouts ?? []) {
+		for (const layout of c.layouts ?? []) {
 			for (const r of layout.summaryRects ?? []) {
 				if (r.entry === entry) {
 					rect = r;
@@ -48,7 +89,7 @@ export function startPinFlyToToday(canvas: EpochCanvas, entry: DateEntry, onDone
 		const y2 = Number(rect.y2) - pad + innerPad;
 		if (![x1, y1, x2, y2].every(Number.isFinite)) return false;
 
-		const rootRect = (canvas as any).root.getBoundingClientRect();
+		const rootRect = c.root.getBoundingClientRect();
 		const maxW = Math.max(0, rootRect.width);
 		const maxH = Math.max(0, rootRect.height);
 		if (!maxW || !maxH) return false;
@@ -61,8 +102,8 @@ export function startPinFlyToToday(canvas: EpochCanvas, entry: DateEntry, onDone
 		const clippedHCss = Math.max(1, clippedY2 - clippedY1);
 		if (clippedWCss <= 1 || clippedHCss <= 1) return false;
 
-		const w: any = (canvas as any).win ?? window;
-		const dpr = (w && typeof w.devicePixelRatio === "number" ? w.devicePixelRatio : window.devicePixelRatio) || 1;
+		const w = c.win ?? window;
+		const dpr = (typeof w.devicePixelRatio === "number" ? w.devicePixelRatio : window.devicePixelRatio) || 1;
 		const sx = Math.max(0, Math.floor(clippedX1 * dpr));
 		const sy = Math.max(0, Math.floor(clippedY1 * dpr));
 		const sw = Math.max(1, Math.floor(clippedWCss * dpr));
@@ -71,7 +112,7 @@ export function startPinFlyToToday(canvas: EpochCanvas, entry: DateEntry, onDone
 
 		let imgData: ImageData | null = null;
 		try {
-			imgData = (canvas as any).ctx.getImageData(sx, sy, sw, sh);
+			imgData = c.ctx.getImageData(sx, sy, sw, sh);
 		} catch {
 			imgData = null;
 		}
@@ -88,27 +129,27 @@ export function startPinFlyToToday(canvas: EpochCanvas, entry: DateEntry, onDone
 			return false;
 		}
 
-		const now = performance.now();
-		const todayLayout = ((canvas as any).layouts ?? []).find((l: any) => l.index === 0) ?? null;
+		const now = window.performance.now();
+		const todayLayout = (c.layouts ?? []).find((l) => l.index === 0) ?? null;
 		const todayFirst = todayLayout?.summaryRects?.[0] ?? null;
 		const toX = todayFirst ? (Number(todayFirst.x1) + pad - innerPad) : clippedX1;
 		const toY = todayFirst
 			? (Number(todayFirst.y1) + pad - innerPad)
-			: (0 * BASE_SPACING * (canvas as any).scale + (canvas as any).offsetY - clippedHCss / 2);
-		(canvas as any).pinFly = {
+			: (0 * BASE_SPACING * c.scale + c.offsetY - clippedHCss / 2);
+		c.pinFly = {
 			img: off,
 			fromX: clippedX1,
 			fromY: clippedY1,
 			toX: Number.isFinite(toX) ? toX : clippedX1,
-			toY: Number.isFinite(toY) ? toY : (0 * BASE_SPACING * (canvas as any).scale + (canvas as any).offsetY - clippedHCss / 2),
+			toY: Number.isFinite(toY) ? toY : (0 * BASE_SPACING * c.scale + c.offsetY - clippedHCss / 2),
 			w: clippedWCss,
 			h: clippedHCss,
 			startAt: now,
 			durationMs: 420,
 			t: 0
 		};
-		(canvas as any).pinFlyOnDone = typeof onDone === "function" ? onDone : null;
-		(canvas as any).requestHoverAnimation();
+		c.pinFlyOnDone = typeof onDone === "function" ? onDone : null;
+		c.requestHoverAnimation();
 		return true;
 	} catch {
 		// ignore

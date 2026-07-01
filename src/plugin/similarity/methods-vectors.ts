@@ -19,11 +19,10 @@ export const methodsVectors: Pick<
 		if (!p) return;
 		if (p.startsWith("epoch://")) return;
 		if (!isLikelyTextFilePath(p)) return;
-		const anyPlugin: any = this as any;
 		const pending: Set<string> =
-			anyPlugin.similarityPendingFiles instanceof Set
-				? anyPlugin.similarityPendingFiles
-				: (anyPlugin.similarityPendingFiles = new Set<string>());
+			this.similarityPendingFiles instanceof Set
+				? this.similarityPendingFiles
+				: (this.similarityPendingFiles = new Set<string>());
 		pending.add(p);
 		scheduleProcessPendingQueue(this, 50);
 	},
@@ -47,16 +46,15 @@ export const methodsVectors: Pick<
 
 	async reloadVectorsFromDisk(this: EpochPlugin): Promise<void> {
 		try {
-			const anyPlugin: any = this as any;
-			anyPlugin.similarityVectorsLoaded = false;
-			anyPlugin.similarityIndex = null;
+			this.similarityVectorsLoaded = false;
+			this.similarityIndex = null;
 			try {
-				await (this as any).updateVectorsFileStat?.();
+				await this.updateVectorsFileStat?.();
 			} catch {
 				// ignore
 			}
 			try {
-				(this as any).scheduleInheritedMarkRecompute?.("vectors-sync");
+				this.scheduleInheritedMarkRecompute?.("vectors-sync");
 			} catch {
 				// ignore
 			}

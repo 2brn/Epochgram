@@ -130,7 +130,8 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 		let bestOutgoingT = 0;
 		if (Array.isArray(outgoingSummaries) && outgoingSummaries.length) {
 			for (let i = 0; i < outgoingSummaries.length; i++) {
-				const o = outgoingSummaries[i]!;
+				const o = outgoingSummaries[i];
+				if (!o) continue;
 				if (o.dayIndex !== dayIndex) continue;
 				const t = clamp01(Number(o.t));
 				if (t > bestOutgoingT + 1e-6) {
@@ -144,12 +145,17 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 			Number.isFinite(visibleRowIndexRange.start) &&
 			Number.isFinite(visibleRowIndexRange.end)
 		);
-		const visibleStart = hasVisibleRange ? Math.max(0, Math.min(rowsThisCol - 1, visibleRowIndexRange!.start)) : 0;
-		const visibleEnd = hasVisibleRange ? Math.max(0, Math.min(rowsThisCol - 1, visibleRowIndexRange!.end)) : rowsThisCol - 1;
+		const visibleStart = hasVisibleRange
+			? Math.max(0, Math.min(rowsThisCol - 1, (visibleRowIndexRange?.start ?? 0)))
+			: 0;
+		const visibleEnd = hasVisibleRange
+			? Math.max(0, Math.min(rowsThisCol - 1, (visibleRowIndexRange?.end ?? (rowsThisCol - 1))))
+			: rowsThisCol - 1;
 
 		for (let row = 0; row < rowsThisCol; row++) {
 			const entryIndex = startIndex + row;
-			const entry = entries[entryIndex]!;
+			const entry = entries[entryIndex];
+			if (!entry) continue;
 			const isNearIncomingHoverRow = incomingHoverRowInThisCol >= 0 && Math.abs(row - incomingHoverRowInThisCol) <= 1;
 			const shouldMeasureText = !hasVisibleRange || (row >= visibleStart && row <= visibleEnd) || isNearIncomingHoverRow;
 			const isIncomingHoverTarget = !!(animSummary && animSummary.dayIndex === dayIndex && animSummary.itemIndex === entryIndex);

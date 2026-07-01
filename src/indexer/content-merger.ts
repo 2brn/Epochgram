@@ -1,8 +1,19 @@
 import type { FileDateEntry } from "./types";
 import { extractText, resolveSummaryForEntry, resolveSummaryForFile, stripDatesFromContentSummaryText } from "./summary-helpers";
 
+type SummaryPluginLike = {
+	settings?: {
+		summaryWordsCount?: number;
+	};
+};
+
+type FileDateEntryWithExtras = FileDateEntry & {
+	fromFrontmatter?: boolean;
+	markColor?: number;
+};
+
 export function mergeConsecutiveEntries(
-	plugin: any,
+	plugin: SummaryPluginLike,
 	entries: FileDateEntry[],
 	lines: string[]
 ): FileDateEntry[] {
@@ -34,8 +45,7 @@ export function mergeConsecutiveEntries(
 	const pushCurrent = () => {
 		const text = extractText(lines, current.blockStart, current.blockEnd);
 		if (current.source === "content") {
-			const anyCurrent: any = current as any;
-			if (anyCurrent?.fromFrontmatter === true) {
+			if ((current as FileDateEntryWithExtras).fromFrontmatter === true) {
 				const fullText = Array.isArray(lines) && lines.length > 0 ? lines.join("\n") : "";
 				const cleaned = stripDatesFromContentSummaryText(fullText);
 				const summary = resolveSummaryForFile(plugin, current.file, cleaned, { includeFileName: false });
@@ -53,8 +63,8 @@ export function mergeConsecutiveEntries(
 
 	for (let i = 1; i < expanded.length; i++) {
 		const next = expanded[i];
-		const curFromFrontmatter = (current as any)?.fromFrontmatter === true;
-		const nextFromFrontmatter = (next as any)?.fromFrontmatter === true;
+		const curFromFrontmatter = (current as FileDateEntryWithExtras).fromFrontmatter === true;
+		const nextFromFrontmatter = (next as FileDateEntryWithExtras).fromFrontmatter === true;
 		if (
 			next.date === current.date &&
 			next.file === current.file &&
@@ -63,10 +73,10 @@ export function mergeConsecutiveEntries(
 		) {
 			current.blockStart = Math.min(current.blockStart, next.blockStart);
 			current.blockEnd = Math.max(current.blockEnd, next.blockEnd);
-			const nextMark = typeof (next as any)?.markColor === "number" ? (next as any).markColor : null;
+			const nextMark = typeof (next as FileDateEntryWithExtras).markColor === "number" ? (next as FileDateEntryWithExtras).markColor : null;
 			if (nextMark != null) {
-				const curMark = typeof (current as any)?.markColor === "number" ? (current as any).markColor : null;
-				if (curMark == null) (current as any).markColor = nextMark;
+				const curMark = typeof (current as FileDateEntryWithExtras).markColor === "number" ? (current as FileDateEntryWithExtras).markColor : null;
+				if (curMark == null) (current as FileDateEntryWithExtras).markColor = nextMark;
 			}
 		} else {
 			pushCurrent();

@@ -1,11 +1,24 @@
 import type { EpochCanvas } from "../epoch-canvas";
 import { getEpochMarkColorGroups, normalizeMarkColorIndex } from "../mark-colors";
 
+type MarkEntry = {
+	file?: string;
+	markColor?: number | null;
+};
+
+type ScrollNavCanvasState = {
+	plugin?: {
+		__epochInheritedMarkIndexByPath?: Map<string, number>;
+		__epochInheritedMarkSourceByPath?: Map<string, string>;
+	};
+	index?: Record<string, MarkEntry[]>;
+};
+
 export function getInheritedMarkIndexByPath(canvas: EpochCanvas): Map<string, number> | null {
 	try {
-		const pluginAny: any = (canvas as any)?.plugin;
-		const map = pluginAny?.__epochInheritedMarkIndexByPath as Map<string, number> | null | undefined;
-		return map && typeof (map as any)?.get === "function" ? map : null;
+		const c = canvas as unknown as ScrollNavCanvasState;
+		const map = c.plugin?.__epochInheritedMarkIndexByPath;
+		return map instanceof Map ? map : null;
 	} catch {
 		return null;
 	}
@@ -13,9 +26,9 @@ export function getInheritedMarkIndexByPath(canvas: EpochCanvas): Map<string, nu
 
 export function getInheritedMarkSourceByPath(canvas: EpochCanvas): Map<string, string> | null {
 	try {
-		const pluginAny: any = (canvas as any)?.plugin;
-		const map = pluginAny?.__epochInheritedMarkSourceByPath as Map<string, string> | null | undefined;
-		return map && typeof (map as any)?.get === "function" ? map : null;
+		const c = canvas as unknown as ScrollNavCanvasState;
+		const map = c.plugin?.__epochInheritedMarkSourceByPath;
+		return map instanceof Map ? map : null;
 	} catch {
 		return null;
 	}
@@ -29,17 +42,17 @@ export function normalizeNonEpochPath(path: string | null | undefined): string |
 }
 
 export function getExplicitMarkIndexForPath(canvas: EpochCanvas, filePath: string): number | null {
-	const c: any = canvas as any;
-	const index: any = c.index ?? null;
+	const c = canvas as unknown as ScrollNavCanvasState;
+	const index = c.index;
 	if (!index || typeof index !== "object") return null;
 	for (const dateKey of Object.keys(index)) {
-		const list: any[] = index[dateKey];
+		const list = index[dateKey];
 		if (!Array.isArray(list) || list.length === 0) continue;
 		for (const entry of list) {
 			if (!entry) continue;
-			const file = String((entry as any).file ?? "");
+			const file = String(entry.file ?? "");
 			if (file !== filePath) continue;
-			const idx = normalizeMarkColorIndex((entry as any).markColor);
+			const idx = normalizeMarkColorIndex(entry.markColor);
 			if (idx) return idx;
 		}
 	}
@@ -49,7 +62,8 @@ export function getExplicitMarkIndexForPath(canvas: EpochCanvas, filePath: strin
 export function getMarkColorGroupIndexSet(root: HTMLElement | null, idx: number): Set<number> | null {
 	const base = normalizeMarkColorIndex(idx);
 	if (!base) return null;
-	const groups = getEpochMarkColorGroups((root as any) ?? ({} as any));
+	if (!root) return null;
+	const groups = getEpochMarkColorGroups(root);
 	for (const g of groups) {
 		const indices = [g.base.index, ...g.shades.map((s) => s.index)];
 		if (indices.includes(base)) {
@@ -60,19 +74,19 @@ export function getMarkColorGroupIndexSet(root: HTMLElement | null, idx: number)
 }
 
 export function getExplicitMarkPathsInGroup(canvas: EpochCanvas, groupSet: Set<number>): string[] {
-	const c: any = canvas as any;
+	const c = canvas as unknown as ScrollNavCanvasState;
 	const out: string[] = [];
 	const seen = new Set<string>();
-	const index: any = c.index ?? null;
+	const index = c.index;
 	if (!index || typeof index !== "object") return out;
 	for (const dateKey of Object.keys(index)) {
-		const list: any[] = index[dateKey];
+		const list = index[dateKey];
 		if (!Array.isArray(list) || list.length === 0) continue;
 		for (const entry of list) {
 			if (!entry) continue;
-			const file = String((entry as any).file ?? "");
+			const file = String(entry.file ?? "");
 			if (!file || file.startsWith("epoch://")) continue;
-			const idx = normalizeMarkColorIndex((entry as any).markColor);
+			const idx = normalizeMarkColorIndex(entry.markColor);
 			if (!idx) continue;
 			if (!groupSet.has(idx)) continue;
 			if (seen.has(file)) continue;

@@ -8,6 +8,11 @@ import { ellipsizeToWidth } from "./ellipsis";
 import { getHoverFontStrForRow } from "./hover-font";
 import { splitPlusNPrefix } from "../plusn";
 
+type TextMetricsWithBoxes = TextMetrics & {
+	actualBoundingBoxAscent?: number;
+	actualBoundingBoxDescent?: number;
+};
+
 function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
 	const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
 	ctx.beginPath();
@@ -36,8 +41,8 @@ function fillTextWithPlusNBadge(
 	const basePx = Number.isFinite(fontPx) ? fontPx : 12;
 	const fontAscent = (() => {
 		try {
-			const m = ctx.measureText("Mg");
-			const a = Number((m as any).actualBoundingBoxAscent);
+			const m: TextMetricsWithBoxes = ctx.measureText("Mg");
+			const a = Number(m.actualBoundingBoxAscent);
 			return Number.isFinite(a) && a > 0 ? a : basePx * 0.8;
 		} catch {
 			return basePx * 0.8;
@@ -64,9 +69,9 @@ function fillTextWithPlusNBadge(
 	let ascent = basePx * 0.8;
 	let descent = basePx * 0.2;
 	try {
-		const m = ctx.measureText(badgeText);
-		const a = Number((m as any).actualBoundingBoxAscent);
-		const d = Number((m as any).actualBoundingBoxDescent);
+		const m: TextMetricsWithBoxes = ctx.measureText(badgeText);
+		const a = Number(m.actualBoundingBoxAscent);
+		const d = Number(m.actualBoundingBoxDescent);
 		if (Number.isFinite(a) && a > 0) ascent = a;
 		if (Number.isFinite(d) && d >= 0) descent = d;
 	} catch {
@@ -123,8 +128,8 @@ function fillTextWithPlusNBadgeSmoothEllipsis(
 	const basePx = Number.isFinite(fontPx) ? fontPx : 12;
 	const fontAscent = (() => {
 		try {
-			const m = ctx.measureText("Mg");
-			const a = Number((m as any).actualBoundingBoxAscent);
+			const m: TextMetricsWithBoxes = ctx.measureText("Mg");
+			const a = Number(m.actualBoundingBoxAscent);
 			return Number.isFinite(a) && a > 0 ? a : basePx * 0.8;
 		} catch {
 			return basePx * 0.8;
@@ -176,9 +181,9 @@ function fillTextWithPlusNBadgeSmoothEllipsis(
 	let ascent = basePx * 0.8;
 	let descent = basePx * 0.2;
 	try {
-		const m = ctx.measureText(badgeText);
-		const a = Number((m as any).actualBoundingBoxAscent);
-		const d = Number((m as any).actualBoundingBoxDescent);
+		const m: TextMetricsWithBoxes = ctx.measureText(badgeText);
+		const a = Number(m.actualBoundingBoxAscent);
+		const d = Number(m.actualBoundingBoxDescent);
 		if (Number.isFinite(a) && a > 0) ascent = a;
 		if (Number.isFinite(d) && d >= 0) descent = d;
 	} catch {
@@ -392,9 +397,9 @@ export function renderNormalRow(args: {
 			let yTextTop = yItemCenter - textHeight / 2;
 			if (linesToRender.length === 1) {
 				try {
-					const m = ctx.measureText("Mg");
-					const a = Number((m as any).actualBoundingBoxAscent);
-					const d = Number((m as any).actualBoundingBoxDescent);
+					const m: TextMetricsWithBoxes = ctx.measureText("Mg");
+					const a = Number(m.actualBoundingBoxAscent);
+					const d = Number(m.actualBoundingBoxDescent);
 					const glyphH = (Number.isFinite(a) ? a : 0) + (Number.isFinite(d) ? d : 0);
 					if (glyphH > 0.5) {
 						yTextTop = yItemCenter - glyphH / 2;

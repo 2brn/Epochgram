@@ -41,6 +41,18 @@ type RuntimeEntitlementCache = {
 	holder: string;
 };
 
+type ProTrustPluginLike = {
+	manifest?: { id?: string; version?: string };
+	settings: {
+		activationGenerationFloor?: number;
+		installId?: string;
+		devicePublicKey?: string;
+		activationEnvelope?: string;
+		activationWitness?: string;
+	};
+	__epochEntitlementRuntime?: RuntimeEntitlementCache | null;
+};
+
 const ENTITLEMENT_SCHEMA_VERSION = 1;
 const DEFAULT_AUDIENCE = "obsidian-epochgram";
 const DEFAULT_ALGORITHM = "ECDSA-P256-SHA256";
@@ -158,11 +170,11 @@ function parseGeneration(value: unknown): number {
 	return Number.isInteger(numeric) && numeric > 0 ? numeric : 0;
 }
 
-function getStoredActivationGenerationFloor(plugin: any): number {
+function getStoredActivationGenerationFloor(plugin: ProTrustPluginLike): number {
 	return parseGeneration(plugin?.settings?.activationGenerationFloor);
 }
 
-function getCurrentAudience(plugin: any): string {
+function getCurrentAudience(plugin: ProTrustPluginLike): string {
 	return normalizeText(plugin?.manifest?.id) || DEFAULT_AUDIENCE;
 }
 
@@ -228,7 +240,7 @@ function parseClaims(envelope: SignedEntitlementEnvelope | null): EntitlementCla
 	}
 }
 
-function currentCacheKey(plugin: any): string {
+function currentCacheKey(plugin: ProTrustPluginLike): string {
 	return stableStringify({
 		audience: getCurrentAudience(plugin),
 		version: getCurrentPluginVersion(plugin),
@@ -248,7 +260,7 @@ function hasUsableWindow(claims: EntitlementClaims): boolean {
 	return true;
 }
 
-function claimsMatchRuntime(plugin: any, claims: EntitlementClaims): boolean {
+function claimsMatchRuntime(plugin: ProTrustPluginLike, claims: EntitlementClaims): boolean {
 	return claims.audience === getCurrentAudience(plugin)
 		&& claims.installId === normalizeText(plugin?.settings?.installId)
 		&& claims.devicePublicKey === normalizeText(plugin?.settings?.devicePublicKey)
@@ -301,7 +313,7 @@ async function verifySignature(envelope: SignedEntitlementEnvelope): Promise<boo
 	}
 }
 
-async function buildWitness(plugin: any, envelope: SignedEntitlementEnvelope, claims: EntitlementClaims): Promise<string> {
+async function buildWitness(plugin: ProTrustPluginLike, envelope: SignedEntitlementEnvelope, claims: EntitlementClaims): Promise<string> {
 	return await sha256Base64Url(stableStringify({
 		audience: getCurrentAudience(plugin),
 		version: getCurrentPluginVersion(plugin),
@@ -315,43 +327,43 @@ async function buildWitness(plugin: any, envelope: SignedEntitlementEnvelope, cl
 	}));
 }
 
-function setRuntimeCache(plugin: any, cache: RuntimeEntitlementCache | null): void {
+function setRuntimeCache(plugin: ProTrustPluginLike, cache: RuntimeEntitlementCache | null): void {
 	plugin.__epochEntitlementRuntime = cache;
 }
 
-function getRuntimeCache(plugin: any): RuntimeEntitlementCache | null {
+function getRuntimeCache(plugin: ProTrustPluginLike): RuntimeEntitlementCache | null {
 	const cache = plugin?.__epochEntitlementRuntime;
 	if (!cache || typeof cache !== "object") return null;
 	if (!(cache.features instanceof Set)) return null;
-	return cache as RuntimeEntitlementCache;
+	return cache;
 }
 
-export function getCurrentPluginVersion(plugin: any): string {
+export function getCurrentPluginVersion(plugin: ProTrustPluginLike): string {
 	return normalizeText(plugin?.manifest?.version);
 }
 
-export function getStoredActivationEnvelope(plugin: any): string {
+export function getStoredActivationEnvelope(plugin: ProTrustPluginLike): string {
 	return normalizeText(plugin?.settings?.activationEnvelope);
 }
 
-export function getStoredInstallId(plugin: any): string {
+export function getStoredInstallId(plugin: ProTrustPluginLike): string {
 	return normalizeText(plugin?.settings?.installId);
 }
 
-export function getStoredDevicePublicKey(plugin: any): string {
+export function getStoredDevicePublicKey(plugin: ProTrustPluginLike): string {
 	return normalizeText(plugin?.settings?.devicePublicKey);
 }
 
-export function getStoredActivationWitness(plugin: any): string {
+export function getStoredActivationWitness(plugin: ProTrustPluginLike): string {
 	return normalizeText(plugin?.settings?.activationWitness);
 }
 
-export function clearTrustedActivationCache(plugin: any): void {
+export function clearTrustedActivationCache(plugin: ProTrustPluginLike): void {
 	setRuntimeCache(plugin, null);
 }
 
 export function primeTrustedActivationCache(
-	plugin: any,
+	plugin: ProTrustPluginLike,
 	data: {
 		claims: EntitlementClaims;
 		witness: string;
@@ -360,11 +372,11 @@ export function primeTrustedActivationCache(
 ): void {
 	const envelope = parseEnvelope(data.envelope);
 	if (!envelope) return;
-	(plugin.settings as any).activationEnvelope = JSON.stringify(envelope);
-	(plugin.settings as any).activationWitness = normalizeText(data.witness);
-	(plugin.settings as any).activationGenerationFloor = Math.max(getStoredActivationGenerationFloor(plugin), data.claims.licenseGeneration);
-	(plugin.settings as any).installId = data.claims.installId;
-	(plugin.settings as any).devicePublicKey = data.claims.devicePublicKey;
+	plugin.settings.activationEnvelope = JSON.stringify(envelope);
+	plugin.settings.activationWitness = normalizeText(data.witness);
+	plugin.settings.activationGenerationFloor = Math.max(getStoredActivationGenerationFloor(plugin), data.claims.licenseGeneration);
+	plugin.settings.installId = data.claims.installId;
+	plugin.settings.devicePublicKey = data.claims.devicePublicKey;
 	setRuntimeCache(plugin, {
 		cacheKey: currentCacheKey(plugin),
 		witness: normalizeText(data.witness),
@@ -375,7 +387,7 @@ export function primeTrustedActivationCache(
 }
 
 export async function verifyStoredActivationEnvelope(
-	plugin: any,
+	plugin: ProTrustPluginLike,
 	options: { expectedRefreshChallenge?: string } = {}
 ): Promise<{ claims: EntitlementClaims; witness: string; envelope: SignedEntitlementEnvelope } | null> {
 	const envelope = parseEnvelope(getStoredActivationEnvelope(plugin));
@@ -398,7 +410,7 @@ export async function verifyStoredActivationEnvelope(
 	return { claims, witness, envelope };
 }
 
-export function hasTrustedActivationState(plugin: any): boolean {
+export function hasTrustedActivationState(plugin: ProTrustPluginLike): boolean {
 	const cache = getRuntimeCache(plugin);
 	if (!cache) return false;
 	if (cache.cacheKey !== currentCacheKey(plugin)) return false;
@@ -407,7 +419,7 @@ export function hasTrustedActivationState(plugin: any): boolean {
 }
 
 export function hasVerifiedFeatureAccess(
-	plugin: any,
+	plugin: ProTrustPluginLike,
 	feature: EntitlementFeature
 ): boolean {
 	const cache = getRuntimeCache(plugin);
@@ -416,12 +428,12 @@ export function hasVerifiedFeatureAccess(
 	return !!cache?.features.has(feature);
 }
 
-export function getVerifiedLicenseHolder(plugin: any): string {
+export function getVerifiedLicenseHolder(plugin: ProTrustPluginLike): string {
 	if (!hasTrustedActivationState(plugin)) return "";
 	return normalizeText(getRuntimeCache(plugin)?.holder);
 }
 
-export function needsActivationValidationForCurrentVersion(plugin: any): boolean {
+export function needsActivationValidationForCurrentVersion(plugin: ProTrustPluginLike): boolean {
 	const envelope = parseEnvelope(getStoredActivationEnvelope(plugin));
 	const claims = parseClaims(envelope);
 	if (!envelope || !claims) return false;

@@ -27,6 +27,12 @@ import {
 import { getEpochMarkColorSet } from "../mark-colors";
 import { drawDayMarker } from "./draw-days/date-marker";
 import type { CanvasDrawState } from "./state";
+import type { DaySummaryRenderArgs } from "../summary-rendering/types";
+
+type DateRangeFilter = DaySummaryRenderArgs["relatedDateRange"];
+type AnimSummaryState = DaySummaryRenderArgs["animSummary"];
+type PrevAnimSummaryState = DaySummaryRenderArgs["prevAnimSummary"];
+type OutgoingSummariesState = DaySummaryRenderArgs["outgoingSummaries"];
 
 export function drawDayLayouts(params: {
 	s: CanvasDrawState;
@@ -56,20 +62,20 @@ export function drawDayLayouts(params: {
 	colRelated: string;
 	colHighlight: string;
 	activePath: string | null;
-	relatedDateRange: any;
+	relatedDateRange: DateRangeFilter;
 	semanticRelatedPaths: Set<string> | null;
 	semanticRelatedTermPaths: Set<string> | null;
 	semanticRelatedActiveTerm: string | null;
 	inheritedMarkIndexByPath: Map<string, number> | null;
 	epochsViewMarkedChildVisibleByDateKey: Map<string, boolean> | null;
-	wrapFadeCache: Map<string, any>;
+	wrapFadeCache: Map<string, unknown>;
 	packedEpochDayCenterY: Map<number, number>;
 	epochPackAlphaByIndex: Map<number, number> | null;
 	packedNormalDayCenterY: Map<number, number>;
 	hoverAnimEffective: number;
-	animSummaryEffective: any;
-	prevAnimSummaryEffective: any;
-	outgoingSummariesEffective: any;
+	animSummaryEffective: AnimSummaryState;
+	prevAnimSummaryEffective: PrevAnimSummaryState;
+	outgoingSummariesEffective: OutgoingSummariesState;
 	globalDenseMode: boolean;
 	globalCompactMode: boolean;
 	perDayDenseByIndex: Map<number, boolean>;
@@ -134,19 +140,19 @@ export function drawDayLayouts(params: {
 	const layouts: DayLayout[] = [];
 	const denseBarsToDraw: DenseBarVisual[] = [];
 	let hoverOverlay: HoverOverlay | null = null;
-	const filenameWordsCount = Number((s as any).plugin.settings.filenameWordsCount ?? 2);
-	const summaryWordsCount = Number((s as any).plugin.settings.summaryWordsCount ?? 5);
+	const filenameWordsCount = Number(s.plugin.settings.filenameWordsCount ?? 2);
+	const summaryWordsCount = Number(s.plugin.settings.summaryWordsCount ?? 5);
 	const showHiddenForRender = (() => {
 		try {
-			if ((s as any).showHidden) return true;
-			return /(^|\s)[!$]hidden(?=\s|$)/i.test(String((s as any).searchQuery || ""));
+			if (s.showHidden) return true;
+			return /(^|\s)[!$]hidden(?=\s|$)/i.test(String(s.searchQuery || ""));
 		} catch {
-			return !!(s as any).showHidden;
+			return !!s.showHidden;
 		}
 	})();
 	const hiddenOnlyForRender = (() => {
 		try {
-			return /(^|\s)[!$]hidden(?=\s|$)/i.test(String((s as any).searchQuery || ""));
+			return /(^|\s)[!$]hidden(?=\s|$)/i.test(String(s.searchQuery || ""));
 		} catch {
 			return false;
 		}
@@ -154,7 +160,7 @@ export function drawDayLayouts(params: {
 
 	const markColorsRaw = getEpochMarkColorSet(s.root);
 	const markColors = markColorsRaw;
-	const compactModeMinWidthPercentRaw = Number((s as any).plugin.settings.compactModeMinWidthPercent ?? 30);
+	const compactModeMinWidthPercentRaw = Number(s.plugin.settings.compactModeMinWidthPercent ?? 30);
 	const compactModeMinWidthPercent = Number.isFinite(compactModeMinWidthPercentRaw)
 		? Math.max(0, Math.min(100, compactModeMinWidthPercentRaw))
 		: 20;
@@ -175,10 +181,11 @@ export function drawDayLayouts(params: {
 
 		const tIn = s.animDateIndex === i ? s.hoverAnim : 0;
 		let tOut = 0;
-		const outgoingDates = (s as any).outgoingDates as Array<{ index: number; t: number }> | null | undefined;
+		const outgoingDates = s.outgoingDates;
 		if (outgoingDates && outgoingDates.length) {
 			for (let oi = 0; oi < outgoingDates.length; oi++) {
-				const o = outgoingDates[oi]!;
+				const o = outgoingDates[oi];
+				if (!o) continue;
 				if (o.index === i) {
 					const ot = Number(o.t);
 					if (Number.isFinite(ot) && ot > tOut) tOut = ot;
@@ -249,7 +256,7 @@ export function drawDayLayouts(params: {
 				hiddenOnly: hiddenOnlyForRender,
 				filenameWordsCount,
 				summaryWordsCount,
-					iconCache: (s as any).iconCache,
+					iconCache: s.iconCache,
 					fontSmall,
 					fontSmallHover,
 					colTextBase,
@@ -258,9 +265,9 @@ export function drawDayLayouts(params: {
 					colRelated,
 					colTimelineBg: colSummaryHoverBg,
 					markColors,
-					getEntryTitle: (entry: DateEntry) => (s as any).getEntryTitle(entry),
-					pathsWithEmbeddingTerm: (s as any)?.pathsWithEmbeddingTerm ?? null,
-					pathsWithClassifiedTerm: (s as any)?.pathsWithClassifiedTerm ?? null,
+					getEntryTitle: (entry: DateEntry): string | null => s.getEntryTitle(entry),
+					pathsWithEmbeddingTerm: s.pathsWithEmbeddingTerm ?? null,
+					pathsWithClassifiedTerm: s.pathsWithClassifiedTerm ?? null,
 					termSimilarPaths: semanticRelatedActiveTerm ? semanticRelatedTermPaths : null,
 					compactMinWidthRatio,
 					denseMode: denseForPrev,
@@ -307,8 +314,8 @@ export function drawDayLayouts(params: {
 					rowHeight,
 					fontSmall,
 					activeFilePath: activePath,
-					pathsWithEmbeddingTerm: (s as any)?.pathsWithEmbeddingTerm ?? null,
-					pathsWithClassifiedTerm: (s as any)?.pathsWithClassifiedTerm ?? null,
+					pathsWithEmbeddingTerm: s.pathsWithEmbeddingTerm ?? null,
+					pathsWithClassifiedTerm: s.pathsWithClassifiedTerm ?? null,
 					termSimilarPaths: semanticRelatedActiveTerm ? semanticRelatedTermPaths : null,
 					compactMinWidthRatio
 				}))
@@ -334,9 +341,9 @@ export function drawDayLayouts(params: {
 								scale: s.scale,
 								rowHeight,
 								hoverAnim: s.hoverAnim,
-								animSummary: (s as any).animSummary,
-								prevAnimSummary: (s as any).prevAnimSummary ?? null,
-								outgoingSummaries: (s as any).outgoingSummaries ?? null,
+								animSummary: s.animSummary,
+								prevAnimSummary: s.prevAnimSummary ?? null,
+								outgoingSummaries: s.outgoingSummaries ?? null,
 								activeFilePath: activePath,
 								relatedDateRange,
 								semanticRelatedPaths,
@@ -351,11 +358,11 @@ export function drawDayLayouts(params: {
 								colRelated,
 								markColors,
 								inheritedMarkIndexByPath,
-								pathsWithEmbeddingTerm: (s as any)?.pathsWithEmbeddingTerm ?? null,
-								pathsWithClassifiedTerm: (s as any)?.pathsWithClassifiedTerm ?? null,
+								pathsWithEmbeddingTerm: s.pathsWithEmbeddingTerm ?? null,
+								pathsWithClassifiedTerm: s.pathsWithClassifiedTerm ?? null,
 								termSimilarPaths: semanticRelatedActiveTerm ? semanticRelatedTermPaths : null,
 								compactMinWidthRatio,
-								getEntryTitle: (entry: DateEntry) => (s as any).getEntryTitle(entry)
+						getEntryTitle: (entry: DateEntry): string | null => s.getEntryTitle(entry)
 							});
 							if (bucketCheck.anyRenderableText && !bucketCheck.needsDenseByWidth) {
 								ctx.save();
@@ -386,7 +393,7 @@ export function drawDayLayouts(params: {
 									showHidden: showHiddenForRender,
 									filenameWordsCount,
 									summaryWordsCount,
-									iconCache: (s as any).iconCache,
+									iconCache: s.iconCache,
 									fontSmall,
 									fontSmallHover,
 									colTextBase,
@@ -395,9 +402,9 @@ export function drawDayLayouts(params: {
 									colRelated,
 									colTimelineBg: colSummaryHoverBg,
 									markColors,
-									getEntryTitle: (entry: DateEntry) => (s as any).getEntryTitle(entry),
-									pathsWithEmbeddingTerm: (s as any)?.pathsWithEmbeddingTerm ?? null,
-									pathsWithClassifiedTerm: (s as any)?.pathsWithClassifiedTerm ?? null,
+							getEntryTitle: (entry: DateEntry): string | null => s.getEntryTitle(entry),
+									pathsWithEmbeddingTerm: s.pathsWithEmbeddingTerm ?? null,
+									pathsWithClassifiedTerm: s.pathsWithClassifiedTerm ?? null,
 									termSimilarPaths: semanticRelatedActiveTerm ? semanticRelatedTermPaths : null,
 									denseMode: false,
 									epochsView: false,
@@ -442,19 +449,19 @@ export function drawDayLayouts(params: {
 						const hoverRects = buildDenseSummaryRects(visual, entries, HOVER_HIT_PAD, { allEntries: true });
 						dayLayout.summaryRects = rects;
 						dayLayout.summaryHoverRects = hoverRects;
-						const highlightMatch = !!((s as any).animSummary && (s as any).animSummary.dayIndex === i);
+						const highlightMatch = !!(s.animSummary && s.animSummary.dayIndex === i);
 						const hoverT = highlightMatch ? Math.max(0, Math.min(1, Number(s.hoverAnim) || 0)) : 0;
-						const hoverPartition = highlightMatch && (s as any).animSummary ? (s as any).animSummary.itemIndex : null;
+						const hoverPartition = highlightMatch && s.animSummary ? s.animSummary.itemIndex : null;
 
 						ctx.save();
 						ctx.globalAlpha *= dayOpacity;
 						drawDenseBarBase(ctx, visual);
-						if ((visual as any).hasActiveEntry) {
-							const pc = Number((visual as any).partitionCount);
+						if (visual.hasActiveEntry) {
+							const pc = Number(visual.partitionCount);
 							const isPartitioned = Number.isFinite(pc) && pc > 1;
 							const activePartition =
-								isPartitioned && (visual as any).activeItemIndex >= 0 && (visual as any).activeItemIndex < Math.floor(pc)
-									? (visual as any).activeItemIndex
+								isPartitioned && visual.activeItemIndex >= 0 && visual.activeItemIndex < Math.floor(pc)
+									? visual.activeItemIndex
 									: null;
 							drawDenseBarHover(ctx, visual, 1, activePartition, colHighlight);
 						}
@@ -505,7 +512,7 @@ export function drawDayLayouts(params: {
 					hiddenOnly: hiddenOnlyForRender,
 					filenameWordsCount,
 					summaryWordsCount,
-					iconCache: (s as any).iconCache,
+					iconCache: s.iconCache,
 					fontSmall,
 					fontSmallHover,
 					fontEpochLine1: epochsViewActive ? fontEpochLine1 : undefined,
@@ -516,9 +523,9 @@ export function drawDayLayouts(params: {
 					colRelated,
 					colTimelineBg: colSummaryHoverBg,
 					markColors,
-					getEntryTitle: (entry: DateEntry) => (s as any).getEntryTitle(entry),
-					pathsWithEmbeddingTerm: (s as any)?.pathsWithEmbeddingTerm ?? null,
-					pathsWithClassifiedTerm: (s as any)?.pathsWithClassifiedTerm ?? null,
+			getEntryTitle: (entry: DateEntry): string | null => s.getEntryTitle(entry),
+					pathsWithEmbeddingTerm: s.pathsWithEmbeddingTerm ?? null,
+					pathsWithClassifiedTerm: s.pathsWithClassifiedTerm ?? null,
 					termSimilarPaths: semanticRelatedActiveTerm ? semanticRelatedTermPaths : null,
 					denseMode: denseForDay || compactForDay,
 					epochsView: epochsViewActive,

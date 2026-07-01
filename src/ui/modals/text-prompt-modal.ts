@@ -1,7 +1,15 @@
 import { App, Modal } from "obsidian";
 import { setCssStyles } from "../../dom";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = typeof window !== "undefined" ? window.document : ({} as Document);
+
+type FocusableElement = HTMLElement & {
+	focus(options?: FocusOptions): void;
+};
+
+function toFocusableElement(value: Element | null): FocusableElement | null {
+	return value instanceof HTMLElement ? value : null;
+}
 
 
 export class TextPromptModal extends Modal {
@@ -13,7 +21,9 @@ export class TextPromptModal extends Modal {
 
 	constructor(app: App, title: string, initialValue: string, resolve: (value: string | null) => void) {
 		super(app);
-		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = typeof activeDocument !== "undefined"
+			? toFocusableElement(activeDocument.activeElement)
+			: null;
 		this.titleText = title;
 		this.initialValue = initialValue;
 		this.resolver = resolve;
@@ -76,7 +86,7 @@ export class TextPromptModal extends Modal {
 		if (el && typeof el.focus === "function") {
 			window.requestAnimationFrame(() => {
 				try {
-					(el as any).focus?.({ preventScroll: true });
+					(el as FocusableElement).focus({ preventScroll: true });
 				} catch {
 					try {
 						el.focus();

@@ -1,5 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
+import { Platform, TFile } from "obsidian";
 import { withTrustedPro } from "./helpers/trusted-pro";
+
+// Create a fake TFile class that can be used for instanceof checks
+class FakeTFile {
+	path: string;
+	stat: any;
+	extension?: string;
+	constructor(path: string, stat: any = {}) {
+		this.path = path;
+		this.stat = stat;
+		const lastDot = path.lastIndexOf(".");
+		this.extension = lastDot > -1 ? path.slice(lastDot + 1) : "";
+	}
+}
+// Make instanceof work by setting the prototype
+Object.setPrototypeOf(FakeTFile.prototype, TFile.prototype);
 
 vi.mock("../src/plugin/similarity/store", () => {
 	return {
@@ -12,8 +28,10 @@ import { runSimilarityStartupMaintenance } from "../src/plugin/similarity/startu
 describe("similarity: startup maintenance after Pro activation", () => {
 	it("does not consume the guard while Free, and enqueues vectors after Pro becomes active", async () => {
 		vi.useFakeTimers();
+		Platform.isDesktopApp = true;
+		Platform.isMobileApp = false;
 		const queued: string[] = [];
-		const mdFiles = [{ path: "a.md" }, { path: "b.md" }];
+		const mdFiles = [new FakeTFile("a.md"), new FakeTFile("b.md")];
 
 		const plugin: any = {
 			proActive: false,

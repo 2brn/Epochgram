@@ -14,10 +14,37 @@ import { getEventState, type CanvasEventInternals } from "./state";
 type ShiftZoomAnchorLock =
 	| { kind: "date"; dayIndex: number; screenY: number };
 
-function resolveToday(state: CanvasEventInternals): Date | null {
+type WheelState = CanvasEventInternals & {
+	getToday?(): Date;
+	activeFilePath?: string;
+	animatingWheelPan?: boolean;
+	animatingWheelZoom?: boolean;
+	wheelZoomDir?: number;
+	wheelZoomAnchorY?: number;
+	wheelZoomAnchorWorldY?: number;
+	suppressClickUntil?: number;
+	__lastKnownCanvasCssHeight?: number;
+	hoverAnim?: number;
+	hoverEaseStartAt?: number | null;
+	hoverEaseFrom?: number;
+	hoverEaseTo?: number;
+	outgoingSummaries?: Array<{ dayIndex: number; itemIndex: number; t: number }> | null;
+	outgoingDates?: Array<{ index: number; t: number }> | null;
+	previewLockedUntilAltRelease?: boolean;
+	hoverPreviewKey?: string | null;
+	viewInteractionUntil?: number;
+	suppressHoverUntil?: number;
+	suppressHoverUntilPointerMove?: boolean;
+	keepHoverUntilPointerMove?: boolean;
+};
+
+function nowMs(): number {
+	return window.performance?.now?.() ?? Date.now();
+}
+
+function resolveToday(state: WheelState): Date | null {
 	try {
-		const fn = (state as any)?.getToday;
-		if (typeof fn === "function") return fn.call(state);
+		if (typeof state.getToday === "function") return state.getToday();
 	} catch {
 		// ignore
 	}
@@ -25,7 +52,11 @@ function resolveToday(state: CanvasEventInternals): Date | null {
 }
 
 function resolveCurrentScrollNavDayIndex(canvas: EpochCanvas): number | null {
-	const c: any = canvas as any;
+	const c = canvas as unknown as {
+		pendingScrollNavHighlight?: { dayIndex?: number } | null;
+		scrollNavAnchorDayIndex?: number | null;
+		scrollNavAnchorEntry?: { date?: string | null } | null;
+	};
 	try {
 		const pending = c?.pendingScrollNavHighlight ?? null;
 		const pendingDay = pending?.dayIndex;
@@ -40,7 +71,7 @@ function resolveCurrentScrollNavDayIndex(canvas: EpochCanvas): number | null {
 		// ignore
 	}
 	try {
-		const anchorEntry: any = c?.scrollNavAnchorEntry ?? null;
+		const anchorEntry = c?.scrollNavAnchorEntry ?? null;
 		const dk = String(anchorEntry?.date ?? "").trim();
 		if (!dk) return null;
 		const dt = dateKeyToDate(dk);
@@ -53,9 +84,14 @@ function resolveCurrentScrollNavDayIndex(canvas: EpochCanvas): number | null {
 }
 
 function resolveActiveRecordDayIndex(canvas: EpochCanvas, activePath: string): number | null {
-	const c: any = canvas as any;
+	const c = canvas as unknown as {
+		scrollNavAnchorEntry?: { file?: string | null; date?: string | null; recurring?: boolean } | null;
+		scrollNavAnchorDayIndex?: number | null;
+		pendingScrollNavHighlight?: { dayIndex?: number; entry?: { file?: string | null } | null } | null;
+		index?: Record<string, Array<{ file?: string | null; recurring?: boolean } | null>>;
+	};
 	try {
-		const anchorEntry: any = c?.scrollNavAnchorEntry ?? null;
+		const anchorEntry = c?.scrollNavAnchorEntry ?? null;
 		if (anchorEntry && String(anchorEntry.file ?? "") === activePath) {
 			const explicitDay = c?.scrollNavAnchorDayIndex;
 			if (typeof explicitDay === "number" && Number.isFinite(explicitDay)) {
@@ -72,8 +108,8 @@ function resolveActiveRecordDayIndex(canvas: EpochCanvas, activePath: string): n
 	}
 
 	try {
-		const pending: any = c?.pendingScrollNavHighlight ?? null;
-		const pendingEntry: any = pending?.entry ?? null;
+		const pending = c?.pendingScrollNavHighlight ?? null;
+		const pendingEntry = pending?.entry ?? null;
 		if (pendingEntry && String(pendingEntry.file ?? "") === activePath) {
 			const idx = pending?.dayIndex;
 			if (typeof idx === "number" && Number.isFinite(idx)) return idx;
@@ -83,7 +119,7 @@ function resolveActiveRecordDayIndex(canvas: EpochCanvas, activePath: string): n
 	}
 
 	try {
-		const index = c?.index as Record<string, any[]> | undefined;
+		const index = c?.index;
 		if (!index || typeof index !== "object") return null;
 
 		let bestNonRecurringMs: number | null = null;
@@ -97,8 +133,8 @@ function resolveActiveRecordDayIndex(canvas: EpochCanvas, activePath: string): n
 			let hasRecurring = false;
 			for (const entry of entries) {
 				if (!entry) continue;
-				if (String((entry as any).file ?? "") !== activePath) continue;
-				if ((entry as any).recurring === true) hasRecurring = true;
+				if (String(entry.file ?? "") !== activePath) continue;
+				if (entry.recurring === true) hasRecurring = true;
 				else hasNonRecurring = true;
 			}
 			if (!hasNonRecurring && !hasRecurring) continue;
@@ -133,7 +169,9 @@ function resolveActiveRecordDayIndex(canvas: EpochCanvas, activePath: string): n
 }
 
 function resolveShiftZoomAnchorLock(canvas: EpochCanvas, s: CanvasEventInternals): ShiftZoomAnchorLock | null {
-	const activePath = String((s as any)?.activeFilePath ?? (canvas as any)?.activeFilePath ?? "").trim();
+	const state = s as WheelState;
+	const canvasState = canvas as unknown as { activeFilePath?: string };
+	const activePath = String(state.activeFilePath ?? canvasState.activeFilePath ?? "").trim();
 	const scrollAnchorDayIndex = resolveCurrentScrollNavDayIndex(canvas);
 
 	// Shift-zoom policy:
@@ -165,6 +203,7 @@ function resolveShiftZoomAnchorLock(canvas: EpochCanvas, s: CanvasEventInternals
 }
 
 function applyWheelPan(s: CanvasEventInternals, delta: number): void {
+	const state = s as WheelState;
 	if (!Number.isFinite(delta) || delta === 0) return;
 	const dir = Math.sign(delta);
 	if (dir === 0) return;
@@ -173,21 +212,21 @@ function applyWheelPan(s: CanvasEventInternals, delta: number): void {
 		s.animatingView = false;
 	}
 	const wasAnimatingWheelPan =
-		(s as any).animatingWheelPan === true &&
+		state.animatingWheelPan === true &&
 		Number.isFinite(s.targetOffsetY) &&
 		Number.isFinite(s.offsetY);
 	if (wasAnimatingWheelPan) {
 		const remaining = s.targetOffsetY - s.offsetY;
 		if (remaining !== 0 && Math.sign(remaining) === dir) {
-			(s as any).animatingWheelPan = false;
+			state.animatingWheelPan = false;
 			s.targetOffsetY = s.offsetY;
 		}
 	}
 	const base =
-		(s as any).animatingWheelPan === true && Number.isFinite(s.targetOffsetY)
+		state.animatingWheelPan === true && Number.isFinite(s.targetOffsetY)
 			? s.targetOffsetY
 			: s.offsetY;
-	const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+	const viewportHeight = resolveViewportHeight(s.root, Number(state.__lastKnownCanvasCssHeight ?? 0));
 	const nextTargetOffset = base - delta;
 	const today = resolveToday(s);
 	s.targetOffsetY = viewportHeight > 0
@@ -202,7 +241,7 @@ function applyWheelPan(s: CanvasEventInternals, delta: number): void {
 		s.targetOffsetY = nextTargetOffset;
 	}
 	s.targetScale = s.scale;
-	(s as any).animatingWheelPan = true;
+	state.animatingWheelPan = true;
 }
 
 function applyWheelZoomAnimated(
@@ -211,14 +250,15 @@ function applyWheelZoomAnimated(
 	event: WheelEvent,
 	anchorY: number
 ): void {
+	const state = s as WheelState;
 	const deltaY = Number(event.deltaY) || 0;
 	if (!Number.isFinite(deltaY) || deltaY === 0) return;
 
 	const dir = Math.sign(-deltaY);
 	if (dir === 0) return;
 
-	const wasAnimating = (s as any).animatingWheelZoom === true;
-	const prevDir = Number((s as any).wheelZoomDir) || 0;
+	const wasAnimating = state.animatingWheelZoom === true;
+	const prevDir = Number(state.wheelZoomDir) || 0;
 	const reversing = wasAnimating && prevDir !== 0 && prevDir !== dir;
 
 	const baseScale = (() => {
@@ -238,7 +278,7 @@ function applyWheelZoomAnimated(
 
 	const worldY = (anchorY - baseOffsetY) / baseScale;
 	const nextOffsetY = anchorY - worldY * nextScale;
-	const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+	const viewportHeight = resolveViewportHeight(s.root, Number(state.__lastKnownCanvasCssHeight ?? 0));
 	const today = resolveToday(s);
 	const clampedOffsetY = viewportHeight > 0
 		? clampTimelineOffsetToBounds({
@@ -251,11 +291,11 @@ function applyWheelZoomAnimated(
 
 	// Cancel other view motion modes; wheel zoom owns scale/offset while active.
 	s.animatingView = false;
-	(s as any).animatingWheelPan = false;
-	(s as any).animatingWheelZoom = true;
-	(s as any).wheelZoomDir = dir;
-	(s as any).wheelZoomAnchorY = anchorY;
-	(s as any).wheelZoomAnchorWorldY = worldY;
+	state.animatingWheelPan = false;
+	state.animatingWheelZoom = true;
+	state.wheelZoomDir = dir;
+	state.wheelZoomAnchorY = anchorY;
+	state.wheelZoomAnchorWorldY = worldY;
 
 	s.targetScale = nextScale;
 	s.targetOffsetY = today ? clampedOffsetY : nextOffsetY;
@@ -263,11 +303,12 @@ function applyWheelZoomAnimated(
 
 export function handleWheel(canvas: EpochCanvas, event: WheelEvent): void {
 	const s = getEventState(canvas);
+	const state = s as WheelState;
 	event.preventDefault();
-	const now = performance.now();
+	const now = nowMs();
 	try {
-		const prev = Number((s as any).suppressClickUntil ?? 0);
-		(s as any).suppressClickUntil = Math.max(prev, now + 200);
+		const prev = Number(state.suppressClickUntil ?? 0);
+		state.suppressClickUntil = Math.max(prev, now + 200);
 	} catch {
 		// ignore
 	}
@@ -302,7 +343,7 @@ export function handleWheel(canvas: EpochCanvas, event: WheelEvent): void {
 	}
 	if (event.ctrlKey || event.metaKey || (event.shiftKey && !event.altKey && !event.metaKey)) {
 		s.animatingView = false;
-		(s as any).animatingWheelPan = false;
+		state.animatingWheelPan = false;
 		// Shift-only wheel zoom remains instant (for the shift-lock pinned-hover correction pass).
 		// Ctrl/meta wheel zoom is animated via animatingWheelZoom.
 		// Treat active zoom as an "animating" period for perf gating.
@@ -316,17 +357,17 @@ export function handleWheel(canvas: EpochCanvas, event: WheelEvent): void {
 
 		// Zoom input should not trigger hover (across all render modes).
 		// Clear hover immediately (no hover-out animation) and keep it suppressed until the user moves the pointer.
-		const hoverNow = performance.now();
+		const hoverNow = nowMs();
 		s.suppressHoverUntil = hoverNow + 180;
 		s.suppressHoverUntilPointerMove = true;
 		s.keepHoverUntilPointerMove = false;
 		s.clearHover(true);
-		(s as any).hoverAnim = 0;
-		(s as any).hoverEaseStartAt = null;
-		(s as any).hoverEaseFrom = 0;
-		(s as any).hoverEaseTo = 0;
-		(s as any).outgoingSummaries = [];
-		(s as any).outgoingDates = [];
+		state.hoverAnim = 0;
+		state.hoverEaseStartAt = null;
+		state.hoverEaseFrom = 0;
+		state.hoverEaseTo = 0;
+		state.outgoingSummaries = [];
+		state.outgoingDates = [];
 
 		if (event.ctrlKey || event.metaKey) {
 			applyWheelZoomAnimated(canvas, s, event, anchorY);
@@ -340,7 +381,7 @@ export function handleWheel(canvas: EpochCanvas, event: WheelEvent): void {
 			const worldY = (anchorY - s.offsetY) / prevScale;
 			s.scale = newScale;
 			s.offsetY = anchorY - worldY * s.scale;
-			const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+			const viewportHeight = resolveViewportHeight(s.root, Number(state.__lastKnownCanvasCssHeight ?? 0));
 			if (viewportHeight > 0) {
 				const today = resolveToday(s);
 				s.offsetY = clampTimelineOffsetToBounds({

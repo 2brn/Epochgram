@@ -3,8 +3,8 @@ import { setIcon } from "obsidian";
 export type RegisterDomEvent = (
 	el: HTMLElement,
 	event: string,
-	callback: (event: any) => any,
-	options?: any
+	callback: (event: Event) => void,
+	options?: boolean | AddEventListenerOptions
 ) => void;
 
 export function registerButtonInteractionCleanup(registerDomEvent: RegisterDomEvent, button: HTMLElement | null): void {
@@ -71,9 +71,10 @@ export function createFilterToggle(params: {
 	};
 
 	registerDomEvent(button, "click", activate);
-	registerDomEvent(button, "keydown", (event: KeyboardEvent) => {
-		if (event.key === "Enter" || event.key === " ") {
-			event.preventDefault();
+	registerDomEvent(button, "keydown", (event: Event) => {
+		const keyboardEvent = event as KeyboardEvent;
+		if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
+			keyboardEvent.preventDefault();
 			activate();
 		}
 	});
@@ -119,9 +120,10 @@ export function createFilterButton(params: {
 	};
 
 	registerDomEvent(button, "click", activate);
-	registerDomEvent(button, "keydown", (event: KeyboardEvent) => {
-		if (event.key === "Enter" || event.key === " ") {
-			event.preventDefault();
+	registerDomEvent(button, "keydown", (event: Event) => {
+		const keyboardEvent = event as KeyboardEvent;
+		if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
+			keyboardEvent.preventDefault();
 			activate();
 		}
 	});

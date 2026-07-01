@@ -13,8 +13,10 @@ export interface SummaryRect {
 	y2: number;
 	itemIndex: number;
 	entry: DateEntry;
+	denseBarTotalCount?: number;
 	compactTotalCount?: number;
 	compactHiddenCount?: number;
+	isPlaceholder?: boolean;
 }
 
 export interface DayLayout {

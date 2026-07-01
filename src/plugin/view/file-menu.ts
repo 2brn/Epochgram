@@ -3,6 +3,7 @@ import { Menu, TFile } from "obsidian";
 import { applyMarkColorWithContext } from "../mark-context";
 import { setCssStyles } from "../../dom";
 import { gatherFileEntries } from "../../indexer/entry-state";
+import type { FileIndexData } from "../../indexer/types";
 import {
 	getEpochMarkColorGroups,
 	getEpochMarkColorSet,
@@ -10,51 +11,97 @@ import {
 } from "../../ui/mark-colors";
 import type { EpochPlugin } from "../../main";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = typeof window !== "undefined" ? window.document : ({} as Document);
+
+type FileMenuItemLike = {
+	setTitle(title: string): FileMenuItemLike;
+	setIcon(icon: string): FileMenuItemLike;
+	setDisabled(disabled: boolean): FileMenuItemLike;
+	onClick(callback: () => void | Promise<void>): FileMenuItemLike;
+	setSubmenu?(): Menu | null;
+	dom?: HTMLElement & { addClass?: (name: string) => void };
+	iconEl?: HTMLElement;
+};
+
+type FileMenuIndexLike = {
+	isFileKnown?(path: string): boolean;
+	isFilePinned(path: string): boolean;
+	getFileMarkColor(path: string): number | null;
+	getFileEmbeddingTerm?(path: string): unknown;
+	setFileReviewStateForAllRecords?(path: string, next: "draft" | "reviewed"): boolean;
+	setFileReviewStateForAllRecordsPreserveHidden?(path: string, next: "draft" | "reviewed"): boolean;
+	isFileHidden?(path: string): boolean;
+	setFileHidden?(path: string, hidden: boolean): boolean;
+	toJSON?(): { files?: Record<string, FileIndexData | undefined> };
+};
+
+type FileMenuPluginLike = EpochPlugin & {
+	indexReady?: boolean;
+	indexer?: FileMenuIndexLike;
+	app: {
+		workspace: {
+			containerEl?: HTMLElement;
+			on(eventName: string, callback: (menu: Menu, file: TAbstractFile) => void): unknown;
+			getActiveFile?: () => { path?: string } | null;
+		};
+		vault?: {
+			getConfig?(name: string): unknown;
+		};
+	};
+	isExcludedPath?(path: string): boolean;
+	toggleFilePin?(file: TFile, pinned: boolean): Promise<void>;
+	ensureIndexLoaded?(): Promise<void>;
+	waitForExcludedSync?(): Promise<void>;
+	persistIndex?(options: { skipEnsure?: boolean }): Promise<void>;
+	refreshEpochViews?(): void;
+	__epochInheritedMarkIndexByPath?: Map<string, number | null | undefined>;
+};
 
 
 export function registerFileMenu(plugin: EpochPlugin): void {
+	const pluginState = plugin as FileMenuPluginLike;
 	plugin.registerEvent(
-		plugin.app.workspace.on("file-menu", (menu: Menu, file: TAbstractFile) => {
+		pluginState.app.workspace.on("file-menu", (menu: Menu, file: TAbstractFile) => {
 			if (!(file instanceof TFile)) return;
-			if (!(plugin as any).indexReady) return;
-			if ((plugin as any).isExcludedPath?.(file.path)) return;
-			if (!(plugin as any).indexer?.isFileKnown?.(file.path)) return;
+			if (pluginState.indexReady !== true) return;
+			if (pluginState.isExcludedPath?.(file.path)) return;
+			if (!pluginState.indexer?.isFileKnown?.(file.path)) return;
 
 			menu.addSeparator();
+			const menuWithHide = menu as Menu & { onHide?: (callback: () => void) => void; hide?: () => void };
 
-			const pinned = (plugin as any).indexer.isFilePinned(file.path);
+			const pinned = pluginState.indexer.isFilePinned(file.path);
 			menu.addItem((item) => {
 				item
 					.setTitle(pinned ? "Epochgram: Unpin" : "Epochgram: Pin")
 					.setIcon(pinned ? "pin-off" : "pin")
 					.onClick(async () => {
-						await (plugin as any).toggleFilePin(file, !pinned);
+						await pluginState.toggleFilePin?.(file, !pinned);
 					});
 			});
-			const currentMark: number | null = (plugin as any).indexer.getFileMarkColor(file.path);
+			const currentMark: number | null = pluginState.indexer.getFileMarkColor(file.path);
 			const explicitMark = normalizeMarkColorIndex(currentMark);
 			const inheritedMark: number | null = (() => {
 				if (explicitMark != null) return null;
 				try {
-					const map: unknown = (plugin as any)?.__epochInheritedMarkIndexByPath;
+					const map: unknown = pluginState.__epochInheritedMarkIndexByPath;
 					if (!(map instanceof Map)) return null;
 					return normalizeMarkColorIndex(map.get(file.path));
 				} catch {
 					return null;
 				}
 			})();
-			menu.addItem((item) => {
+			menu.addItem((item: FileMenuItemLike) => {
 				item.setTitle("Epochgram: Mark").setIcon("highlighter").setDisabled(false);
 
-				const submenu = (item as any).setSubmenu?.();
+				const submenu = item.setSubmenu?.();
 				if (!submenu) return;
 				const hideContextMenu = () => {
 					try {
-						(menu as any)?.hide?.();
+						menuWithHide.hide?.();
 					} catch { void 0; }
 				};
-				const rootEl: HTMLElement = (plugin as any).app.workspace?.containerEl ?? activeDocument.body;
+				const rootEl: HTMLElement = pluginState.app.workspace?.containerEl ?? activeDocument.body;
 				const groups = getEpochMarkColorGroups(rootEl);
 				const colors = getEpochMarkColorSet(rootEl);
 				const hasAnyMark = explicitMark != null || inheritedMark != null;
@@ -68,7 +115,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 
 				const nativeMenusEnabled = (() => {
 					try {
-						return !!(plugin.app as any)?.vault?.getConfig?.("nativeMenus");
+						return !!pluginState.app.vault?.getConfig?.("nativeMenus");
 					} catch {
 						return false;
 					}
@@ -78,18 +125,18 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 				const labelOrIconOnly = (label: string): string => (useTextLabels ? label : ICON_ONLY_LABEL);
 				let activeGroupSubmenu: Menu | null = null;
 				try {
-					(menu as any)?.onHide?.(() => {
+					menuWithHide.onHide?.(() => {
 						activeGroupSubmenu = null;
 					});
 				} catch { void 0; }
-				submenu.addItem((it: any) => {
+				submenu.addItem((it: FileMenuItemLike) => {
 					it
 						.setTitle(useTextLabels ? "Clear mark" : ICON_ONLY_LABEL)
 						.setIcon("ban")
 						.setDisabled(!hasAnyMark)
 						.onClick(async () => {
 							try {
-								await applyMarkColorWithContext(plugin as any, {
+								await applyMarkColorWithContext(plugin, {
 									entryPath: file.path,
 									nextColorIndex: null,
 									currentColorIndex: explicitMark ?? inheritedMark
@@ -101,20 +148,20 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 				});
 
 				for (const group of groups) {
-					submenu.addItem((it: any) => {
+					submenu.addItem((it: FileMenuItemLike) => {
 						it.setTitle(labelOrIconOnly(group.name)).setIcon("circle").setDisabled(false);
 						try {
-							const el = (it as any).iconEl as HTMLElement | undefined;
+							const el = it.iconEl;
 							if (el) {
 								el.style.color = group.base.css;
 								setCssStyles(el, { opacity: "1", filter: "none", webkitFilter: "none" });
 							}
 						} catch { void 0; }
 
-						const groupSub = (it as any).setSubmenu?.();
+						const groupSub = it.setSubmenu?.();
 						if (!groupSub) return;
 						try {
-							const dom: any = (it as any)?.dom;
+							const dom = it.dom;
 							if (dom) {
 								if (typeof dom.addClass === "function") dom.addClass("epoch-menu-no-arrow");
 								else dom.classList?.add?.("epoch-menu-no-arrow");
@@ -124,14 +171,14 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 						for (const shade of group.shades) {
 							const idx = shade.index;
 							const css = colors[idx - 1] || "";
-							groupSub.addItem((subIt: any) => {
+							groupSub.addItem((subIt: FileMenuItemLike) => {
 								subIt
 									.setTitle(labelOrIconOnly(shade.name))
 									.setIcon("circle")
 									.setDisabled(false)
 									.onClick(() => {
 									void Promise.resolve(
-										applyMarkColorWithContext(plugin as any, {
+										applyMarkColorWithContext(plugin, {
 											entryPath: file.path,
 											nextColorIndex: idx,
 											currentColorIndex: explicitMark ?? inheritedMark
@@ -139,7 +186,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 									).finally(hideContextMenu);
 								});
 								try {
-									const el = (subIt as any).iconEl as HTMLElement | undefined;
+										const el = subIt.iconEl;
 									if (el) {
 										el.style.color = css;
 										setCssStyles(el, { opacity: "1", filter: "none", webkitFilter: "none" });
@@ -149,8 +196,8 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 						}
 
 						try {
-							const domAny: any = (it as any)?.dom ?? null;
-							const iconEl: any = (it as any)?.iconEl ?? null;
+							const domAny = it.dom ?? null;
+							const iconEl = it.iconEl ?? null;
 							const domEl: HTMLElement | null = domAny && typeof domAny?.addEventListener === "function" ? domAny : null;
 							const iconHTMLElement: HTMLElement | null = iconEl && typeof iconEl?.addEventListener === "function" ? iconEl : null;
 							const targets = [domEl, iconHTMLElement].filter(Boolean) as HTMLElement[];
@@ -161,7 +208,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 									evt.stopPropagation?.();
 								} catch { void 0; }
 								void Promise.resolve(
-									applyMarkColorWithContext(plugin as any, {
+									applyMarkColorWithContext(plugin, {
 										entryPath: file.path,
 										nextColorIndex: group.base.index,
 										currentColorIndex: explicitMark ?? inheritedMark
@@ -174,47 +221,38 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 						} catch { void 0; }
 
 						try {
-							const domAny: any = (it as any)?.dom ?? null;
-							const iconEl: any = (it as any)?.iconEl ?? null;
+							const domAny = it.dom ?? null;
+							const iconEl = it.iconEl ?? null;
 							const domEl: HTMLElement | null = domAny && typeof domAny?.addEventListener === "function" ? domAny : null;
 							const iconHTMLElement: HTMLElement | null = iconEl && typeof iconEl?.addEventListener === "function" ? iconEl : null;
-							const anchor = (domEl ?? iconHTMLElement) as any;
+							const anchor = domEl ?? iconHTMLElement;
 							anchor?.addEventListener?.("mouseenter", () => {
 								if (activeGroupSubmenu && activeGroupSubmenu !== groupSub) {
 									try {
-										(activeGroupSubmenu as any)?.hide?.();
+										activeGroupSubmenu.hide?.();
 									} catch { void 0; }
 								}
 								activeGroupSubmenu = groupSub;
 							});
-							if (!domEl && domAny && typeof domAny?.on === "function") {
-								domAny.on("mouseenter", () => {
-									if (activeGroupSubmenu && activeGroupSubmenu !== groupSub) {
-										try {
-											(activeGroupSubmenu as any)?.hide?.();
-										} catch { void 0; }
-									}
-									activeGroupSubmenu = groupSub;
-								});
-							}
+							void domAny;
 						} catch { void 0; }
 					});
 				}
 			});
 
 			{
-				const idxAny: any = (plugin as any).indexer as any;
+				const idxAny = pluginState.indexer;
 				const fileReviewMode: "draft" | "reviewed" | "hidden" = (() => {
 					try {
-						const files: any = (plugin as any).indexer?.toJSON?.()?.files ?? null;
-						const data: any = files ? files[file.path] : null;
-						const entries: any[] = gatherFileEntries(data);
+						const files = pluginState.indexer?.toJSON?.()?.files ?? null;
+						const data = files ? files[file.path] : null;
+						const entries = gatherFileEntries(data);
 						if (entries.length === 0) return "draft";
-						const allHidden = entries.every((e) => (e as any)?.reviewState === "hidden");
+						const allHidden = entries.every((e) => e.reviewState === "hidden");
 						if (allHidden) return "hidden";
-						const nonHidden = entries.filter((e) => (e as any)?.reviewState !== "hidden");
+						const nonHidden = entries.filter((e) => e.reviewState !== "hidden");
 						if (nonHidden.length === 0) return "hidden";
-						const allReviewed = nonHidden.every((e) => (e as any)?.reviewState === "reviewed");
+						const allReviewed = nonHidden.every((e) => e.reviewState === "reviewed");
 						return allReviewed ? "reviewed" : "draft";
 					} catch {
 						return "draft";
@@ -222,13 +260,13 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 				})();
 				const hideContextMenu = () => {
 					try {
-						(menu as any)?.hide?.();
+						menuWithHide.hide?.();
 					} catch { void 0; }
 				};
 				const applyReviewState = async (next: "draft" | "reviewed") => {
 					try {
-						await (plugin as any).ensureIndexLoaded?.();
-						await (plugin as any).waitForExcludedSync?.();
+						await pluginState.ensureIndexLoaded?.();
+						await pluginState.waitForExcludedSync?.();
 					} catch {
 						// ignore
 					}
@@ -246,19 +284,19 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 					}
 					if (!changed) return;
 					try {
-						if (typeof (plugin as any)?.persistIndex === "function") await (plugin as any).persistIndex({ skipEnsure: true });
+						if (typeof pluginState.persistIndex === "function") await pluginState.persistIndex({ skipEnsure: true });
 					} catch {
 						// ignore
 					}
 					try {
-						(plugin as any)?.refreshEpochViews?.();
+						pluginState.refreshEpochViews?.();
 					} catch {
 						// ignore
 					}
 				};
 
 				if (fileReviewMode !== "draft") {
-					menu.addItem((it: any) => {
+					menu.addItem((it: FileMenuItemLike) => {
 						it
 							.setTitle("Epochgram: Draft")
 							.setIcon("pencil-ruler")
@@ -267,7 +305,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 					});
 				}
 				if (fileReviewMode !== "reviewed") {
-					menu.addItem((it: any) => {
+					menu.addItem((it: FileMenuItemLike) => {
 						it
 							.setTitle("Epochgram: Review")
 							.setIcon("scan-eye")
@@ -278,7 +316,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 			}
 
 			{
-				const idxAny: any = (plugin as any).indexer as any;
+				const idxAny = pluginState.indexer;
 				const hidden = (() => {
 					try {
 						return typeof idxAny?.isFileHidden === "function" && idxAny.isFileHidden(file.path) === true;
@@ -288,13 +326,13 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 				})();
 				const hideContextMenu = () => {
 					try {
-						(menu as any)?.hide?.();
+						menuWithHide.hide?.();
 					} catch { void 0; }
 				};
 				const apply = async () => {
 					try {
-						await (plugin as any).ensureIndexLoaded?.();
-						await (plugin as any).waitForExcludedSync?.();
+						await pluginState.ensureIndexLoaded?.();
+						await pluginState.waitForExcludedSync?.();
 					} catch {
 						// ignore
 					}
@@ -306,18 +344,18 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 					}
 					if (!changed) return;
 					try {
-						if (typeof (plugin as any)?.persistIndex === "function") await (plugin as any).persistIndex({ skipEnsure: true });
+						if (typeof pluginState.persistIndex === "function") await pluginState.persistIndex({ skipEnsure: true });
 					} catch {
 						// ignore
 					}
 					try {
-						(plugin as any)?.refreshEpochViews?.();
+						pluginState.refreshEpochViews?.();
 					} catch {
 						// ignore
 					}
 				};
 
-				menu.addItem((it: any) => {
+				menu.addItem((it: FileMenuItemLike) => {
 					it
 						.setTitle(hidden ? "Epochgram: Show" : "Epochgram: Hide")
 						.setIcon(hidden ? "eye" : "eye-off")

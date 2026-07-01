@@ -1,7 +1,22 @@
 const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-function getBufferCtor(): any {
-	const maybe = (window as any)?.Buffer;
+type BufferLike = {
+	toString(encoding: "base64"): string;
+	buffer: ArrayBufferLike;
+	byteOffset: number;
+	byteLength: number;
+};
+
+type BufferCtorLike = {
+	from(input: Uint8Array | string, encoding?: "base64"): BufferLike;
+};
+
+type WindowWithBuffer = Window & {
+	Buffer?: BufferCtorLike;
+};
+
+function getBufferCtor(): BufferCtorLike | null {
+	const maybe = (window as WindowWithBuffer).Buffer;
 	return typeof maybe === "function" ? maybe : null;
 }
 

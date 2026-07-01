@@ -3,16 +3,23 @@ import type { EpochCanvas } from "../epoch-canvas";
 
 import { dateKeyToDate, getSourcePriority } from "../epoch-canvas-focus";
 import { pickEntryForFile } from "../entry-helpers";
+import type { parseTimelineQuery } from "../timeline-search";
+
+type SearchBestMatchCanvasLike = {
+	index?: Record<string, unknown>;
+};
+
+type SearchBestMatchParsed = ReturnType<typeof parseTimelineQuery>;
 
 export function pickBestMatchEntryForRankedPaths(
 	canvas: EpochCanvas,
 	rankedPaths: string[],
-	parsed: any
+	parsed: SearchBestMatchParsed
 ): { path: string; entry: DateEntry } | null {
 	try {
 		if (!canvas) return null;
-		const canvasAny: any = canvas as any;
-		const index: any = canvasAny?.index ?? null;
+		const canvasState = canvas as unknown as SearchBestMatchCanvasLike;
+		const index = canvasState.index ?? null;
 		if (!index || typeof index !== "object") return null;
 
 		const wanted = new Set(rankedPaths);
@@ -22,7 +29,7 @@ export function pickBestMatchEntryForRankedPaths(
 			if (parsed?.dateRange && (dateKey < parsed.dateRange.start || dateKey > parsed.dateRange.end)) {
 				continue;
 			}
-			const rawEntries = (index as any)[dateKey];
+			const rawEntries = index[dateKey];
 			if (!Array.isArray(rawEntries) || rawEntries.length === 0) continue;
 			const dt = dateKeyToDate(dateKey);
 			if (!dt) continue;
@@ -30,7 +37,9 @@ export function pickBestMatchEntryForRankedPaths(
 			if (!Number.isFinite(ms)) continue;
 			const byPath = new Map<string, DateEntry[]>();
 			for (const entry of rawEntries) {
-				const fp = String((entry as any)?.file ?? "");
+				if (!entry || typeof entry !== "object") continue;
+				const typedEntry = entry as DateEntry;
+				const fp = String(typedEntry.file ?? "");
 				if (!fp) continue;
 				if (!wanted.has(fp)) continue;
 				let arr = byPath.get(fp);
@@ -38,18 +47,18 @@ export function pickBestMatchEntryForRankedPaths(
 					arr = [];
 					byPath.set(fp, arr);
 				}
-				arr.push(entry as any);
+				arr.push(typedEntry);
 			}
 			if (byPath.size === 0) continue;
 			for (const [fp, list] of byPath) {
 				let picked: DateEntry | null = null;
 				try {
-					picked = pickEntryForFile(canvasAny, list as any, fp, null) as any;
+					picked = pickEntryForFile(canvas, list, fp, null);
 				} catch {
 					picked = null;
 				}
 				if (!picked) continue;
-				const priority = getSourcePriority((picked as any).source);
+				const priority = getSourcePriority(picked.source);
 				const prev = bestByPath.get(fp);
 				if (!prev || priority < prev.priority || (priority === prev.priority && ms > prev.ms)) {
 					bestByPath.set(fp, { priority, ms, entry: picked });

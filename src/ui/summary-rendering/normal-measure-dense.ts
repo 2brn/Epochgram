@@ -94,7 +94,8 @@ export function computeNeedsDenseByWidthFast(args: {
 
 		for (let row = 0; row < rowsThisCol; row++) {
 			const entryIndex = startIndex + row;
-			const entry = entries[entryIndex]!;
+			const entry = entries[entryIndex];
+			if (!entry) continue;
 
 			const summaryComponents = entrySummaryComponents(entry);
 			const iconIds = summaryComponents.iconIds.slice().filter((id) => id !== "tag");

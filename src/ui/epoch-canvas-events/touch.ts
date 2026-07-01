@@ -15,7 +15,10 @@ import {
 } from "../epoch-canvas-constants";
 import { resetScrollNavTargetState } from "../epoch-canvas/scroll-nav-reset";
 import { getEventState, isViewMotionActive, stopViewMotion } from "./state";
+import type { CanvasEventInternals } from "./state";
 import { handleDoublePoint, handlePointClick } from "./interactions";
+import type { DateEntry } from "../../indexer/types";
+import type { DayLayout, SummaryRect } from "../epoch-canvas-types";
 import {
 	beginAnchorEntryDrag,
 	cancelAnchorEntryDrag,
@@ -25,19 +28,68 @@ import {
 } from "./anchor-dnd";
 import { clampTimelineOffsetToBounds, resolveViewportHeight } from "../epoch-canvas/viewport-limits";
 
-function resolveToday(state: any): Date {
+type TouchMenuLike = { hide?: () => void; close?: () => void } | null;
+
+type TouchEventState = CanvasEventInternals & {
+	plugin?: {
+		app?: {
+			workspace?: {
+				rightSplit?: { collapse?: () => void };
+			};
+		};
+	};
+	hoverAnim?: number;
+	hoverEaseStartAt?: number | null;
+	hoverEaseFrom?: number;
+	hoverEaseTo?: number;
+	outgoingSummaries?: Array<{ dayIndex: number; itemIndex: number; t: number }> | null;
+	outgoingDates?: Array<{ index: number; t: number }> | null;
+	__lastKnownCanvasCssHeight?: number;
+	__touchPendingDateTapTimeoutId?: number | null;
+	__touchPendingDateTapX?: number | null;
+	__touchPendingDateTapY?: number | null;
+	__touchPendingDateTapAt?: number | null;
+	__touchPendingDateTapToken?: number;
+	__touchGestureToken?: number;
+	__touchGestureActiveToken?: number;
+	__touchGestureStartedDuringMotion?: boolean;
+	__touchCarryVelocity?: number;
+	__touchConsumeActionsToken?: number;
+	__touchHoverDelayCancelled?: boolean;
+	__touchHoverDelayTimerId?: number | null;
+	__touchHoverDelayToken?: number;
+	__touchEntryDragArmed?: { entry: DateEntry; ghostEntry: DateEntry | null } | null;
+	__touchEntryDragMenu?: TouchMenuLike;
+	__touchDragAnchorEntry?: DateEntry | null;
+	__touchDragGhostEntry?: DateEntry | null;
+	__touchHoverPinnedUntil?: number;
+	__touchSwipeHideLock?: boolean;
+	__touchPanStartedAt?: number;
+	__touchPanAbs?: number;
+	__lastTouchEndLikeAt?: number;
+	_swipeHideTriggered?: boolean;
+	__scrollNavAnchorMode?: string | null;
+	__ignoreNextHoverMove?: boolean;
+	__ignoreHoverUntil?: number;
+};
+
+function getTouchEventState(canvas: EpochCanvas): TouchEventState {
+	return getEventState(canvas);
+}
+
+function resolveToday(state: TouchEventState): Date {
 	try {
-		if (typeof state?.getToday === "function") return state.getToday();
+		if (typeof state.getToday === "function") return state.getToday();
 	} catch {
 		// ignore
 	}
 	return new Date();
 }
 
-function suppressIncidentalHoverAfterTouch(state: any, durationMs: number = 450): void {
+function suppressIncidentalHoverAfterTouch(state: TouchEventState, durationMs: number = 450): void {
 	try {
-		if (typeof state?.isPointerDeviceEvent === "function" && state.isPointerDeviceEvent()) return;
-		const now = performance.now();
+		if (typeof state.isPointerDeviceEvent === "function" && state.isPointerDeviceEvent()) return;
+		const now = window.performance.now();
 		state.suppressHoverUntil = Math.max(Number(state.suppressHoverUntil ?? 0) || 0, now + 220);
 		state.suppressHoverUntilPointerMove = true;
 		state.__ignoreNextHoverMove = true;
@@ -47,9 +99,9 @@ function suppressIncidentalHoverAfterTouch(state: any, durationMs: number = 450)
 	}
 }
 
-function findTouchDayLayoutAtPoint(s: any, x: number, y: number): any {
+function findTouchDayLayoutAtPoint(s: TouchEventState, x: number, y: number): DayLayout | null {
 	const pad = Number(DATE_TOUCH_HIT_PAD) || 0;
-	const list: any[] = Array.isArray(s?.layouts) ? s.layouts : [];
+	const list = Array.isArray(s.layouts) ? s.layouts : [];
 	for (let i = 0; i < list.length; i++) {
 		const day = list[i];
 		if (!day || day.hasVisibleDate !== true) continue;
@@ -62,11 +114,11 @@ function findTouchDayLayoutAtPoint(s: any, x: number, y: number): any {
 	return null;
 }
 
-function findTouchSummaryEntryAtPoint(s: any, x: number, y: number): any {
-	const list: any[] = Array.isArray(s?.layouts) ? s.layouts : [];
+function findTouchSummaryEntryAtPoint(s: TouchEventState, x: number, y: number): DateEntry | null {
+	const list = Array.isArray(s.layouts) ? s.layouts : [];
 	for (let i = 0; i < list.length; i++) {
 		const day = list[i];
-		const rects: any[] =
+		const rects: SummaryRect[] =
 			(Array.isArray(day?.summaryHoverRects) && day.summaryHoverRects.length > 0)
 				? day.summaryHoverRects
 				: (Array.isArray(day?.summaryRects) ? day.summaryRects : []);
@@ -81,9 +133,9 @@ function findTouchSummaryEntryAtPoint(s: any, x: number, y: number): any {
 	return null;
 }
 
-function clearPendingDateTapOpen(s: any): void {
+function clearPendingDateTapOpen(s: TouchEventState): void {
 	try {
-		const id = Number((s as any).__touchPendingDateTapTimeoutId);
+		const id = Number(s.__touchPendingDateTapTimeoutId);
 		if (Number.isFinite(id) && id > 0) {
 			window.clearTimeout(id);
 		}
@@ -91,40 +143,40 @@ function clearPendingDateTapOpen(s: any): void {
 		// ignore
 	}
 	try {
-		(s as any).__touchPendingDateTapTimeoutId = null;
-		(s as any).__touchPendingDateTapX = null;
-		(s as any).__touchPendingDateTapY = null;
-		(s as any).__touchPendingDateTapAt = null;
+		s.__touchPendingDateTapTimeoutId = null;
+		s.__touchPendingDateTapX = null;
+		s.__touchPendingDateTapY = null;
+		s.__touchPendingDateTapAt = null;
 	} catch {
 		// ignore
 	}
 }
 
-function scheduleDeferredDateTapOpen(canvas: EpochCanvas, s: any, x: number, y: number): void {
+function scheduleDeferredDateTapOpen(canvas: EpochCanvas, s: TouchEventState, x: number, y: number): void {
 	clearPendingDateTapOpen(s);
 	try {
-		(s as any).__touchPendingDateTapX = x;
-		(s as any).__touchPendingDateTapY = y;
-		(s as any).__touchPendingDateTapAt = Date.now();
+		s.__touchPendingDateTapX = x;
+		s.__touchPendingDateTapY = y;
+		s.__touchPendingDateTapAt = Date.now();
 	} catch {
 		// ignore
 	}
 
 	const delay = Math.max(0, Number(DOUBLE_TAP_MAX_DELAY) || 0) + 10;
-	const token = (Number((s as any).__touchPendingDateTapToken) || 0) + 1;
+	const token = (Number(s.__touchPendingDateTapToken) || 0) + 1;
 	try {
-		(s as any).__touchPendingDateTapToken = token;
+		s.__touchPendingDateTapToken = token;
 	} catch {
 		// ignore
 	}
 
 	try {
-		(s as any).__touchPendingDateTapTimeoutId = window.setTimeout(() => {
+		s.__touchPendingDateTapTimeoutId = window.setTimeout(() => {
 			try {
-				const st: any = getEventState(canvas) as any;
+				const st = getTouchEventState(canvas);
 				if (Number(st.__touchPendingDateTapToken) !== token) return;
-				const consumeToken = Number((st as any).__touchConsumeActionsToken ?? 0) || 0;
-				const activeToken = Number((st as any).__touchGestureActiveToken ?? 0) || 0;
+				const consumeToken = Number(st.__touchConsumeActionsToken ?? 0) || 0;
+				const activeToken = Number(st.__touchGestureActiveToken ?? 0) || 0;
 				if (isViewMotionActive(st) || (consumeToken > 0 && activeToken > 0 && consumeToken === activeToken)) {
 					clearPendingDateTapOpen(st);
 					return;
@@ -141,26 +193,26 @@ function scheduleDeferredDateTapOpen(canvas: EpochCanvas, s: any, x: number, y: 
 }
 
 export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
-	const s = getEventState(canvas);
+	const s = getTouchEventState(canvas);
 	event.preventDefault();
-	const gestureToken = (Number((s as any).__touchGestureToken) || 0) + 1;
+	const gestureToken = (Number(s.__touchGestureToken) || 0) + 1;
 	try {
-		(s as any).__touchGestureToken = gestureToken;
-		(s as any).__touchGestureActiveToken = gestureToken;
+		s.__touchGestureToken = gestureToken;
+		s.__touchGestureActiveToken = gestureToken;
 	} catch {
 		// ignore
 	}
-	const nowPerf = performance.now();
+	const nowPerf = window.performance.now();
 	const wasMoving = event.touches.length === 1 && isViewMotionActive(s);
 	try {
-		(s as any).__touchGestureStartedDuringMotion = wasMoving;
-		(s as any).__touchCarryVelocity = wasMoving ? Number(s.velocityY) || 0 : 0;
+		s.__touchGestureStartedDuringMotion = wasMoving;
+		s.__touchCarryVelocity = wasMoving ? Number(s.velocityY) || 0 : 0;
 	} catch {
 		// ignore
 	}
 	if (wasMoving) {
 		try {
-			(s as any).__touchConsumeActionsToken = gestureToken;
+			s.__touchConsumeActionsToken = gestureToken;
 		} catch {
 			// ignore
 		}
@@ -170,14 +222,14 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 			// ignore
 		}
 		try {
-			const prev = Number((s as any).suppressClickUntil ?? 0);
-			(s as any).suppressClickUntil = Math.max(prev, nowPerf + 260);
+			const prev = Number(s.suppressClickUntil ?? 0);
+			s.suppressClickUntil = Math.max(prev, nowPerf + 260);
 		} catch {
 			// ignore
 		}
 		clearPendingDateTapOpen(s);
 		try {
-			(s as any).__touchHoverDelayCancelled = true;
+			s.__touchHoverDelayCancelled = true;
 		} catch {
 			// ignore
 		}
@@ -194,26 +246,26 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 		}
 	}
 	try {
-		(s as any).__touchEntryDragArmed = null;
-		(s as any).__touchEntryDragMenu = null;
+		s.__touchEntryDragArmed = null;
+		s.__touchEntryDragMenu = null;
 	} catch {
 		// ignore
 	}
 	try {
-		const prev = Number((s as any).__touchHoverDelayTimerId);
+		const prev = Number(s.__touchHoverDelayTimerId);
 		if (Number.isFinite(prev) && prev > 0) {
 			window.clearTimeout(prev);
 		}
 	} catch {
 		// ignore
 	}
-	(s as any).__touchHoverDelayTimerId = null;
-	(s as any).__touchHoverDelayCancelled = false;
+	s.__touchHoverDelayTimerId = null;
+	s.__touchHoverDelayCancelled = false;
 	// Touch interactions generally override any in-flight view animation, but two-finger tap
 	// scroll navigation should behave like Alt+Wheel / Alt+UpDown and not cancel animation.
 	if (event.touches.length !== 2) {
 		s.animatingView = false;
-		(s as any).animatingWheelZoom = false;
+		s.animatingWheelZoom = false;
 	}
 	if (s.epochsView) {
 		s.touchHadMultipleTouches = event.touches.length > 1;
@@ -233,8 +285,8 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 
 	if (event.touches.length === 1) {
 		const touch = event.touches[0];
-		(s as any)._swipeHideTriggered = false;
-		(s as any).__touchSwipeHideLock = false;
+		s._swipeHideTriggered = false;
+		s.__touchSwipeHideLock = false;
 
 		s.pendingScrollNavHighlight = null;
 		s.touchHadMultipleTouches = false;
@@ -247,7 +299,7 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 		s.touchMoved = false;
 
 		s.lastPanY = touch.clientY;
-		s.lastPanTime = performance.now();
+		s.lastPanTime = window.performance.now();
 		s.velocityY = 0;
 
 		if (s.touchLongPressTimeout != null) {
@@ -259,11 +311,11 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 		// If a date tap is pending, a second tap near the same point should cancel it
 		// so double-tap can take over (create another daily) without a late open.
 		try {
-			const pendingId = Number((s as any).__touchPendingDateTapTimeoutId);
+			const pendingId = Number(s.__touchPendingDateTapTimeoutId);
 			if (Number.isFinite(pendingId) && pendingId > 0) {
-				const px = Number((s as any).__touchPendingDateTapX);
-				const py = Number((s as any).__touchPendingDateTapY);
-				const at = Number((s as any).__touchPendingDateTapAt);
+				const px = Number(s.__touchPendingDateTapX);
+				const py = Number(s.__touchPendingDateTapY);
+				const at = Number(s.__touchPendingDateTapAt);
 				const dt = at > 0 ? (Date.now() - at) : Infinity;
 				const d = Number.isFinite(px) && Number.isFinite(py) ? Math.hypot(x0 - px, y0 - py) : Infinity;
 				if (dt < DOUBLE_TAP_MAX_DELAY && d < DOUBLE_TAP_MAX_DIST) {
@@ -275,11 +327,11 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 		}
 		try {
 			const entry0 = findTouchSummaryEntryAtPoint(s, x0, y0) ?? s.findSummaryEntryAtPoint(x0, y0);
-			(s as any).__touchDragAnchorEntry = resolveDraggableAnchorEntry(canvas, entry0);
-			(s as any).__touchDragGhostEntry = entry0 ?? null;
+			s.__touchDragAnchorEntry = resolveDraggableAnchorEntry(canvas, entry0);
+			s.__touchDragGhostEntry = entry0 ?? null;
 		} catch {
-			(s as any).__touchDragAnchorEntry = null;
-			(s as any).__touchDragGhostEntry = null;
+			s.__touchDragAnchorEntry = null;
+			s.__touchDragGhostEntry = null;
 		}
 		// Touch devices have no true hover. For tap interactions, show the hover state
 		// immediately on finger-down so the user gets instant feedback. Keep it anchored
@@ -289,18 +341,18 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 			if (hasHoverTarget) {
 				// Touch panning should not flash hover. Delay hover very briefly; if the
 				// gesture crosses the pan threshold, touchmove cancels this timer.
-				(s as any).__touchHoverDelayCancelled = false;
-				const token = (Number((s as any).__touchHoverDelayToken) || 0) + 1;
-				(s as any).__touchHoverDelayToken = token;
+				s.__touchHoverDelayCancelled = false;
+				const token = (Number(s.__touchHoverDelayToken) || 0) + 1;
+				s.__touchHoverDelayToken = token;
 				const HOVER_DELAY_MS = 50;
-				(s as any).__touchHoverDelayTimerId = window.setTimeout(() => {
+				s.__touchHoverDelayTimerId = window.setTimeout(() => {
 					try {
-						const st: any = getEventState(canvas) as any;
+						const st = getTouchEventState(canvas);
 						if (Number(st.__touchHoverDelayToken) !== token) return;
 						if (st.__touchHoverDelayCancelled === true) return;
 						if (st.touchMode === "pan" || st.touchMode === "pinch" || st.touchMode === "twofinger") return;
-						const consumeToken = Number((st as any).__touchConsumeActionsToken ?? 0) || 0;
-						const activeToken = Number((st as any).__touchGestureActiveToken ?? 0) || 0;
+						const consumeToken = Number(st.__touchConsumeActionsToken ?? 0) || 0;
+						const activeToken = Number(st.__touchGestureActiveToken ?? 0) || 0;
 						if (isViewMotionActive(st) || (consumeToken > 0 && activeToken > 0 && consumeToken === activeToken)) return;
 						// If a prior gesture suppressed hover, a direct touch should still be allowed
 						// to establish a target under the finger.
@@ -310,7 +362,7 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 						// Keep this touch-established hover stable through quick finger-up.
 						st.keepHoverUntilPointerMove = true;
 						try {
-							st.__touchHoverPinnedUntil = performance.now() + 220;
+							st.__touchHoverPinnedUntil = window.performance.now() + 220;
 						} catch {
 							// ignore
 						}
@@ -334,9 +386,9 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 
 		s.touchLongPressTimeout = window.setTimeout(() => {
 			try {
-				const st: any = getEventState(canvas) as any;
-				const consumeToken = Number((st as any).__touchConsumeActionsToken ?? 0) || 0;
-				const activeToken = Number((st as any).__touchGestureActiveToken ?? 0) || 0;
+				const st = getTouchEventState(canvas);
+				const consumeToken = Number(st.__touchConsumeActionsToken ?? 0) || 0;
+				const activeToken = Number(st.__touchGestureActiveToken ?? 0) || 0;
 				if (isViewMotionActive(st) || (consumeToken > 0 && activeToken > 0 && consumeToken === activeToken)) {
 					return;
 				}
@@ -346,56 +398,53 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 			const rect = s.canvas.getBoundingClientRect();
 			const x = s.touchStartX - rect.left;
 			const y = s.touchStartY - rect.top;
-			const dragEntry = (() => {
-				try {
-					const cached = (s as any).__touchDragAnchorEntry;
-					if (cached) return cached;
-				} catch {
-					// ignore
-				}
-				try {
-					const hit = findTouchSummaryEntryAtPoint(s, x, y) ?? s.findSummaryEntryAtPoint(x, y);
-					return resolveDraggableAnchorEntry(canvas, hit);
-				} catch {
-					return null;
-				}
-			})();
-			const entry = findTouchSummaryEntryAtPoint(s, x, y) ?? s.findSummaryEntryAtPoint(x, y);
-			if (entry) {
-				s.keepHoverAfterMenu = true;
-				s.touchMode = null;
-				try {
-					(s as any).__touchEntryDragArmed = null;
-					(s as any).__touchEntryDragMenu = null;
-				} catch {
-					// ignore
-				}
-				// If a prior gesture temporarily suppressed hover, still allow
-				// a long-press to lock the target under the finger before opening menus.
-				try {
-					s.suppressHoverUntilPointerMove = false;
-					s.suppressHoverUntil = 0;
-				} catch {
-					// ignore
-				}
-				s.updateHover(x, y);
-				const menu = s.showSummaryMenu(entry, s.touchStartX, s.touchStartY);
-				if (dragEntry) {
-					const ghostEntry = (() => {
-						try {
-							return (s as any).__touchDragGhostEntry ?? null;
-						} catch {
-							return null;
-						}
-					})();
+			const dragEntry = ((): DateEntry | null => {
+				const getDragEntry = (): DateEntry | null => {
 					try {
-						(s as any).__touchEntryDragArmed = { entry: dragEntry, ghostEntry };
-						(s as any).__touchEntryDragMenu = menu as any;
+						const cached = s.__touchDragAnchorEntry;
+						if (cached) return cached;
 					} catch {
 						// ignore
 					}
 					try {
-						(s as any).__touchHoverDelayCancelled = true;
+						const hit = findTouchSummaryEntryAtPoint(s, x, y) ?? s.findSummaryEntryAtPoint(x, y);
+						return resolveDraggableAnchorEntry(canvas, hit);
+					} catch {
+						return null;
+					}
+				};
+				return getDragEntry();
+			})();
+		const entry = findTouchSummaryEntryAtPoint(s, x, y) ?? s.findSummaryEntryAtPoint(x, y);
+		if (entry) {
+			s.keepHoverAfterMenu = true;
+			s.touchMode = null;
+			try {
+				s.__touchEntryDragArmed = null;
+				s.__touchEntryDragMenu = null;
+			} catch {
+				// ignore
+			}
+			// If a prior gesture temporarily suppressed hover, still allow
+			// a long-press to lock the target under the finger before opening menus.
+			try {
+				s.suppressHoverUntilPointerMove = false;
+				s.suppressHoverUntil = 0;
+			} catch {
+				// ignore
+			}
+			s.updateHover(x, y);
+			const menu = s.showSummaryMenu(entry, s.touchStartX, s.touchStartY) as TouchMenuLike;
+			if (dragEntry) {
+				const ghostEntry = s.__touchDragGhostEntry ?? null;
+				try {
+					s.__touchEntryDragArmed = { entry: dragEntry, ghostEntry };
+					s.__touchEntryDragMenu = menu;
+					} catch {
+						// ignore
+					}
+					try {
+						s.__touchHoverDelayCancelled = true;
 					} catch {
 						// ignore
 					}
@@ -416,8 +465,8 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 				s.updateHover(x, y);
 				s.showDateMenu(day.index, s.touchStartX, s.touchStartY);
 				try {
-					(s as any).__touchEntryDragArmed = null;
-					(s as any).__touchEntryDragMenu = null;
+					s.__touchEntryDragArmed = null;
+					s.__touchEntryDragMenu = null;
 				} catch {
 					// ignore
 				}
@@ -427,13 +476,13 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 			s.keepHoverAfterMenu = false;
 			s.touchMode = null;
 			try {
-				(s as any).__touchEntryDragArmed = null;
-				(s as any).__touchEntryDragMenu = null;
+				s.__touchEntryDragArmed = null;
+				s.__touchEntryDragMenu = null;
 			} catch {
 				// ignore
 			}
 			s.toggleEmptyAreaView();
-		}, longPressDelay) as unknown as number;
+		}, longPressDelay);
 	} else if (event.touches.length === 2) {
 		if (s.touchLongPressTimeout != null) {
 			window.window.clearTimeout(s.touchLongPressTimeout);
@@ -462,9 +511,9 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 }
 
 export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
-	const s = getEventState(canvas);
+	const s = getTouchEventState(canvas);
 	event.preventDefault();
-	const perfNow = performance.now();
+	const perfNow = window.performance.now();
 
 	if (event.touches.length === 2) {
 		// Two-finger gestures are always high-frequency and should engage perf gating.
@@ -497,17 +546,17 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 		s.animatingView = false;
 
 		// Pinch zoom should not trigger/adjust hover.
-		const now = performance.now();
+		const now = window.performance.now();
 		s.suppressHoverUntil = now + 180;
 		s.suppressHoverUntilPointerMove = true;
 		s.keepHoverUntilPointerMove = false;
 		s.clearHover(true);
-		(s as any).hoverAnim = 0;
-		(s as any).hoverEaseStartAt = null;
-		(s as any).hoverEaseFrom = 0;
-		(s as any).hoverEaseTo = 0;
-		(s as any).outgoingSummaries = [];
-		(s as any).outgoingDates = [];
+		s.hoverAnim = 0;
+		s.hoverEaseStartAt = null;
+		s.hoverEaseFrom = 0;
+		s.hoverEaseTo = 0;
+		s.outgoingSummaries = [];
+		s.outgoingDates = [];
 
 		let newScale = s.pinchStartScale * (newDist / s.pinchStartDist);
 		newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
@@ -516,7 +565,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 		s.touchMoved = true;
 		s.scale = newScale;
 		s.offsetY = midY - s.pinchAnchorWorldY * s.scale;
-		const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+		const viewportHeight = resolveViewportHeight(s.root, Number(s.__lastKnownCanvasCssHeight ?? 0));
 		if (viewportHeight > 0) {
 			s.offsetY = clampTimelineOffsetToBounds({
 				offsetY: s.offsetY,
@@ -535,15 +584,14 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 
 	try {
 		const isMobileSurface = Platform.isMobileApp || Platform.isMobile === true;
-		const plugin = (canvas as any).plugin;
-		if (plugin && typeof plugin === "object" && plugin.app?.workspace && isMobileSurface && (s as any).__touchGestureStartedDuringMotion !== true) {
+		const plugin = s.plugin;
+		if (plugin && typeof plugin === "object" && plugin.app?.workspace && isMobileSurface && s.__touchGestureStartedDuringMotion !== true) {
 			const dx = touch.clientX - s.touchStartX;
 			const dy = touch.clientY - s.touchStartY;
-			console.debug("Touch move", { dx, dy});	
-			if (!(s as any)._swipeHideTriggered && dx > 30 && dx > Math.abs(dy) * 2) {
-				(s as any)._swipeHideTriggered = true;
-				(s as any).__touchSwipeHideLock = true;
-				s.touchMode = "swipehide" as any;
+			if (!s._swipeHideTriggered && dx > 30 && dx > Math.abs(dy) * 2) {
+				s._swipeHideTriggered = true;
+				s.__touchSwipeHideLock = true;
+				s.touchMode = "swipehide";
 				s.touchMoved = true;
 				s.dragSource = null;
 				if (s.touchLongPressTimeout != null) {
@@ -552,9 +600,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 				}
 				stopViewMotion(s);
 				try {
-					if (typeof plugin.app.workspace.detachLeavesOfType === "function") {
-						plugin.app.workspace.rightSplit.collapse();
-					}
+					plugin.app.workspace.rightSplit?.collapse?.();
 				} catch {
 					// ignore
 				}
@@ -562,10 +608,10 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 			}
 		}
 	} catch { void 0; }
-	if ((s as any).__touchSwipeHideLock === true) {
+	if (s.__touchSwipeHideLock === true) {
 		return;
 	}
-	if (s.touchMode === "entrydrag" || (s as any).entryDragActive) {
+	if (s.touchMode === "entrydrag" || s.entryDragActive) {
 		if (s.touchLongPressTimeout != null) {
 			window.clearTimeout(s.touchLongPressTimeout);
 			s.touchLongPressTimeout = null;
@@ -574,7 +620,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 		return;
 	}
 	try {
-		const armed = (s as any).__touchEntryDragArmed as any;
+		const armed = s.__touchEntryDragArmed;
 		if (armed && armed.entry) {
 			const dx = touch.clientX - s.touchStartX;
 			const dy = touch.clientY - s.touchStartY;
@@ -585,15 +631,15 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 					s.touchLongPressTimeout = null;
 				}
 				try {
-					const menu = (s as any).__touchEntryDragMenu as any;
+					const menu = s.__touchEntryDragMenu;
 					menu?.hide?.();
 					menu?.close?.();
 				} catch {
 					// ignore
 				}
 				try {
-					(s as any).__touchEntryDragMenu = null;
-					(s as any).__touchEntryDragArmed = null;
+					s.__touchEntryDragMenu = null;
+					s.__touchEntryDragArmed = null;
 				} catch {
 					// ignore
 				}
@@ -601,7 +647,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 				s.keepHoverUntilPointerMove = false;
 				s.clearHover(true);
 				s.touchMoved = true;
-				s.touchMode = "entrydrag" as any;
+				s.touchMode = "entrydrag";
 				beginAnchorEntryDrag(canvas, armed.entry, "touch", touch.clientX, touch.clientY, armed.ghostEntry ?? null);
 				updateAnchorEntryDrag(canvas, touch.clientX, touch.clientY);
 				suppressIncidentalHoverAfterTouch(s, 650);
@@ -619,30 +665,30 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 	const distVal = Math.hypot(dx, dy);
 
 	if (!s.touchMoved && distVal > 12) {
-		(s as any)._swipeHideTriggered = false;
+		s._swipeHideTriggered = false;
 		// Pan start: engage perf gating.
 		s.viewInteractionUntil = perfNow + 140;
 		s.touchMoved = true;
 		clearPendingDateTapOpen(s);
 		try {
-			const consumeToken = Number((s as any).__touchConsumeActionsToken ?? 0) || 0;
-			const activeToken = Number((s as any).__touchGestureActiveToken ?? 0) || 0;
+			const consumeToken = Number(s.__touchConsumeActionsToken ?? 0) || 0;
+			const activeToken = Number(s.__touchGestureActiveToken ?? 0) || 0;
 			if (consumeToken > 0 && activeToken > 0 && consumeToken === activeToken) {
-				(s as any).__touchConsumeActionsToken = 0;
+				s.__touchConsumeActionsToken = 0;
 			}
 		} catch {
 			// ignore
 		}
 		try {
-			(s as any).__touchHoverDelayCancelled = true;
-			const t = Number((s as any).__touchHoverDelayTimerId);
+			s.__touchHoverDelayCancelled = true;
+			const t = Number(s.__touchHoverDelayTimerId);
 			if (Number.isFinite(t) && t > 0) {
 				window.clearTimeout(t);
 			}
 		} catch {
 			// ignore
 		}
-		(s as any).__touchHoverDelayTimerId = null;
+		s.__touchHoverDelayTimerId = null;
 		resetScrollNavTargetState(canvas);
 		if (s.touchLongPressTimeout != null) {
 			window.clearTimeout(s.touchLongPressTimeout);
@@ -652,15 +698,15 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 		s.touchMode = "pan";
 		s.dragSource = "touch";
 		try {
-			(s as any).__touchPanStartedAt = performance.now();
-			(s as any).__touchPanAbs = 0;
-			const carryVelocity = Number((s as any).__touchCarryVelocity ?? 0) || 0;
+			s.__touchPanStartedAt = window.performance.now();
+			s.__touchPanAbs = 0;
+			const carryVelocity = Number(s.__touchCarryVelocity ?? 0) || 0;
 			s.velocityY = carryVelocity;
 		} catch {
 			// ignore
 		}
 		s.lastPanY = touch.clientY;
-		s.lastPanTime = performance.now();
+		s.lastPanTime = window.performance.now();
 		// Touch-drag is for panning; it should not trigger/adjust hover.
 		// Force-clear so persistent scroll-nav date hover is cleared too.
 		s.keepHoverUntilPointerMove = false;
@@ -675,7 +721,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 		s.viewInteractionUntil = perfNow + 140;
 		const dyPan = touch.clientY - s.touchStartY;
 		s.offsetY = s.touchStartOffsetY + dyPan;
-		const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+		const viewportHeight = resolveViewportHeight(s.root, Number(s.__lastKnownCanvasCssHeight ?? 0));
 		if (viewportHeight > 0) {
 			s.offsetY = clampTimelineOffsetToBounds({
 				offsetY: s.offsetY,
@@ -685,17 +731,17 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 			});
 		}
 
-		const now = performance.now();
+		const now = window.performance.now();
 		const dt = now - s.lastPanTime;
 		if (dt > 0) {
 			const dyStep = touch.clientY - s.lastPanY;
-			const carryVelocity = Number((s as any).__touchCarryVelocity ?? 0) || 0;
+			const carryVelocity = Number(s.__touchCarryVelocity ?? 0) || 0;
 			const carryBlend = 1 / Math.max(1, Number(INERTIA_BOOST) || 1);
 			s.velocityY = (dyStep / dt) + (carryVelocity * carryBlend);
-			(s as any).__touchCarryVelocity = 0;
+			s.__touchCarryVelocity = 0;
 			try {
-				const prevAbs = Number((s as any).__touchPanAbs ?? 0) || 0;
-				(s as any).__touchPanAbs = prevAbs + Math.abs(dyStep);
+				const prevAbs = Number(s.__touchPanAbs ?? 0) || 0;
+				s.__touchPanAbs = prevAbs + Math.abs(dyStep);
 			} catch {
 				// ignore
 			}
@@ -712,19 +758,19 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 }
 
 export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Promise<void> {
-	const s = getEventState(canvas);
+	const s = getTouchEventState(canvas);
 	// Some Android/Obsidian touch stacks can emit a quick touchend followed by a touchcancel
 	// (or vice versa). De-dupe those to avoid hover clearing/reapplying (visible "jump").
 	try {
-		const now = performance.now();
-		const last = Number((s as any).__lastTouchEndLikeAt ?? 0) || 0;
+		const now = window.performance.now();
+		const last = Number(s.__lastTouchEndLikeAt ?? 0) || 0;
 		if (last > 0 && now - last < 60 && event.touches.length === 0) {
 			s.dragSource = null;
 			s.touchMode = null;
 			suppressIncidentalHoverAfterTouch(s);
 			return;
 		}
-		(s as any).__lastTouchEndLikeAt = now;
+		s.__lastTouchEndLikeAt = now;
 	} catch {
 		// ignore
 	}
@@ -733,16 +779,16 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 		s.touchLongPressTimeout = null;
 	}
 	try {
-		(s as any).__touchEntryDragArmed = null;
-		(s as any).__touchEntryDragMenu = null;
+		s.__touchEntryDragArmed = null;
+		s.__touchEntryDragMenu = null;
 	} catch {
 		// ignore
 	}
-	if (s.touchMode === "entrydrag" || (s as any).entryDragActive) {
+	if (s.touchMode === "entrydrag" || s.entryDragActive) {
 		s.touchMode = null;
 		s.dragSource = null;
 		try {
-			(s as any).__touchDragAnchorEntry = null;
+			s.__touchDragAnchorEntry = null;
 		} catch {
 			// ignore
 		}
@@ -751,8 +797,8 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 		return;
 	}
 	try {
-		(s as any).__touchGestureStartedDuringMotion = false;
-		(s as any).__touchCarryVelocity = 0;
+		s.__touchGestureStartedDuringMotion = false;
+		s.__touchCarryVelocity = 0;
 	} catch {
 		// ignore
 	}
@@ -764,8 +810,8 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 	const wasPinch = mode === "pinch";
 	const wasTwoFinger = mode === "twofinger";
 	{
-		const consumeToken = Number((s as any).__touchConsumeActionsToken ?? 0) || 0;
-		const activeToken = Number((s as any).__touchGestureActiveToken ?? 0) || 0;
+		const consumeToken = Number(s.__touchConsumeActionsToken ?? 0) || 0;
+		const activeToken = Number(s.__touchGestureActiveToken ?? 0) || 0;
 		if (consumeToken > 0 && activeToken > 0 && consumeToken === activeToken) {
 			const isTapLike =
 				!wasPinch &&
@@ -775,7 +821,7 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 				!hadMultiTouch &&
 				touchesRemaining === 0;
 			try {
-				(s as any).__touchConsumeActionsToken = 0;
+				s.__touchConsumeActionsToken = 0;
 			} catch {
 				// ignore
 			}
@@ -838,7 +884,7 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 			// target instead of moving relative to the user's current view.
 			try {
 				if (!s.isPointerDeviceEvent()) {
-					(s as any).__scrollNavAnchorMode = "center";
+					s.__scrollNavAnchorMode = "center";
 				}
 			} catch {
 				// ignore
@@ -909,7 +955,7 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 				await handlePointClick(canvas, x, y, false, false, { preserveHoverOnNonPointer: true });
 			}
 			try {
-				(s as any).__touchHoverPinnedUntil = performance.now() + 260;
+				s.__touchHoverPinnedUntil = window.performance.now() + 260;
 			} catch {
 				// ignore
 			}
@@ -921,9 +967,9 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 
 	if (mode === "pan") {
 		try {
-			const panAbs = Number((s as any).__touchPanAbs ?? 0) || 0;
-			const panStartedAt = Number((s as any).__touchPanStartedAt ?? 0) || 0;
-			const now = performance.now();
+			const panAbs = Number(s.__touchPanAbs ?? 0) || 0;
+			const panStartedAt = Number(s.__touchPanStartedAt ?? 0) || 0;
+			const now = window.performance.now();
 			const panDt = panStartedAt > 0 ? (now - panStartedAt) : 0;
 			// If the "pan" was extremely short or small, don't apply inertia.
 			// This avoids a visible jump on quick taps that accidentally cross the threshold.
@@ -933,9 +979,9 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 			if ((panAbs < 26 || panDt < 120) && flickV < 0.18) {
 				s.velocityY = 0;
 			}
-			(s as any).__touchPanAbs = 0;
-			(s as any).__touchPanStartedAt = 0;
-			(s as any).__touchCarryVelocity = 0;
+			s.__touchPanAbs = 0;
+			s.__touchPanStartedAt = 0;
+			s.__touchCarryVelocity = 0;
 		} catch {
 			// ignore
 		}
@@ -971,37 +1017,37 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 }
 
 export function handleTouchCancel(canvas: EpochCanvas, event: TouchEvent): void {
-	const s = getEventState(canvas);
+	const s = getTouchEventState(canvas);
 	void event;
 	try {
-		(s as any).__touchConsumeActionsToken = 0;
+		s.__touchConsumeActionsToken = 0;
 	} catch {
 		// ignore
 	}
 	clearPendingDateTapOpen(s);
 	try {
-		const menu = (s as any).__touchEntryDragMenu as any;
+		const menu = s.__touchEntryDragMenu;
 		menu?.hide?.();
 		menu?.close?.();
 	} catch {
 		// ignore
 	}
 	try {
-		(s as any).__touchEntryDragArmed = null;
-		(s as any).__touchEntryDragMenu = null;
+		s.__touchEntryDragArmed = null;
+		s.__touchEntryDragMenu = null;
 	} catch {
 		// ignore
 	}
-	if ((s as any).entryDragActive) {
+	if (s.entryDragActive) {
 		try {
-			(s as any).__touchDragAnchorEntry = null;
+			s.__touchDragAnchorEntry = null;
 		} catch {
 			// ignore
 		}
 		cancelAnchorEntryDrag(canvas);
 	}
 	try {
-		(s as any).__lastTouchEndLikeAt = performance.now();
+		s.__lastTouchEndLikeAt = window.performance.now();
 	} catch {
 		// ignore
 	}
@@ -1010,8 +1056,8 @@ export function handleTouchCancel(canvas: EpochCanvas, event: TouchEvent): void 
 		s.touchLongPressTimeout = null;
 	}
 	try {
-		(s as any).__touchGestureStartedDuringMotion = false;
-		(s as any).__touchCarryVelocity = 0;
+		s.__touchGestureStartedDuringMotion = false;
+		s.__touchCarryVelocity = 0;
 	} catch {
 		// ignore
 	}

@@ -2,7 +2,32 @@ import { App, SuggestModal } from "obsidian";
 import { canonicalizeTopicTerm, isNoTopicSentinel, sortTopicTermsIgnorePrefix } from "utils";
 import { truncateToChars, truncateToWords } from "./text-utils";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = typeof window !== "undefined" ? window.document : ({} as Document);
+
+type FocusableElement = HTMLElement & {
+	focus(options?: FocusOptions): void;
+};
+
+type SuggestChooserLike = {
+	selectedItem?: unknown;
+};
+
+type SuggestInputChangeLike = {
+	onInputChanged?: () => void;
+};
+
+function toFocusableElement(value: Element | null): FocusableElement | null {
+	return value instanceof HTMLElement ? value : null;
+}
+
+function getChooser(modal: SuggestModal<TopicSuggestItem>): SuggestChooserLike | null {
+	const candidate = modal as unknown as { chooser?: SuggestChooserLike };
+	return candidate.chooser ?? null;
+}
+
+function getInputChangeHandle(modal: SuggestModal<TopicSuggestItem>): SuggestInputChangeLike {
+	return modal as unknown as SuggestInputChangeLike;
+}
 
 
 type TopicSuggestItem =
@@ -35,7 +60,9 @@ class TopicSuggestModal extends SuggestModal<TopicSuggestItem> {
 		resolve: (value: TopicEditResult | null) => void
 	) {
 		super(app);
-		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = typeof activeDocument !== "undefined"
+			? toFocusableElement(activeDocument.activeElement)
+			: null;
 		this.titleText = options.title;
 		this.initialValue = String(options.initialValue ?? "");
 		this.topics = Array.isArray(options.topics)
@@ -56,7 +83,7 @@ class TopicSuggestModal extends SuggestModal<TopicSuggestItem> {
 		this.handleKeyDown = (event: KeyboardEvent) => {
 			if (event.key !== "Enter") return;
 			const trimmed = String(this.inputEl.value || "").trim();
-			const chooser: any = (this as any).chooser;
+			const chooser = getChooser(this);
 			const hasSelection = typeof chooser?.selectedItem === "number" && chooser.selectedItem >= 0;
 			if (hasSelection) return;
 			event.preventDefault();
@@ -74,7 +101,7 @@ class TopicSuggestModal extends SuggestModal<TopicSuggestItem> {
 		};
 		this.handleInput = () => {
 			try {
-				(this as any).onInputChanged?.();
+				getInputChangeHandle(this).onInputChanged?.();
 			} catch { void 0; }
 		};
 	}
@@ -97,7 +124,7 @@ class TopicSuggestModal extends SuggestModal<TopicSuggestItem> {
 		if (el && typeof el.focus === "function") {
 			window.requestAnimationFrame(() => {
 				try {
-					(el as any).focus?.({ preventScroll: true });
+					(el as FocusableElement).focus({ preventScroll: true });
 				} catch {
 					try {
 						el.focus();

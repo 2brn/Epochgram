@@ -22,6 +22,44 @@ import {
 	SIGNAL_TITLE,
 	SIGNAL_TOPICS
 } from "./similarity/file-similarity-signals";
+
+type InheritedRuntime = {
+	__epochInheritedMarkRecomputeReason?: string;
+	__epochInheritedMarkRecomputeTimer?: number | null;
+	ensureSimilarityStoreLoaded?: () => Promise<void>;
+	ensureTermSimilarityStoreLoaded?: () => Promise<void>;
+	similarityIndex?: { files?: Record<string, unknown> } | null;
+	termSimilarityIndex?: { files?: Record<string, TopicStoreRecord> } | null;
+	__epochInheritedMarkIndexByPath?: unknown;
+	__epochInheritedMarkSourceByPath?: unknown;
+	__epochInheritedMarkReasonByPath?: unknown;
+	__epochInheritedMarkComputedAt?: number;
+};
+
+type TopicStoreRecord = {
+	term?: string;
+	score?: number;
+	vocabularySig?: string;
+};
+
+type SimilarityIndexerLike = {
+	index: Record<string, DateEntry[]>;
+	getIndexedPaths: () => string[];
+	getFileEmbeddingTerm: (path: string) => string;
+	getFileMarkColor: (path: string) => number | null;
+};
+
+type DateEntryRuntime = DateEntry & {
+	pinned?: boolean;
+	originalDate?: string;
+	blockStart?: number;
+	blockEnd?: number;
+	aiSummary?: string;
+	summary?: string;
+	file?: string;
+	source?: string;
+	markColor?: number;
+};
  
 
 export interface InheritedMarkMethods {
@@ -37,8 +75,9 @@ function isDateKey(s: string): boolean {
 
 function isSyntheticPinnedTodayEntry(entry: DateEntry, dateKey: string): boolean {
 	try {
-		if ((entry as any)?.pinned !== true) return false;
-		const original = typeof (entry as any)?.originalDate === "string" ? String((entry as any).originalDate) : "";
+		const runtime = entry as DateEntryRuntime;
+		if (runtime.pinned !== true) return false;
+		const original = typeof runtime.originalDate === "string" ? String(runtime.originalDate) : "";
 		if (!original || !isDateKey(original)) return false;
 		return original !== String(dateKey || "");
 	} catch {
@@ -51,19 +90,20 @@ function parseEpochRange(epochPath: string): { start: string; end: string } | nu
 	if (!key.startsWith("epoch://")) return null;
 	const m = key.match(/^epoch:\/\/[^/]+\/(\d{4}-\d{2}-\d{2})-(\d{4}-\d{2}-\d{2})$/);
 	if (!m) return null;
-	const start = m[1]!;
-	const end = m[2]!;
+	const start = m[1];
+	const end = m[2];
 	if (!isDateKey(start) || !isDateKey(end)) return null;
 	return { start, end };
 }
 
 function extractLineCountFromEntry(entry: DateEntry): number {
-	const bs = Number((entry as any).blockStart ?? 0);
-	const be = Number((entry as any).blockEnd ?? 0);
+	const runtime = entry as DateEntryRuntime;
+	const bs = Number(runtime.blockStart ?? 0);
+	const be = Number(runtime.blockEnd ?? 0);
 	if (Number.isFinite(bs) && Number.isFinite(be) && be >= bs) {
 		return Math.max(0, Math.floor(be) - Math.floor(bs) + 1);
 	}
-	const txt = String((entry as any).aiSummary || (entry as any).summary || "").trim();
+	const txt = String(runtime.aiSummary || runtime.summary || "").trim();
 	if (!txt) return 0;
 	return txt.split(/\r?\n/).filter((l) => l.trim().length > 0).length;
 }
@@ -73,10 +113,11 @@ function getAllEpochPathsFromIndex(index: Record<string, DateEntry[]>): string[]
 	for (const entries of Object.values(index ?? {})) {
 		if (!Array.isArray(entries)) continue;
 		for (const e of entries) {
-			const fp = String((e as any)?.file || "");
+			const runtime = e as DateEntryRuntime;
+			const fp = String(runtime.file || "");
 			if (!fp) continue;
 			if (fp.startsWith("epoch://")) out.add(fp);
-			if (String((e as any)?.source || "") === "epoch" && fp.startsWith("epoch://")) out.add(fp);
+			if (String(runtime.source || "") === "epoch" && fp.startsWith("epoch://")) out.add(fp);
 		}
 	}
 	return Array.from(out);
@@ -84,14 +125,14 @@ function getAllEpochPathsFromIndex(index: Record<string, DateEntry[]>): string[]
 
 function collectMarkedSeedPaths(plugin: EpochPlugin): string[] {
 	try {
-		const filesObj: any = plugin.indexer.toJSON().files;
+		const filesObj: unknown = plugin.indexer.toJSON().files;
 		if (!filesObj || typeof filesObj !== "object") return [];
 
 		const paths: string[] = [];
-		for (const [p, data] of Object.entries(filesObj)) {
+			for (const [p, data] of Object.entries(filesObj as Record<string, unknown>)) {
 			if (typeof p !== "string" || !p) continue;
-			const anyD: any = data as any;
-			const rawIdx: unknown = typeof anyD?.markColor === "number" ? anyD.markColor : null;
+			const anyD = data as DateEntryRuntime;
+			const rawIdx: unknown = typeof anyD.markColor === "number" ? anyD.markColor : null;
 			if (typeof rawIdx !== "number" || !Number.isFinite(rawIdx)) continue;
 			const idx = Math.floor(rawIdx);
 			if (idx < 1) continue;
@@ -105,8 +146,8 @@ function collectMarkedSeedPaths(plugin: EpochPlugin): string[] {
 
 export function buildTopicCandidatesFromSeeds(params: {
 	seedPaths: string[];
-	indexer: any;
-	termStoreFiles: Record<string, any>;
+	indexer: SimilarityIndexerLike;
+	termStoreFiles: Record<string, TopicStoreRecord>;
 	zeroShotMinScore: number;
 	vocabularySig: string;
 	visibleSet: Set<string>;
@@ -114,8 +155,7 @@ export function buildTopicCandidatesFromSeeds(params: {
 	const { seedPaths, indexer, termStoreFiles, zeroShotMinScore, vocabularySig, visibleSet } = params;
 	const explicitTopics = new Map<string, string>();
 	try {
-		const indexed: unknown = indexer.getIndexedPaths();
-		const paths: string[] = Array.isArray(indexed) ? indexed : [];
+		const paths: string[] = indexer.getIndexedPaths();
 		for (const p of paths) {
 			const t0 = String(indexer.getFileEmbeddingTerm(p) || "").trim();
 			const t = canonicalizeTopicTerm(t0);
@@ -150,12 +190,12 @@ export function buildTopicCandidatesFromSeeds(params: {
 		for (const [p, recOther] of Object.entries(termStoreFiles ?? {})) {
 			if (!p || p === seedPath) continue;
 			if (!visibleSet.has(p)) continue;
-			const termOther = canonicalizeTopicTerm(typeof (recOther as any)?.term === "string" ? String((recOther as any).term).trim() : "");
+			const termOther = canonicalizeTopicTerm(typeof (recOther)?.term === "string" ? String((recOther).term).trim() : "");
 			if (!termOther || termOther !== seedTerm) continue;
 			const explicitOther = explicitTopics.get(p) || "";
 			if (explicitOther && explicitOther !== seedTerm) continue;
-			const s = Number((recOther as any)?.score ?? 0);
-			const sigOther = String((recOther as any)?.vocabularySig ?? "");
+			const s = Number((recOther)?.score ?? 0);
+			const sigOther = String((recOther)?.vocabularySig ?? "");
 			if (Number.isFinite(s) && s >= zeroShotMinScore) {
 				if (!vocabularySig || !sigOther || sigOther === vocabularySig) {
 					const prev = dedup.get(p) ?? 0;
@@ -173,12 +213,12 @@ export function buildTopicCandidatesFromSeeds(params: {
 export const inheritedMarkMethods: InheritedMarkMethods = {
 	scheduleInheritedMarkRecompute(this: EpochPlugin, reason?: string): void {
 		try {
-			const anyPlugin: any = this as any;
-			anyPlugin.__epochInheritedMarkRecomputeReason = String(reason || anyPlugin.__epochInheritedMarkRecomputeReason || "");
-			if (anyPlugin.__epochInheritedMarkRecomputeTimer != null) return;
-			anyPlugin.__epochInheritedMarkRecomputeTimer = window.setTimeout(() => {
-				anyPlugin.__epochInheritedMarkRecomputeTimer = null;
-				void this.recomputeInheritedMarksNow(anyPlugin.__epochInheritedMarkRecomputeReason).catch(() => {
+			const runtime = this as unknown as InheritedRuntime;
+			runtime.__epochInheritedMarkRecomputeReason = String(reason || runtime.__epochInheritedMarkRecomputeReason || "");
+			if (runtime.__epochInheritedMarkRecomputeTimer != null) return;
+			runtime.__epochInheritedMarkRecomputeTimer = window.setTimeout(() => {
+				runtime.__epochInheritedMarkRecomputeTimer = null;
+				void this.recomputeInheritedMarksNow(runtime.__epochInheritedMarkRecomputeReason).catch(() => {
 					// swallow
 				});
 			}, 250);
@@ -188,7 +228,7 @@ export const inheritedMarkMethods: InheritedMarkMethods = {
 	},
 
 	async recomputeInheritedMarksNow(this: EpochPlugin, _reason?: string): Promise<void> {
-		const anyPlugin: any = this as any;
+		const runtime = this as unknown as InheritedRuntime;
 		try {
 			if (!this.hasProAccess?.()) {
 				this.clearInheritedMarksCache();
@@ -211,7 +251,7 @@ export const inheritedMarkMethods: InheritedMarkMethods = {
 
 			if (vectorsEnabled) {
 				try {
-					await (this as any).ensureSimilarityStoreLoaded?.();
+					await runtime.ensureSimilarityStoreLoaded?.();
 				} catch {
 					// ignore
 				}
@@ -219,14 +259,14 @@ export const inheritedMarkMethods: InheritedMarkMethods = {
 
 			if (topicsEnabled) {
 				try {
-					await (this as any).ensureTermSimilarityStoreLoaded?.();
+					await runtime.ensureTermSimilarityStoreLoaded?.();
 				} catch {
 					// ignore
 				}
 			}
 
-			const indexerAny: any = this.indexer as any;
-			const index: Record<string, DateEntry[]> = (indexerAny?.index as any) ?? {};
+			const indexerAny = this.indexer as unknown as SimilarityIndexerLike;
+			const index: Record<string, DateEntry[]> = indexerAny.index ?? {};
 			const visiblePaths: string[] = [];
 			try {
 				for (const p of this.indexer.getIndexedPaths()) {
@@ -242,12 +282,11 @@ export const inheritedMarkMethods: InheritedMarkMethods = {
 				return;
 			}
 
-			const storeFiles: Record<string, any> = (anyPlugin.similarityIndex?.files as any) ?? {};
+			const storeFiles = (runtime.similarityIndex?.files ?? {}) as Record<string, { v?: number[] }>;
 			const visibleSet = new Set<string>(visiblePaths);
 			const explicitTermByPath = new Map<string, string>();
 			try {
-				const indexed: unknown = indexerAny.getIndexedPaths();
-				const paths: string[] = Array.isArray(indexed) ? indexed : [];
+				const paths: string[] = indexerAny.getIndexedPaths();
 				for (const p of paths) {
 					if (!p || typeof p !== "string" || p.startsWith("epoch://")) continue;
 					const t0 = String(indexerAny.getFileEmbeddingTerm(p) || "").trim();
@@ -268,7 +307,7 @@ export const inheritedMarkMethods: InheritedMarkMethods = {
 			const mask = (p: string): number => {
 				const prev = maskByPath.get(p);
 				if (typeof prev === "number") return prev;
-				const m = getFileSimilaritySignalMask(this as any, p);
+				const m = getFileSimilaritySignalMask(this, p);
 				maskByPath.set(p, m);
 				return m;
 			};
@@ -336,7 +375,7 @@ export const inheritedMarkMethods: InheritedMarkMethods = {
 			}
 			if (topicsEnabled && seedPaths.length > 0) {
 				try {
-					const termStoreFiles: Record<string, any> = (anyPlugin.termSimilarityIndex as any)?.files ?? {};
+					const termStoreFiles: Record<string, TopicStoreRecord> = runtime.termSimilarityIndex?.files ?? {};
 					const topicCandidates = buildTopicCandidatesFromSeeds({
 						seedPaths,
 						indexer: this.indexer,
@@ -365,13 +404,14 @@ export const inheritedMarkMethods: InheritedMarkMethods = {
 					if (!Array.isArray(list) || list.length === 0) continue;
 					for (const e of list) {
 						if (!e) continue;
+						const runtimeEntry = e as DateEntryRuntime;
 						// Synthetic pinned-today entries are clones of the real anchor entry with
 						// `date` rewritten to today and `originalDate` set to the real date key.
 						// Exclude them from epoch child-record votes so they don't skew epoch marks.
-						if (isSyntheticPinnedTodayEntry(e as any, dateKey)) continue;
-						const fp = String((e as any).file || "");
+							if (isSyntheticPinnedTodayEntry(e, dateKey)) continue;
+						const fp = String(runtimeEntry.file || "");
 						if (!fp || fp.startsWith("epoch://")) continue;
-						if (String((e as any).source || "") === "epoch") continue;
+						if (String(runtimeEntry.source || "") === "epoch") continue;
 						const lines = extractLineCountFromEntry(e);
 						const prev = perFileBestLines.get(fp) ?? 0;
 						if (lines > prev) perFileBestLines.set(fp, lines);
@@ -408,12 +448,12 @@ export const inheritedMarkMethods: InheritedMarkMethods = {
 				titleJwThreshold: getEffectiveTitleSimilarityThreshold(this)
 			});
 
-			anyPlugin.__epochInheritedMarkIndexByPath = inherited?.indexByPath ?? null;
-			anyPlugin.__epochInheritedMarkSourceByPath = inherited?.sourceByPath ?? null;
-			anyPlugin.__epochInheritedMarkReasonByPath = inherited?.reasonByPath && inherited.reasonByPath.size > 0
+			runtime.__epochInheritedMarkIndexByPath = inherited?.indexByPath ?? null;
+			runtime.__epochInheritedMarkSourceByPath = inherited?.sourceByPath ?? null;
+			runtime.__epochInheritedMarkReasonByPath = inherited?.reasonByPath && inherited.reasonByPath.size > 0
 				? inherited.reasonByPath
 				: null;
-			anyPlugin.__epochInheritedMarkComputedAt = Date.now();
+			runtime.__epochInheritedMarkComputedAt = Date.now();
 			this.refreshEpochViews();
 		} catch {
 			// If anything fails, don't break indexing.
@@ -424,11 +464,11 @@ export const inheritedMarkMethods: InheritedMarkMethods = {
 
 	clearInheritedMarksCache(this: EpochPlugin): void {
 		try {
-			const anyPlugin: any = this as any;
-			anyPlugin.__epochInheritedMarkIndexByPath = null;
-			anyPlugin.__epochInheritedMarkSourceByPath = null;
-			anyPlugin.__epochInheritedMarkReasonByPath = null;
-			anyPlugin.__epochInheritedMarkComputedAt = 0;
+			const runtime = this as unknown as InheritedRuntime;
+			runtime.__epochInheritedMarkIndexByPath = null;
+			runtime.__epochInheritedMarkSourceByPath = null;
+			runtime.__epochInheritedMarkReasonByPath = null;
+			runtime.__epochInheritedMarkComputedAt = 0;
 		} catch {
 			// ignore
 		}

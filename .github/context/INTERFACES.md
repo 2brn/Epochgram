@@ -43,8 +43,13 @@
   - Timeline search control: the view renders a bottom-center search control that opens a modal search input; the query filters visible entries for the current view session (not persisted). Search spans filename/path, dates (including epoch ranges), summaries, AI summaries, topics/terms, Obsidian tags, and YAML frontmatter fields (including `date`).
     - Query language supports fuzzy text, quoted exact phrases (`"exact phrase"`), and date ranges (e.g. `YYYY-MM-DD..YYYY-MM-DD` or numeric one-token dash ranges like `YYYY.MM.DD-YYYY.MM.DD` / `DD.MM.YYYY-DD.MM.YYYY`).
     - Full-file text search uses an in-memory MiniSearch index built during indexing.
-    - Search suggestions show up to 7 record suggestions.
-      - Uses MiniSearch relevance when text tokens are present.
+    - Search suggestions show up to `settings.searchResultsLimit` record suggestions (default: 7).
+    - Suggestions are not gated by timeline visibility filters (`showAttachments`, `showTrackedChanges`, parsed/property visibility, hidden/draft-only).
+    - Ordering buckets:
+    - Empty query: search-history paths, active file, workspace last-open files, then recent timeline records (newest date-first).
+    - Non-empty query: MiniSearch-ranked paths only.
+      - Uses MiniSearch relevance for query-matching results across all indexed files (no timeline-filter gating).
+      - No non-query fallback buckets are shown for non-empty input.
       - Falls back to scanning timeline records so record-only fields (summaries/AI summaries/topics/tags/aliases) still produce suggestions.
 	  - In Epochs view, suggestions include epoch records in the current zoom bucket, and can also include normal (non-epoch) record matches.
       - Epoch suggestions display as `YYYY-MM-DD - YYYY-MM-DD ⸱ <summary>` when a summary exists.
@@ -82,7 +87,7 @@
   - Pro activation/settings group is rendered at the top of settings (without a visible section title).
   - General settings include `Anchor by mdate`, `Anchor property`, and `Summary property` inputs.
   - General settings are grouped into:
-    - an untitled top group: `Open on startup`, `Enable animation`, `Record width limit`.
+	- an untitled top group: `Open on startup`, `Enable animation`, `Record width limit`, `Search results`.
     - `Indexer`: `Track changes` (Pro-gated/blurred when unavailable), `Anchor by mdate`, `Anchor property`, `Summary property`, `Parse all properties`, `Filename length`, `Summary length`, `Similarity` group, `Generative AI` group (desktop-only), and `Index` actions.
   - The bottom of the settings tab shows a compact metadata footer line in the format `v.<version>-<buildTimestamp>` (`YYYYMMDDHHmmss`).
   - These two inputs now commit/apply only on input blur (focus lost) or explicit reset, instead of applying on every keystroke.

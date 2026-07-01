@@ -135,7 +135,13 @@ export function parseTimelineQuery(queryRaw: string): TimelineQuery {
 		if (!dateRange) {
 			const m = t.match(RANGE_ONE_TOKEN_RE);
 			if (m) {
-				const r = normalizeRange(m[1]!, m[2]!);
+				const a = m[1];
+				const b = m[2];
+				if (!a || !b) {
+					fuzzyTokens.push(t);
+					continue;
+				}
+				const r = normalizeRange(a, b);
 				if (r) {
 					dateRange = r;
 					continue;
@@ -143,7 +149,13 @@ export function parseTimelineQuery(queryRaw: string): TimelineQuery {
 			}
 			const mdmy = t.match(RANGE_DMY_DASH_ONE_TOKEN_RE);
 			if (mdmy) {
-				const r = normalizeRange(mdmy[1]!, mdmy[2]!);
+				const a = mdmy[1];
+				const b = mdmy[2];
+				if (!a || !b) {
+					fuzzyTokens.push(t);
+					continue;
+				}
+				const r = normalizeRange(a, b);
 				if (r) {
 					dateRange = r;
 					continue;
@@ -151,7 +163,13 @@ export function parseTimelineQuery(queryRaw: string): TimelineQuery {
 			}
 			const mn = t.match(RANGE_NUM_DASH_ONE_TOKEN_RE);
 			if (mn) {
-				const r = normalizeRange(mn[1]!, mn[2]!);
+				const a = mn[1];
+				const b = mn[2];
+				if (!a || !b) {
+					fuzzyTokens.push(t);
+					continue;
+				}
+				const r = normalizeRange(a, b);
 				if (r) {
 					dateRange = r;
 					continue;
@@ -159,7 +177,13 @@ export function parseTimelineQuery(queryRaw: string): TimelineQuery {
 			}
 			const md = t.match(RANGE_DOTS_ONE_TOKEN_RE);
 			if (md) {
-				const r = normalizeRange(md[1]!, md[2]!);
+				const a = md[1];
+				const b = md[2];
+				if (!a || !b) {
+					fuzzyTokens.push(t);
+					continue;
+				}
+				const r = normalizeRange(a, b);
 				if (r) {
 					dateRange = r;
 					continue;

@@ -21,24 +21,109 @@ import { VIEW_TYPE_EPOCH } from "../ui/epoch-view-mode";
 import { DEFAULT_SETTINGS } from "../settings-model";
 import { hasVerifiedEntitlement, isTrackChangesEffective } from "./pro-feature-state";
 
+type ThrottleState = {
+	timerId?: unknown;
+	pendingJobs?: unknown;
+};
+
+type ThrottleMap = {
+	values: () => Iterable<unknown>;
+	clear: () => void;
+};
+
+type TimelineSearchIndexRuntime = {
+	clear?: () => void;
+};
+
+type BridgeRuntime = {
+	clearQueue?: () => void;
+	getUrl?: () => unknown;
+};
+
+type MaintenanceRuntime = {
+	__epochAiEnqueueCancelKey?: number;
+	epochRegenAfterAiTimer?: unknown;
+	epochRegenAfterAiMode?: unknown;
+	epochRegenAfterAiAll?: boolean;
+	epochRegenAfterAiDateKeys?: unknown;
+	epochRegenAfterAiBuckets?: unknown;
+	epochRegenAfterAiShowQueuedNotice?: boolean;
+	aiSummaryPendingFiles?: Set<string>;
+	aiSummaryQueueRunning?: boolean;
+	aiSummaryEnqueueThrottleByFile?: ThrottleMap;
+	aiBridge?: BridgeRuntime | null;
+	__epochNodeHttpModule?: string;
+	__epochResetInFlight?: boolean;
+	clearInheritedMarksCache?: () => void;
+	ensurePluginDir?: () => Promise<void> | void;
+	vectorsFilePath?: string;
+	similarityIndex?: { model: string; dim: number; files: Record<string, unknown> };
+	similarityVectorsLoaded?: boolean;
+	similarityQueueTimer?: number | null;
+	similarityPendingFiles?: Set<string>;
+	similarityQueueTotal?: number;
+	similarityQueueProcessed?: number;
+	similarityVectorUpdateStartedAt?: number;
+	similarityVectorUpdateProcessingStartedAt?: number;
+	similarityStoreRev?: number;
+	__epochDidSimilarityStartupMaintenance?: boolean;
+	__epochHugeSimilarityBackfillTimer?: unknown;
+	__epochHugeSimilarityBackfillFiles?: unknown;
+	__epochHugeSimilarityBackfillIndex?: number;
+	__epochHugeSimilarityBackfillRunning?: boolean;
+	termSimilarityIndex?: { model: string; files: Record<string, unknown> };
+	termSimilarityLoaded?: boolean;
+	timelineSearchIndex?: TimelineSearchIndexRuntime;
+	__timelineSearchIndexVersion?: number;
+	__epochCancelRequestedAt?: Record<string, number>;
+};
+
+type IndexerMaintenanceRuntime = {
+	clearTrackedChanges: () => boolean;
+	resetTrackedBaseline?: () => boolean;
+};
+
+type EpochSettingsRuntime = EpochPlugin["settings"] & {
+	installId?: string;
+	devicePublicKey?: string;
+	activationEnvelope?: string;
+	activationWitness?: string;
+	lastValidatedAt?: string;
+};
+
+type EpochViewRuntime = {
+	setSearchQueryInternal?: (value: string) => void;
+	searchQuery?: string;
+	canvas?: { setSearchQuery?: (value: string) => void };
+	updateSearchControl?: () => void;
+	updateFilterButtons?: () => void;
+};
+
+async function importHttpModule(): Promise<typeof import("http")> {
+	return await import("http");
+}
+
+function getRuntime(plugin: EpochPlugin): MaintenanceRuntime {
+	return plugin as unknown as MaintenanceRuntime;
+}
+
 function clearPlannedEpochWork(plugin: EpochPlugin): void {
 	try {
-		const anyPlugin: any = plugin as any;
-		const g: any = window as any;
+		const runtime = getRuntime(plugin);
 		try {
-			anyPlugin.__epochAiEnqueueCancelKey = (Number(anyPlugin.__epochAiEnqueueCancelKey) || 0) + 1;
+			runtime.__epochAiEnqueueCancelKey = (Number(runtime.__epochAiEnqueueCancelKey) || 0) + 1;
 		} catch { void 0; }
-		if (anyPlugin?.epochRegenAfterAiTimer != null) {
+		if (runtime.epochRegenAfterAiTimer != null) {
 			try {
-				g?.clearInterval?.(anyPlugin.epochRegenAfterAiTimer);
+				(window.clearInterval as unknown as (id: unknown) => void)(runtime.epochRegenAfterAiTimer);
 			} catch { void 0; }
-			anyPlugin.epochRegenAfterAiTimer = null;
+			runtime.epochRegenAfterAiTimer = null;
 		}
-		anyPlugin.epochRegenAfterAiMode = null;
-		anyPlugin.epochRegenAfterAiAll = false;
-		anyPlugin.epochRegenAfterAiDateKeys = null;
-		anyPlugin.epochRegenAfterAiBuckets = null;
-		anyPlugin.epochRegenAfterAiShowQueuedNotice = false;
+		runtime.epochRegenAfterAiMode = null;
+		runtime.epochRegenAfterAiAll = false;
+		runtime.epochRegenAfterAiDateKeys = null;
+		runtime.epochRegenAfterAiBuckets = null;
+		runtime.epochRegenAfterAiShowQueuedNotice = false;
 	} catch {
 		// ignore
 	}
@@ -46,31 +131,36 @@ function clearPlannedEpochWork(plugin: EpochPlugin): void {
 
 function clearPlannedAiWork(plugin: EpochPlugin): void {
 	try {
-		const anyPlugin: any = plugin as any;
-		const g: any = window as any;
+		const runtime = getRuntime(plugin);
 
 		clearPlannedEpochWork(plugin);
 
 		// Cancel in-plugin summarization queue state.
 		try {
-			anyPlugin.aiSummaryPendingFiles = new Set<string>();
-			anyPlugin.aiSummaryQueueRunning = false;
+			runtime.aiSummaryPendingFiles = new Set<string>();
+			runtime.aiSummaryQueueRunning = false;
 		} catch {
 			// ignore
 		}
 
 		// Cancel any per-file throttled enqueues waiting on a cooldown timer.
-		const throttle: any = anyPlugin?.aiSummaryEnqueueThrottleByFile;
-		if (throttle && typeof throttle?.values === "function" && typeof throttle?.clear === "function") {
+		const throttle = runtime.aiSummaryEnqueueThrottleByFile;
+		if (throttle && typeof throttle.values === "function" && typeof throttle.clear === "function") {
 			try {
 				for (const st of throttle.values()) {
 					try {
-						if (st?.timerId != null) g?.clearTimeout?.(st.timerId);
+						if (typeof st === "object" && st !== null) {
+							const state = st as ThrottleState;
+							if (state.timerId != null) {
+								(window.clearTimeout as unknown as (id: unknown) => void)(state.timerId);
+							}
+						}
 					} catch { void 0; }
 					try {
-						if (st) {
-							st.timerId = null;
-							st.pendingJobs = null;
+						if (typeof st === "object" && st !== null) {
+							const state = st as ThrottleState;
+							state.timerId = null;
+							state.pendingJobs = null;
 						}
 					} catch { void 0; }
 				}
@@ -91,7 +181,7 @@ function clearPlannedAiWork(plugin: EpochPlugin): void {
 
 async function clearBridgeQueueBestEffort(plugin: EpochPlugin): Promise<void> {
 	try {
-		const bridge: any = (plugin as any).aiBridge ?? null;
+		const bridge = getRuntime(plugin).aiBridge ?? null;
 		if (bridge && typeof bridge.clearQueue === "function") {
 			bridge.clearQueue();
 		}
@@ -100,8 +190,13 @@ async function clearBridgeQueueBestEffort(plugin: EpochPlugin): Promise<void> {
 	}
 
 	try {
-		const bridge: any = (plugin as any).aiBridge ?? null;
-		const bridgeUrl = typeof bridge?.getUrl === "function" ? String(bridge.getUrl() || "") : "";
+		const bridge = getRuntime(plugin).aiBridge ?? null;
+		const bridgeUrl = (() => {
+			if (typeof bridge?.getUrl !== "function") return "";
+			const raw = bridge.getUrl();
+			return typeof raw === "string" ? raw : "";
+		})();
+		const runtime = getRuntime(plugin);
 		const settingsState = plugin.settings.aiBridgeServer;
 		const settingsUrl = (() => {
 			const token = typeof settingsState?.token === "string" ? settingsState.token : "";
@@ -112,14 +207,14 @@ async function clearBridgeQueueBestEffort(plugin: EpochPlugin): Promise<void> {
 		})();
 		const url = bridgeUrl || settingsUrl;
 		if (url) {
-			await postBridgeClearQueue(url);
+			await postBridgeClearQueue(url, runtime.__epochNodeHttpModule);
 		}
 	} catch {
 		// ignore
 	}
 }
 
-async function postBridgeClearQueue(url: string): Promise<void> {
+async function postBridgeClearQueue(url: string, httpModuleOverride?: string): Promise<void> {
 	if (Platform.isMobile) return;
 	if (!url) return;
 	const u = new URL(url);
@@ -132,31 +227,42 @@ async function postBridgeClearQueue(url: string): Promise<void> {
 				resolve();
 				return;
 			}
-			const httpModule = (window as any).__epochNodeHttpModule ?? "node:http";
-			// eslint-disable-next-line @typescript-eslint/no-require-imports -- Dynamic require allows runtime selection of http module for testing
-			const http = require(httpModule) as typeof import("http");
-			const req = http.request(
-				{
-					method: "POST",
-					hostname: u.hostname,
-					port: Number(u.port || 80),
-					path: u.pathname + (u.search || ""),
-					headers: {
-						"content-type": "application/json",
-						"content-length": Buffer.byteLength(body)
-					}
-				},
-				(res) => {
-					try {
-						res.resume();
-					} catch { void 0; }
-					res.on("end", () => resolve());
-					res.on("close", () => resolve());
-				}
-			);
-			req.on("error", () => resolve());
-			req.write(body);
-			req.end();
+			const moduleNameRaw = typeof httpModuleOverride === "string" && httpModuleOverride.trim()
+				? httpModuleOverride
+				: "http";
+			const moduleName = moduleNameRaw === "node:http" ? "http" : moduleNameRaw;
+			const moduleRequire = (window as unknown as { require?: (name: string) => unknown }).require;
+			const loadModule = typeof moduleRequire === "function"
+				? Promise.resolve(moduleRequire(moduleName))
+				: importHttpModule();
+			void loadModule
+				.then((httpUnknown) => {
+					const http = httpUnknown as typeof import("http");
+					const contentLength = new TextEncoder().encode(body).length;
+					const req = http.request(
+						{
+							method: "POST",
+							hostname: u.hostname,
+							port: Number(u.port || 80),
+							path: u.pathname + (u.search || ""),
+							headers: {
+								"content-type": "application/json",
+								"content-length": contentLength
+							}
+						},
+						(res) => {
+							try {
+								res.resume();
+							} catch { void 0; }
+							res.on("end", () => resolve());
+							res.on("close", () => resolve());
+						}
+					);
+					req.on("error", () => resolve());
+					req.write(body);
+					req.end();
+				})
+				.catch(() => resolve());
 		} catch {
 			resolve();
 		}
@@ -164,10 +270,12 @@ async function postBridgeClearQueue(url: string): Promise<void> {
 }
 
 export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options: { keepLicense: boolean } = { keepLicense: true }): Promise<void> {
+	const runtime = getRuntime(plugin);
+	const indexerRuntime = plugin.indexer as unknown as IndexerMaintenanceRuntime;
 	// Prevent overlapping runs.
 	try {
-		if ((plugin as any).__epochResetInFlight) return;
-		(plugin as any).__epochResetInFlight = true;
+		if (runtime.__epochResetInFlight) return;
+		runtime.__epochResetInFlight = true;
 	} catch {
 		// ignore
 	}
@@ -176,8 +284,7 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 		// Cancel any in-flight AI enqueue loops (generate/regenerate commands) early so
 		// the reset flow doesn't get misleading "AI summaries: queued ..." notices.
 		try {
-			const anyPlugin: any = plugin as any;
-			anyPlugin.__epochAiEnqueueCancelKey = (Number(anyPlugin.__epochAiEnqueueCancelKey) || 0) + 1;
+			runtime.__epochAiEnqueueCancelKey = (Number(runtime.__epochAiEnqueueCancelKey) || 0) + 1;
 		} catch {
 			// ignore
 		}
@@ -193,7 +300,7 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 		const selectedLabels: string[] = [];
 		const addSelected = (key: keyof ResetSelection, label: string): void => {
 			try {
-				if ((sel as any)?.[key] === true) selectedLabels.push(label);
+				if (sel[key] === true) selectedLabels.push(label);
 			} catch {
 				// ignore
 			}
@@ -214,7 +321,7 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 			const cleared = clearAllMarks(plugin);
 			if (cleared > 0) didSomething = true;
 			try {
-				(plugin as any).clearInheritedMarksCache?.();
+				runtime.clearInheritedMarksCache?.();
 			} catch {
 				// ignore
 			}
@@ -237,53 +344,51 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 				// ignore
 			}
 			try {
-				await (plugin as any).ensurePluginDir?.();
+				await runtime.ensurePluginDir?.();
 			} catch {
 				// ignore
 			}
 			try {
 				try {
 					// Semantics reset clears the vectors store; force re-run of similarity startup maintenance.
-					const anyPlugin: any = plugin as any;
-					delete anyPlugin.__epochDidSimilarityStartupMaintenance;
+					delete runtime.__epochDidSimilarityStartupMaintenance;
 					try {
-						if (anyPlugin.__epochHugeSimilarityBackfillTimer != null) {
-						window.clearTimeout(anyPlugin.__epochHugeSimilarityBackfillTimer);
-							anyPlugin.__epochHugeSimilarityBackfillTimer = null;
+						if (runtime.__epochHugeSimilarityBackfillTimer != null) {
+							(window.clearTimeout as unknown as (id: unknown) => void)(runtime.__epochHugeSimilarityBackfillTimer);
+							runtime.__epochHugeSimilarityBackfillTimer = null;
 						}
 					} catch {
 						// ignore
 					}
-					anyPlugin.__epochHugeSimilarityBackfillFiles = null;
-					anyPlugin.__epochHugeSimilarityBackfillIndex = 0;
-					anyPlugin.__epochHugeSimilarityBackfillRunning = false;
+					runtime.__epochHugeSimilarityBackfillFiles = null;
+					runtime.__epochHugeSimilarityBackfillIndex = 0;
+					runtime.__epochHugeSimilarityBackfillRunning = false;
 				} catch {
 					// ignore
 				}
 
-				const vectorsPath = String((plugin as any).vectorsFilePath ?? "");
+				const vectorsPath = String(runtime.vectorsFilePath ?? "");
 				if (vectorsPath) {
 					await plugin.app.vault.adapter.write(vectorsPath, JSON.stringify({ models: {} }));
 				}
-				const anyPlugin: any = plugin as any;
-				anyPlugin.similarityIndex = { model: getSimilarityModelId(plugin), dim: 0, files: {} };
-				anyPlugin.similarityVectorsLoaded = true;
+				runtime.similarityIndex = { model: getSimilarityModelId(plugin), dim: 0, files: {} };
+				runtime.similarityVectorsLoaded = true;
 				try {
-					if (anyPlugin.similarityQueueTimer) {
-						window.clearTimeout(anyPlugin.similarityQueueTimer);
-						anyPlugin.similarityQueueTimer = null;
+					if (typeof runtime.similarityQueueTimer === "number") {
+						window.clearTimeout(runtime.similarityQueueTimer);
+						runtime.similarityQueueTimer = null;
 					}
-					anyPlugin.similarityPendingFiles = new Set<string>();
-					anyPlugin.similarityQueueTotal = 0;
-					anyPlugin.similarityQueueProcessed = 0;
-					anyPlugin.similarityVectorUpdateStartedAt = 0;
-					anyPlugin.similarityVectorUpdateProcessingStartedAt = 0;
+					runtime.similarityPendingFiles = new Set<string>();
+					runtime.similarityQueueTotal = 0;
+					runtime.similarityQueueProcessed = 0;
+					runtime.similarityVectorUpdateStartedAt = 0;
+					runtime.similarityVectorUpdateProcessingStartedAt = 0;
 				} catch {
 					// ignore
 				}
 				try {
-					anyPlugin.similarityStoreRev =
-						(typeof anyPlugin.similarityStoreRev === "number" ? anyPlugin.similarityStoreRev : 0) + 1;
+					runtime.similarityStoreRev =
+						(typeof runtime.similarityStoreRev === "number" ? runtime.similarityStoreRev : 0) + 1;
 				} catch {
 					// ignore
 				}
@@ -295,10 +400,10 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 
 		if (sel.trackedChanges) {
 			try {
-				const cleared = plugin.indexer.clearTrackedChanges();
+				const cleared = indexerRuntime.clearTrackedChanges();
 				let baselineReset = false;
 				try {
-					baselineReset = !!(plugin.indexer as any)?.resetTrackedBaseline?.();
+					baselineReset = indexerRuntime.resetTrackedBaseline?.() === true;
 				} catch {
 					// ignore
 				}
@@ -317,29 +422,27 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 			try {
 				try {
 					// Topics reset clears the topics store; force re-run of similarity startup maintenance.
-					const anyPlugin: any = plugin as any;
-					delete anyPlugin.__epochDidSimilarityStartupMaintenance;
+					delete runtime.__epochDidSimilarityStartupMaintenance;
 					try {
-						if (anyPlugin.__epochHugeSimilarityBackfillTimer != null) {
-							window.clearTimeout(anyPlugin.__epochHugeSimilarityBackfillTimer);
-							anyPlugin.__epochHugeSimilarityBackfillTimer = null;
+						if (runtime.__epochHugeSimilarityBackfillTimer != null) {
+							(window.clearTimeout as unknown as (id: unknown) => void)(runtime.__epochHugeSimilarityBackfillTimer);
+							runtime.__epochHugeSimilarityBackfillTimer = null;
 						}
 					} catch {
 						// ignore
 					}
-					anyPlugin.__epochHugeSimilarityBackfillFiles = null;
-					anyPlugin.__epochHugeSimilarityBackfillIndex = 0;
-					anyPlugin.__epochHugeSimilarityBackfillRunning = false;
+					runtime.__epochHugeSimilarityBackfillFiles = null;
+					runtime.__epochHugeSimilarityBackfillIndex = 0;
+					runtime.__epochHugeSimilarityBackfillRunning = false;
 				} catch {
 					// ignore
 				}
 
-				const emptyStore = { model: "zeroshot", files: {} } as any;
+				const emptyStore = { model: "zeroshot", files: {} };
 				await writeTermStore(plugin, emptyStore);
 				try {
-					const anyPlugin: any = plugin as any;
-					anyPlugin.termSimilarityIndex = emptyStore;
-					anyPlugin.termSimilarityLoaded = true;
+					runtime.termSimilarityIndex = emptyStore;
+					runtime.termSimilarityLoaded = true;
 				} catch {
 					// ignore
 				}
@@ -354,8 +457,8 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 			const cleared = clearAllAiSummaries(plugin);
 			if (cleared > 0) didSomething = true;
 			try {
-				(plugin as any).aiSummaryPendingFiles = new Set<string>();
-				(plugin as any).aiSummaryQueueRunning = false;
+				runtime.aiSummaryPendingFiles = new Set<string>();
+				runtime.aiSummaryQueueRunning = false;
 			} catch {
 				// ignore
 			}
@@ -382,7 +485,7 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 
 		if (sel.search) {
 			try {
-				(plugin as any)?.timelineSearchIndex?.clear?.();
+				runtime.timelineSearchIndex?.clear?.();
 			} catch {
 				// ignore
 			}
@@ -390,7 +493,7 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 				const leaves = plugin?.app?.workspace?.getLeavesOfType?.(VIEW_TYPE_EPOCH);
 				if (Array.isArray(leaves)) {
 					for (const leaf of leaves) {
-						const view: any = (leaf as any)?.view as any;
+						const view = (leaf as { view?: unknown })?.view as EpochViewRuntime | undefined;
 						if (!view) continue;
 						if (typeof view.setSearchQueryInternal === "function") {
 							view.setSearchQueryInternal("");
@@ -427,8 +530,7 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 				// ignore
 			}
 			try {
-				const anyThis: any = plugin as any;
-				anyThis.__timelineSearchIndexVersion = Number(anyThis.__timelineSearchIndexVersion ?? 0) + 1;
+				runtime.__timelineSearchIndexVersion = Number(runtime.__timelineSearchIndexVersion ?? 0) + 1;
 			} catch {
 				// ignore
 			}
@@ -438,13 +540,14 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 		if (sel.settings) {
 			// Preserve license (and keep aiBridgeServer state stable to avoid re-opening duplicate bridge pages).
 			const claimKeyPreview = options.keepLicense ? String(plugin.settings.claimKeyPreview ?? "") : "";
-			const installId = options.keepLicense ? String((plugin.settings as any).installId ?? "") : "";
-			const devicePublicKey = options.keepLicense ? String((plugin.settings as any).devicePublicKey ?? "") : "";
-			const activationEnvelope = options.keepLicense ? String((plugin.settings as any).activationEnvelope ?? "") : "";
-			const activationWitness = options.keepLicense ? String((plugin.settings as any).activationWitness ?? "") : "";
+			const settingsRuntime = plugin.settings as EpochSettingsRuntime;
+			const installId = options.keepLicense ? String(settingsRuntime.installId ?? "") : "";
+			const devicePublicKey = options.keepLicense ? String(settingsRuntime.devicePublicKey ?? "") : "";
+			const activationEnvelope = options.keepLicense ? String(settingsRuntime.activationEnvelope ?? "") : "";
+			const activationWitness = options.keepLicense ? String(settingsRuntime.activationWitness ?? "") : "";
 			const activationStatus = options.keepLicense ? String(plugin.settings.activationStatus ?? "") : "inactive";
 			const lastValidationAt = options.keepLicense ? String(plugin.settings.lastValidationAt ?? "") : "";
-			const lastValidatedAt = options.keepLicense ? String((plugin.settings as any).lastValidatedAt ?? "") : "";
+			const lastValidatedAt = options.keepLicense ? String(settingsRuntime.lastValidatedAt ?? "") : "";
 			const proActivatedOnce = options.keepLicense ? plugin.settings.proActivatedOnce === true : false;
 			const aiBridgeServer = plugin.settings.aiBridgeServer;
 			const aiBridgeOptions = plugin.settings.aiBridgeOptions;
@@ -511,7 +614,7 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 				// ignore
 			}
 			try {
-				(plugin as any).clearInheritedMarksCache?.();
+				runtime.clearInheritedMarksCache?.();
 			} catch {
 				// ignore
 			}
@@ -528,13 +631,12 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 			// Data files reset is effectively a full data reset; cancel AI work so it can't repopulate.
 			await clearBridgeQueueBestEffort(plugin);
 			try {
-				const anyThis: any = plugin as any;
-				anyThis.__epochCancelRequestedAt = {};
+				runtime.__epochCancelRequestedAt = {};
 			} catch {
 				// ignore
 			}
 			try {
-				(plugin as any)?.timelineSearchIndex?.clear?.();
+				runtime.timelineSearchIndex?.clear?.();
 			} catch {
 				// ignore
 			}
@@ -544,14 +646,13 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 				// ignore
 			}
 			try {
-				const anyThis: any = plugin as any;
-				anyThis.__timelineSearchIndexVersion = Number(anyThis.__timelineSearchIndexVersion ?? 0) + 1;
+				runtime.__timelineSearchIndexVersion = Number(runtime.__timelineSearchIndexVersion ?? 0) + 1;
 			} catch {
 				// ignore
 			}
 			try {
 				// Data files reset clears vectors/topics stores; force re-run of startup maintenance.
-				delete (plugin as any).__epochDidSimilarityStartupMaintenance;
+				delete runtime.__epochDidSimilarityStartupMaintenance;
 			} catch {
 				// ignore
 			}
@@ -581,10 +682,10 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 		}
 	} finally {
 		try {
-			delete (plugin as any).__epochResetInFlight;
+			delete runtime.__epochResetInFlight;
 		} catch {
 			try {
-				(plugin as any).__epochResetInFlight = false;
+				runtime.__epochResetInFlight = false;
 			} catch {
 				// ignore
 			}

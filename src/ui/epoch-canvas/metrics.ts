@@ -7,13 +7,19 @@ import { parseFontSize } from "../epoch-canvas-utils";
 import type { EpochCanvas } from "../epoch-canvas";
 
 export function getTodayOffset(canvas: EpochCanvas): number {
-	const rect = (canvas as any).root.getBoundingClientRect();
-	if (rect.height && Number.isFinite(rect.height)) {
+	const canvasState = canvas as unknown as {
+		root?: HTMLElement;
+		canvas?: HTMLCanvasElement;
+	};
+	const root = canvasState.root;
+	const rect = root?.getBoundingClientRect();
+	if (rect?.height && Number.isFinite(rect.height)) {
 		return rect.height * FOCUS_ANCHOR_RATIO;
 	}
 	const dpr = window.devicePixelRatio || 1;
-	if ((canvas as any).canvas?.height) {
-		return ((canvas as any).canvas.height / dpr) * FOCUS_ANCHOR_RATIO;
+	const canvasEl = canvasState.canvas;
+	if (canvasEl?.height) {
+		return (canvasEl.height / dpr) * FOCUS_ANCHOR_RATIO;
 	}
 	return TODAY_OFFSET_Y_INITIAL;
 }

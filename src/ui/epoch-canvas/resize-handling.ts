@@ -1,10 +1,25 @@
 import type { EpochCanvas } from "../epoch-canvas";
 
+type ResizeCanvasState = {
+	win?: Window;
+	root?: HTMLElement;
+	canvas?: HTMLCanvasElement;
+	postResizeTimeout1?: number | null;
+	postResizeTimeout2?: number | null;
+	resizeScheduled?: boolean;
+	resize(): void;
+};
+
+function state(canvas: EpochCanvas): ResizeCanvasState {
+	return canvas as unknown as ResizeCanvasState;
+}
+
 export function ensureSizeMatchesDisplay(canvas: EpochCanvas): void {
+	const c = state(canvas);
 	try {
-		const w: any = (canvas as any).win ?? window;
-		if (!(canvas as any).root?.isConnected) return;
-		const rect = (canvas as any).canvas?.getBoundingClientRect?.();
+		const w = c.win ?? window;
+		if (!c.root?.isConnected) return;
+		const rect = c.canvas?.getBoundingClientRect?.();
 		const cssWidth = rect?.width ?? 0;
 		const cssHeight = rect?.height ?? 0;
 		if (!cssWidth || !cssHeight) return;
@@ -12,8 +27,8 @@ export function ensureSizeMatchesDisplay(canvas: EpochCanvas): void {
 		const wantW = Math.round(cssWidth * dpr);
 		const wantH = Math.round(cssHeight * dpr);
 		if (!wantW || !wantH) return;
-		if ((canvas as any).canvas.width !== wantW || (canvas as any).canvas.height !== wantH) {
-			(canvas as any).resize();
+		if (c.canvas && (c.canvas.width !== wantW || c.canvas.height !== wantH)) {
+			c.resize();
 		}
 	} catch {
 		// ignore
@@ -21,39 +36,40 @@ export function ensureSizeMatchesDisplay(canvas: EpochCanvas): void {
 }
 
 export function scheduleResize(canvas: EpochCanvas): void {
-	const w: any = (canvas as any).win ?? window;
+	const c = state(canvas);
+	const w = c.win ?? window;
 	try {
-		if ((canvas as any).postResizeTimeout1 != null) {
-			w.clearTimeout((canvas as any).postResizeTimeout1);
-			(canvas as any).postResizeTimeout1 = null;
+		if (c.postResizeTimeout1 != null) {
+			w.clearTimeout(c.postResizeTimeout1);
+			c.postResizeTimeout1 = null;
 		}
-		if ((canvas as any).postResizeTimeout2 != null) {
-			w.clearTimeout((canvas as any).postResizeTimeout2);
-			(canvas as any).postResizeTimeout2 = null;
+		if (c.postResizeTimeout2 != null) {
+			w.clearTimeout(c.postResizeTimeout2);
+			c.postResizeTimeout2 = null;
 		}
 	} catch {
 		// ignore
 	}
-	if ((canvas as any).resizeScheduled) return;
-	(canvas as any).resizeScheduled = true;
+	if (c.resizeScheduled) return;
+	c.resizeScheduled = true;
 	try {
 		w.requestAnimationFrame(() => {
-			(canvas as any).resizeScheduled = false;
-			(canvas as any).resize();
+			c.resizeScheduled = false;
+			c.resize();
 			try {
-				if (!(canvas as any).root?.isConnected) return;
-				(canvas as any).postResizeTimeout1 = w.setTimeout(() => {
-					if (!(canvas as any).root?.isConnected) return;
+				if (!c.root?.isConnected) return;
+				c.postResizeTimeout1 = w.setTimeout(() => {
+					if (!c.root?.isConnected) return;
 					try {
-						(canvas as any).resize();
+						c.resize();
 					} catch {
 						// ignore
 					}
 				}, 50);
-				(canvas as any).postResizeTimeout2 = w.setTimeout(() => {
-					if (!(canvas as any).root?.isConnected) return;
+				c.postResizeTimeout2 = w.setTimeout(() => {
+					if (!c.root?.isConnected) return;
 					try {
-						(canvas as any).resize();
+						c.resize();
 					} catch {
 						// ignore
 					}
@@ -63,9 +79,9 @@ export function scheduleResize(canvas: EpochCanvas): void {
 			}
 		});
 	} catch {
-		(canvas as any).resizeScheduled = false;
+		c.resizeScheduled = false;
 		try {
-			(canvas as any).resize();
+			c.resize();
 		} catch {
 			// ignore
 		}

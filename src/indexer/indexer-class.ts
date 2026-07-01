@@ -5,10 +5,10 @@ import {
 	EpochIndex,
 	FileDateEntry,
 	FileIndexData,
-	RecurrenceKind,
 	SerializedEpochIndex,
 	StoredFileIndexData
 } from "./types";
+import type { EpochPlugin } from "../main";
 import { parseAnyDates } from "./extractor";
 import { formatDate, frontmatterToIndexTokens, parseDateFromDailyNoteFormat } from "../utils";
 import { sortIndex } from "./indexer-utils";
@@ -71,31 +71,31 @@ export class Indexer {
 	private pipelineCache: IndexerPipeline | null = null;
 	private lastSyntheticRefreshTodayKey: string | null = null;
 
-	constructor(private plugin: any) {}
+	constructor(private plugin: unknown) {}
 
 	private getPipeline(): IndexerPipeline {
 		if (this.pipelineCache) return this.pipelineCache;
-		const getPlugin = () => this.plugin;
-		const getIndex = () => this.index;
+		const getIndex = (): EpochIndex => this.index;
 		const setIndex = (v: EpochIndex) => {
 			this.index = v;
 		};
-		const getFiles = () => this.files;
-		const getLatestLines = () => this.latestLines;
+		const getFiles = (): Record<string, FileIndexData> => this.files;
+		const getLatestLines = (): Record<string, string[]> => this.latestLines;
+		const getPlugin = (): EpochPlugin => this.plugin as EpochPlugin;
 		const pipeline: IndexerPipeline = {
-			get plugin() {
+			get plugin(): EpochPlugin {
 				return getPlugin();
 			},
-			get index() {
+			get index(): EpochIndex {
 				return getIndex();
 			},
 			set index(v) {
 				setIndex(v);
 			},
-			get files() {
+			get files(): Record<string, FileIndexData> {
 				return getFiles();
 			},
-			get latestLines() {
+			get latestLines(): Record<string, string[]> {
 				return getLatestLines();
 			},
 			readFileContent: this.readFileContent.bind(this),
@@ -125,7 +125,7 @@ export class Indexer {
 				if (data?.pinnedFile === true) {
 					syntheticPaths.add(path);
 				}
-				if ((data as any)?.recur) {
+				if ((data as { recur?: unknown }).recur) {
 					syntheticPaths.add(path);
 				}
 			}
@@ -145,7 +145,7 @@ export class Indexer {
 		const syntheticPaths: string[] = [];
 		for (const [path, data] of Object.entries(this.files ?? {})) {
 			if (!data) continue;
-			if (data.pinnedFile === true || (data as any)?.recur) {
+			if (data.pinnedFile === true || (data as { recur?: unknown }).recur) {
 				syntheticPaths.push(path);
 			}
 		}
@@ -174,13 +174,12 @@ export class Indexer {
 	async rebuildAll(files: TFile[], onProgress?: (processed: number, total: number) => void) {
 		const previousFiles = this.files;
 		const previousIndex = this.index;
-		const preservedEpochs: Record<string, any[]> = {};
+		const preservedEpochs: Record<string, DateEntry[]> = {};
 		for (const [date, entries] of Object.entries(previousIndex ?? {})) {
 			if (!Array.isArray(entries) || entries.length === 0) continue;
-			const kept = entries.filter(e => {
+			const kept = entries.filter((e) => {
 				if (!e) return false;
-				const anyE: any = e as any;
-				return String(anyE?.file || "").startsWith("epoch://");
+				return String(e.file || "").startsWith("epoch://");
 			});
 			if (kept.length > 0) {
 				preservedEpochs[date] = kept;
@@ -193,16 +192,18 @@ export class Indexer {
 		let processed = 0;
 		for (const file of files) {
 			try {
-				const anyPlugin: any = this.plugin as any;
-				const cancelMap: any = anyPlugin?.__epochCancelRequestedAt;
-				if (cancelMap && typeof cancelMap === "object" && typeof cancelMap.index === "number" && cancelMap.index > 0) {
+				const pluginRuntime = this.plugin as { __epochCancelRequestedAt?: { index?: number } };
+				const cancelMap = pluginRuntime.__epochCancelRequestedAt;
+				if (cancelMap && typeof cancelMap.index === "number" && cancelMap.index > 0) {
 					// Restore previous in-memory state so cancel doesn't wipe the index.
 					this.files = previousFiles;
 					this.index = previousIndex;
 					throw Object.assign(new Error("EPOCH_CANCELLED"), { code: "EPOCH_CANCELLED" });
 				}
-			} catch (e: any) {
-				if (String(e?.message || "") === "EPOCH_CANCELLED" || String(e?.code || "") === "EPOCH_CANCELLED") throw e;
+			} catch (e: unknown) {
+				const message = e instanceof Error ? e.message : "";
+				const code = typeof e === "object" && e !== null && "code" in e ? (e as { code?: unknown }).code : undefined;
+				if (message === "EPOCH_CANCELLED" || code === "EPOCH_CANCELLED") throw e;
 				// ignore
 			}
 			await this.processFile(file, {
@@ -216,21 +217,20 @@ export class Indexer {
 		}
 
 		for (const [date, kept] of Object.entries(preservedEpochs)) {
-			const current = Array.isArray((this.index as any)[date]) ? (this.index as any)[date] : [];
-			const next = current.slice();
+			const current = this.index[date];
+			const next: DateEntry[] = Array.isArray(current) ? current.slice() : [];
 			for (const e of kept) {
-				const anyE: any = e as any;
-				const bucket = String(anyE?.epochBucket || "");
-				const start = String(anyE?.epochStart || "");
-				const file = String(anyE?.file || "");
-				const exists = next.some((x: any) => {
+				const bucket = String(e.epochBucket || "");
+				const start = String(e.epochStart || "");
+				const file = String(e.file || "");
+				const exists = next.some((x) => {
 					if (!x) return false;
-					if (!String(x?.file || "").startsWith("epoch://")) return false;
-					return String(x?.epochBucket || "") === bucket && String(x?.epochStart || "") === start && String(x?.file || "") === file;
+					if (!String(x.file || "").startsWith("epoch://")) return false;
+					return String(x.epochBucket || "") === bucket && String(x.epochStart || "") === start && String(x.file || "") === file;
 				});
 				if (!exists) next.push(e);
 			}
-			(this.index as any)[date] = next;
+			this.index[date] = next;
 		}
 
 		this.index = sortIndex(this.index);
@@ -242,13 +242,15 @@ export class Indexer {
 		const seen = new Set<string>();
 		for (const file of files) {
 			try {
-				const anyPlugin: any = this.plugin as any;
-				const cancelMap: any = anyPlugin?.__epochCancelRequestedAt;
-				if (cancelMap && typeof cancelMap === "object" && typeof cancelMap.index === "number" && cancelMap.index > 0) {
+				const pluginRuntime = this.plugin as { __epochCancelRequestedAt?: { index?: number } };
+				const cancelMap = pluginRuntime.__epochCancelRequestedAt;
+				if (cancelMap && typeof cancelMap.index === "number" && cancelMap.index > 0) {
 					throw Object.assign(new Error("EPOCH_CANCELLED"), { code: "EPOCH_CANCELLED" });
 				}
-			} catch (e: any) {
-				if (String(e?.message || "") === "EPOCH_CANCELLED" || String(e?.code || "") === "EPOCH_CANCELLED") throw e;
+			} catch (e: unknown) {
+				const message = e instanceof Error ? e.message : "";
+				const code = typeof e === "object" && e !== null && "code" in e ? (e as { code?: unknown }).code : undefined;
+				if (message === "EPOCH_CANCELLED" || code === "EPOCH_CANCELLED") throw e;
 				// ignore
 			}
 			seen.add(file.path);
@@ -396,8 +398,9 @@ export class Indexer {
 		isText: boolean,
 		source: DateSource
 	): FileDateEntry {
+		const plugin = this.plugin as EpochPlugin;
 		const text = isText ? lines.join("\n") : "";
-		const baseSummary = resolveSummaryForFile(this.plugin, file.path, text, {
+		const baseSummary = resolveSummaryForFile(plugin, file.path, text, {
 			includeFileName: false
 		});
 		const summary = baseSummary || "";
@@ -412,9 +415,9 @@ export class Indexer {
 	}
 
 	private buildNamedDateEntries(file: TFile, lines: string[], isMd: boolean): { anchor: FileDateEntry | null; rangeEntries: FileDateEntry[] } {
-		const pluginAny: any = this.plugin as any;
-		const format = typeof pluginAny?.getDailyNoteFormat === "function"
-			? String(pluginAny.getDailyNoteFormat() || "").trim()
+		const pluginRuntime = this.plugin as EpochPlugin;
+		const format = typeof pluginRuntime.getDailyNoteFormat === "function"
+			? String(pluginRuntime.getDailyNoteFormat() || "").trim()
 			: "YYYY-MM-DD";
 		const fromFormat = format ? parseDateFromDailyNoteFormat(file.basename, format) : null;
 		if (fromFormat) {
@@ -423,27 +426,28 @@ export class Indexer {
 		const parsed = parseAnyDates(file.basename);
 		if (parsed.length === 0) return { anchor: null, rangeEntries: [] };
 		if (parsed.length === 1) {
-			return { anchor: this.buildFileDateEntry(file, lines, parsed[0]!, isMd, "namedate"), rangeEntries: [] };
+			return { anchor: this.buildFileDateEntry(file, lines, parsed[0], isMd, "namedate"), rangeEntries: [] };
 		}
 		// Filename date range: use the first (fromDate) as the anchor.
 		// The rest remain as range entries so the note appears on all range days.
-		const anchor = this.buildFileDateEntry(file, lines, parsed[0]!, isMd, "namedate");
+		const anchor = this.buildFileDateEntry(file, lines, parsed[0], isMd, "namedate");
 		const rangeEntries = parsed.slice(1).map(d => {
 			const entry = this.buildFileDateEntry(file, lines, d, isMd, "namedate");
-			(entry as any).namedDateRange = true;
+			(entry as FileDateEntry & { namedDateRange?: boolean }).namedDateRange = true;
 			return entry;
 		});
 		return { anchor, rangeEntries };
 	}
 
 	private buildContentDates(file: TFile, lines: string[]): FileDateEntry[] {
-		const parseDatesInFrontmatter = (this.plugin as any)?.settings?.parseDatesInFrontmatter === true;
-		const datePropertyKey = getYamlDatePropertyKey(this.plugin);
+		const plugin = this.plugin as EpochPlugin;
+		const parseDatesInFrontmatter = plugin.settings?.parseDatesInFrontmatter === true;
+		const datePropertyKey = getYamlDatePropertyKey(plugin);
 		const datePropertyLineRe = new RegExp(`^${datePropertyKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:`, "i");
 		const datePropertyKeyLower = String(datePropertyKey).toLowerCase();
 		try {
 			const rawText = Array.isArray(lines) && lines.length > 0 ? lines.slice(0, 250).join("\n") : "";
-			const suppression = resolveFrontmatterSuppressionFlags(this.plugin, file, rawText);
+			const suppression = resolveFrontmatterSuppressionFlags(plugin, file, rawText);
 			if (suppression.noparsed) return [];
 		} catch {
 			// ignore
@@ -499,7 +503,7 @@ export class Indexer {
 					file: file.path,
 					blockStart: anchorLine,
 					blockEnd: anchorLine,
-					summary: resolveSummaryForFile(this.plugin, file.path, summaryText),
+					summary: resolveSummaryForFile(plugin, file.path, summaryText),
 					source: "content",
 					fromFrontmatter: true
 				});
@@ -521,9 +525,8 @@ export class Indexer {
 		// Include dates found in YAML frontmatter (via Obsidian metadata cache).
 		if (parseDatesInFrontmatter) {
 			try {
-				const pluginAny: any = this.plugin as any;
-				const cache = pluginAny?.app?.metadataCache?.getFileCache?.(file);
-				const fm: any = cache?.frontmatter ?? null;
+				const cache = plugin.app.metadataCache.getFileCache(file);
+				const fm: unknown = cache?.frontmatter ?? null;
 				if (fm && typeof fm === "object") {
 					const tokens = frontmatterToIndexTokens(fm, {
 						excludeKeys: ["repeat", "recur", datePropertyKeyLower]
@@ -559,13 +562,13 @@ export class Indexer {
 					file: file.path,
 					blockStart: i,
 					blockEnd: i,
-					summary: resolveSummaryForFile(this.plugin, file.path, summaryText),
+					summary: resolveSummaryForFile(plugin, file.path, summaryText),
 					source: "content"
 				});
 			}
 		}
 
-		return mergeConsecutiveEntries(this.plugin, entries, lines);
+		return mergeConsecutiveEntries(plugin, entries, lines);
 	}
 
 	private updateTrackedDates(file: TFile, data: FileIndexData, lines: string[]) {
@@ -582,9 +585,30 @@ export class Indexer {
 	}
 
 	private normalizeFileIndexData(data: StoredFileIndexData): FileIndexData {
+		type RecurRuntime = {
+			raw?: unknown;
+			rrule?: unknown;
+			kind?: unknown;
+			line?: unknown;
+			from?: unknown;
+			until?: unknown;
+			count?: unknown;
+		};
+		type StoredFileRuntime = StoredFileIndexData & {
+			recurReviewedDates?: unknown;
+			contentHash?: unknown;
+			embeddingTerm?: unknown;
+			noparsed?: unknown;
+			notracked?: unknown;
+			recurHiddenDates?: unknown;
+			recur?: RecurRuntime | null;
+			indexedMtimeMs?: unknown;
+			indexedSize?: unknown;
+		};
+		const rawData = data as StoredFileRuntime;
 		const recurReviewedDates = (() => {
 			try {
-				const raw: any = (data as any)?.recurReviewedDates;
+				const raw: unknown = rawData.recurReviewedDates;
 				if (!Array.isArray(raw)) return [];
 				const out: string[] = [];
 				for (const v of raw) {
@@ -597,10 +621,10 @@ export class Indexer {
 				return [];
 			}
 		})();
-		const contentHashRaw = typeof (data as any)?.contentHash === "string" ? String((data as any).contentHash) : "";
+		const contentHashRaw = typeof rawData.contentHash === "string" ? String(rawData.contentHash) : "";
 		const contentHash = contentHashRaw.trim() ? contentHashRaw : undefined;
 
-		const embeddingTermRaw = typeof (data as any)?.embeddingTerm === "string" ? String((data as any).embeddingTerm) : "";
+		const embeddingTermRaw = typeof rawData.embeddingTerm === "string" ? String(rawData.embeddingTerm) : "";
 		const embeddingTerm = embeddingTermRaw.trim();
 		const tracked = cloneTrackedDates(data.trackedDates);
 		const cdate = data.cdate ?? null;
@@ -618,16 +642,16 @@ export class Indexer {
 			typeof data.trackedBaselineSnapshot === "string" ? data.trackedBaselineSnapshot : null
 		);
 		const trackedBaselineDate = typeof data.trackedBaselineDate === "string" ? data.trackedBaselineDate : null;
-		const markColorRaw = typeof (data as any)?.markColor === "number" ? (data as any).markColor : null;
-		const markColor = markColorRaw != null
+		const markColorRaw = Number((data as { markColor?: number | null }).markColor ?? NaN);
+		const markColor = Number.isFinite(markColorRaw)
 			? Math.max(1, Math.min(MAX_MARK_COLORS, Math.floor(markColorRaw)))
 			: undefined;
 		const pinnedFile = data.pinnedFile === true;
-		const noparsed = (data as any)?.noparsed === true;
-		const notracked = (data as any)?.notracked === true;
+		const noparsed = rawData.noparsed === true;
+		const notracked = rawData.notracked === true;
 		const recurHiddenDates = (() => {
 			try {
-				const raw: any = (data as any)?.recurHiddenDates;
+				const raw: unknown = rawData.recurHiddenDates;
 				if (!Array.isArray(raw)) return [];
 				const out: string[] = [];
 				for (const v of raw) {
@@ -641,26 +665,26 @@ export class Indexer {
 			}
 		})();
 		const recur = (() => {
-			const raw: any = (data as any)?.recur;
+			const raw = rawData.recur;
 			if (!raw || typeof raw !== "object") return null;
-			const r = String(raw?.raw ?? "").trim();
-			const rule = String(raw?.rrule ?? "").trim();
-			const kindRaw = String(raw?.kind ?? "");
-			const kind = (kindRaw === "rrule" || kindRaw === "friendly" ? kindRaw : "friendly") as RecurrenceKind;
-			const lineRaw = Number(raw?.line ?? 0);
+			const r = String(raw.raw ?? "").trim();
+			const rule = String(raw.rrule ?? "").trim();
+			const kindRaw = String(raw.kind ?? "");
+			const kind: "rrule" | "friendly" = (kindRaw === "rrule" || kindRaw === "friendly") ? kindRaw : "friendly";
+			const lineRaw = Number(raw.line ?? 0);
 			const line = Number.isFinite(lineRaw) ? Math.max(0, Math.floor(lineRaw)) : 0;
-			const from = typeof raw?.from === "string" ? String(raw.from) : undefined;
-			const until = typeof raw?.until === "string" ? String(raw.until) : undefined;
-			const countRaw = Number(raw?.count ?? NaN);
+			const from = typeof raw.from === "string" ? String(raw.from) : undefined;
+			const until = typeof raw.until === "string" ? String(raw.until) : undefined;
+			const countRaw = Number(raw.count ?? NaN);
 			const count = Number.isFinite(countRaw) && countRaw > 0 ? Math.floor(countRaw) : undefined;
 			if (!r || !rule) return null;
 			return { raw: r, rrule: rule, kind, line, from, until, count };
 		})();
-		const indexedMtimeMsRaw = Number((data as any)?.indexedMtimeMs);
+		const indexedMtimeMsRaw = Number(rawData.indexedMtimeMs);
 		const indexedMtimeMs = Number.isFinite(indexedMtimeMsRaw) && indexedMtimeMsRaw > 0
 			? indexedMtimeMsRaw
 			: undefined;
-		const indexedSizeRaw = Number((data as any)?.indexedSize);
+		const indexedSizeRaw = Number(rawData.indexedSize);
 		const indexedSize = Number.isFinite(indexedSizeRaw) && indexedSizeRaw >= 0
 			? indexedSizeRaw
 			: undefined;
@@ -689,11 +713,12 @@ export class Indexer {
 	}
 
 	private buildMergedDates(data: FileIndexData): FileDateEntry[] {
+		const plugin = this.plugin as EpochPlugin;
 		const content = data.contentDates ?? [];
 		const tracked: FileDateEntry[] = [];
-		const summaryWords = Math.max(0, (this.plugin as any)?.settings?.summaryWordsCount ?? 0);
+		const summaryWords = Math.max(0, plugin.settings?.summaryWordsCount ?? 0);
 		const summaryDisabled = summaryWords <= 0;
-		if (isTrackChangesConfigured(this.plugin)) {
+		if (isTrackChangesConfigured(plugin)) {
 			for (const dateKey of Object.keys(data.trackedDates)) {
 				tracked.push(...data.trackedDates[dateKey]);
 			}
@@ -715,18 +740,19 @@ export class Indexer {
 		return d;
 	}
 
-	private async readFileContent(file: TFile, reason?: ProcessOptions["reason"]): Promise<string> {
+	private readFileContent(file: TFile, reason?: ProcessOptions["reason"]): Promise<string> {
+		const plugin = this.plugin as EpochPlugin;
 		if (reason === "track" || reason === "modify") {
-			const view = this.plugin.app.workspace.getActiveViewOfType?.(MarkdownView);
+			const view = plugin.app.workspace.getActiveViewOfType?.(MarkdownView);
 			if (view?.file?.path === file.path) {
 				try {
 					const live = view.editor?.getValue?.();
-					if (typeof live === "string") return live;
+					if (typeof live === "string") return Promise.resolve(live);
 				} catch (err) {
 					void err;
 				}
 			}
 		}
-		return this.plugin.app.vault.read(file);
+		return plugin.app.vault.read(file);
 	}
 }

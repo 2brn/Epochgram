@@ -46,4 +46,41 @@ describe("daily note date format", () => {
 	it("parses prefix + compact tokens", () => {
 		expect(parseDateFromDailyNoteFormat("daily_260106", "daily_yyddmm")).toBe("2026-06-01");
 	});
+
+	it("parses without local Date getter dependency in moment path", () => {
+		const win = window as typeof window & { moment?: unknown };
+		const prevMoment = win.moment;
+		const prevGetDate = Date.prototype.getDate;
+		try {
+			win.moment = ((input?: unknown, fmt?: string, strict?: boolean) => {
+				if (typeof input === "string" && input === "2026-07-04" && fmt === "YYYY-MM-DD" && strict === true) {
+					return {
+						isValid: () => true,
+						year: () => 2026,
+						month: () => 6,
+						date: () => 4,
+					};
+				}
+				return {
+					isValid: () => false,
+					year: () => NaN,
+					month: () => NaN,
+					date: () => NaN,
+				};
+			}) as unknown;
+			Object.defineProperty(Date.prototype, "getDate", {
+				configurable: true,
+				value: function getDateThrow(): number {
+					throw new Error("getDate should not be called");
+				},
+			});
+			expect(parseDateFromDailyNoteFormat("2026-07-04", "YYYY-MM-DD")).toBe("2026-07-04");
+		} finally {
+			Object.defineProperty(Date.prototype, "getDate", {
+				configurable: true,
+				value: prevGetDate,
+			});
+			win.moment = prevMoment;
+		}
+	});
 });

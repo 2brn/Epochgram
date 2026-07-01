@@ -1,5 +1,25 @@
 const DATE_FORMAT = "yyyy-MM-dd";
 
+type ObsidianMomentLike = ((input?: unknown, fmt?: string, strict?: boolean) => {
+	format?: (fmt: string) => string;
+	isValid?: () => boolean;
+	year?: () => number;
+	month?: () => number;
+	date?: () => number;
+}) & {
+	utc?: (
+		input?: unknown,
+		fmt?: string,
+		strict?: boolean
+	) => {
+		format?: (fmt: string) => string;
+		isValid?: () => boolean;
+		year?: () => number;
+		month?: () => number;
+		date?: () => number;
+	};
+};
+
 export function sanitizeSummaryText(input: string): string {
 	try {
 		const s = String(input ?? "");
@@ -46,14 +66,13 @@ export function normalizeDailyNoteDateFormatInput(format: string): string {
 	return f;
 }
 
-function getObsidianMoment():
-	| (((input?: any, fmt?: any, strict?: any) => any) & { utc?: (...args: any[]) => any })
-	| null {
+function getObsidianMoment(): ObsidianMomentLike | null {
 	try {
-		const win = window as typeof window & {
-			moment?: (((input?: any, fmt?: any, strict?: any) => any) & { utc?: (...args: any[]) => any }) | undefined;
-		};
-		return typeof win?.moment === "function" ? win.moment : null;
+		const root: Window | null = typeof window !== "undefined" ? window : null;
+		const maybeMoment = root && "moment" in root ? (root as Window & { moment?: unknown }).moment : null;
+		return typeof maybeMoment === "function"
+			? (maybeMoment as ObsidianMomentLike)
+			: null;
 	} catch {
 		return null;
 	}
@@ -79,6 +98,19 @@ function formatDateWithTokensUtc(dateUtc: Date, format: string): string | null {
 	const mm = String(dateUtc.getUTCMonth() + 1).padStart(2, "0");
 	const dd = String(dateUtc.getUTCDate()).padStart(2, "0");
 	return f.replace(/YYYY/g, yyyy).replace(/YY/g, yy).replace(/MM/g, mm).replace(/DD/g, dd);
+}
+
+function formatYmdParts(year: number, month: number, day: number): string {
+	return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function isValidYmdParts(year: number, month: number, day: number): boolean {
+	if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return false;
+	if (month < 1 || month > 12) return false;
+	if (day < 1) return false;
+	const maxDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+	if (!Number.isFinite(maxDay) || maxDay < 1) return false;
+	return day <= maxDay;
 }
 
 function hasValidFallbackFullDateTokens(format: string): boolean {
@@ -114,18 +146,22 @@ export function isValidDailyNoteDateFormat(format: string): boolean {
 		for (const refUtc of refs) {
 			let sample = "";
 			try {
-				const fmtObj = typeof (moment as any).utc === "function" ? (moment as any).utc(refUtc) : (moment as any)(refUtc);
+				const fmtObj = typeof moment.utc === "function" ? moment.utc(refUtc) : moment(refUtc);
 				sample = String(fmtObj?.format?.(f) ?? "");
 			} catch {
 				return false;
 			}
 			if (!sample) return false;
-			let parsed: any;
+			let parsed:
+				| {
+						isValid?: () => boolean;
+						year?: () => number;
+						month?: () => number;
+						date?: () => number;
+				  }
+				| undefined;
 			try {
-				parsed =
-					typeof (moment as any).utc === "function"
-						? (moment as any).utc(sample, f, true)
-						: (moment as any)(sample, f, true);
+				parsed = typeof moment.utc === "function" ? moment.utc(sample, f, true) : moment(sample, f, true);
 			} catch {
 				return false;
 			}
@@ -147,7 +183,8 @@ export function isValidDailyNoteDateFormat(format: string): boolean {
 	const refUtc = new Date(Date.UTC(2026, 0, 6));
 	const sample = formatDateWithTokensUtc(refUtc, f);
 	if (sample == null) return false;
-	return parseDateFromDailyNoteFormat(sample, f) === formatDate(refUtc);
+	const expected = formatYmdParts(refUtc.getUTCFullYear(), refUtc.getUTCMonth() + 1, refUtc.getUTCDate());
+	return parseDateFromDailyNoteFormat(sample, f) === expected;
 }
 
 export function parseDateFromDailyNoteFormat(text: string, format: string): string | null {
@@ -159,15 +196,13 @@ export function parseDateFromDailyNoteFormat(text: string, format: string): stri
 	const moment = getObsidianMoment();
 	if (moment) {
 		try {
-			const parsed =
-				typeof (moment as any).utc === "function" ? (moment as any).utc(t, f, true) : (moment as any)(t, f, true);
+			const parsed = typeof moment.utc === "function" ? moment.utc(t, f, true) : moment(t, f, true);
 			if (parsed && typeof parsed.isValid === "function" && parsed.isValid()) {
 				const y = Number(parsed.year?.());
 				const m = Number(parsed.month?.()) + 1;
 				const d = Number(parsed.date?.());
-				if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)) {
-					const dt = new Date(Date.UTC(y, m - 1, d));
-					if (!Number.isNaN(dt.getTime())) return formatDate(dt);
+				if (isValidYmdParts(y, m, d)) {
+					return formatYmdParts(y, m, d);
 				}
 			}
 		} catch {
@@ -216,18 +251,16 @@ export function parseDateFromDailyNoteFormat(text: string, format: string): stri
 
 	const vals: Partial<Record<"YYYY" | "YY" | "MM" | "DD", number>> = {};
 	for (let gi = 0; gi < groups.length; gi++) {
-		vals[groups[gi]!] = Number(m[gi + 1]);
+		const group = groups[gi];
+		if (!group) continue;
+		vals[group] = Number(m[gi + 1]);
 	}
 	const yearRaw = yearTok === "YYYY" ? vals.YYYY : vals.YY;
 	const year = yearTok === "YYYY" ? Number(yearRaw) : coerce2DigitYear(Number(yearRaw));
 	const month = Number(vals.MM);
 	const day = Number(vals.DD);
-	if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
-	if (month < 1 || month > 12) return null;
-	if (day < 1 || day > 31) return null;
-	const dt = new Date(Date.UTC(year, month - 1, day));
-	if (Number.isNaN(dt.getTime())) return null;
-	return formatDate(dt);
+	if (!isValidYmdParts(year, month, day)) return null;
+	return formatYmdParts(year, month, day);
 }
 
 // Title-similarity (Jaro–Winkler) constants.
@@ -276,11 +309,20 @@ export function frontmatterToIndexTokens(frontmatter: unknown, options?: { exclu
 		out.push(v);
 	};
 
-	const toScalarString = (value: any): string => {
+	const toScalarString = (value: unknown): string => {
 		if (value == null) return "";
 		if (typeof value === "string") return value;
 		if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
 		if (typeof value === "boolean") return value ? "true" : "false";
+		if (typeof value === "bigint") return value.toString();
+		if (typeof value === "symbol" || typeof value === "function") return "";
+		if (typeof value === "object") {
+			try {
+				return JSON.stringify(value) ?? "";
+			} catch {
+				return "";
+			}
+		}
 		try {
 			if (value instanceof Date && Number.isFinite(value.getTime())) {
 				return value.toISOString();
@@ -288,10 +330,10 @@ export function frontmatterToIndexTokens(frontmatter: unknown, options?: { exclu
 		} catch {
 			// ignore
 		}
-		return String(value);
+		return "";
 	};
 
-	const walk = (keyPath: string, value: any, depth: number) => {
+	const walk = (keyPath: string, value: unknown, depth: number) => {
 		if (value == null) return;
 		if (depth > 3) {
 			const s = toScalarString(value);
@@ -323,7 +365,7 @@ export function frontmatterToIndexTokens(frontmatter: unknown, options?: { exclu
 		}
 
 		if (value && typeof value === "object") {
-			for (const [k, v] of Object.entries(value)) {
+			for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
 				const childKey = String(k ?? "").trim();
 				if (!childKey) continue;
 				walk(`${keyPath}.${childKey}`, v, depth + 1);
@@ -336,9 +378,9 @@ export function frontmatterToIndexTokens(frontmatter: unknown, options?: { exclu
 	};
 
 	try {
-		const fm: any = frontmatter as any;
+		const fm = frontmatter;
 		if (!fm || typeof fm !== "object") return [];
-		for (const [k, v] of Object.entries(fm)) {
+		for (const [k, v] of Object.entries(fm as Record<string, unknown>)) {
 			const key = String(k ?? "").trim();
 			if (!key) continue;
 			if (exclude.has(key.toLowerCase())) continue;
@@ -430,6 +472,13 @@ export function getNoteTitleFromPath(filePath: string): string {
 	const p = String(filePath || "");
 	const base = p.split("/").pop() || p;
 	return base.replace(/\.md$/i, "");
+}
+
+export function getFolderPathFromFilePath(filePath: string): string {
+	const p = String(filePath || "").trim();
+	if (!p) return "";
+	const idx = p.lastIndexOf("/");
+	return idx >= 0 ? p.slice(0, idx) : "";
 }
 
 const LIKELY_TEXT_EXTENSIONS = new Set([

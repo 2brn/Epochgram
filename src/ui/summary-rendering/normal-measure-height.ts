@@ -53,7 +53,8 @@ export function measureNormalDaySummariesHeight(args: NormalMeasureArgs): number
 		const rows = col.rows;
 		let effectiveColumnHeight = 0;
 		for (let i = 0; i < col.rowsThisCol; i++) {
-			const r = rows[i]!;
+			const r = rows[i];
+			if (!r) continue;
 			let h = r.height;
 			const hoverT = Math.max(0, Math.min(1, r.summaryHoverT));
 			if (textModeEnabled && r.isHoverIncoming && hoverT > 0) {
@@ -95,7 +96,9 @@ export function measureNormalDaySummariesHeight(args: NormalMeasureArgs): number
 		}
 		if (col.rowsThisCol > 1) {
 			for (let i = 0; i < col.rowsThisCol; i++) {
-				const t = Math.max(0, Math.min(1, rows[i]!.summaryHoverT));
+				const row = rows[i];
+				if (!row) continue;
+				const t = Math.max(0, Math.min(1, row.summaryHoverT));
 				if (t <= 0) continue;
 				const gh = (HOVER_EXTRA_GAP / 2) * t;
 				if (i > 0) effectiveColumnHeight += gh;

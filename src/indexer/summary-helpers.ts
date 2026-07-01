@@ -10,6 +10,12 @@ interface SummaryOptions {
 	skipFlatten?: boolean;
 }
 
+type SummaryPluginLike = {
+	settings?: {
+		summaryWordsCount?: number;
+	};
+};
+
 const ORD_SUFFIX = "(?:st|nd|rd|th)";
 const MONTH_NAME = "(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)";
 
@@ -52,7 +58,7 @@ export function extractText(lines: string[], start: number, end: number): string
 }
 
 export function resolveSummaryForFile(
-	plugin: any,
+	plugin: SummaryPluginLike,
 	path: string,
 	text: string,
 	options: SummaryOptions = {}
@@ -85,7 +91,7 @@ export function resolveSummaryForFile(
 	return "";
 }
 
-export function resolveSummaryForEntry(plugin: any, entry: FileDateEntry, text: string): string {
+export function resolveSummaryForEntry(plugin: SummaryPluginLike, entry: FileDateEntry, text: string): string {
 	return resolveSummaryForFile(plugin, entry.file, text, {
 		includeFileName: false
 	});
@@ -97,14 +103,14 @@ function getFileNameFromPath(path: string): string {
 	return idx >= 0 ? path.slice(idx + 1) : path;
 }
 
-function maybeSummarize(plugin: any, text: string, skipFlatten = false): string {
+function maybeSummarize(plugin: SummaryPluginLike, text: string, skipFlatten = false): string {
 	if (!text) return "";
 	const words = Math.max(0, plugin?.settings?.summaryWordsCount ?? 0);
 	if (words <= 0) return "";
 	return makeSummary(text, words, { skipFlatten });
 }
 
-function isSummaryDisabled(plugin: any): boolean {
+function isSummaryDisabled(plugin: SummaryPluginLike): boolean {
 	const words = Math.max(0, plugin?.settings?.summaryWordsCount ?? 0);
 	return words <= 0;
 }

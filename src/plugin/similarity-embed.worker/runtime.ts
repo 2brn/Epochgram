@@ -1,24 +1,47 @@
 import { withProcessMasked } from "./process-mask";
 import { workerState } from "./state";
 
-const workerGlobal: any = typeof self !== "undefined" ? (self as any) : (typeof global !== "undefined" ? (global as any) : {});
+type WorkerLocationLike = {
+	href?: string;
+};
+
+type WorkerGlobalLike = {
+	__epochNetworkFetchGuardInstalled?: boolean;
+	fetch?: (input: unknown, init?: unknown) => Promise<unknown>;
+	location?: WorkerLocationLike;
+};
+
+declare const self: WorkerGlobalLike;
+
+type ImportableModule = Record<string, unknown>;
+
+type OrtLike = ImportableModule & {
+	InferenceSession?: {
+		create?: unknown;
+	};
+};
+
+const workerGlobal = self;
 
 function installNetworkFetchGuard(): void {
-	const anyGlobal: any = workerGlobal;
-	if (anyGlobal.__epochNetworkFetchGuardInstalled) return;
-	anyGlobal.__epochNetworkFetchGuardInstalled = true;
+	if (workerGlobal.__epochNetworkFetchGuardInstalled) return;
+	workerGlobal.__epochNetworkFetchGuardInstalled = true;
 
-	const origFetch: any = workerGlobal.fetch;
+	const origFetch = workerGlobal.fetch;
 	if (typeof origFetch !== "function") return;
 
-	workerGlobal.fetch = (input: any, init?: any) => {
+	workerGlobal.fetch = (input: unknown, init?: unknown) => {
 		let url: string | undefined;
 		if (typeof input === "string") url = input;
-		else if (input && typeof input.url === "string") url = input.url;
+		else if (input instanceof URL) url = input.toString();
+		else if (input && typeof input === "object" && "url" in input) {
+			const candidate = input.url;
+			if (typeof candidate === "string") url = candidate;
+		}
 
 		if (url) {
 			try {
-				const base = workerGlobal?.location?.href;
+				const base = workerGlobal.location?.href;
 				const parsed = base ? new URL(url, base) : new URL(url);
 				if (parsed.protocol === "http:" || parsed.protocol === "https:") {
 					const host = String(parsed.host || "").toLowerCase();
@@ -42,7 +65,7 @@ function installNetworkFetchGuard(): void {
 	};
 }
 
-export async function getTransformers(): Promise<any> {
+export async function getTransformers(): Promise<ImportableModule> {
 	if (workerState.transformers) return workerState.transformers;
 	return await withProcessMasked(async () => {
 		installNetworkFetchGuard();
@@ -51,7 +74,7 @@ export async function getTransformers(): Promise<any> {
 	});
 }
 
-export async function getOrt(): Promise<any> {
+export async function getOrt(): Promise<ImportableModule> {
 	if (workerState.ort) return workerState.ort;
 	return await withProcessMasked(async () => {
 		installNetworkFetchGuard();
@@ -60,12 +83,15 @@ export async function getOrt(): Promise<any> {
 	});
 }
 
-export function assertOrtAvailable(ortAny: any): void {
-	const hasCreate = typeof ortAny?.InferenceSession?.create === "function";
+
+export function assertOrtAvailable(ortAny: unknown): void {
+	const ort = ortAny as OrtLike;
+	const hasCreate = typeof ort.InferenceSession?.create === "function";
 	if (hasCreate) return;
 	const keys = (() => {
 		try {
-			return Object.keys(ortAny || {}).slice(0, 50);
+			const ortRecord: Record<string, unknown> = ort;
+			return Object.keys(ortRecord).slice(0, 50);
 		} catch {
 			return [];
 		}

@@ -15,8 +15,27 @@ import { getSimilarityWorker } from "./worker-factory";
 import { loadZeroShotModelViaWorker, zeroShotScoreLabelsViaWorker } from "./worker-zeroshot";
 import { hasSimilarityAccess } from "../pro-feature-state";
 
+type TermStore = Awaited<ReturnType<typeof readTermStore>>;
+
+type TopicQueuePluginRuntime = EpochPlugin & {
+	termSimilarityQueueRunning?: boolean;
+	termSimilarityQueueTimer?: number | null;
+	termSimilarityEnsureTimer?: number | null;
+	termSimilarityResetKey?: number;
+	termSimilarityPendingFiles?: Set<string>;
+	termSimilarityQueueTotal?: number;
+	termSimilarityQueueProcessed?: number;
+	termSimilarityStartedAt?: number;
+	termSimilarityStoreCache?: TermStore | null;
+	termSimilarityStoreDirtyUpdates?: number;
+	termSimilarityStoreLastWriteAt?: number;
+	termSimilarityWorkerLastLoadError?: string;
+	termSimilarityProcessingStartedAt?: number;
+	shouldIndexFile?: (file: TFile) => boolean;
+};
+
 export function scheduleProcessPendingTermSimilarityQueue(plugin: EpochPlugin, delayMs: number = 0): void {
-	const anyPlugin: any = plugin as any;
+	const anyPlugin = plugin as TopicQueuePluginRuntime;
 	if (anyPlugin.termSimilarityQueueRunning) return;
 	if (anyPlugin.termSimilarityQueueTimer) return;
 	const MIN_DELAY_MS = 150;
@@ -28,7 +47,7 @@ export function scheduleProcessPendingTermSimilarityQueue(plugin: EpochPlugin, d
 }
 
 export function ensureTermStoreExistsSoon(plugin: EpochPlugin): void {
-	const anyPlugin: any = plugin as any;
+	const anyPlugin = plugin as TopicQueuePluginRuntime;
 	if (anyPlugin.termSimilarityEnsureTimer) return;
 	anyPlugin.termSimilarityEnsureTimer = window.setTimeout(() => {
 		anyPlugin.termSimilarityEnsureTimer = null;
@@ -39,7 +58,7 @@ export function ensureTermStoreExistsSoon(plugin: EpochPlugin): void {
 }
 
 export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Promise<void> {
-	const anyPlugin: any = plugin as any;
+	const anyPlugin = plugin as TopicQueuePluginRuntime;
 	if (anyPlugin.termSimilarityQueueRunning) return;
 	const resetKeyAtStart = (() => {
 		try {
@@ -50,7 +69,7 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 		}
 	})();
 
-	let getStoreFromCache: () => Promise<any> = async () => await readTermStore(plugin);
+	let getStoreFromCache: () => Promise<TermStore> = async () => await readTermStore(plugin);
 	let bumpDirty: () => void = () => {};
 	let maybeFlushStore: (force: boolean) => Promise<void> = async () => {};
 	try {
@@ -79,18 +98,16 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 			}
 			if (Platform.isDesktopApp) {
 				announceEpochDesktopTaskAfter(plugin, "topics:queued", "Topics queued", {
-						graceMs: 1000,
+					graceMs: 1000,
 					minIntervalMs: 1000,
 					still: () => {
 						try {
-							const anyPlugin: any = plugin as any;
-							const startedAt = Number(anyPlugin?.termSimilarityStartedAt ?? 0);
+							const p = plugin as TopicQueuePluginRuntime;
+							const startedAt = Number(p.termSimilarityStartedAt ?? 0);
 							if (!(Number.isFinite(startedAt) && startedAt > 0)) return false;
-							// Queue may run in short bursts; treat it as "still pending" if it's actively running
-							// OR if there is remaining work enqueued.
-							const p: any = anyPlugin?.termSimilarityPendingFiles;
-							const hasPending = p instanceof Set && p.size > 0;
-							return anyPlugin?.termSimilarityQueueRunning === true || hasPending;
+							const pending = p.termSimilarityPendingFiles;
+							const hasPending = pending instanceof Set && pending.size > 0;
+							return p.termSimilarityQueueRunning === true || hasPending;
 						} catch {
 							return true;
 						}
@@ -111,7 +128,7 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 		if (!(anyPlugin.termSimilarityPendingFiles instanceof Set)) {
 			anyPlugin.termSimilarityPendingFiles = new Set<string>();
 		}
-		const pendingFiles: Set<string> = anyPlugin.termSimilarityPendingFiles as Set<string>;
+		const pendingFiles = anyPlugin.termSimilarityPendingFiles;
 		if (pendingFiles.size === 0) return;
 
 		// Hard guard: topic classification is markdown-only.
@@ -123,7 +140,7 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 					if (!s || s.startsWith("epoch://") || !/\.md$/i.test(s)) {
 						pending.delete(p);
 						try {
-							(anyPlugin.termSimilarityPendingFiles as Set<string>).delete(p);
+							anyPlugin.termSimilarityPendingFiles?.delete(p);
 						} catch {
 							// ignore
 						}
@@ -179,7 +196,7 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 		};
 
 		anyPlugin.termSimilarityQueueProcessed = typeof anyPlugin.termSimilarityQueueProcessed === "number" ? Math.max(0, anyPlugin.termSimilarityQueueProcessed) : 0;
-		const prevProcessed = anyPlugin.termSimilarityQueueProcessed as number;
+		const prevProcessed = anyPlugin.termSimilarityQueueProcessed;
 		anyPlugin.termSimilarityQueueTotal = Math.max(1, prevProcessed + pendingFiles.size);
 
 		const vocab = getTermVocabulary(plugin);
@@ -187,7 +204,7 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 			const loaded = await loadZeroShotModelViaWorker(plugin);
 			if (!loaded) {
 				try {
-					const lastErr = String(anyPlugin?.termSimilarityWorkerLastLoadError ?? "").trim();
+					const lastErr = String(anyPlugin.termSimilarityWorkerLastLoadError ?? "").trim();
 					if (lastErr) {
 						devConsoleWarnOnce(plugin, "term-similarity-load", `[epoch] zero-shot model unavailable: ${lastErr}`);
 					}
@@ -227,7 +244,7 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 		pendingFiles.delete(nextPath);
 		anyPlugin.termSimilarityQueueProcessed =
 			(typeof anyPlugin.termSimilarityQueueProcessed === "number" ? anyPlugin.termSimilarityQueueProcessed : 0) + 1;
-		anyPlugin.termSimilarityQueueTotal = Math.max(1, (anyPlugin.termSimilarityQueueProcessed as number) + pendingFiles.size);
+		anyPlugin.termSimilarityQueueTotal = Math.max(1, anyPlugin.termSimilarityQueueProcessed + pendingFiles.size);
 		const file = plugin.app.vault.getAbstractFileByPath(nextPath);
 		if (!(file instanceof TFile)) return;
 		if ((file.extension || "").toLowerCase() !== "md") return;
@@ -237,7 +254,7 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 			// term inference cannot affect behavior; skip work and delete any stale inferred record.
 			try {
 				const explicit = getEmbeddingTermForPath(plugin, file.path);
-					if (explicit) {
+				if (explicit) {
 					const store = await getStoreFromCache();
 					if (store.files && store.files[file.path]) {
 						delete store.files[file.path];
@@ -250,7 +267,7 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 				// ignore
 			}
 
-			if (!(plugin as any).shouldIndexFile?.(file)) {
+			if (!anyPlugin.shouldIndexFile?.(file)) {
 				const store = await getStoreFromCache();
 				if (store.files[file.path]) {
 					delete store.files[file.path];
@@ -328,8 +345,13 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 				// ignore
 			}
 		}
-	} catch (e) {
-		debugLog("termSimilarity:queue-failed", { err: String((e as any)?.message || e || "failed") });
+	} catch (e: unknown) {
+		const err = e instanceof Error
+			? e.message
+			: (typeof e === "string" || typeof e === "number" || typeof e === "boolean")
+				? String(e)
+				: "failed";
+		debugLog("termSimilarity:queue-failed", { err });
 	} finally {
 		try {
 			const pending = anyPlugin.termSimilarityPendingFiles?.size ?? 0;

@@ -77,9 +77,9 @@ function findPreferredMarkdownSummaryStart(raw: string, descriptionPropertyKey?:
     // Best-effort: ignore YAML frontmatter when deciding the start; keep code content.
     const text = text0
         .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/m, "")
-        .replace(/```([^`][\s\S]*?)```/g, (_, inner) => inner)
+        .replace(/```([^`][\s\S]*?)```/g, (_, inner: string) => inner)
         .replace(/```/g, "")
-        .replace(/~~~([\s\S]*?)~~~/g, (_, inner) => inner);
+        .replace(/~~~([\s\S]*?)~~~/g, (_, inner: string) => inner);
 
     // Ignore embeds/links when looking for "formatted" starts; otherwise filenames/paths
     // (often containing underscores) can trip the emphasis regexes.
@@ -91,7 +91,7 @@ function findPreferredMarkdownSummaryStart(raw: string, descriptionPropertyKey?:
         // Markdown links [label](url)
         .replace(/\[[^\]]*]\([^)]*\)/g, " ")
         // Inline code: keep content but neutralise formatting chars inside
-        .replace(/`([^`]*)`/g, (_, inner) => inner.replace(/[*_~=]/g, " "));
+        .replace(/`([^`]*)`/g, (_, inner: string) => inner.replace(/[*_~=]/g, " "));
 
     // When looking for formatted starts (==, **, __, *, _, ~~), ignore any such markers
     // that occur inside raw URLs/URIs. URLs can contain these sequences (e.g. base64, ids)
@@ -392,14 +392,16 @@ export function makeSummary(
 
 function trimTrailingSeparators(tokens: string[], isSeparator: (token: string) => boolean): void {
     for (let i = tokens.length - 1; i >= 0; i--) {
-        if (!isSeparator(tokens[i]!)) break;
+        const token = tokens[i];
+        if (!token || !isSeparator(token)) break;
         tokens.pop();
     }
 }
 
 function trimTrailingLinkArrows(tokens: string[], isLinkArrow: (token: string) => boolean): void {
     for (let i = tokens.length - 1; i >= 0; i--) {
-        if (!isLinkArrow(tokens[i]!)) break;
+        const token = tokens[i];
+        if (!token || !isLinkArrow(token)) break;
         tokens.pop();
     }
 }

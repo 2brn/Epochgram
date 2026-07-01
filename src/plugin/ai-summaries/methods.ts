@@ -17,7 +17,7 @@ export interface AiSummariesMethods {
 	regenerateEpochsForAllRecords(): Promise<void>;
 	regenerateMissingEpochsForAllRecords(): Promise<void>;
 	stopAiBridge(): Promise<void>;
-	onAiBridgeOptionsChanged(prev: Record<string, any>, next: Record<string, any>): void;
+	onAiBridgeOptionsChanged(prev: Record<string, unknown>, next: Record<string, unknown>): void;
 }
 
 import {

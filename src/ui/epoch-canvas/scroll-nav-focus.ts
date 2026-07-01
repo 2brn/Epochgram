@@ -1,3 +1,4 @@
+import type { DateEntry, DateSource } from "../../indexer/types";
 import type { EpochCanvas } from "../epoch-canvas";
 
 import {
@@ -10,16 +11,80 @@ import { buildMiniSearchQueryParts, getEntriesForDate, pickEntryForFile } from "
 import { BASE_SPACING, FOCUS_ANCHOR_RATIO } from "../epoch-canvas-constants";
 import { parseTimelineQuery } from "../timeline-search";
 
-function isRecurringEntry(entry: unknown): boolean {
-	return (entry as any)?.recurring === true;
+type TimelineSearchIndexLike = {
+	searchFileIdsRanked(args: ReturnType<typeof buildMiniSearchQueryParts>): unknown;
+};
+
+type ScrollNavFocusPluginLike = {
+	timelineSearchIndex?: TimelineSearchIndexLike;
+};
+
+type ScrollNavFocusState = {
+	root: HTMLElement;
+	__pendingFocusFirstFilteredTimelineRecord?: boolean;
+	pendingVisibilityDraw?: boolean;
+	scheduleVisibilityCheck?: () => void;
+	searchQuery?: string;
+	plugin?: ScrollNavFocusPluginLike;
+	index?: Record<string, DateEntry[]>;
+	scrollNavFile?: string | null;
+	scrollNavIndex: number;
+	scrollNavAnchorEntry?: unknown;
+	scrollNavAnchorDayIndex?: number | null;
+	pendingScrollNavHighlight?: unknown;
+	animatingView: boolean;
+	scale: number;
+	targetScale: number;
+	offsetY: number;
+	targetOffsetY: number;
+	hoverSummary: { dayIndex?: number | null } | null;
+	animSummary: { dayIndex?: number | null } | null;
+	hoverTarget: number;
+	draw?: () => void;
+};
+
+const DATE_SOURCES: ReadonlySet<DateSource> = new Set(["cdate", "namedate", "dateprop", "content", "tracked", "epoch"]);
+
+function asScrollNavFocusState(canvas: EpochCanvas): ScrollNavFocusState {
+	return canvas as unknown as ScrollNavFocusState;
 }
 
-function filterNonRecurringEntries<T>(entries: T[]): T[] {
+function isDateSource(value: unknown): value is DateSource {
+	return typeof value === "string" && DATE_SOURCES.has(value as DateSource);
+}
+
+function getEntrySource(entry: DateEntry | null): DateSource | null {
+	if (!entry) return null;
+	const source: unknown = entry.source;
+	return isDateSource(source) ? source : null;
+}
+
+function getEntryPriority(entry: DateEntry | null): number {
+	return getSourcePriority(getEntrySource(entry) ?? "content");
+}
+
+function getCanvasIndex(c: ScrollNavFocusState): Record<string, DateEntry[]> | null {
+	const index = c.index;
+	if (!index || typeof index !== "object") return null;
+	return index;
+}
+
+function asFilePath(value: unknown): string {
+	return typeof value === "string" ? value : "";
+}
+
+function isRecurringEntry(entry: unknown): boolean {
+	if (!entry || typeof entry !== "object") return false;
+	const recurring = (entry as { recurring?: unknown }).recurring;
+	return recurring === true;
+}
+
+function filterNonRecurringEntries(entries: DateEntry[]): DateEntry[] {
 	return (entries ?? []).filter((e) => !isRecurringEntry(e));
 }
 
 export function focusFirstFilteredTimelineRecord(canvas: EpochCanvas): boolean {
-	const c: any = canvas as any;
+	const c = asScrollNavFocusState(canvas);
 	try {
 		const rect = c.root?.getBoundingClientRect?.();
 		if (!rect || !rect.width || !rect.height) {
@@ -35,20 +100,19 @@ export function focusFirstFilteredTimelineRecord(canvas: EpochCanvas): boolean {
 	const rawQuery = String(c.searchQuery || "").trim();
 	if (rawQuery) {
 		try {
-			const pluginAny: any = c.plugin;
-			const idx: any = pluginAny?.timelineSearchIndex;
+			const idx = c.plugin?.timelineSearchIndex;
 			if (idx && typeof idx.searchFileIdsRanked === "function") {
 				const parsed = parseTimelineQuery(rawQuery);
 				const { includeText, excludeTokens, exactPhrases, excludedPhrases, hasAnySearch } = buildMiniSearchQueryParts(parsed);
 				if (hasAnySearch) {
-					const ranked: unknown = idx.searchFileIdsRanked({ includeText, excludeTokens, exactPhrases, excludedPhrases });
-					const rankedList = Array.isArray(ranked) ? (ranked as any[]) : [];
+					const ranked: unknown = idx.searchFileIdsRanked({ includeText, excludeTokens, exactPhrases, excludedPhrases, hasAnySearch });
+					const rankedList = Array.isArray(ranked) ? ranked : [];
 					for (const fpRaw of rankedList) {
-						const filePath = String(fpRaw || "");
+						const filePath = asFilePath(fpRaw);
 						if (!filePath) continue;
 
-						const index: any = c.index ?? null;
-						if (!index || typeof index !== "object") continue;
+						const index = getCanvasIndex(c);
+						if (!index) continue;
 
 						let bestDateNonRecurring: Date | null = null;
 						let bestNonRecurring: { priority: number; ms: number } | null = null;
@@ -59,21 +123,21 @@ export function focusFirstFilteredTimelineRecord(canvas: EpochCanvas): boolean {
 							if (!date) continue;
 							const entries = getEntriesForDate(canvas, date);
 							if (!entries || entries.length === 0) continue;
-							const nonRecurring = filterNonRecurringEntries(entries as any);
-							const recurringOnly = (entries ?? []).filter((e: any) => isRecurringEntry(e));
+							const nonRecurring = filterNonRecurringEntries(entries);
+							const recurringOnly = (entries ?? []).filter((e) => isRecurringEntry(e));
 							const matchNonRecurring =
 								nonRecurring.length > 0
-									? pickEntryForFile(canvas, nonRecurring as any, filePath, null)
+									? pickEntryForFile(canvas, nonRecurring, filePath, null)
 									: null;
 							const matchRecurring =
 								recurringOnly.length > 0
-									? pickEntryForFile(canvas, recurringOnly as any, filePath, null)
+									? pickEntryForFile(canvas, recurringOnly, filePath, null)
 									: null;
 							if (!matchNonRecurring && !matchRecurring) continue;
 							const ms = date.getTime();
 							if (!Number.isFinite(ms)) continue;
 							if (matchNonRecurring) {
-								const priority = getSourcePriority((matchNonRecurring as any)?.source);
+								const priority = getEntryPriority(matchNonRecurring);
 								if (
 									!bestNonRecurring ||
 									priority < bestNonRecurring.priority ||
@@ -113,8 +177,8 @@ export function focusFirstFilteredTimelineRecord(canvas: EpochCanvas): boolean {
 		}
 	}
 
-	const index: any = c.index ?? null;
-	if (!index || typeof index !== "object") return false;
+	const index = getCanvasIndex(c);
+	if (!index) return false;
 	let bestDateNonRecurring: Date | null = null;
 	let bestNonRecurringMs = Number.NEGATIVE_INFINITY;
 	let bestDateOldestRecurring: Date | null = null;
@@ -126,13 +190,13 @@ export function focusFirstFilteredTimelineRecord(canvas: EpochCanvas): boolean {
 		if (!entries || entries.length === 0) continue;
 		const ms = date.getTime();
 		if (!Number.isFinite(ms)) continue;
-		if (filterNonRecurringEntries(entries as any).length > 0) {
+		if (filterNonRecurringEntries(entries).length > 0) {
 			if (ms > bestNonRecurringMs) {
 				bestNonRecurringMs = ms;
 				bestDateNonRecurring = date;
 			}
 		}
-		if ((entries ?? []).some((e: any) => isRecurringEntry(e))) {
+		if ((entries ?? []).some((e) => isRecurringEntry(e))) {
 			if (ms < bestOldestRecurringMs) {
 				bestOldestRecurringMs = ms;
 				bestDateOldestRecurring = date;
@@ -162,7 +226,7 @@ export function focusFirstFilteredTimelineRecord(canvas: EpochCanvas): boolean {
 }
 
 export function snapFirstFilteredTimelineRecord(canvas: EpochCanvas, options: { draw?: boolean } = {}): boolean {
-	const c: any = canvas as any;
+	const c = asScrollNavFocusState(canvas);
 	try {
 		const rect = c.root?.getBoundingClientRect?.();
 		if (!rect || !rect.width || !rect.height) {
@@ -171,8 +235,8 @@ export function snapFirstFilteredTimelineRecord(canvas: EpochCanvas, options: { 
 	} catch {
 		// ignore
 	}
-	const index: any = c.index ?? null;
-	if (!index || typeof index !== "object") return false;
+	const index = getCanvasIndex(c);
+	if (!index) return false;
 
 	const rawQuery = String(c.searchQuery || "").trim();
 	let bestDateNonRecurring: Date | null = null;
@@ -182,37 +246,36 @@ export function snapFirstFilteredTimelineRecord(canvas: EpochCanvas, options: { 
 	let bestDate: Date | null = null;
 	if (rawQuery) {
 		try {
-			const pluginAny: any = c.plugin;
-			const idx: any = pluginAny?.timelineSearchIndex;
+			const idx = c.plugin?.timelineSearchIndex;
 			if (idx && typeof idx.searchFileIdsRanked === "function") {
 				const parsed = parseTimelineQuery(rawQuery);
 				const { includeText, excludeTokens, exactPhrases, excludedPhrases, hasAnySearch } = buildMiniSearchQueryParts(parsed);
 				if (hasAnySearch) {
-					const ranked: unknown = idx.searchFileIdsRanked({ includeText, excludeTokens, exactPhrases, excludedPhrases });
-					const rankedList = Array.isArray(ranked) ? (ranked as any[]) : [];
+					const ranked: unknown = idx.searchFileIdsRanked({ includeText, excludeTokens, exactPhrases, excludedPhrases, hasAnySearch });
+					const rankedList = Array.isArray(ranked) ? ranked : [];
 					for (const fpRaw of rankedList) {
-						const filePath = String(fpRaw || "");
+						const filePath = asFilePath(fpRaw);
 						if (!filePath) continue;
 						for (const dateKey of Object.keys(index)) {
 							const date = dateKeyToDateHelper(dateKey);
 							if (!date) continue;
 							const entries = getEntriesForDate(canvas, date);
 							if (!entries || entries.length === 0) continue;
-							const nonRecurring = filterNonRecurringEntries(entries as any);
-							const recurringOnly = (entries ?? []).filter((e: any) => isRecurringEntry(e));
+							const nonRecurring = filterNonRecurringEntries(entries);
+							const recurringOnly = (entries ?? []).filter((e) => isRecurringEntry(e));
 							const matchNonRecurring =
 								nonRecurring.length > 0
-									? pickEntryForFile(canvas, nonRecurring as any, filePath, null)
+									? pickEntryForFile(canvas, nonRecurring, filePath, null)
 									: null;
 							const matchRecurring =
 								recurringOnly.length > 0
-									? pickEntryForFile(canvas, recurringOnly as any, filePath, null)
+									? pickEntryForFile(canvas, recurringOnly, filePath, null)
 									: null;
 							if (!matchNonRecurring && !matchRecurring) continue;
 							const ms = date.getTime();
 							if (!Number.isFinite(ms)) continue;
 							if (matchNonRecurring) {
-								const priority = getSourcePriority((matchNonRecurring as any)?.source);
+								const priority = getEntryPriority(matchNonRecurring);
 								if (
 									!bestNonRecurring ||
 									priority < bestNonRecurring.priority ||
@@ -231,11 +294,7 @@ export function snapFirstFilteredTimelineRecord(canvas: EpochCanvas, options: { 
 						}
 						bestDate = bestDateNonRecurring ?? bestDateOldestRecurring;
 						if (bestDate) {
-							try {
-								c.scrollNavFile = filePath;
-							} catch {
-								// ignore
-							}
+							c.scrollNavFile = filePath;
 							break;
 						}
 					}
@@ -257,13 +316,13 @@ export function snapFirstFilteredTimelineRecord(canvas: EpochCanvas, options: { 
 			if (!entries || entries.length === 0) continue;
 			const ms = date.getTime();
 			if (!Number.isFinite(ms)) continue;
-			if (filterNonRecurringEntries(entries as any).length > 0) {
+			if (filterNonRecurringEntries(entries).length > 0) {
 				if (ms > bestNonRecurringMs) {
 					bestNonRecurringMs = ms;
 					bestDateNonRecurring = date;
 				}
 			}
-			if ((entries ?? []).some((e: any) => isRecurringEntry(e))) {
+			if ((entries ?? []).some((e) => isRecurringEntry(e))) {
 				if (ms < bestOldestRecurringMs) {
 					bestOldestRecurringMs = ms;
 					bestDateOldestRecurring = date;
@@ -298,7 +357,7 @@ export function snapFirstFilteredTimelineRecord(canvas: EpochCanvas, options: { 
 	}
 	if (options.draw !== false) {
 		try {
-			(c as any).draw?.();
+			c.draw?.();
 		} catch {
 			// ignore
 		}
@@ -307,7 +366,7 @@ export function snapFirstFilteredTimelineRecord(canvas: EpochCanvas, options: { 
 }
 
 export function focusFilteredTimelineRecordForFile(canvas: EpochCanvas, filePath: string): boolean {
-	const c: any = canvas as any;
+	const c = asScrollNavFocusState(canvas);
 	try {
 		const rect = c.root?.getBoundingClientRect?.();
 		if (!rect || !rect.width || !rect.height) {
@@ -316,8 +375,8 @@ export function focusFilteredTimelineRecordForFile(canvas: EpochCanvas, filePath
 	} catch {
 		// ignore
 	}
-	const index: any = c.index ?? null;
-	if (!index || typeof index !== "object") return false;
+	const index = getCanvasIndex(c);
+	if (!index) return false;
 	const fp = String(filePath || "");
 	if (!fp) return false;
 
@@ -328,13 +387,13 @@ export function focusFilteredTimelineRecordForFile(canvas: EpochCanvas, filePath
 		if (!date) continue;
 		const entries = getEntriesForDate(canvas, date);
 		if (!entries || entries.length === 0) continue;
-		const nonRecurring = filterNonRecurringEntries(entries as any);
+		const nonRecurring = filterNonRecurringEntries(entries);
 		if (nonRecurring.length === 0) continue;
-		const match = pickEntryForFile(canvas, nonRecurring as any, fp, null);
+		const match = pickEntryForFile(canvas, nonRecurring, fp, null);
 		if (!match) continue;
 		const ms = date.getTime();
 		if (!Number.isFinite(ms)) continue;
-		const priority = getSourcePriority((match as any)?.source);
+		const priority = getEntryPriority(match);
 		if (!bestNonRecurring || priority < bestNonRecurring.priority || (priority === bestNonRecurring.priority && ms > bestNonRecurring.ms)) {
 			bestNonRecurring = { priority, ms };
 			bestDateNonRecurring = date;

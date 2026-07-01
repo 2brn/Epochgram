@@ -31,6 +31,37 @@ interface PollOptions {
 	forceEpochSummaries?: boolean;
 }
 
+type FileStatLike = { mtime: number | null; size: number | null };
+type IncomingFileStatLike = { mtime?: number; size?: number } | null | undefined;
+
+type PollingRuntime = {
+	statTermSimilarityFile?: () => Promise<IncomingFileStatLike>;
+	statEpochSummariesFile?: () => Promise<IncomingFileStatLike>;
+	vectorsFileStat?: FileStatLike;
+	termSimilarityFileStat?: FileStatLike;
+	epochSummariesFileStat?: FileStatLike;
+	lastIndexContentCheckAt?: number;
+	lastVectorsContentCheckAt?: number;
+	lastTermSimilarityContentCheckAt?: number;
+	lastEpochSummariesContentCheckAt?: number;
+	lastIndexDiskSignature?: string;
+	lastVectorsDiskSignature?: string;
+	lastTermSimilarityDiskSignature?: string;
+	lastEpochSummariesDiskSignature?: string;
+	vectorsFilePath?: string;
+	termSimilarityFilePath?: string;
+	epochSummariesFilePath?: string;
+	reloadVectorsFromDisk?: () => Promise<void>;
+	reloadTermSimilaritiesFromDisk?: () => Promise<void>;
+	scheduleInheritedMarkRecompute?: (reason?: string) => void;
+};
+
+function toIncomingFileStat(value: IncomingFileStatLike): { mtime?: number; size?: number } {
+	const mtime = typeof value?.mtime === "number" && Number.isFinite(value.mtime) ? value.mtime : undefined;
+	const size = typeof value?.size === "number" && Number.isFinite(value.size) ? value.size : undefined;
+	return { mtime, size };
+}
+
 export interface PollingMethods {
 	pollExternalIndexChanges(options?: PollOptions): Promise<void>;
 	reloadIndexFromDisk(): Promise<void>;
@@ -39,6 +70,7 @@ export interface PollingMethods {
 
 export const pollingMethods: PollingMethods = {
 	async pollExternalIndexChanges(this: EpochPlugin, options: PollOptions = {}): Promise<void> {
+		const runtime = this as unknown as PollingRuntime;
 		const {
 			forceIndex = false,
 			forceData = false,
@@ -57,24 +89,24 @@ export const pollingMethods: PollingMethods = {
 				this.statIndexFile(),
 				this.statDataFile(),
 				this.statVectorsFile(),
-				(this as any).statTermSimilarityFile?.(),
-				(this as any).statEpochSummariesFile?.()
+				runtime.statTermSimilarityFile?.(),
+				runtime.statEpochSummariesFile?.()
 			]);
 			let indexChanged = forceIndex || this.didStatChange(this.indexFileStat, indexStat);
 			const dataChanged = forceData || this.didStatChange(this.dataFileStat, dataStat);
-			let vectorsChanged = forceVectors || this.didStatChange((this as any).vectorsFileStat ?? { mtime: null, size: null }, vectorsStat);
-			let termChanged =
-				forceTermSimilarity ||
-				this.didStatChange((this as any).termSimilarityFileStat ?? { mtime: null, size: null }, termStat);
-			let epochSummariesChanged =
-				forceEpochSummaries ||
-				this.didStatChange((this as any).epochSummariesFileStat ?? { mtime: null, size: null }, epochSummariesStat);
+			let vectorsChanged = forceVectors || this.didStatChange(runtime.vectorsFileStat ?? { mtime: null, size: null }, toIncomingFileStat(vectorsStat));
+		let termChanged =
+			forceTermSimilarity ||
+				this.didStatChange((runtime.termSimilarityFileStat ?? { mtime: null, size: null }), toIncomingFileStat(termStat));
+		let epochSummariesChanged =
+			forceEpochSummaries ||
+				this.didStatChange((runtime.epochSummariesFileStat ?? { mtime: null, size: null }), toIncomingFileStat(epochSummariesStat));
 			const now = Date.now();
 
 			const normalizedIndexStat = this.normalizeStat(indexStat);
 			const normalizedVectorsStat = this.normalizeStat(vectorsStat);
-			const normalizedTermStat = this.normalizeStat(termStat);
-			const normalizedEpochSummariesStat = this.normalizeStat(epochSummariesStat);
+			const normalizedTermStat = this.normalizeStat(termStat ?? null);
+			const normalizedEpochSummariesStat = this.normalizeStat(epochSummariesStat ?? null);
 			void normalizedIndexStat;
 			void normalizedVectorsStat;
 			void normalizedTermStat;
@@ -82,21 +114,21 @@ export const pollingMethods: PollingMethods = {
 
 			// Some mobile vault adapters may not provide reliable mtime/size signals for sync changes.
 			// Fall back to periodic content checks.
-			const shouldForceIndexContentCheck = !indexChanged && now - (this as any).lastIndexContentCheckAt > 60000;
-			const shouldForceVectorsContentCheck = !vectorsChanged && now - (this as any).lastVectorsContentCheckAt > 60000;
-			const shouldForceTermContentCheck = !termChanged && now - (this as any).lastTermSimilarityContentCheckAt > 60000;
+			const shouldForceIndexContentCheck = !indexChanged && now - Number(runtime.lastIndexContentCheckAt ?? 0) > 60000;
+			const shouldForceVectorsContentCheck = !vectorsChanged && now - Number(runtime.lastVectorsContentCheckAt ?? 0) > 60000;
+			const shouldForceTermContentCheck = !termChanged && now - Number(runtime.lastTermSimilarityContentCheckAt ?? 0) > 60000;
 			const shouldForceEpochSummariesContentCheck =
-				!epochSummariesChanged && now - (this as any).lastEpochSummariesContentCheckAt > 60000;
+				!epochSummariesChanged && now - Number(runtime.lastEpochSummariesContentCheckAt ?? 0) > 60000;
 
 			// Content signature check: catches sync updates where mtime/size do not change.
 			if (shouldForceIndexContentCheck) {
-				(this as any).lastIndexContentCheckAt = now;
+				runtime.lastIndexContentCheckAt = now;
 				try {
 					const exists = await this.app.vault.adapter.exists(this.indexFilePath);
 					const raw = exists ? await this.app.vault.adapter.read(this.indexFilePath) : "";
 					const sig = fastStringSignature(raw);
-					const prev = String((this as any).lastIndexDiskSignature ?? "");
-					(this as any).lastIndexDiskSignature = sig;
+					const prev = String(runtime.lastIndexDiskSignature ?? "");
+					runtime.lastIndexDiskSignature = sig;
 					if (prev && prev !== sig) {
 						indexChanged = true;
 					}
@@ -106,15 +138,15 @@ export const pollingMethods: PollingMethods = {
 			}
 
 			if (shouldForceVectorsContentCheck) {
-				(this as any).lastVectorsContentCheckAt = now;
+				runtime.lastVectorsContentCheckAt = now;
 				try {
-					const vectorsPath = String((this as any).vectorsFilePath ?? "");
+					const vectorsPath = String(runtime.vectorsFilePath ?? "");
 					if (vectorsPath) {
 						const exists = await this.app.vault.adapter.exists(vectorsPath);
 						const raw = exists ? await this.app.vault.adapter.read(vectorsPath) : "";
 						const sig = fastStringSignature(raw);
-						const prev = String((this as any).lastVectorsDiskSignature ?? "");
-						(this as any).lastVectorsDiskSignature = sig;
+						const prev = String(runtime.lastVectorsDiskSignature ?? "");
+						runtime.lastVectorsDiskSignature = sig;
 						if (prev && prev !== sig) {
 							vectorsChanged = true;
 						}
@@ -125,15 +157,15 @@ export const pollingMethods: PollingMethods = {
 			}
 
 			if (shouldForceTermContentCheck) {
-				(this as any).lastTermSimilarityContentCheckAt = now;
+				runtime.lastTermSimilarityContentCheckAt = now;
 				try {
-					const termPath = String((this as any).termSimilarityFilePath ?? "");
+					const termPath = String(runtime.termSimilarityFilePath ?? "");
 					if (termPath) {
 						const exists = await this.app.vault.adapter.exists(termPath);
 						const raw = exists ? await this.app.vault.adapter.read(termPath) : "";
 						const sig = fastStringSignature(raw);
-						const prev = String((this as any).lastTermSimilarityDiskSignature ?? "");
-						(this as any).lastTermSimilarityDiskSignature = sig;
+						const prev = String(runtime.lastTermSimilarityDiskSignature ?? "");
+						runtime.lastTermSimilarityDiskSignature = sig;
 						if (prev && prev !== sig) {
 							termChanged = true;
 						}
@@ -144,15 +176,15 @@ export const pollingMethods: PollingMethods = {
 			}
 
 			if (shouldForceEpochSummariesContentCheck) {
-				(this as any).lastEpochSummariesContentCheckAt = now;
+				runtime.lastEpochSummariesContentCheckAt = now;
 				try {
-					const p = String((this as any).epochSummariesFilePath ?? "");
+					const p = String(runtime.epochSummariesFilePath ?? "");
 					if (p) {
 						const exists = await this.app.vault.adapter.exists(p);
 						const raw = exists ? await this.app.vault.adapter.read(p) : "";
 						const sig = fastStringSignature(raw);
-						const prev = String((this as any).lastEpochSummariesDiskSignature ?? "");
-						(this as any).lastEpochSummariesDiskSignature = sig;
+						const prev = String(runtime.lastEpochSummariesDiskSignature ?? "");
+						runtime.lastEpochSummariesDiskSignature = sig;
 						if (prev && prev !== sig) {
 							epochSummariesChanged = true;
 						}
@@ -174,7 +206,7 @@ export const pollingMethods: PollingMethods = {
 
 			if (vectorsChanged) {
 				try {
-					await (this as any).reloadVectorsFromDisk?.();
+					await runtime.reloadVectorsFromDisk?.();
 				} catch {
 					// ignore
 				}
@@ -182,7 +214,7 @@ export const pollingMethods: PollingMethods = {
 
 			if (termChanged) {
 				try {
-					await (this as any).reloadTermSimilaritiesFromDisk?.();
+					await runtime.reloadTermSimilaritiesFromDisk?.();
 				} catch {
 					// ignore
 				}
@@ -205,9 +237,9 @@ export const pollingMethods: PollingMethods = {
 
 			this.indexFileStat = normalizedIndexStat;
 			this.dataFileStat = this.normalizeStat(dataStat);
-			(this as any).vectorsFileStat = normalizedVectorsStat;
-			(this as any).termSimilarityFileStat = normalizedTermStat;
-			(this as any).epochSummariesFileStat = normalizedEpochSummariesStat;
+			runtime.vectorsFileStat = normalizedVectorsStat;
+			runtime.termSimilarityFileStat = normalizedTermStat;
+			runtime.epochSummariesFileStat = normalizedEpochSummariesStat;
 		} catch (error) {
 			void error;
 		} finally {
@@ -216,6 +248,7 @@ export const pollingMethods: PollingMethods = {
 	},
 
 	async reloadIndexFromDisk(this: EpochPlugin): Promise<void> {
+		const runtime = this as unknown as PollingRuntime;
 		try {
 			const diskIndex = await this.loadIndexFromDisk();
 			if (!diskIndex) {
@@ -235,7 +268,7 @@ export const pollingMethods: PollingMethods = {
 			// Inherited mark caches depend on the marked seed set; invalidate + recompute
 			// so cleared marks (unmark) reflect immediately on other devices.
 			try {
-				(this as any).scheduleInheritedMarkRecompute?.("index-disk-reload");
+				runtime.scheduleInheritedMarkRecompute?.("index-disk-reload");
 			} catch {
 				// ignore
 			}

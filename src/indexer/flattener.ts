@@ -153,8 +153,8 @@ export function flattenForSummary(raw: string): string {
 
 	// HTML anchors: <a href="...">text</a> → LNKARROW text (url)
 	text = text.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_, attrs, label) => {
-		const hrefMatch = /href=['"]?([^'"\s>]+)['"]?/i.exec(attrs);
-		const innerText = label.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+		const hrefMatch = /href=['"]?([^'"\s>]+)['"]?/i.exec(String(attrs));
+		const innerText = String(label).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 		if (!hrefMatch) return innerText || " ";
 		const ph = pushUrlPlaceholder(hrefMatch[1]);
 		if (innerText && ph) return "LNKARROW " + `${innerText} (${ph})`;
@@ -165,10 +165,10 @@ export function flattenForSummary(raw: string): string {
 
 	// HTML img: <img src="..." alt="..."> → LNKARROW [alt ]url
 	text = text.replace(/<img\b([^>]*)\/?>/gi, (_, attrs) => {
-		const srcMatch = /src=['"]?([^'"\s>]+)['"]?/i.exec(attrs);
+		const srcMatch = /src=['"]?([^'"\s>]+)['"]?/i.exec(String(attrs));
 		if (!srcMatch) return " ";
 		const ph = pushUrlPlaceholder(srcMatch[1]);
-		const altMatch = /alt=['"]([^'"]+)['"]/i.exec(attrs);
+		const altMatch = /alt=['"]([^'"]+)['"]/i.exec(String(attrs));
 		const alt = altMatch ? altMatch[1].trim() : "";
 		if (alt && ph) return "LNKARROW " + `${alt} (${ph})`;
 		if (alt) return alt;
@@ -178,17 +178,17 @@ export function flattenForSummary(raw: string): string {
 
 	// HTML iframe: <iframe src="...">...</iframe> → LNKARROW url
 	text = text.replace(/<iframe\b([^>]*)>[\s\S]*?<\/iframe>/gi, (_, attrs) => {
-		const srcMatch = /src=['"]?([^'"\s>]+)['"]?/i.exec(attrs);
+		const srcMatch = /src=['"]?([^'"\s>]+)['"]?/i.exec(String(attrs));
 		if (!srcMatch) return " ";
 		const ph = pushUrlPlaceholder(srcMatch[1]);
 		return ph ? "LNKARROW " + ph : " ";
 	});
 
 	// quotes but keep content
-	text = text.replace(/"([^"]+)"|'([^']+)'/g, (_, a, b) => a || b);
+	text = text.replace(/"([^"]+)"|'([^']+)'/g, (_: string, a: string, b: string) => String(a) || String(b));
 
 	// Obsidian embeds: keep filename (strip leading path, keep base name)
-	text = text.replace(/!\[\[([^\]]+?)]]/g, (_, fname) => {
+	text = text.replace(/!\[\[([^\]]+?)]]/g, (_: string, fname: string) => {
 		const base = String(fname ?? "").split("/").pop() ?? fname;
 		const label = String(base || "").trim();
 		return label ? "LNKARROW " + label : " ";
@@ -250,9 +250,9 @@ export function flattenForSummary(raw: string): string {
 		.replace(/&nbsp;|&#160;/gi, " ")
 		.replace(/&#\d+;/g, " ")
 		.replace(/&[a-z]+;/gi, " ")
-		.replace(/```([^`][\s\S]*?)```/g, (_, inner) => " " + inner.trim() + " ")
+		.replace(/```([^`][\s\S]*?)```/g, (_: string, inner: string) => " " + inner.trim() + " ")
 		.replace(/```/g, " ")
-		.replace(/~~~([\s\S]*?)~~~/g, (_, inner) => " " + inner.trim() + " ")
+		.replace(/~~~([\s\S]*?)~~~/g, (_: string, inner: string) => " " + inner.trim() + " ")
 		.replace(/`([^`]*)`/g, "$1")
 		.replace(/(^|\s)#[\p{L}\p{N}_/-]+/gu, " ")
 		.replace(/#+\s+/g, " ")

@@ -1,6 +1,19 @@
 import { TFile } from "obsidian";
 import type { EpochPlugin } from "../../main";
-import type { FileIndexData } from "../../indexer/types";
+import type { FileDateEntry, FileIndexData } from "../../indexer/types";
+
+type FileIndexDataLike = FileIndexData & {
+	trackedDates?: Record<string, FileDateEntry[]>;
+};
+
+type FilesIndexerLike = {
+	getFileIndexData: (path: string) => FileIndexDataLike | null;
+};
+
+type FileLike = {
+	stat?: { mtime?: number };
+	path?: string;
+};
 
 function dateKey(d: string): number {
 	try {
@@ -22,18 +35,18 @@ function newestRecordDateKeyFromIndexData(data: FileIndexData | null | undefined
 	};
 	try {
 		if (!data) return best;
-		consider((data as any)?.cdate?.date);
-		consider((data as any)?.namedDate?.date);
-		const content = (data as any)?.contentDates;
+		consider(data.cdate?.date);
+		consider(data.namedDate?.date);
+		const content = data.contentDates;
 		if (Array.isArray(content)) {
-			for (const e of content) consider((e as any)?.date);
+			for (const e of content) consider(e?.date);
 		}
-		const tracked = (data as any)?.trackedDates;
+		const tracked = data.trackedDates;
 		if (tracked && typeof tracked === "object") {
-			for (const [d, list] of Object.entries(tracked as Record<string, unknown>)) {
+			for (const [d, list] of Object.entries(tracked)) {
 				consider(d);
 				if (Array.isArray(list)) {
-					for (const e of list as any[]) consider((e as any)?.date);
+					for (const e of list) consider(e?.date);
 				}
 			}
 		}
@@ -45,17 +58,15 @@ function newestRecordDateKeyFromIndexData(data: FileIndexData | null | undefined
 
 function newestRecordDateKey(plugin: EpochPlugin, path: string): number {
 	try {
-		const idx: any = (plugin as any)?.indexer;
-		const fn = idx?.getFileIndexData;
-		if (typeof fn !== "function") return -1;
-		const data = fn.call(idx, path) as FileIndexData | null;
+		const idx = plugin.indexer as FilesIndexerLike;
+		const data = idx.getFileIndexData(path);
 		return newestRecordDateKeyFromIndexData(data);
 	} catch {
 		return -1;
 	}
 }
 
-export function getFileMtime(file: any): number {
+export function getFileMtime(file: FileLike | null | undefined): number {
 	try {
 		const m = Number(file?.stat?.mtime ?? 0);
 		return Number.isFinite(m) ? m : 0;
@@ -71,8 +82,8 @@ export function sortFilesNewestRecordFirst<T extends { stat?: { mtime?: number }
 	return files
 		.slice()
 		.sort((a, b) => {
-			const ap = String((a as any)?.path ?? "");
-			const bp = String((b as any)?.path ?? "");
+			const ap = String(a?.path ?? "");
+			const bp = String(b?.path ?? "");
 			const ad = ap ? newestRecordDateKey(plugin, ap) : -1;
 			const bd = bp ? newestRecordDateKey(plugin, bp) : -1;
 			const dd = bd - ad;

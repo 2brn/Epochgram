@@ -68,6 +68,26 @@ describe("timeline selection", () => {
 		expect(selected.find(entry => entry.file === "b.md")?.summary).toBe("content");
 	});
 
+	it("orders selected entries by newest file mtime first", () => {
+		const entries = [
+			makeEntry({ file: "older.md", summary: "older", source: "content", fileMtimeMs: 100 }),
+			makeEntry({ file: "newer.md", summary: "newer", source: "content", fileMtimeMs: 200 })
+		];
+		const selected = selectTimelineEntries(entries);
+		expect(selected).toHaveLength(2);
+		expect(selected.map((entry) => entry.file)).toEqual(["newer.md", "older.md"]);
+	});
+
+	it("prefers source priority before mdate when ordering selected entries", () => {
+		const entries = [
+			makeEntry({ file: "content-new.md", source: "content", fileMtimeMs: 500 }),
+			makeEntry({ file: "tracked-old.md", source: "tracked", fileMtimeMs: 100 })
+		];
+		const selected = selectTimelineEntries(entries);
+		expect(selected).toHaveLength(2);
+		expect(selected.map((entry) => entry.file)).toEqual(["tracked-old.md", "content-new.md"]);
+	});
+
 	it("pickTimelineEntryForFile mirrors per-file selection", () => {
 		const entries = [
 			makeEntry({

@@ -1,6 +1,22 @@
 import { normalizePath, TFile } from "obsidian";
 import type { EpochPlugin } from "../main";
 
+type PluginDataPaths = {
+	vectorsFilePath?: string;
+	termSimilarityFilePath?: string;
+};
+
+type VaultConfigLike = {
+	getConfig?: (key: string) => unknown;
+	config?: {
+		userIgnoreFilters?: unknown;
+		file?: {
+			excludedFolders?: unknown;
+			excludedFiles?: unknown;
+		};
+	};
+};
+
 export interface ExclusionMethods {
 	isPluginDataFile(path: string): boolean;
 	getManagedFileType(path: string): "index" | "data" | "vectors" | "termSimilarity" | null;
@@ -19,18 +35,20 @@ export interface ExclusionMethods {
 export const exclusionMethods: ExclusionMethods = {
 	isPluginDataFile(this: EpochPlugin, path: string): boolean {
 		const normalized = normalizePath(path);
+		const pluginData = this as EpochPlugin & PluginDataPaths;
 		if (normalized === this.indexFilePath) return true;
-		if (normalized === normalizePath(String((this as any).vectorsFilePath || ""))) return true;
-		if (normalized === normalizePath(String((this as any).termSimilarityFilePath || ""))) return true;
+		if (normalized === normalizePath(String(pluginData.vectorsFilePath || ""))) return true;
+		if (normalized === normalizePath(String(pluginData.termSimilarityFilePath || ""))) return true;
 		return normalized.startsWith(`${this.pluginDirPath}/`);
 	},
 
 	getManagedFileType(this: EpochPlugin, path: string): "index" | "data" | "vectors" | "termSimilarity" | null {
 		const normalized = normalizePath(path);
+		const pluginData = this as EpochPlugin & PluginDataPaths;
 		if (normalized === this.indexFilePath) return "index";
 		if (normalized === this.dataFilePath) return "data";
-		if (normalized === normalizePath(String((this as any).vectorsFilePath || ""))) return "vectors";
-		if (normalized === normalizePath(String((this as any).termSimilarityFilePath || ""))) return "termSimilarity";
+		if (normalized === normalizePath(String(pluginData.vectorsFilePath || ""))) return "vectors";
+		if (normalized === normalizePath(String(pluginData.termSimilarityFilePath || ""))) return "termSimilarity";
 		return null;
 	},
 
@@ -98,11 +116,11 @@ export const exclusionMethods: ExclusionMethods = {
 
 	getExcludedFilterStringsFromConfig(this: EpochPlugin): string[] {
 		const collected = new Set<string>();
-		const vaultAny = this.app.vault as any;
-		this.collectFiltersFromConfig(vaultAny?.getConfig?.("userIgnoreFilters"), collected);
-		this.collectFiltersFromConfig(vaultAny?.config?.userIgnoreFilters, collected);
-		this.collectFiltersFromConfig(vaultAny?.config?.file?.excludedFolders, collected);
-		this.collectFiltersFromConfig(vaultAny?.config?.file?.excludedFiles, collected);
+		const vaultConfig = this.app.vault as unknown as VaultConfigLike;
+		this.collectFiltersFromConfig(vaultConfig.getConfig?.("userIgnoreFilters"), collected);
+		this.collectFiltersFromConfig(vaultConfig.config?.userIgnoreFilters, collected);
+		this.collectFiltersFromConfig(vaultConfig.config?.file?.excludedFolders, collected);
+		this.collectFiltersFromConfig(vaultConfig.config?.file?.excludedFiles, collected);
 		return Array.from(collected)
 			.filter(Boolean)
 			.map(item => item.trim())

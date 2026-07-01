@@ -4,15 +4,27 @@ type EpochInputAiSummaryError = {
 	at: number;
 };
 
-function getMap(plugin: any): Map<string, EpochInputAiSummaryError> {
-	const anyPlugin: any = plugin as any;
-	if (!anyPlugin.__epochInputAiSummaryErrors) {
-		anyPlugin.__epochInputAiSummaryErrors = new Map<string, EpochInputAiSummaryError>();
+type EpochInputAiSummaryEntry = {
+	file?: string;
+	date?: string;
+	source?: string;
+	blockStart?: number;
+	blockEnd?: number;
+};
+
+type EpochInputAiSummaryState = {
+	__epochInputAiSummaryErrors?: Map<string, EpochInputAiSummaryError>;
+};
+
+function getMap(plugin: unknown): Map<string, EpochInputAiSummaryError> {
+	const state = plugin as EpochInputAiSummaryState;
+	if (!state.__epochInputAiSummaryErrors) {
+		state.__epochInputAiSummaryErrors = new Map<string, EpochInputAiSummaryError>();
 	}
-	return anyPlugin.__epochInputAiSummaryErrors as Map<string, EpochInputAiSummaryError>;
+	return state.__epochInputAiSummaryErrors;
 }
 
-export function epochInputKeyForEntry(entry: any): string {
+export function epochInputKeyForEntry(entry: EpochInputAiSummaryEntry): string {
 	try {
 		const file = String(entry?.file ?? "");
 		const date = String(entry?.date ?? "");
@@ -25,7 +37,7 @@ export function epochInputKeyForEntry(entry: any): string {
 	}
 }
 
-export function hasEpochInputAiSummaryError(plugin: any, entry: any): boolean {
+export function hasEpochInputAiSummaryError(plugin: unknown, entry: EpochInputAiSummaryEntry): boolean {
 	const key = epochInputKeyForEntry(entry);
 	if (!key) return false;
 	const rec = getMap(plugin).get(key);
@@ -41,8 +53,8 @@ export function hasEpochInputAiSummaryError(plugin: any, entry: any): boolean {
 }
 
 export function markEpochInputAiSummaryError(
-	plugin: any,
-	entries: any[],
+	plugin: unknown,
+	entries: EpochInputAiSummaryEntry[],
 	inputHash: string,
 	error: string
 ): void {
@@ -57,7 +69,7 @@ export function markEpochInputAiSummaryError(
 	}
 }
 
-export function clearEpochInputAiSummaryError(plugin: any, entries: any[]): void {
+export function clearEpochInputAiSummaryError(plugin: unknown, entries: EpochInputAiSummaryEntry[]): void {
 	const map = getMap(plugin);
 	for (const e of Array.isArray(entries) ? entries : []) {
 		const key = epochInputKeyForEntry(e);

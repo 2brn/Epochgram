@@ -25,7 +25,7 @@ const denseDayScanCacheByDay = new Map<number, DenseDayScanCache>();
 
 function getOrInitDenseDayScanCache(dayIndex: number, entries: DateEntry[]): DenseDayScanCache {
 	const entryCount = entries.length;
-	const firstFile = entryCount > 0 ? String(entries[0]!.file ?? "") : "";
+	const firstFile = entryCount > 0 ? String(entries[0]?.file ?? "") : "";
 	const prev = denseDayScanCacheByDay.get(dayIndex);
 	if (prev && prev.entryCount === entryCount && prev.firstFile === firstFile) return prev;
 	const next: DenseDayScanCache = {
@@ -114,7 +114,7 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 
 	if (activeFilePath) {
 		if (cache.lastActiveFilePath === activeFilePath && cache.lastActiveIndex >= 0 && cache.lastActiveIndex < entries.length) {
-			const e = entries[cache.lastActiveIndex]!;
+			const e = entries[cache.lastActiveIndex];
 			if (e.file === activeFilePath) {
 				activeEntry = e;
 				activeIndex = cache.lastActiveIndex;
@@ -122,7 +122,8 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 		}
 		if (!activeEntry) {
 			for (let idx = 0; idx < entries.length; idx++) {
-				const entry = entries[idx]!;
+				const entry = entries[idx];
+				if (!entry) continue;
 				if (entry.file === activeFilePath) {
 					activeEntry = entry;
 					activeIndex = idx;
@@ -138,8 +139,9 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 		anyMarkedEntry = entries[cache.anyMarkedIndex] ?? null;
 	} else {
 		for (let idx = 0; idx < entries.length; idx++) {
-			const entry = entries[idx]!;
-			if (normalizeMarkColorIndex((entry as any)?.markColor)) {
+			const entry = entries[idx];
+			if (!entry) continue;
+			if (normalizeMarkColorIndex(entry.markColor)) {
 				cache.anyMarkedIndex = idx;
 				anyMarkedEntry = entry;
 				break;
@@ -156,7 +158,8 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 	}
 	if (!anyInheritedColor && cache.anyInheritedIndex < 0) {
 		for (let idx = 0; idx < entries.length; idx++) {
-			const entry = entries[idx]!;
+			const entry = entries[idx];
+			if (!entry) continue;
 			const inherited = getInheritedMarkColor(entry, markColors, colHighlight, inheritedMarkIndexByPath);
 			if (inherited) {
 				cache.anyInheritedIndex = idx;
@@ -168,7 +171,8 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 
 	if (semanticRelatedPaths) {
 		for (let idx = 0; idx < entries.length; idx++) {
-			const entry = entries[idx]!;
+			const entry = entries[idx];
+			if (!entry) continue;
 			if (semanticRelatedPaths.has(entry.file)) {
 				hasSemantic = true;
 				break;
@@ -178,13 +182,15 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 
 	if (showHidden) {
 		for (let idx = 0; idx < entries.length; idx++) {
-			if (String((entries[idx] as any)?.reviewState ?? "") === "hidden") hiddenVisibleCount++;
+			if (String(entries[idx]?.reviewState ?? "") === "hidden") hiddenVisibleCount++;
 		}
 	}
 
 	const hasActive = !!activeEntry;
 	const allHiddenVisible = showHidden && hiddenVisibleCount === entries.length;
-	let primaryEntry = activeEntry ?? entries[0]!;
+	const firstEntry = entries[0];
+	if (!firstEntry) return null;
+	let primaryEntry = activeEntry ?? firstEntry;
 	let primaryItemIndex = activeEntry ? Math.max(0, activeIndex) : 0;
 	if (!activeEntry) {
 		const markedIndex = cache.anyMarkedIndex >= 0 && cache.anyMarkedIndex < entries.length ? cache.anyMarkedIndex : -1;
@@ -195,7 +201,8 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 				: (markedIndex >= 0 ? markedIndex : inheritedIndex);
 		if (preferredIndex >= 0) {
 			primaryItemIndex = preferredIndex;
-			primaryEntry = entries[primaryItemIndex]!;
+			const preferredEntry = entries[primaryItemIndex];
+			if (preferredEntry) primaryEntry = preferredEntry;
 		}
 	}
 
@@ -216,7 +223,7 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 		);
 	})();
 	barHeight = Math.max(SUMMARY_DENSE_BAR_MIN_HEIGHT, barHeight);
-	if (Number.isFinite(maxBarHeight as number)) {
+	if (Number.isFinite(maxBarHeight)) {
 		barHeight = Math.max(1, Math.min(barHeight, Number(maxBarHeight)));
 	}
 	const barWidth = availableWidth;
@@ -278,6 +285,8 @@ export function buildDenseSummaryRects(
 		const out: SummaryRect[] = [];
 		for (let r = 0; r < rows; r++) {
 			if (r >= entries.length) break;
+			const entry = entries[r];
+			if (!entry) continue;
 			const cy = y0 + r * prh;
 			const y1 = cy - psh / 2 - pad;
 			const y2 = cy + psh / 2 + pad;
@@ -287,11 +296,10 @@ export function buildDenseSummaryRects(
 				x2,
 				y2,
 				itemIndex: r,
-				entry: entries[r]!,
+				entry,
 				// Metadata for click handling.
-				// (Extra fields are allowed; SummaryRect consumers read them via `as any`.)
 				denseBarTotalCount: entries.length
-			} as any);
+			});
 		}
 		return out;
 	}
@@ -307,18 +315,19 @@ export function buildDenseSummaryRects(
 			if (i === primary) continue;
 			order.push(i);
 		}
-		return order.map((i) => ({
+		const result: (SummaryRect & { denseBarTotalCount: number })[] = order.map((i) => ({
 			x1,
 			y1,
 			x2,
 			y2,
 			itemIndex: i,
-			entry: entries[i]!,
+			entry: entries[i] ?? visual.primaryEntry,
 			denseBarTotalCount: entries.length
-		} as any));
+		}));
+		return result;
 	}
 	// Single dense bar maps to the primary record of the day.
-	return [
+	const single: (SummaryRect & { denseBarTotalCount: number })[] = [
 		{
 			x1,
 			y1,
@@ -328,8 +337,9 @@ export function buildDenseSummaryRects(
 			entry: visual.primaryEntry,
 			// Metadata for click handling.
 			denseBarTotalCount: entries.length
-		} as any
+		}
 	];
+	return single;
 }
 
 export function drawDenseBarBase(ctx: CanvasRenderingContext2D, visual: DenseBarVisual): void {

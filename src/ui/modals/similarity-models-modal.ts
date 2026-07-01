@@ -1,4 +1,4 @@
-import { Modal, Notice } from "obsidian";
+import { App, Modal, Notice } from "obsidian";
 import type { EpochPlugin } from "../../main";
 import { DEFAULT_SIMILARITY_MODEL, DEFAULT_ZERO_SHOT_MODEL } from "../../plugin/similarity/config";
 import { hasSimilarityAccess } from "../../plugin/pro-feature-state";
@@ -6,13 +6,27 @@ import { setCssStyles } from "../../dom";
 
 type SimilarityModelsModalFocus = "semantics" | "topics";
 
+
+type FocusableElement = HTMLElement & {
+	focus(options?: FocusOptions): void;
+};
+
+type SimilaritySettingsLike = {
+	similarityEmbeddingModelId?: string;
+	similarityZeroShotModelId?: string;
+};
+
+function getSimilaritySettings(plugin: EpochPlugin): SimilaritySettingsLike {
+	return plugin.settings;
+}
+
 export class SimilarityModelsModal extends Modal {
 	private plugin: EpochPlugin;
 	private focus: SimilarityModelsModalFocus;
 	private inputEl: HTMLTextAreaElement | null = null;
 	private submitted = false;
 
-	constructor(app: any, plugin: EpochPlugin, options?: { focus?: SimilarityModelsModalFocus }) {
+	constructor(app: App, plugin: EpochPlugin, options?: { focus?: SimilarityModelsModalFocus }) {
 		super(app);
 		this.plugin = plugin;
 		this.focus = options?.focus === "topics" ? "topics" : "semantics";
@@ -31,8 +45,9 @@ export class SimilarityModelsModal extends Modal {
 			}
 		})();
 
-		const currentEmbedding = String((this.plugin.settings as any)?.similarityEmbeddingModelId ?? "").trim();
-		const currentZeroShot = String((this.plugin.settings as any)?.similarityZeroShotModelId ?? "").trim();
+		const settings = getSimilaritySettings(this.plugin);
+		const currentEmbedding = String(settings.similarityEmbeddingModelId ?? "").trim();
+		const currentZeroShot = String(settings.similarityZeroShotModelId ?? "").trim();
 
 		const initialValue = this.focus === "topics" ? currentZeroShot : currentEmbedding;
 		const placeholder = this.focus === "topics" ? DEFAULT_ZERO_SHOT_MODEL : DEFAULT_SIMILARITY_MODEL;
@@ -71,7 +86,7 @@ export class SimilarityModelsModal extends Modal {
 
 		window.requestAnimationFrame(() => {
 			try {
-				(textarea as any).focus?.({ preventScroll: true });
+				(textarea as FocusableElement).focus({ preventScroll: true });
 			} catch {
 				textarea.focus();
 			}
@@ -102,8 +117,9 @@ export class SimilarityModelsModal extends Modal {
 					this.close();
 					return;
 				}
-				(this.plugin.settings as any).similarityZeroShotModelId = nextZeroShot ? nextZeroShot : undefined;
-				await this.plugin.onSettingsChanged("similarityZeroShotModelId" as any);
+				const settings = getSimilaritySettings(this.plugin);
+				settings.similarityZeroShotModelId = nextZeroShot ? nextZeroShot : undefined;
+				await this.plugin.onSettingsChanged("similarityZeroShotModelId");
 				new Notice("Model updated.");
 			} else {
 				const nextEmbedding = String(this.inputEl?.value ?? "").trim();
@@ -112,12 +128,13 @@ export class SimilarityModelsModal extends Modal {
 					this.close();
 					return;
 				}
-				(this.plugin.settings as any).similarityEmbeddingModelId = nextEmbedding ? nextEmbedding : undefined;
-				await this.plugin.onSettingsChanged("similarityEmbeddingModelId" as any);
+				const settings = getSimilaritySettings(this.plugin);
+				settings.similarityEmbeddingModelId = nextEmbedding ? nextEmbedding : undefined;
+				await this.plugin.onSettingsChanged("similarityEmbeddingModelId");
 				new Notice("Model updated.");
 			}
-		} catch (e: any) {
-			console.error("Failed to update similarity model", e);
+		} catch (error) {
+			window.console.error("Failed to update similarity model", error);
 			new Notice("Failed to update model (see console)");
 		}
 

@@ -1,27 +1,96 @@
-import { Platform } from "obsidian";
+import { Platform, type WorkspaceLeaf } from "obsidian";
 import { VIEW_TYPE_EPOCH } from "../../ui/epoch-view-mode";
 import type { EpochPlugin } from "../../main";
 
-function getEpochTargetLeaf(plugin: EpochPlugin): any {
-	const workspaceAny: any = plugin.app.workspace as any;
-	return plugin.app.workspace.getRightLeaf(false) ?? (typeof workspaceAny?.getLeaf === "function" ? workspaceAny.getLeaf(true) : null);
+type FileRef = { path: string };
+
+type CursorLike = { line?: unknown };
+
+type EditorLike = {
+	getCursor?: () => CursorLike;
+};
+
+type CanvasViewLike = {
+	snapInitialPosition?: (path: string | null, line: number | null) => void;
+	refreshIndex?: () => void;
+	refreshSemanticRelatedForActiveFile?: (force: boolean) => void;
+};
+
+type LeafViewLike = {
+	getViewType?: () => string;
+	file?: unknown;
+	editor?: EditorLike;
+	canvas?: CanvasViewLike;
+	openTimelineSearch?: () => void;
+	syncPreferencesFromPlugin?: (prefs: unknown) => void;
+	refreshIndex?: () => void;
+};
+
+type EpochPluginRuntime = EpochPlugin & {
+	stopAiBridge?: () => Promise<void> | void;
+	similarityWorker?: Worker | null;
+	similarityWorkerPending?: unknown;
+	similarityWorkerNextId?: number;
+	noteLeaf?: WorkspaceLeaf | null;
+	indexReady?: boolean;
+	viewPreferences?: unknown;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+	return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function asFileRef(value: unknown): FileRef | null {
+	const rec = asRecord(value);
+	if (!rec) return null;
+	const p = rec.path;
+	return typeof p === "string" && p.length > 0 ? { path: p } : null;
+}
+
+function getLeafView(leaf: WorkspaceLeaf | null | undefined): LeafViewLike | null {
+	if (!leaf) return null;
+	return leaf.view;
+}
+
+function getCursorLine(view: LeafViewLike | null): number | null {
+	if (!view) return null;
+	const cur = view.editor?.getCursor?.();
+	return typeof cur?.line === "number" ? cur.line : null;
+}
+
+function getLeafFile(view: LeafViewLike | null): FileRef | null {
+	if (!view) return null;
+	return asFileRef(view.file);
+}
+
+function getEpochTargetLeaf(plugin: EpochPlugin): WorkspaceLeaf | null {
+	const workspace = plugin.app.workspace;
+	const direct = workspace.getRightLeaf(false);
+	if (direct) return direct;
+	const rec = asRecord(workspace);
+	const maybeGetLeaf = rec?.getLeaf;
+	if (typeof maybeGetLeaf === "function") {
+		const leaf = maybeGetLeaf.call(workspace, true) as unknown;
+		return leaf as WorkspaceLeaf | null;
+	}
+	return null;
 }
 
 export function onViewUnload(plugin: EpochPlugin): void {
+	const runtime = plugin as EpochPluginRuntime;
 	try {
-		void (plugin as any).stopAiBridge?.();
+		void runtime.stopAiBridge?.();
 	} catch {
 		// ignore
 	}
 	try {
-		const anyPlugin: any = plugin as any;
-		const w: Worker | null = anyPlugin.similarityWorker ?? null;
+		const w: Worker | null = runtime.similarityWorker ?? null;
 		if (w) {
 			w.terminate();
-			anyPlugin.similarityWorker = null;
+			runtime.similarityWorker = null;
 		}
-		anyPlugin.similarityWorkerPending = null;
-		anyPlugin.similarityWorkerNextId = 1;
+		runtime.similarityWorkerPending = null;
+		runtime.similarityWorkerNextId = 1;
 	} catch {
 		// ignore
 	}
@@ -29,58 +98,58 @@ export function onViewUnload(plugin: EpochPlugin): void {
 }
 
 export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: boolean; activate?: boolean } = {}): Promise<void> {
+	const runtime = plugin as EpochPluginRuntime;
 	await plugin.ensureIndexLoaded();
 	const shouldActivate = options.activate === true;
 	const current = plugin.app.workspace.getMostRecentLeaf();
 	if (current && current.view.getViewType() === "markdown") {
-		(plugin as any).noteLeaf = current;
+		runtime.noteLeaf = current;
 	}
 
-	const resolveFileFromLeaf = (leaf: any): { file: any; line: number | null } | null => {
+	const resolveFileFromLeaf = (leaf: WorkspaceLeaf | null | undefined): { file: FileRef; line: number | null } | null => {
 		if (!leaf) return null;
 		try {
-			const v: any = leaf?.view;
-			const f = v?.file;
+			const v = getLeafView(leaf);
+			const f = getLeafFile(v);
 			if (f) {
-				const line0 = v?.editor?.getCursor?.().line;
-				const line = typeof line0 === "number" ? line0 : null;
+				const line = getCursorLine(v);
 				return { file: f, line };
 			}
 		} catch {
 			// ignore
 		}
 		try {
-			const getViewState = leaf?.getViewState;
-			if (typeof getViewState !== "function") return null;
-			const vs = getViewState.call(leaf);
-			const raw = vs?.state?.file ?? vs?.state?.path ?? null;
+			const vs = leaf.getViewState();
+			const state = asRecord(vs?.state);
+			const raw = state?.file ?? state?.path ?? null;
 			const path = typeof raw === "string" ? raw : "";
 			if (!path) return null;
-			const af = (plugin.app.vault as any)?.getAbstractFileByPath?.(path);
+			const af = plugin.app.vault.getAbstractFileByPath(path);
 			if (!af) return null;
-			return { file: af, line: null };
+			const file = asFileRef(af);
+			if (!file) return null;
+			return { file, line: null };
 		} catch {
 			// ignore
 		}
 		return null;
 	};
 
-	const getOpenFile = (): { file: any; line: number | null } | null => {
+	const getOpenFile = (): { file: FileRef; line: number | null } | null => {
 		try {
-			const activeLeaf: any = (plugin.app.workspace as any)?.activeLeaf ?? null;
+			const activeLeaf = (asRecord(plugin.app.workspace)?.activeLeaf as WorkspaceLeaf | null | undefined) ?? null;
 			const active = resolveFileFromLeaf(activeLeaf);
 			if (active?.file) return active;
 		} catch {
 			// ignore
 		}
 		try {
-			const noteLeaf: any = (plugin as any).noteLeaf ?? null;
-			const noteView: any = noteLeaf?.view ?? null;
+			const noteLeaf = runtime.noteLeaf ?? null;
+			const noteView = getLeafView(noteLeaf);
 			if (noteView?.getViewType?.() !== VIEW_TYPE_EPOCH) {
-				const f = noteView?.file;
+				const f = getLeafFile(noteView);
 				if (f) {
-					const line0 = noteView?.editor?.getCursor?.().line;
-					const line = typeof line0 === "number" ? line0 : null;
+					const line = getCursorLine(noteView);
 					return { file: f, line };
 				}
 			}
@@ -88,13 +157,12 @@ export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: b
 			// ignore
 		}
 		try {
-			const leaves: any[] = (plugin.app.workspace as any)?.getLeavesOfType?.("markdown") ?? [];
+			const leaves = plugin.app.workspace.getLeavesOfType("markdown");
 			for (const l of leaves) {
-				const v: any = l?.view;
-				const f = v?.file;
+				const v = getLeafView(l);
+				const f = getLeafFile(v);
 				if (f) {
-					const line0 = v?.editor?.getCursor?.().line;
-					const line = typeof line0 === "number" ? line0 : null;
+					const line = getCursorLine(v);
 					return { file: f, line };
 				}
 			}
@@ -124,20 +192,20 @@ export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: b
 			// ignore
 		}
 		if (!options.skipSnap) {
-			const view: any = leaf.view as any;
+			const view = getLeafView(leaf);
 			try {
 				const open = getOpenFile();
 				const path = open?.file?.path ?? null;
 				const line = open?.line ?? null;
 				if (path) {
-					(view as any)?.canvas?.snapInitialPosition?.(path, line);
+					view?.canvas?.snapInitialPosition?.(path, line);
 					return;
 				}
 			} catch {
 				// ignore
 			}
 			try {
-				(view as any)?.canvas?.snapInitialPosition?.(null, null);
+				view?.canvas?.snapInitialPosition?.(null, null);
 			} catch {
 				// ignore
 			}
@@ -168,7 +236,7 @@ export async function openTimelineSearch(plugin: EpochPlugin): Promise<void> {
 	try {
 		const leaves = plugin.app.workspace.getLeavesOfType(VIEW_TYPE_EPOCH);
 		const leaf = Array.isArray(leaves) && leaves.length > 0 ? leaves[0] : null;
-		const view: any = leaf?.view as any;
+		const view = getLeafView(leaf);
 		view?.openTimelineSearch?.();
 	} catch {
 		// ignore
@@ -194,18 +262,23 @@ export function refreshEpochViews(
 	plugin: EpochPlugin,
 	options: { forceSemanticRelated?: boolean } = {}
 ): void {
-	if (!(plugin as any).indexReady) return;
+	const runtime = plugin as EpochPluginRuntime;
+	if (!runtime.indexReady) return;
 	const leaves = plugin.app.workspace.getLeavesOfType(VIEW_TYPE_EPOCH);
 	for (const leaf of leaves) {
-		const view: any = leaf.view as any;
+		const view = getLeafView(leaf);
+		if (!view) continue;
 		if (typeof view.syncPreferencesFromPlugin === "function") {
-			view.syncPreferencesFromPlugin((plugin as any).viewPreferences);
+			view.syncPreferencesFromPlugin(runtime.viewPreferences);
 		}
-		if (typeof (view as any).refreshIndex === "function") {
-			(view as any).refreshIndex();
+		if (typeof view.refreshIndex === "function") {
+			view.refreshIndex();
 		} else {
-			view.canvas?.refreshIndex();
+			const canvasView = view.canvas;
+			if (canvasView && typeof canvasView.refreshIndex === "function") {
+				canvasView.refreshIndex();
+			}
 		}
-		(view.canvas as any)?.refreshSemanticRelatedForActiveFile?.(options.forceSemanticRelated === true);
+		view.canvas?.refreshSemanticRelatedForActiveFile?.(options.forceSemanticRelated === true);
 	}
 }

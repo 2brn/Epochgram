@@ -46,6 +46,11 @@ describe("DATE PARSING", () => {
 		expect(r).toBe("2025-04-03");
 	});
 
+	it("extracts dd.mm.yy date from content", () => {
+		const r = parseAnyDate("Event on 26.07.26");
+		expect(r).toBe("2026-07-26");
+	});
+
 	it("parses ISO timestamps by ignoring everything after T", () => {
 		expect(parseAnyDate("2020-08-21T10:30:00.123")).toBe("2020-08-21");
 		expect(parseAnyDate("2020-08-21T10:30:00.123Z")).toBe("2020-08-21");

@@ -1,4 +1,4 @@
-import { Notice, normalizePath, Platform } from "obsidian";
+import { Notice, normalizePath, Platform, type EventRef } from "obsidian";
 import { DEFAULT_SETTINGS, EpochSettingTab } from "../settings";
 import { Indexer } from "../indexer/indexer";
 import { VIEW_TYPE_EPOCH } from "../ui/epoch-view-mode";
@@ -26,8 +26,60 @@ interface LifecycleMethods {
 	onunload(): void;
 }
 
+type EpochSettingTabLike = {
+	display?: () => void;
+};
+
+type LifecycleLeafLike = {
+	view?: { file?: unknown };
+	getViewState?: () => { state?: { file?: unknown; path?: unknown } };
+};
+
+type LifecycleWorkspaceLike = {
+	on?: (event: string, callback: () => void) => EventRef;
+	getLeavesOfType?: (type: string) => LifecycleLeafLike[];
+};
+
+type LifecycleRuntime = EpochPlugin & {
+	refreshAiBridgeStatusBar?: () => void;
+	refreshAiBridgeProgress?: () => void;
+	similarityStartupAt?: number;
+	vectorsFilePath?: string;
+	termSimilarityFilePath?: string;
+	epochSummariesFilePath?: string;
+	updateVectorsFileStat?: () => Promise<void>;
+	updateTermSimilarityFileStat?: () => Promise<void>;
+	similarityLastVectorsEnabled?: boolean;
+	similarityLastZeroShotMinScore?: number;
+	registerObsidianProtocolHandler?: (protocol: string, callback: (params: Record<string, string>) => void) => void;
+	__epochSettingTab?: EpochSettingTabLike;
+	openAiBridgeWindow?: (options: { silent: boolean; source: string }) => void;
+	regenerateMissingAiSummariesAndEpochsForAllRecords?: () => void;
+	enqueueAiSummariesForFile?: (path: string, options: { force: boolean; showNotice: boolean; enableIfDisabled: boolean }) => Promise<void>;
+	maybeIndexOpenedFile?: (file: unknown) => void;
+	persistIndex?: (options: { skipEnsure: true }) => Promise<void>;
+	refreshEpochViews?: () => void;
+	__epochInheritedMarkIndexByPath?: Map<string, unknown>;
+	__epochEnsuredViewOnStartup?: boolean;
+	__epochAutoOpenedOnStartup?: boolean;
+	maybeOpenAiBridgeOnStartup?: () => void;
+};
+
+type AppSettingRuntime = {
+	open?: () => void;
+	openTabById?: (id: string) => void;
+};
+
+type LifecycleSettingsRuntime = {
+	installId?: string;
+	showAttachments?: boolean;
+	showTrackedChanges?: boolean;
+	showParsed?: boolean;
+};
+
 export const lifecycleMethods: LifecycleMethods = {
 	async onload(this: EpochPlugin): Promise<void> {
+		const runtime = this as LifecycleRuntime;
 		// Desktop: keep progress minimal in the status bar.
 		try {
 			initEpochStatusBarProgress(this);
@@ -37,8 +89,8 @@ export const lifecycleMethods: LifecycleMethods = {
 
 		try {
 			initAiBridgeStatusBar(this);
-			(this as any).refreshAiBridgeStatusBar = () => refreshAiBridgeStatusBar(this);
-			(this as any).refreshAiBridgeProgress = () => refreshAiBridgeProgress(this);
+			runtime.refreshAiBridgeStatusBar = () => refreshAiBridgeStatusBar(this);
+			runtime.refreshAiBridgeProgress = () => refreshAiBridgeProgress(this);
 			refreshAiBridgeProgress(this);
 		} catch {
 			// ignore
@@ -47,26 +99,26 @@ export const lifecycleMethods: LifecycleMethods = {
 		// Mark plugin startup; used to delay expensive background work (e.g. embedding)
 		// until Obsidian/ORT has fully initialized.
 		try {
-			(this as any).similarityStartupAt = Date.now();
+			runtime.similarityStartupAt = Date.now();
 		} catch {
 			// ignore
 		}
 
 		this.registerCustomIcons();
 		this.pluginDirPath = normalizePath(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
-			this.indexFilePath = normalizePath(`${this.app.vault.configDir}/epochgram-index.json`);
+		this.indexFilePath = normalizePath(`${this.app.vault.configDir}/epochgram-index.json`);
 		this.dataFilePath = normalizePath(`${this.pluginDirPath}/data.json`);
-		(this as any).vectorsFilePath = normalizePath(`${this.app.vault.configDir}/epochgram-semantics.json`);
+		runtime.vectorsFilePath = normalizePath(`${this.app.vault.configDir}/epochgram-semantics.json`);
 		// Topic classifications (separate from semantic vectors).
-		(this as any).termSimilarityFilePath = normalizePath(`${this.app.vault.configDir}/epochgram-topics.json`);
-		(this as any).epochSummariesFilePath = normalizePath(`${this.app.vault.configDir}/epochgram-summaries.json`);
+		runtime.termSimilarityFilePath = normalizePath(`${this.app.vault.configDir}/epochgram-topics.json`);
+		runtime.epochSummariesFilePath = normalizePath(`${this.app.vault.configDir}/epochgram-summaries.json`);
 		try {
-			await (this as any).updateVectorsFileStat?.();
+			await runtime.updateVectorsFileStat?.();
 		} catch {
 			// ignore
 		}
 		try {
-			await (this as any).updateTermSimilarityFileStat?.();
+			await runtime.updateTermSimilarityFileStat?.();
 		} catch {
 			// ignore
 		}
@@ -79,9 +131,10 @@ export const lifecycleMethods: LifecycleMethods = {
 			DEFAULT_SETTINGS,
 			mergeSyncedSettingsWithLocalActivation(saved?.settings ?? {}, readLocalActivationState(this))
 		);
-		const prevInstallId = String((this.settings as any).installId ?? "");
+		const settingsRuntime = this.settings as unknown as LifecycleSettingsRuntime;
+		const prevInstallId = String(settingsRuntime.installId ?? "");
 		this.ensureDeviceIdentity();
-		const didCreateInstallId = String((this.settings as any).installId ?? "") !== prevInstallId;
+		const didCreateInstallId = String(settingsRuntime.installId ?? "") !== prevInstallId;
 		const licenseChanged = await this.refreshLicenseState();
 		if (!hadSavedSettings) {
 			this.applyDailyNotesDefaults();
@@ -92,10 +145,10 @@ export const lifecycleMethods: LifecycleMethods = {
 		let didNormalizeFilters = false;
 		const timelineDefaults = DEFAULT_SETTINGS.timelineFilters ?? {};
 		const rawTimelineFilters = this.settings.timelineFilters ?? {};
-		const mergedTimelineFilters: any = Object.assign({}, timelineDefaults, rawTimelineFilters);
+		const mergedTimelineFilters = Object.assign({}, timelineDefaults, rawTimelineFilters) as LifecycleSettingsRuntime;
 		const showDraftsOnly = false;
 		const showParsed = mergedTimelineFilters.showParsed !== false;
-		const normalizedTimelineFilters: any = {
+		const normalizedTimelineFilters: LifecycleSettingsRuntime = {
 			showAttachments: mergedTimelineFilters.showAttachments === true,
 			showTrackedChanges: mergedTimelineFilters.showTrackedChanges !== false,
 			showParsed
@@ -132,11 +185,10 @@ export const lifecycleMethods: LifecycleMethods = {
 		// Initialize last-known similarity settings state so first-time toggles from
 		// "disabled" thresholds correctly enqueue missing background work.
 		try {
-			const anyPlugin: any = this as any;
-			anyPlugin.similarityLastVectorsEnabled = embeddingsSimilarityEnabled(this);
+			runtime.similarityLastVectorsEnabled = embeddingsSimilarityEnabled(this);
 			const zeroShotRaw = Number(this.settings.similarityZeroShotMinScore ?? 0);
 			const zeroShot = Number.isFinite(zeroShotRaw) ? Math.max(0, Math.min(1, zeroShotRaw)) : 0;
-			anyPlugin.similarityLastZeroShotMinScore = zeroShot;
+			runtime.similarityLastZeroShotMinScore = zeroShot;
 		} catch {
 			// ignore
 		}
@@ -184,9 +236,8 @@ export const lifecycleMethods: LifecycleMethods = {
 		this.addSettingTab(new EpochSettingTab(this.app, this));
 
 		try {
-			const anyThis: any = this as any;
-			if (typeof anyThis.registerObsidianProtocolHandler === "function") {
-				anyThis.registerObsidianProtocolHandler("epochgram", (params: Record<string, string>) => {
+			if (typeof runtime.registerObsidianProtocolHandler === "function") {
+				runtime.registerObsidianProtocolHandler("epochgram", (params: Record<string, string>) => {
 					void (async () => {
 						const raw = String(params?.key ?? params?.claimKey ?? "").trim();
 						if (!raw) {
@@ -198,14 +249,14 @@ export const lifecycleMethods: LifecycleMethods = {
 						let activationSucceeded = false;
 						try {
 							try {
-								const settingsAny: any = (this.app as any)?.setting;
+								const settingsAny = (this.app as unknown as { setting?: AppSettingRuntime }).setting;
 								settingsAny?.open?.();
 								settingsAny?.openTabById?.(this.manifest.id);
 							} catch {
 								// ignore
 							}
 							try {
-								anyThis.__epochSettingTab?.display?.();
+								runtime.__epochSettingTab?.display?.();
 							} catch {
 								// ignore
 							}
@@ -218,7 +269,7 @@ export const lifecycleMethods: LifecycleMethods = {
 							this.proActivationBusy = false;
 							if (activationSucceeded) this.proActivationPendingKey = "";
 							try {
-								anyThis.__epochSettingTab?.display?.();
+								runtime.__epochSettingTab?.display?.();
 							} catch {
 								// ignore
 							}
@@ -254,7 +305,7 @@ export const lifecycleMethods: LifecycleMethods = {
 						return true;
 					}
 					wrapNoticeError("Epochgram: Open AI bridge failed", () =>
-						(this as any).openAiBridgeWindow?.({ silent: false, source: "command" })
+						void runtime.openAiBridgeWindow?.({ silent: false, source: "command" })
 					)();
 					return true;
 				} catch {
@@ -275,7 +326,7 @@ export const lifecycleMethods: LifecycleMethods = {
 						return true;
 					}
 					wrapNoticeError("Epochgram: Summarize missing failed", () =>
-						(this as any).regenerateMissingAiSummariesAndEpochsForAllRecords?.()
+						void runtime.regenerateMissingAiSummariesAndEpochsForAllRecords?.()
 					)();
 					return true;
 				} catch {
@@ -300,7 +351,7 @@ export const lifecycleMethods: LifecycleMethods = {
 						return true;
 					}
 					void wrapNoticeError("Epochgram: Summarize current file failed", async () => {
-						await (this as any).enqueueAiSummariesForFile?.(file.path, {
+						await runtime.enqueueAiSummariesForFile?.(file.path, {
 							force: true,
 							showNotice: true,
 							enableIfDisabled: true
@@ -317,7 +368,7 @@ export const lifecycleMethods: LifecycleMethods = {
 			const fileOpenRef = this.app.workspace.on("file-open", (file) => {
 				if (file) {
 					try {
-						void (this as any).maybeIndexOpenedFile?.(file);
+						void runtime.maybeIndexOpenedFile?.(file);
 					} catch {
 						// ignore
 					}
@@ -354,7 +405,7 @@ export const lifecycleMethods: LifecycleMethods = {
 						const inherited: number | null = (() => {
 							if (explicit != null) return null;
 							try {
-								const map: unknown = (this as any)?.__epochInheritedMarkIndexByPath;
+								const map = runtime.__epochInheritedMarkIndexByPath;
 								if (!(map instanceof Map)) return null;
 								return normalizeMarkColorIndex(map.get(file.path));
 							} catch {
@@ -362,7 +413,7 @@ export const lifecycleMethods: LifecycleMethods = {
 							}
 						})();
 						const hasAnyMark = explicit != null || inherited != null;
-						const filesObj: any = this.indexer.toJSON().files;
+						const filesObj: unknown = this.indexer.toJSON().files;
 
 						const desired = hasAnyMark
 							? null
@@ -424,12 +475,12 @@ export const lifecycleMethods: LifecycleMethods = {
 					}
 
 					try {
-						if (typeof (this as any)?.persistIndex === "function") await (this as any).persistIndex({ skipEnsure: true });
+						if (typeof runtime.persistIndex === "function") await runtime.persistIndex({ skipEnsure: true });
 					} catch {
 						// ignore
 					}
 					try {
-						(this as any)?.refreshEpochViews?.();
+						runtime.refreshEpochViews?.();
 					} catch {
 						// ignore
 					}
@@ -463,12 +514,12 @@ export const lifecycleMethods: LifecycleMethods = {
 
 					if (changed) {
 						try {
-							if (typeof (this as any)?.persistIndex === "function") await (this as any).persistIndex({ skipEnsure: true });
+							if (typeof runtime.persistIndex === "function") await runtime.persistIndex({ skipEnsure: true });
 						} catch {
 							// ignore
 						}
 						try {
-							(this as any)?.refreshEpochViews?.();
+							runtime.refreshEpochViews?.();
 						} catch {
 							// ignore
 						}
@@ -494,12 +545,12 @@ export const lifecycleMethods: LifecycleMethods = {
 					const changed = reviewAllDraftFiles(this);
 					if (changed > 0) {
 						try {
-							if (typeof (this as any)?.persistIndex === "function") await (this as any).persistIndex({ skipEnsure: true });
+							if (typeof runtime.persistIndex === "function") await runtime.persistIndex({ skipEnsure: true });
 						} catch {
 							// ignore
 						}
 						try {
-							(this as any)?.refreshEpochViews?.();
+							runtime.refreshEpochViews?.();
 						} catch {
 							// ignore
 						}
@@ -519,20 +570,20 @@ export const lifecycleMethods: LifecycleMethods = {
 		);
 
 		try {
-			const anyPlugin: any = this as any;
-			if (!anyPlugin.__epochEnsuredViewOnStartup) {
-				anyPlugin.__epochEnsuredViewOnStartup = true;
+			if (!runtime.__epochEnsuredViewOnStartup) {
+				runtime.__epochEnsuredViewOnStartup = true;
 				this.app.workspace.onLayoutReady(() => {
 					window.setTimeout(() => {
 						const shouldAutoOpen = this.settings.openEpochViewOnStartup === true;
 						if (shouldAutoOpen) {
 							// Startup/activation: use the same open path as ribbon click.
 							try {
-								if (!anyPlugin.__epochAutoOpenedOnStartup) {
-									anyPlugin.__epochAutoOpenedOnStartup = true;
+								if (!runtime.__epochAutoOpenedOnStartup) {
+									runtime.__epochAutoOpenedOnStartup = true;
 									window.setTimeout(() => {
 										try {
-											const startAt = performance.now();
+											const perf = window.performance;
+											const startAt = perf?.now() ?? Date.now();
 											const hasOpenMarkdownFile = (): boolean => {
 												try {
 													const active = this.app.workspace.getActiveFile();
@@ -541,13 +592,11 @@ export const lifecycleMethods: LifecycleMethods = {
 													// ignore
 												}
 												try {
-													const leaves: any[] = (this.app.workspace as any)?.getLeavesOfType?.("markdown") ?? [];
+													const workspace = this.app.workspace as unknown as LifecycleWorkspaceLike;
+													const leaves = workspace.getLeavesOfType?.("markdown") ?? [];
 													for (const l of leaves) {
-														const v: any = l?.view;
-														if (v?.file) return true;
-														const getViewState = l?.getViewState;
-														if (typeof getViewState !== "function") continue;
-														const vs = getViewState.call(l);
+														if (l.view?.file) return true;
+														const vs = l.getViewState?.();
 														const raw = vs?.state?.file ?? vs?.state?.path ?? null;
 														if (typeof raw === "string" && raw.length > 0) return true;
 													}
@@ -562,7 +611,7 @@ export const lifecycleMethods: LifecycleMethods = {
 											};
 
 											const attemptOpen = () => {
-												if (hasOpenMarkdownFile() || performance.now() - startAt >= 500) {
+												if (hasOpenMarkdownFile() || (perf?.now() ?? Date.now()) - startAt >= 500) {
 													runOpen();
 													return;
 												}
@@ -597,9 +646,9 @@ export const lifecycleMethods: LifecycleMethods = {
 		try {
 			window.setTimeout(() => {
 				try {
-					const maybe: any = (this as any).maybeOpenAiBridgeOnStartup;
+					const maybe = runtime.maybeOpenAiBridgeOnStartup;
 					if (typeof maybe === "function") {
-						wrapNoticeError("Epochgram: AI bridge startup failed", () => maybe.call(this))();
+						wrapNoticeError("Epochgram: AI bridge startup failed", () => void maybe())();
 					}
 				} catch {
 					// ignore
@@ -615,8 +664,8 @@ export const lifecycleMethods: LifecycleMethods = {
 				void this.refreshIndexSmartWithProgress({ suppressNotices: true });
 			}
 		};
-		const workspaceAny = this.app.workspace as any;
-		if (workspaceAny?.on) {
+		const workspaceAny = this.app.workspace as unknown as LifecycleWorkspaceLike;
+		if (typeof workspaceAny.on === "function") {
 			this.registerEvent(workspaceAny.on("config-changed", handleConfigChanged));
 			this.registerEvent(workspaceAny.on("obsidian:config-change", handleConfigChanged));
 		}

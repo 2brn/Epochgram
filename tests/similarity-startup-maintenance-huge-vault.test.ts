@@ -1,5 +1,21 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { Platform, TFile } from "obsidian";
 import { withTrustedPro } from "./helpers/trusted-pro";
+
+// Create a fake TFile class that can be used for instanceof checks
+class FakeTFile {
+	path: string;
+	stat: any;
+	extension?: string;
+	constructor(path: string, stat: any) {
+		this.path = path;
+		this.stat = stat;
+		const lastDot = path.lastIndexOf(".");
+		this.extension = lastDot > -1 ? path.slice(lastDot + 1) : "";
+	}
+}
+// Make instanceof work by setting the prototype
+Object.setPrototypeOf(FakeTFile.prototype, TFile.prototype);
 
 vi.mock("../src/plugin/similarity/store", () => {
 	return {
@@ -18,6 +34,8 @@ import { runSimilarityStartupMaintenance } from "../src/plugin/similarity/startu
 describe("similarity: huge vault startup maintenance", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
+		Platform.isDesktopApp = true;
+		Platform.isMobileApp = false;
 	});
 
 	afterEach(() => {
@@ -28,13 +46,15 @@ describe("similarity: huge vault startup maintenance", () => {
 		const queuedVectors: string[] = [];
 		const queuedTopics: string[] = [];
 
-		const mdFiles = Array.from({ length: 5001 }, (_, i) => ({ path: `f${i}.md`, stat: { mtime: i } }));
+		const mdFiles = Array.from({ length: 5001 }, (_, i) => new FakeTFile(`f${i}.md`, { mtime: i }));
 
 		const plugin: any = {
 			proActive: true,
+			manifest: { id: "epochgram", version: "0.4.3-test" },
 			hasProAccess() {
 				return this.proActive === true;
 			},
+			ensureTermSimilarityStoreLoaded: vi.fn(async () => {}),
 			settings: {
 				similarityThreshold: 0.79,
 				similarityZeroShotMinScore: 0.1
@@ -67,7 +87,7 @@ describe("similarity: huge vault startup maintenance", () => {
 				queuedTopics.push(path);
 			}
 		};
-		withTrustedPro(plugin, "0.4.3-test", { preserveHasProAccess: true });
+		withTrustedPro(plugin);
 
 		const p = runSimilarityStartupMaintenance(plugin);
 		await vi.runAllTimersAsync();

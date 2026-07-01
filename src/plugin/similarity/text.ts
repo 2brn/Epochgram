@@ -1,26 +1,39 @@
 import { MarkdownView, TFile } from "obsidian";
 import type { EpochPlugin } from "../../main";
 import { gatherFileEntries } from "../../indexer/entry-state";
+import type { DateEntry, FileIndexData } from "../../indexer/types";
 import { SIMILARITY_CONTENT_MAX_CHARS, TOPIC_CANDIDATE_MAX_CHARS } from "./config";
+
+type SimilarityIndexerLike = {
+	getFileIndexData: (path: string) => FileIndexData | null | undefined;
+};
+
+type EntryTextLike = Pick<DateEntry, "date" | "blockStart" | "blockEnd" | "aiSummary">;
+
+type MarkdownViewLike = MarkdownView & {
+	editor?: {
+		getValue?: () => string;
+	};
+};
 
 export function getPreferredSimilarityText(plugin: EpochPlugin, filePath: string): string {
 	try {
-		const idxAny: any = (plugin as any)?.indexer as any;
-		const data = idxAny.getFileIndexData(filePath);
+		const indexer = plugin.indexer as SimilarityIndexerLike;
+		const data = indexer.getFileIndexData(filePath);
 		if (!data) return "";
-		const entries = gatherFileEntries(data as any);
+		const entries = gatherFileEntries(data);
 		if (!Array.isArray(entries) || entries.length === 0) return "";
 
-		const pickBest = (getText: (e: any) => string): string => {
+		const pickBest = (getText: (entry: EntryTextLike) => string): string => {
 			let bestText = "";
 			let bestKey = "";
 			for (const e of entries) {
 				if (!e) continue;
 				const txt = getText(e);
 				if (!txt) continue;
-				const date = typeof (e as any)?.date === "string" ? String((e as any).date) : "";
-				const bs = Number((e as any)?.blockStart ?? 0);
-				const be = Number((e as any)?.blockEnd ?? 0);
+				const date = typeof e.date === "string" ? String(e.date) : "";
+				const bs = Number(e.blockStart ?? 0);
+				const be = Number(e.blockEnd ?? 0);
 				const key = `${date}|${String(Math.floor(bs)).padStart(8, "0")}|${String(Math.floor(be)).padStart(8, "0")}`;
 				if (!bestKey || key > bestKey) {
 					bestKey = key;
@@ -31,7 +44,7 @@ export function getPreferredSimilarityText(plugin: EpochPlugin, filePath: string
 		};
 
 		const ai = pickBest((e) => {
-			const s = typeof (e as any)?.aiSummary === "string" ? String((e as any).aiSummary).trim() : "";
+			const s = typeof e.aiSummary === "string" ? String(e.aiSummary).trim() : "";
 			return s;
 		});
 		if (ai) return ai;
@@ -97,9 +110,9 @@ export function chunkText(raw: string, maxChars: number): string[] {
 export async function buildZeroShotCandidateText(plugin: EpochPlugin, file: TFile): Promise<string> {
 	let baseText = "";
 	try {
-		const view = plugin.app.workspace.getActiveViewOfType?.(MarkdownView);
+		const view: MarkdownViewLike | null = plugin.app.workspace.getActiveViewOfType?.(MarkdownView) ?? null;
 		if (view?.file?.path === file.path) {
-			const live = (view as any)?.editor?.getValue?.();
+			const live = view.editor?.getValue?.();
 			if (typeof live === "string") {
 				baseText = stripFrontmatter(live);
 			}

@@ -5,7 +5,7 @@ import {
 	TITLE_SIMILARITY_MAX_LEN_DIFF,
 } from "./config";
 import { getDirectLinkedPaths, getSameTagPaths } from "./graph";
-import { getNoteTitleFromPath, jaroWinkler, normalizeTitleForSimilarity } from "../../utils";
+import { getFolderPathFromFilePath, getNoteTitleFromPath, jaroWinkler, normalizeTitleForSimilarity } from "../../utils";
 import {
 	canMatchBySignalMask,
 	getFileSimilaritySignalMask,
@@ -30,7 +30,7 @@ export const methodsRelatedGraph: Pick<SimilarityMethods, "getGraphRelatedPathsF
 			const mask = (p: string): number => {
 				const prev = maskByPath.get(p);
 				if (typeof prev === "number") return prev;
-				const m = getFileSimilaritySignalMask(this as any, p);
+				const m = getFileSimilaritySignalMask(this, p);
 				maskByPath.set(p, m);
 				return m;
 			};
@@ -65,15 +65,23 @@ export const methodsRelatedGraph: Pick<SimilarityMethods, "getGraphRelatedPathsF
 
 			const titleThr = getEffectiveTitleSimilarityThreshold(this);
 			const titleMaxLenDiff = TITLE_SIMILARITY_MAX_LEN_DIFF;
+			const sameFolderMode = titleThr >= 1;
 
-			const centerTitle = titleThr > 0 && centerMask !== 0 ? normalizeTitleForSimilarity(getNoteTitleFromPath(filePath)) : "";
-			if (centerTitle) {
+			const centerTitle = titleThr > 0 && centerMask !== 0 && !sameFolderMode ? normalizeTitleForSimilarity(getNoteTitleFromPath(filePath)) : "";
+			const centerFolder = sameFolderMode ? getFolderPathFromFilePath(filePath) : "";
+			if (centerTitle || sameFolderMode) {
 				const files = this.app.vault.getFiles();
 				for (const f of files) {
 					if (!f || f.path === filePath) continue;
 					if (!this.shouldIndexFile(f)) continue;
 					if (out.has(f.path)) continue;
 					if (!canMatchBySignalMask(centerMask, mask(f.path), SIGNAL_TITLE)) continue;
+					if (sameFolderMode) {
+						if (getFolderPathFromFilePath(f.path) === centerFolder) {
+							out.add(f.path);
+						}
+						continue;
+					}
 					const otherTitle = normalizeTitleForSimilarity(getNoteTitleFromPath(f.path));
 					if (!otherTitle) continue;
 					if (titleMaxLenDiff >= 0) {

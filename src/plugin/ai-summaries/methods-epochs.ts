@@ -1,7 +1,7 @@
 import { Notice, Platform } from "obsidian";
 import type { EpochPlugin } from "../../main";
 import type { EpochBucket } from "../../indexer/types";
-import type { AiBridgeServer } from "../ai-bridge";
+import type { AiBridgeServer, AiSummaryJob } from "../ai-bridge";
 import { estimateTokens } from "../ai-bridge/tokens";
 import { buildEpochJobs, buildEpochJobsForDateKeys, type EpochJobMode } from "./epochs";
 import { ensureAiBridgeServerRunning, maybeNudgeBridgeNotReady } from "./bridge-server";
@@ -11,9 +11,39 @@ import { buildJobsForFile, sortJobsNewestFirst } from "./file-jobs";
 import { enqueueThrottledJobs } from "./enqueue-throttle";
 import { hasGenerateEpochsAccess, isGenerateEpochsEffective, isSummarizeAIEffective } from "../pro-feature-state";
 
+type EpochJobWithVisibility = AiSummaryJob & { timelineVisible: boolean };
+
+type MethodsEpochEntryLike = {
+	file?: string;
+	date?: string;
+};
+
+type MethodsEpochFileDataLike = {
+	cdate?: MethodsEpochEntryLike;
+	namedDate?: MethodsEpochEntryLike;
+	dateProp?: MethodsEpochEntryLike;
+	contentDates?: MethodsEpochEntryLike[];
+	trackedDates?: Record<string, MethodsEpochEntryLike[]>;
+};
+
+type MethodsEpochIndexerLike = {
+	index?: Record<string, MethodsEpochEntryLike[]>;
+	files?: Record<string, MethodsEpochFileDataLike>;
+};
+
+type MethodsEpochRuntime = {
+	__epochAiEnqueueCancelKey?: number;
+	aiBridge?: AiBridgeServer;
+	indexer?: MethodsEpochIndexerLike;
+	__epochEpochHierarchyTotalJobs?: number;
+	__epochEpochHierarchyTotalTokens?: number;
+	__epochEpochHierarchyRunKey?: number;
+};
+
 function getAiEnqueueCancelKey(plugin: EpochPlugin): number {
 	try {
-		return Number((plugin as any)?.__epochAiEnqueueCancelKey) || 0;
+		const runtime = plugin as unknown as MethodsEpochRuntime;
+		return Number(runtime.__epochAiEnqueueCancelKey) || 0;
 	} catch {
 		return 0;
 	}
@@ -25,9 +55,10 @@ function wasAiEnqueueCanceled(plugin: EpochPlugin, startCancelKey: number): bool
 
 function aiBridgeHasPendingWork(plugin: EpochPlugin): boolean {
 	try {
-		const bridge: any = (plugin as any).aiBridge;
+		const runtime = plugin as unknown as MethodsEpochRuntime;
+		const bridge = runtime.aiBridge;
 		if (!bridge || typeof bridge.getStatus !== "function") return false;
-		const s: any = bridge.getStatus?.();
+		const s = bridge.getStatus();
 		const queued = Number(s?.queued ?? 0);
 		const inProgress = Number(s?.inProgress ?? 0);
 		return (Number.isFinite(queued) && queued > 0) || (Number.isFinite(inProgress) && inProgress > 0);
@@ -39,15 +70,15 @@ function aiBridgeHasPendingWork(plugin: EpochPlugin): boolean {
 function collectAllEpochDateKeys(plugin: EpochPlugin): string[] {
 	const keySet = new Set<string>();
 	try {
-		const indexerAny: any = (plugin as any)?.indexer as any;
-		const index: Record<string, any[]> = indexerAny?.index ?? {};
-		const files: Record<string, any> = indexerAny?.files ?? {};
+		const runtime = plugin as unknown as MethodsEpochRuntime;
+		const index = runtime.indexer?.index ?? {};
+		const files = runtime.indexer?.files ?? {};
 
 		for (const k of Object.keys(index)) {
 			if (isDateKey(k)) keySet.add(k);
 		}
 
-		const addEntryDate = (entry: any): void => {
+		const addEntryDate = (entry: MethodsEpochEntryLike | null | undefined): void => {
 			try {
 				const d = String(entry?.date ?? "");
 				if (isDateKey(d)) keySet.add(d);
@@ -57,11 +88,11 @@ function collectAllEpochDateKeys(plugin: EpochPlugin): string[] {
 		};
 		for (const data of Object.values(files)) {
 			try {
-				addEntryDate((data as any)?.cdate);
-				addEntryDate((data as any)?.namedDate);
-				addEntryDate((data as any)?.dateProp);
-				for (const e of Array.isArray((data as any)?.contentDates) ? (data as any).contentDates : []) addEntryDate(e);
-				const tracked = (data as any)?.trackedDates ?? {};
+				addEntryDate((data)?.cdate);
+				addEntryDate((data)?.namedDate);
+				addEntryDate((data)?.dateProp);
+				for (const e of Array.isArray((data)?.contentDates) ? (data).contentDates : []) addEntryDate(e);
+				const tracked = (data)?.trackedDates ?? {};
 				for (const list of Object.values(tracked)) {
 					for (const e of Array.isArray(list) ? list : []) addEntryDate(e);
 				}
@@ -87,14 +118,14 @@ async function enqueueInternalAiSummariesForDateKeys(
 	const keys = Array.from(new Set((Array.isArray(dateKeys) ? dateKeys : []).map(String).filter(isDateKey)));
 	if (keys.length === 0) return 0;
 	const keySet = new Set(keys);
-	const indexerAny: any = (plugin as any)?.indexer as any;
-	const index: Record<string, any[]> = indexerAny?.index ?? {};
+	const runtime = plugin as unknown as MethodsEpochRuntime;
+	const index = runtime.indexer?.index ?? {};
 	const fileNewestKey = new Map<string, string>();
 	const keysNewestFirst = keys.slice().sort().reverse();
 	for (const k of keysNewestFirst) {
-		const entries = Array.isArray(index[k]) ? index[k]! : [];
+		const entries = Array.isArray(index[k]) ? index[k] : [];
 		for (const e of entries) {
-			const fp = String((e as any)?.file ?? "");
+			const fp = String((e)?.file ?? "");
 			if (!fp) continue;
 			if (fp.startsWith("epoch://")) continue;
 			if (!fileNewestKey.has(fp)) fileNewestKey.set(fp, k);
@@ -122,12 +153,14 @@ async function enqueueInternalAiSummariesForDateKeys(
 			continue;
 		}
 		if (isCanceled()) break;
-		const filtered = (built?.jobs ?? []).filter((j: any) => {
-			const d = String(j?.groupDate ?? j?.date ?? "");
+		const filtered = (built?.jobs ?? []).filter((j: unknown) => {
+			const job = j as { groupDate?: string; date?: string };
+			const d = String(job.groupDate ?? job.date ?? "");
 			return keySet.has(d);
 		});
 		if (filtered.length === 0) continue;
-		const jobs = sortJobsNewestFirst(filtered).map((j) => ({ ...(j as any), timelineVisible: false }));
+		const sortedJobs = sortJobsNewestFirst(filtered);
+		const jobs: EpochJobWithVisibility[] = sortedJobs.map(j => ({ ...j, timelineVisible: false }));
 		try {
 			if (isCanceled()) break;
 			await enqueueThrottledJobs(plugin, filePath, jobs, { showNotice: false, allowWhenSummarizeAIDisabled: true });
@@ -156,7 +189,10 @@ async function computeEpochHierarchyTotalsForDateKeys(
 			totalJobs += jobs.length;
 			if (bucket === "year") yearJobs += jobs.length;
 			else nonYearJobs += jobs.length;
-			for (const j of jobs) totalTokens += estimateTokens(String((j as any)?.input ?? ""));
+			for (const j of jobs) {
+				const input = (j as { input?: unknown }).input;
+				totalTokens += estimateTokens(typeof input === "string" ? input : "");
+			}
 		} catch {
 			// ignore
 		}
@@ -170,8 +206,8 @@ async function computeEpochHierarchyTotalsForDateKeys(
 		const hasYear = buckets.includes("year");
 		const hasNonYearBucket = buckets.some((b) => b && b !== "year");
 		if (hasYear && hasNonYearBucket && yearJobs === 0 && nonYearJobs > 0) {
-			const indexerAny: any = (plugin as any)?.indexer as any;
-			const index: Record<string, any[]> = indexerAny?.index ?? {};
+			const runtime = plugin as unknown as MethodsEpochRuntime;
+			const index = runtime.indexer?.index ?? {};
 			const touched = Array.from(new Set((Array.isArray(dateKeys) ? dateKeys : []).map(String).filter(isDateKey)));
 			const yearStarts = new Set<string>();
 			for (const k of touched) {
@@ -182,7 +218,7 @@ async function computeEpochHierarchyTotalsForDateKeys(
 			let extraYearJobs = 0;
 			for (const start of yearStarts) {
 				try {
-					const existing = Array.isArray(index[start]) ? index[start]! : [];
+					const existing = Array.isArray(index[start]) ? index[start] : [];
 					const hasManual = existing.some(() => false);
 					if (!hasManual) extraYearJobs++;
 				} catch {
@@ -203,6 +239,7 @@ export async function enqueueEpochsForDateKeys(
 	options: { force?: boolean; showNotice?: boolean; buckets?: EpochBucket[] } = {}
 ): Promise<void> {
 	const startCancelKey = getAiEnqueueCancelKey(this);
+	const runtime = this as unknown as MethodsEpochRuntime;
 	if (!hasGenerateEpochsAccess(this)) return;
 	if (!Platform.isDesktopApp) return;
 	if (!isGenerateEpochsEffective(this)) return;
@@ -213,8 +250,8 @@ export async function enqueueEpochsForDateKeys(
 	if (normalizedDateKeys.length === 0) return;
 	const mode: EpochJobMode = options.force === true ? "force" : "staleOrMissing";
 	const bucketQueue = Array.isArray(options.buckets) && options.buckets.length > 0
-		? (options.buckets.filter(Boolean) as EpochBucket[])
-		: (EPOCH_BUCKET_ORDER.slice() as EpochBucket[]);
+		? (options.buckets.filter(Boolean))
+		: (EPOCH_BUCKET_ORDER.slice());
 	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 	if (isGenerateEpochsEffective(this)) {
 		try {
@@ -229,9 +266,9 @@ export async function enqueueEpochsForDateKeys(
 						const totals = await computeEpochHierarchyTotalsForDateKeys(this, normalizedDateKeys, mode, bucketQueue);
 						plannedTotal = totals.totalJobs;
 						if (plannedTotal > 0) {
-							(this as any).__epochEpochHierarchyTotalJobs = totals.totalJobs;
-							(this as any).__epochEpochHierarchyTotalTokens = totals.totalTokens;
-							(this as any).__epochEpochHierarchyRunKey = (Number((this as any).__epochEpochHierarchyRunKey) || 0) + 1;
+							runtime.__epochEpochHierarchyTotalJobs = totals.totalJobs;
+							runtime.__epochEpochHierarchyTotalTokens = totals.totalTokens;
+							runtime.__epochEpochHierarchyRunKey = (Number(runtime.__epochEpochHierarchyRunKey) || 0) + 1;
 						}
 					} catch {
 						plannedTotal = 0;
@@ -254,12 +291,12 @@ export async function enqueueEpochsForDateKeys(
 			// status bar and bridge page can show overall remaining epochs (not just the first bucket).
 			// Sum per-bucket to avoid building the full hierarchy in one call.
 			if (bucketQueue.length > 1) {
-				const planned = Number((this as any).__epochEpochHierarchyTotalJobs ?? 0);
+				const planned = Number(runtime.__epochEpochHierarchyTotalJobs ?? 0);
 				if (!(Number.isFinite(planned) && planned > 0)) {
 					const totals = await computeEpochHierarchyTotalsForDateKeys(this, normalizedDateKeys, mode, bucketQueue);
-					(this as any).__epochEpochHierarchyTotalJobs = totals.totalJobs;
-					(this as any).__epochEpochHierarchyTotalTokens = totals.totalTokens;
-					(this as any).__epochEpochHierarchyRunKey = (Number((this as any).__epochEpochHierarchyRunKey) || 0) + 1;
+					runtime.__epochEpochHierarchyTotalJobs = totals.totalJobs;
+					runtime.__epochEpochHierarchyTotalTokens = totals.totalTokens;
+					runtime.__epochEpochHierarchyRunKey = (Number(runtime.__epochEpochHierarchyRunKey) || 0) + 1;
 				}
 			}
 		} catch {
@@ -273,7 +310,7 @@ export async function enqueueEpochsForDateKeys(
 				if (bucketQueue.length > 1) {
 					queuedCount = (await computeEpochHierarchyTotalsForDateKeys(this, normalizedDateKeys, mode, bucketQueue)).totalJobs;
 				} else {
-					const jobs = await buildEpochJobsForDateKeys(this, normalizedDateKeys, mode, [bucketQueue[0]!]);
+					const jobs = await buildEpochJobsForDateKeys(this, normalizedDateKeys, mode, [bucketQueue[0]]);
 					queuedCount = jobs.length;
 				}
 			} catch {
@@ -299,19 +336,20 @@ export async function enqueueEpochsForDateKeys(
 	} catch {
 		return;
 	}
-	const bridge: AiBridgeServer = (this as any).aiBridge;
+	const bridge = (this as unknown as MethodsEpochRuntime).aiBridge;
+	if (!bridge) return;
 	void this.openAiBridgeWindow({ silent: true });
 	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 	if (bucketQueue.length > 1) {
-		const first = bucketQueue[0]!;
+		const first = bucketQueue[0];
 		const rest = bucketQueue.slice(1);
 		try {
-			const planned = Number((this as any).__epochEpochHierarchyTotalJobs ?? 0);
+			const planned = Number(runtime.__epochEpochHierarchyTotalJobs ?? 0);
 			if (!(Number.isFinite(planned) && planned > 0)) {
 				const totals = await computeEpochHierarchyTotalsForDateKeys(this, normalizedDateKeys, mode, bucketQueue);
-				(this as any).__epochEpochHierarchyTotalJobs = totals.totalJobs;
-				(this as any).__epochEpochHierarchyTotalTokens = totals.totalTokens;
-				(this as any).__epochEpochHierarchyRunKey = (Number((this as any).__epochEpochHierarchyRunKey) || 0) + 1;
+				runtime.__epochEpochHierarchyTotalJobs = totals.totalJobs;
+				runtime.__epochEpochHierarchyTotalTokens = totals.totalTokens;
+				runtime.__epochEpochHierarchyRunKey = (Number(runtime.__epochEpochHierarchyRunKey) || 0) + 1;
 			}
 		} catch {
 			// ignore
@@ -325,7 +363,7 @@ export async function enqueueEpochsForDateKeys(
 		// Schedule remaining buckets to run after each prior bucket completes.
 		scheduleEpochRegenerationCascadeAfterAiIdleForDateKeys(this, normalizedDateKeys, mode, rest, false);
 		if (options.showNotice) {
-			const plannedTotal = Number((this as any).__epochEpochHierarchyTotalJobs ?? 0);
+			const plannedTotal = Number(runtime.__epochEpochHierarchyTotalJobs ?? 0);
 			const count = Number.isFinite(plannedTotal) && plannedTotal > 0 ? plannedTotal : firstJobs.length;
 			new Notice(`Epochs: queued ${count} job(s).`, 2000);
 		}
@@ -352,6 +390,7 @@ export async function enqueueEpochsForDateKeys(
 
 export async function generateEpochsForAllRecords(this: EpochPlugin): Promise<void> {
 	const startCancelKey = getAiEnqueueCancelKey(this);
+	const runtime = this as unknown as MethodsEpochRuntime;
 	if (!hasGenerateEpochsAccess(this)) return;
 	if (!Platform.isDesktopApp) return;
 	if (!isGenerateEpochsEffective(this)) return;
@@ -404,7 +443,8 @@ export async function generateEpochsForAllRecords(this: EpochPlugin): Promise<vo
 	}
 	await ensureAiBridgeServerRunning(this);
 	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
-	const bridge: AiBridgeServer = (this as any).aiBridge;
+	const bridge = runtime.aiBridge;
+	if (!bridge) return;
 	void this.openAiBridgeWindow({ silent: true });
 	const jobs = await buildEpochJobs(this, "staleOrMissing");
 	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
@@ -420,6 +460,7 @@ export async function generateEpochsForAllRecords(this: EpochPlugin): Promise<vo
 
 export async function regenerateEpochsForAllRecords(this: EpochPlugin): Promise<void> {
 	const startCancelKey = getAiEnqueueCancelKey(this);
+	const runtime = this as unknown as MethodsEpochRuntime;
 	if (!hasGenerateEpochsAccess(this)) {
 		new Notice(`Epochgram ${"Pro"} required: ${"Generate Epochs"}`, 5000);
 		return;
@@ -485,11 +526,13 @@ export async function regenerateEpochsForAllRecords(this: EpochPlugin): Promise<
 	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 	try {
 		await ensureAiBridgeServerRunning(this);
-	} catch (err: any) {
-		new Notice(`Epochs error: ${err?.message ?? String(err)}`, 5000);
+	} catch (err: unknown) {
+		const msg = err instanceof Error ? err.message : String(err);
+		new Notice(`Epochs error: ${msg}`, 5000);
 		return;
 	}
-	const bridge: AiBridgeServer = (this as any).aiBridge;
+	const bridge = runtime.aiBridge;
+	if (!bridge) return;
 	void this.openAiBridgeWindow({ silent: true });
 	const jobs = await buildEpochJobs(this, "force");
 	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
@@ -506,6 +549,7 @@ export async function regenerateEpochsForAllRecords(this: EpochPlugin): Promise<
 
 export async function regenerateMissingEpochsForAllRecords(this: EpochPlugin): Promise<void> {
 	const startCancelKey = getAiEnqueueCancelKey(this);
+	const runtime = this as unknown as MethodsEpochRuntime;
 	if (!hasGenerateEpochsAccess(this)) {
 		new Notice(`Epochgram ${"Pro"} required: ${"Generate Epochs"}`, 5000);
 		return;
@@ -530,10 +574,10 @@ export async function regenerateMissingEpochsForAllRecords(this: EpochPlugin): P
 			if (getAiEnqueueCancelKey(this) !== startCancelKey) return;
 			if (queued > 0) {
 				void this.openAiBridgeWindow({ silent: true });
-				scheduleEpochRegenerationCascadeAfterAiIdleForDateKeys(this, dateKeys, "missing", EPOCH_BUCKET_ORDER.slice() as EpochBucket[], false);
+				scheduleEpochRegenerationCascadeAfterAiIdleForDateKeys(this, dateKeys, "missing", EPOCH_BUCKET_ORDER.slice(), false);
 				let planned = 0;
 				try {
-					planned = (await computeEpochHierarchyTotalsForDateKeys(this, dateKeys, "missing", EPOCH_BUCKET_ORDER.slice() as EpochBucket[])).totalJobs;
+					planned = (await computeEpochHierarchyTotalsForDateKeys(this, dateKeys, "missing", EPOCH_BUCKET_ORDER.slice())).totalJobs;
 				} catch {
 					planned = 0;
 				}
@@ -549,7 +593,7 @@ export async function regenerateMissingEpochsForAllRecords(this: EpochPlugin): P
 		}
 	}
 
-	const bucketQueue = EPOCH_BUCKET_ORDER.slice() as EpochBucket[];
+	const bucketQueue = EPOCH_BUCKET_ORDER.slice();
 	const mode: EpochJobMode = "missing";
 
 	const hasPending = aiBridgeHasPendingWork(this);
@@ -573,28 +617,30 @@ export async function regenerateMissingEpochsForAllRecords(this: EpochPlugin): P
 
 	try {
 		await ensureAiBridgeServerRunning(this);
-	} catch (err: any) {
-		new Notice(`Epochs error: ${err?.message ?? String(err)}`, 5000);
+	} catch (err: unknown) {
+		const msg = err instanceof Error ? err.message : String(err);
+		new Notice(`Epochs error: ${msg}`, 5000);
 		return;
 	}
-	const bridge: AiBridgeServer = (this as any).aiBridge;
+	const bridge = runtime.aiBridge;
+	if (!bridge) return;
 	void this.openAiBridgeWindow({ silent: true });
 
 	try {
 		const totals = await computeEpochHierarchyTotalsForDateKeys(this, dateKeys, mode, bucketQueue);
-		(this as any).__epochEpochHierarchyTotalJobs = totals.totalJobs;
-		(this as any).__epochEpochHierarchyTotalTokens = totals.totalTokens;
-		(this as any).__epochEpochHierarchyRunKey = (Number((this as any).__epochEpochHierarchyRunKey) || 0) + 1;
+		runtime.__epochEpochHierarchyTotalJobs = totals.totalJobs;
+		runtime.__epochEpochHierarchyTotalTokens = totals.totalTokens;
+		runtime.__epochEpochHierarchyRunKey = (Number(runtime.__epochEpochHierarchyRunKey) || 0) + 1;
 	} catch {
 		// ignore
 	}
 	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
 
-	let firstNonEmptyJobs: any[] = [];
+	let firstNonEmptyJobs: AiSummaryJob[] = [];
 	let firstNonEmptyIndex = -1;
 	for (let i = 0; i < bucketQueue.length; i++) {
-		const bucket = bucketQueue[i]!;
-		let jobsForBucket: any[] = [];
+		const bucket = bucketQueue[i];
+		let jobsForBucket: AiSummaryJob[] = [];
 		try {
 			jobsForBucket = await buildEpochJobsForDateKeys(this, dateKeys, mode, [bucket]);
 		} catch {
@@ -609,14 +655,14 @@ export async function regenerateMissingEpochsForAllRecords(this: EpochPlugin): P
 	if (firstNonEmptyJobs.length === 0) {
 		return;
 	}
-	bridge.enqueue(firstNonEmptyJobs as any);
+	bridge.enqueue(firstNonEmptyJobs);
 	// Cascade only buckets that come after the first non-empty one we just enqueued.
 	const rest = bucketQueue.slice(firstNonEmptyIndex + 1);
 	if (rest.length > 0) {
 		scheduleEpochRegenerationCascadeAfterAiIdleForDateKeys(this, dateKeys, mode, rest, false);
 	}
 	{
-		const plannedTotal = Number((this as any).__epochEpochHierarchyTotalJobs ?? 0);
+		const plannedTotal = Number(runtime.__epochEpochHierarchyTotalJobs ?? 0);
 		const count = Number.isFinite(plannedTotal) && plannedTotal > 0 ? plannedTotal : firstNonEmptyJobs.length;
 		new Notice(`Epochs: queued ${count} missing job(s).`, 2500);
 	}

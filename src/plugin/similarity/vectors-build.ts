@@ -5,11 +5,17 @@ import { getSimilarityModelId } from "./config";
 import { embedPooledChunks } from "./worker-embed";
 import { clampSimilarityContent, chunkText, getPreferredSimilarityText, stripFrontmatter } from "./text";
 
+type MarkdownViewWithEditor = MarkdownView & {
+	editor?: {
+		getValue?: () => string;
+	};
+};
+
 function isEpochgramExportHtml(file: TFile): boolean {
 	try {
 		const ext = String(file?.extension || "").toLowerCase();
 		if (ext !== "html" && ext !== "htm") return false;
-		const base = String((file as any)?.basename ?? "").toLowerCase();
+		const base = String(file.basename ?? "").toLowerCase();
 		return base.startsWith("epochgram-");
 	} catch {
 		return false;
@@ -26,13 +32,13 @@ export async function buildNoteVector(
 	const ext = String(file.extension || "").toLowerCase();
 	if (!isLikelyTextFileExtension(ext)) return null;
 	if (isEpochgramExportHtml(file)) return null;
-	if (!(plugin as any).shouldIndexFile?.(file)) return null;
+	if (!plugin.shouldIndexFile?.(file)) return null;
 
 	let baseText = "";
 	try {
 		const view = plugin.app.workspace.getActiveViewOfType?.(MarkdownView);
 		if (view?.file?.path === file.path) {
-			const live = (view as any)?.editor?.getValue?.();
+			const live = (view as MarkdownViewWithEditor)?.editor?.getValue?.();
 			if (typeof live === "string") {
 				baseText = stripFrontmatter(live);
 			}

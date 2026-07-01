@@ -59,6 +59,8 @@ import {
 	TODAY_OFFSET_Y_INITIAL,
 } from "./epoch-canvas-constants";
 
+import type { EpochPlugin } from "../main";
+
 import type { DayLayout, HoverOverlay } from "./epoch-canvas-types";
 
 import {
@@ -109,14 +111,23 @@ import { getTodayOffset as getTodayOffsetHelper, scaleFont as scaleFontHelper } 
 import { getScrollAnchorDayIndex as getScrollAnchorDayIndexHelper } from "./epoch-canvas/scroll-anchor";
 import { resetScrollNavTargetState as resetScrollNavTargetStateHelper } from "./epoch-canvas/scroll-nav-reset";
 
+type EpochCanvasPlugin = EpochPlugin & {
+	settings?: { enableAnimation?: boolean };
+	manifest?: { id?: string };
+	indexer?: {
+		refreshSyntheticEntriesIfDayChanged?: () => boolean;
+		index?: EpochIndex;
+	};
+};
+
 export class EpochCanvas {
-	private root: HTMLElement; private plugin: any;
+	private root: HTMLElement; private plugin: EpochCanvasPlugin;
 	private canvas: HTMLCanvasElement; private ctx: CanvasRenderingContext2D;
 	private scale = 1; private offsetY = TODAY_OFFSET_Y_INITIAL;
 	private pendingInitialSnap: { path: string; line: number | null } | null = null;
 	private isDragging = false; private dragStartY = 0; private dragStartOffsetY = 0;
 	private mouseDownX = 0; private mouseDownY = 0; private mouseDownTime = 0; private mouseMoved = false;
-	private touchMode: "pan" | "pinch" | "hover" | "twofinger" | "entrydrag" | null = null;
+	private touchMode: "pan" | "pinch" | "hover" | "twofinger" | "entrydrag" | "swipehide" | null = null;
 	private touchStartY = 0; private touchStartOffsetY = 0; private pinchStartDist = 0; private pinchStartScale = 1; private pinchAnchorWorldY = 0;
 	private twoFingerStartTime = 0; private twoFingerAnchorX = 0; private twoFingerAnchorY = 0; private twoFingerMoved = false;
 	private dragSource: "mouse" | "touch" | null = null;
@@ -163,7 +174,7 @@ export class EpochCanvas {
 		// Opening the context menu (or holding right-click) can move pointer capture
 		// off the canvas and trigger mouseleave. Keep the current hover in that case.
 		const rightHeld = !!(e && (e.buttons & 2));
-		if ((this as any).keepHoverAfterMenu || rightHeld) {
+		if (this.keepHoverAfterMenu || rightHeld) {
 			return;
 		}
 		// Click-to-open sets keepHoverUntilPointerMove, but we still want hover to clear
@@ -190,6 +201,7 @@ export class EpochCanvas {
 	private scrollNavIndex = -1; private scrollNavFile: string | null = null;
 	private scrollNavAnchorEntry: import("../indexer/types").DateEntry | null = null;
 	private scrollNavAnchorDayIndex: number | null = null;
+	private __scrollNavAnchorMode: string | null = null;
 	private pinFly: {
 		img: HTMLCanvasElement;
 		fromX: number;
@@ -223,13 +235,15 @@ export class EpochCanvas {
 	private showTrackedChanges = true; private showContentDates = true; private showPropDates = false;
 	private epochsView = false; private focusedEpochRange: { start: string; end: string } | null = null;
 	private searchQuery = "";
+	private __indexVersion = 0;
+	private __scrollNavVisibleTargetsSig: string | null = null;
+	private __scrollNavVisibleTargets: unknown[] | null = null;
 	public onAfterDraw: (() => void) | null = null;
 
 	public setSearchQuery(query: string): void {
-		const cAny: any = this as any;
 		const next = String(query || "");
-		if (String(cAny.searchQuery || "") === next) return;
-		cAny.searchQuery = next;
+		if (this.searchQuery === next) return;
+		this.searchQuery = next;
 		if (/[!$]similar\b/i.test(next)) {
 			try {
 				this.refreshSemanticRelatedForActiveFile(true);
@@ -237,26 +251,22 @@ export class EpochCanvas {
 				// ignore
 			}
 		}
-		cAny.scrollNavFile = null;
-		cAny.scrollNavIndex = -1;
-		cAny.pendingScrollNavHighlight = null;
-		cAny.scrollNavAnchorEntry = null;
-		cAny.scrollNavAnchorDayIndex = null;
+		this.scrollNavFile = null;
+		this.scrollNavIndex = -1;
+		this.pendingScrollNavHighlight = null;
+		this.scrollNavAnchorEntry = null;
+		this.scrollNavAnchorDayIndex = null;
 		try {
-			cAny.__scrollNavAnchorMode = null;
+			this.__scrollNavAnchorMode = null;
 		} catch {
 			// ignore
 		}
-		cAny.clearHover(true);
-		cAny.draw();
+		this.clearHover(true);
+		this.draw();
 	}
 
 	public getSearchQuery(): string {
-		try {
-			return String((this as any).searchQuery || "");
-		} catch {
-			return "";
-		}
+		return this.searchQuery;
 	}
 
 	private clearFocusedEpochRange(): void {
@@ -300,11 +310,11 @@ export class EpochCanvas {
 
 	private requirePro(feature: string): boolean { return requireProHelper(this, feature); }
 
-	constructor(root: HTMLElement, plugin: any, hoverParent: HoverParent | null = null) {
+	constructor(root: HTMLElement, plugin: EpochCanvasPlugin, hoverParent: HoverParent | null = null) {
 		this.root = root;
 		this.plugin = plugin;
 		this.hoverParent = hoverParent;
-		this.win = (root?.ownerDocument?.defaultView as any) ?? window;
+		this.win = root.ownerDocument?.defaultView ?? window;
 		this.hoverSourceId = this.plugin?.manifest?.id ?? "epoch";
 
 		this.canvas = root.createEl("canvas");
@@ -327,10 +337,8 @@ export class EpochCanvas {
 		this.bind();
 
 		try {
-			const w: any = (this as any).win ?? window;
-			const ROCtor: any = w.ResizeObserver ?? (window as any).ResizeObserver;
-			if (typeof ROCtor === "function") {
-				const ro = new ROCtor(() => {
+			if (typeof ResizeObserver === "function") {
+				const ro = new ResizeObserver(() => {
 					this.scheduleResize();
 				});
 				this.resizeObserver = ro;
@@ -341,7 +349,7 @@ export class EpochCanvas {
 		}
 
 		try {
-			const w: any = (this as any).win ?? window;
+			const w = this.win ?? window;
 			w.addEventListener?.("resize", this.scheduleResize);
 			w.visualViewport?.addEventListener?.("resize", this.scheduleResize);
 		} catch {
@@ -350,7 +358,7 @@ export class EpochCanvas {
 
 		// Backstop for maximize/popout flows that don't emit reliable resize events.
 		try {
-			const w: any = (this as any).win ?? window;
+			const w = this.win ?? window;
 			this.sizePoller = w.setInterval(() => this.ensureSizeMatchesDisplay(), 300);
 		} catch {
 			// ignore
@@ -589,14 +597,13 @@ export class EpochCanvas {
 
 	private draw() {
 		try {
-			const indexer: any = this.plugin?.indexer;
+			const indexer = this.plugin?.indexer;
 			if (indexer?.refreshSyntheticEntriesIfDayChanged?.()) {
-				const nextIndex = indexer.index as EpochIndex;
+				const nextIndex = indexer.index;
 				this.index = nextIndex ? { ...nextIndex } : {};
-				const anyThis: any = this as any;
-				anyThis.__indexVersion = (Number(anyThis.__indexVersion) || 0) + 1;
-				anyThis.__scrollNavVisibleTargetsSig = null;
-				anyThis.__scrollNavVisibleTargets = null;
+				this.__indexVersion = Number(this.__indexVersion) + 1;
+				this.__scrollNavVisibleTargetsSig = null;
+				this.__scrollNavVisibleTargets = null;
 			}
 			if (this.pendingInitialSnap) {
 				const rect = this.root?.getBoundingClientRect?.();

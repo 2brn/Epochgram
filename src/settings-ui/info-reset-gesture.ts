@@ -4,7 +4,7 @@ export function registerInfoResetGesture(
 	setting: Setting,
 	onReset: () => Promise<void> | void
 ): void {
-	const infoEl = setting.settingEl?.querySelector?.(".setting-item-info") as HTMLElement | null;
+	const infoEl = setting.settingEl?.querySelector?.<HTMLElement>(".setting-item-info") ?? null;
 	if (!infoEl) return;
 	infoEl.addEventListener("dblclick", (event) => {
 		event.preventDefault();

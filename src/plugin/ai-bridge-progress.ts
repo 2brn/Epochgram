@@ -3,16 +3,49 @@ import type { EpochPlugin } from "../main";
 import { clearEpochProgress, setEpochProgress } from "./progress";
 import { hasAiBridgeAccess } from "./pro-feature-state";
 
-function safeNumber(v: any): number {
+type BridgeJobLike = { kind?: string };
+
+type BridgeStatusLike = {
+	queued?: unknown;
+	inProgress?: unknown;
+	done?: unknown;
+	errors?: unknown;
+	epochTotal?: unknown;
+	epochProcessed?: unknown;
+};
+
+type BridgeLike = {
+	pending?: unknown;
+	inProgress?: unknown;
+	getStatus?: () => unknown;
+};
+
+type AiBridgeProgressPluginState = {
+	epochRegenAfterAiTimer?: number | null;
+	epochRegenAfterAiBucketsQueue?: unknown;
+	__epochEpochHierarchyTotalJobs?: unknown;
+	__epochEpochHierarchyTotalTokens?: unknown;
+	__epochEpochHierarchyRunKey?: unknown;
+	__epochAiProgressWasActive?: unknown;
+	__epochAiProgressBaselineDone?: unknown;
+	__epochAiProgressBaselineErrors?: unknown;
+	aiBridge?: BridgeLike | null;
+};
+
+function asBridgeStatus(value: unknown): BridgeStatusLike | null {
+	return value && typeof value === "object" ? value : null;
+}
+
+function safeNumber(v: unknown): number {
 	const n = Number(v ?? 0);
 	return Number.isFinite(n) ? n : 0;
 }
 
-function hasPlannedEpochCascade(plugin: any): boolean {
+function hasPlannedEpochCascade(plugin: AiBridgeProgressPluginState): boolean {
 	try {
 		if (!plugin) return false;
 		if (plugin.epochRegenAfterAiTimer != null) return true;
-		const q: any = plugin.epochRegenAfterAiBucketsQueue;
+		const q = plugin.epochRegenAfterAiBucketsQueue;
 		if (Array.isArray(q) && q.length > 0) return true;
 		return false;
 	} catch {
@@ -20,7 +53,7 @@ function hasPlannedEpochCascade(plugin: any): boolean {
 	}
 }
 
-function getPlannedEpochTotal(plugin: any): number | null {
+function getPlannedEpochTotal(plugin: AiBridgeProgressPluginState): number | null {
 	try {
 		const n = Number(plugin?.__epochEpochHierarchyTotalJobs ?? 0);
 		return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
@@ -29,15 +62,15 @@ function getPlannedEpochTotal(plugin: any): number | null {
 	}
 }
 
-function getBridgeKindCounts(bridge: any): {
+function getBridgeKindCounts(bridge: BridgeLike | null): {
 	summariesQueued: number;
 	summariesInProgress: number;
 	epochsQueued: number;
 	epochsInProgress: number;
 } {
 	try {
-		const pending: any[] = Array.isArray(bridge?.pending) ? bridge.pending : [];
-		const inProgressValues: any[] = bridge?.inProgress instanceof Map ? Array.from(bridge.inProgress.values()) : [];
+		const pending: BridgeJobLike[] = Array.isArray(bridge?.pending) ? (bridge?.pending as BridgeJobLike[]) : [];
+		const inProgressValues: BridgeJobLike[] = bridge?.inProgress instanceof Map ? Array.from(bridge.inProgress.values() as Iterable<BridgeJobLike>) : [];
 		let summariesQueued = 0;
 		let summariesInProgress = 0;
 		let epochsQueued = 0;
@@ -87,32 +120,33 @@ export function refreshAiBridgeProgress(plugin: EpochPlugin): void {
 		return;
 	}
 
-	const anyPlugin: any = plugin as any;
-	const bridge: any = anyPlugin.aiBridge ?? null;
-	let status: any = null;
+	const state = plugin as EpochPlugin & AiBridgeProgressPluginState;
+	const bridge = state.aiBridge ?? null;
+	let status: BridgeStatusLike | null = null;
 	try {
-		status = bridge?.getStatus?.() ?? null;
+		const raw = bridge?.getStatus?.() ?? null;
+		status = asBridgeStatus(raw);
 	} catch {
 		status = null;
 	}
 
 	const queued = safeNumber(status?.queued);
 	const inProgress = safeNumber(status?.inProgress);
-	const epochPlanActive = hasPlannedEpochCascade(anyPlugin);
+	const epochPlanActive = hasPlannedEpochCascade(state);
 	const hasWork = queued > 0 || inProgress > 0 || epochPlanActive;
-	const plannedEpochTotal = getPlannedEpochTotal(anyPlugin);
+	const plannedEpochTotal = getPlannedEpochTotal(state);
 	const doneNow = clampInt(safeNumber(status?.done));
 	const errorsNow = clampInt(safeNumber(status?.errors));
-	const wasActive = anyPlugin.__epochAiProgressWasActive === true;
+	const wasActive = state.__epochAiProgressWasActive === true;
 
 	if (!hasWork) {
 		try {
-			anyPlugin.__epochEpochHierarchyTotalJobs = 0;
-			anyPlugin.__epochEpochHierarchyTotalTokens = 0;
-			anyPlugin.__epochEpochHierarchyRunKey = 0;
-			anyPlugin.__epochAiProgressWasActive = false;
-			anyPlugin.__epochAiProgressBaselineDone = doneNow;
-			anyPlugin.__epochAiProgressBaselineErrors = errorsNow;
+			state.__epochEpochHierarchyTotalJobs = 0;
+			state.__epochEpochHierarchyTotalTokens = 0;
+			state.__epochEpochHierarchyRunKey = 0;
+			state.__epochAiProgressWasActive = false;
+			state.__epochAiProgressBaselineDone = doneNow;
+			state.__epochAiProgressBaselineErrors = errorsNow;
 		} catch {
 			// ignore
 		}
@@ -128,17 +162,17 @@ export function refreshAiBridgeProgress(plugin: EpochPlugin): void {
 
 	if (!wasActive) {
 		try {
-			anyPlugin.__epochAiProgressWasActive = true;
-			anyPlugin.__epochAiProgressBaselineDone = doneNow;
-			anyPlugin.__epochAiProgressBaselineErrors = errorsNow;
+			state.__epochAiProgressWasActive = true;
+			state.__epochAiProgressBaselineDone = doneNow;
+			state.__epochAiProgressBaselineErrors = errorsNow;
 		} catch {
 			// ignore
 		}
 	}
 
 	try {
-		const baselineDone = clampInt(safeNumber(anyPlugin.__epochAiProgressBaselineDone));
-		const baselineErrors = clampInt(safeNumber(anyPlugin.__epochAiProgressBaselineErrors));
+		const baselineDone = clampInt(safeNumber(state.__epochAiProgressBaselineDone));
+		const baselineErrors = clampInt(safeNumber(state.__epochAiProgressBaselineErrors));
 		const processedAll = clampInt((doneNow - baselineDone) + (errorsNow - baselineErrors));
 		const remainingInBridge = clampInt(queued + inProgress);
 

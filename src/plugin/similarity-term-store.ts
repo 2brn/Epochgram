@@ -14,15 +14,29 @@ type TermClassificationStore = {
 	files: Record<string, TermClassificationFileRecord>;
 };
 
+type ParsedTermStore = {
+	model?: unknown;
+	files?: unknown;
+};
+
+type TermStorePluginState = {
+	termSimilarityFilePath?: string;
+	updateTermSimilarityFileStat?: () => Promise<void>;
+	termSimilarityIndex?: TermClassificationStore;
+	termSimilarityLoaded?: boolean;
+	termSimilarityStoreRev?: number;
+	scheduleInheritedMarkRecompute?: (reason: string) => void;
+};
+
 function getTopicsPath(plugin: EpochPlugin): string {
-	const anyPlugin: any = plugin as any;
-	return String(anyPlugin?.termSimilarityFilePath || "");
+	return String((plugin as EpochPlugin & TermStorePluginState).termSimilarityFilePath || "");
 }
 
 
-function normalizeStoreModel(plugin: EpochPlugin, model: any): string {
+function normalizeStoreModel(plugin: EpochPlugin, model: unknown): string {
 	try {
-		const s = String(model ?? "").trim();
+		if (typeof model !== "string") return getZeroShotModelId(plugin);
+		const s = model.trim();
 		if (s && s.toLowerCase() !== "zeroshot") return s;
 	} catch {
 		// ignore
@@ -42,49 +56,51 @@ export async function ensureTermStoreFileExists(plugin: EpochPlugin): Promise<vo
 		if (!exists) {
 			await plugin.app.vault.adapter.write(p, JSON.stringify(emptyTopicsStore(plugin)));
 			try {
-				await (plugin as any).updateTermSimilarityFileStat?.();
+				await (plugin as EpochPlugin & TermStorePluginState).updateTermSimilarityFileStat?.();
 			} catch { void 0; }
 			return;
 		}
 		try {
-			await (plugin as any).updateTermSimilarityFileStat?.();
+			await (plugin as EpochPlugin & TermStorePluginState).updateTermSimilarityFileStat?.();
 		} catch { void 0; }
 	} catch { void 0; }
 }
 
 export async function readTermStore(plugin: EpochPlugin): Promise<TermClassificationStore> {
-	const anyPlugin: any = plugin as any;
-	if (anyPlugin.termSimilarityIndex && anyPlugin.termSimilarityLoaded) {
-		return anyPlugin.termSimilarityIndex as TermClassificationStore;
+	const state = plugin as EpochPlugin & TermStorePluginState;
+	if (state.termSimilarityIndex && state.termSimilarityLoaded) {
+		return state.termSimilarityIndex;
 	}
 	const empty: TermClassificationStore = emptyTopicsStore(plugin);
 	try {
 		const p = getTopicsPath(plugin);
 		if (!p) {
-			anyPlugin.termSimilarityIndex = empty;
-			anyPlugin.termSimilarityLoaded = true;
+			state.termSimilarityIndex = empty;
+			state.termSimilarityLoaded = true;
 			return empty;
 		}
 		const exists = await plugin.app.vault.adapter.exists(p);
 		if (!exists) {
-			anyPlugin.termSimilarityIndex = empty;
-			anyPlugin.termSimilarityLoaded = true;
+			state.termSimilarityIndex = empty;
+			state.termSimilarityLoaded = true;
 			return empty;
 		}
 		const raw = await plugin.app.vault.adapter.read(p);
-		const parsed = JSON.parse(raw || "{}");
+		const parsed = JSON.parse(raw || "{}") as ParsedTermStore;
 		const effectiveModel = normalizeStoreModel(plugin, parsed?.model);
+		const parsedFiles = parsed?.files;
+		const files = parsedFiles && typeof parsedFiles === "object" && !Array.isArray(parsedFiles) ? parsedFiles : {};
 		const store: TermClassificationStore = {
 			model: effectiveModel,
-			files: typeof parsed?.files === "object" && parsed.files ? parsed.files : {}
+			files: files as Record<string, TermClassificationFileRecord>
 		};
 
-		anyPlugin.termSimilarityIndex = store;
-		anyPlugin.termSimilarityLoaded = true;
+		state.termSimilarityIndex = store;
+		state.termSimilarityLoaded = true;
 		return store;
 	} catch {
-		anyPlugin.termSimilarityIndex = empty;
-		anyPlugin.termSimilarityLoaded = true;
+		state.termSimilarityIndex = empty;
+		state.termSimilarityLoaded = true;
 		return empty;
 	}
 }
@@ -100,11 +116,11 @@ export async function writeTermStore(plugin: EpochPlugin, store: TermClassificat
 		}
 		await plugin.app.vault.adapter.write(p, JSON.stringify(store));
 		try {
-			const anyPlugin: any = plugin as any;
-			anyPlugin.termSimilarityStoreRev = (typeof anyPlugin.termSimilarityStoreRev === "number" ? anyPlugin.termSimilarityStoreRev : 0) + 1;
+			const state = plugin as EpochPlugin & TermStorePluginState;
+			state.termSimilarityStoreRev = (typeof state.termSimilarityStoreRev === "number" ? state.termSimilarityStoreRev : 0) + 1;
 		} catch { void 0; }
 		try {
-			(plugin as any).scheduleInheritedMarkRecompute?.("termSimilarity");
+			(plugin as EpochPlugin & TermStorePluginState).scheduleInheritedMarkRecompute?.("termSimilarity");
 		} catch { void 0; }
 	} catch { void 0; }
 }

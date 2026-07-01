@@ -116,6 +116,22 @@ describe("computeInheritedMarkData", () => {
 		expect(data).toBeNull();
 	});
 
+	it("treats title threshold 1.0 as same-folder matching", () => {
+		const storeFiles = files({});
+		const getFileMarkColor = (p: string) => (p === "journal/Alpha.md" ? 3 : null);
+		const data = computeInheritedMarkData({
+			visiblePaths: ["journal/Completely Different Name.md", "other/Completely Different Name.md"],
+			seedPaths: ["journal/Alpha.md"],
+			storeFiles,
+			getFileMarkColor,
+			threshold: 0.5,
+			titleJwThreshold: 1
+		});
+		expect(data).not.toBeNull();
+		expect(data!.indexByPath.get("journal/Completely Different Name.md")).toBe(3);
+		expect(data!.indexByPath.has("other/Completely Different Name.md")).toBe(false);
+	});
+
 	it("treats 'Epoch - To Do' and 'Epoch - LLC' as title-similar", () => {
 		const storeFiles = files({});
 		const getFileMarkColor = (p: string) => (p === "Epoch - To Do.md" ? 1 : null);

@@ -6,9 +6,20 @@ export interface FrontmatterSuppressionFlags {
 	noindex: boolean;
 }
 
-function hasOwn(obj: any, key: string): boolean {
+function hasOwn(obj: unknown, key: string): boolean {
 	return !!obj && typeof obj === "object" && Object.prototype.hasOwnProperty.call(obj, key);
 }
+
+type PluginLikeForFrontmatterFlags = {
+	app?: {
+		vault?: {
+			getAbstractFileByPath?: (path: string) => unknown;
+		};
+		metadataCache?: {
+			getFileCache?: (file: unknown) => { frontmatter?: Record<string, unknown> } | null;
+		};
+	};
+};
 
 function scanYamlFrontmatterHasKey(raw: string, key: string): boolean {
 	try {
@@ -30,19 +41,19 @@ function scanYamlFrontmatterHasKey(raw: string, key: string): boolean {
 }
 
 export function resolveFrontmatterSuppressionFlags(
-	plugin: any,
+	plugin: unknown,
 	fileOrPath: TFile | string,
 	rawText?: string
 ): FrontmatterSuppressionFlags {
 	const out: FrontmatterSuppressionFlags = { notracked: false, noparsed: false, noindex: false };
 	try {
-		const pluginAny: any = plugin as any;
+		const pluginState = plugin as PluginLikeForFrontmatterFlags;
 		const file =
 			typeof fileOrPath === "string"
-				? pluginAny?.app?.vault?.getAbstractFileByPath?.(fileOrPath)
+				? pluginState?.app?.vault?.getAbstractFileByPath?.(fileOrPath)
 				: fileOrPath;
-		const cache = pluginAny?.app?.metadataCache?.getFileCache?.(file);
-		const fm: any = cache?.frontmatter ?? null;
+		const cache = pluginState?.app?.metadataCache?.getFileCache?.(file);
+		const fm = cache?.frontmatter ?? null;
 		out.notracked = hasOwn(fm, "notracked");
 		out.noparsed = hasOwn(fm, "noparsed");
 		out.noindex = hasOwn(fm, "noindex");

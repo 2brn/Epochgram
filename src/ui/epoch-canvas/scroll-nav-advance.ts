@@ -19,10 +19,39 @@ import { advanceScrollNavSimilar } from "./scroll-nav-advance-similar";
 import { advanceScrollNavEntries } from "./scroll-nav-advance-entries";
 import { resetScrollNavTargetState } from "./scroll-nav-reset";
 
+type ScrollNavCanvasState = {
+	__suppressExternalAutoScrollUntil?: number;
+	clearFocusedEpochRange(): void;
+	pendingScrollNavHighlight: { dayIndex?: number; date?: Date } | null;
+	searchQuery?: string;
+	epochsView?: boolean;
+	activeFilePath?: string | null;
+	scrollNavFile?: string | null;
+	root: HTMLElement;
+	scrollNavAnchorEntry?: unknown;
+	semanticRelatedBasePath?: string;
+	semanticRelatedScored?: Array<{ path?: string }>;
+	semanticRelatedPaths?: Set<string>;
+	__scrollNavLastModeKey?: string;
+	__scrollNavAnchorMode?: string | null;
+	__scrollNavAnchorDayIndex?: number | null;
+	__scrollNavAnchorEntry?: unknown;
+	animatingView: boolean;
+	hoverSummary: { dayIndex?: number | null } | null;
+	animSummary: { dayIndex?: number | null } | null;
+	hoverDateIndex: number | null;
+	animDateIndex: number | null;
+	hoverTarget: number;
+	scrollNavIndex: number;
+	scrollNavAnchorDayIndex?: number | null;
+	scale: number;
+	offsetY: number;
+};
+
 export function advanceScrollNav(canvas: EpochCanvas, direction: number = 1, options: { wrap?: boolean } = {}): boolean {
-	const c: any = canvas as any;
+	const c = canvas as unknown as ScrollNavCanvasState;
 	try {
-		c.__suppressExternalAutoScrollUntil = performance.now() + 1000;
+		c.__suppressExternalAutoScrollUntil = window.performance.now() + 1000;
 	} catch {
 		// ignore
 	}
@@ -66,11 +95,11 @@ export function advanceScrollNav(canvas: EpochCanvas, direction: number = 1, opt
 		}
 		if (!inheritedMarkIndexByPath) return null;
 		if (root) {
-			const v = normalizeMarkColorIndex(inheritedMarkIndexByPath.get(root) as any);
+			const v = normalizeMarkColorIndex(inheritedMarkIndexByPath.get(root));
 			if (v) return v;
 		}
 		if (opened) {
-			const v = normalizeMarkColorIndex(inheritedMarkIndexByPath.get(opened) as any);
+			const v = normalizeMarkColorIndex(inheritedMarkIndexByPath.get(opened));
 			if (v) return v;
 		}
 		return null;
@@ -90,7 +119,7 @@ export function advanceScrollNav(canvas: EpochCanvas, direction: number = 1, opt
 		add(inheritedAncestor);
 		if (inheritedMarkIndexByPath) {
 			for (const [p, raw] of inheritedMarkIndexByPath.entries()) {
-				const v = normalizeMarkColorIndex(raw as any);
+				const v = normalizeMarkColorIndex(raw);
 				if (!v) continue;
 				if (!groupSet.has(v)) continue;
 				if (!p || p.startsWith("epoch://")) continue;
@@ -101,12 +130,12 @@ export function advanceScrollNav(canvas: EpochCanvas, direction: number = 1, opt
 		return Array.from(out);
 	})();
 	try {
-		const base = String((c as any).semanticRelatedBasePath ?? c.activeFilePath ?? "");
+		const base = String(c.semanticRelatedBasePath ?? c.activeFilePath ?? "");
 		if (base && base === String(similarRootFile)) {
 			const scored = Array.isArray(c.semanticRelatedScored) ? c.semanticRelatedScored : null;
 			if (scored && scored.length > 0) {
 				for (const s of scored) {
-					const p = (s as any)?.path;
+					const p = s?.path;
 					if (typeof p === "string" && p) relatedList.push(p);
 				}
 			} else if (c.semanticRelatedPaths instanceof Set) {
@@ -153,17 +182,17 @@ export function advanceScrollNav(canvas: EpochCanvas, direction: number = 1, opt
 	const isSimilarNav = !useVisibleNav && extraPaths.length > 0;
 	const modeKey = epochsViewActive ? "epochs" : useVisibleNav ? "visible" : isSimilarNav ? "similar" : "entry";
 	try {
-		const prevMode = String((c as any).__scrollNavLastModeKey || "");
+		const prevMode = String(c.__scrollNavLastModeKey || "");
 		if (prevMode && prevMode !== modeKey) {
 			resetScrollNavTargetState(canvas);
 		}
-		(c as any).__scrollNavLastModeKey = modeKey;
+		c.__scrollNavLastModeKey = modeKey;
 	} catch {
 		// ignore
 	}
 	const targets: Array<Extract<ScrollNavTarget, { kind: "entry" }>> = useVisibleNav
 		? computeVisibleScrollNavEntryTargets(canvas)
-		: computeScrollNavTargets(canvas, isSimilarNav ? [openedFile, ...extraPaths] : [openedFile]).filter(
+		: computeScrollNavTargets(canvas, isSimilarNav ? [openedFile, ...extraPaths].filter((path): path is string => typeof path === "string" && path.length > 0) : [openedFile].filter((path): path is string => typeof path === "string" && path.length > 0)).filter(
 			(target): target is Extract<ScrollNavTarget, { kind: "entry" }> => target.kind === "entry"
 		);
 
@@ -172,6 +201,9 @@ export function advanceScrollNav(canvas: EpochCanvas, direction: number = 1, opt
 		c.pendingScrollNavHighlight = null;
 		return false;
 	}
+	const prevPendingForSimilar = prevPending
+		? { dayIndex: typeof prevPending.dayIndex === "number" ? prevPending.dayIndex : undefined, date: prevPending.date }
+		: {};
 
 	if (epochsViewActive) {
 		return advanceScrollNavEpochsView({ canvas, c, direction, wrap, prevPending, rect });
@@ -180,7 +212,15 @@ export function advanceScrollNav(canvas: EpochCanvas, direction: number = 1, opt
 		return advanceScrollNavVisibleDays({ canvas, c, direction, wrap, prevPending, rect });
 	}
 	if (isSimilarNav) {
-		return advanceScrollNavSimilar({ canvas, c, direction, wrap, prevPending, rect, targets });
+		return advanceScrollNavSimilar({
+			canvas,
+			c,
+			direction,
+			wrap,
+			prevPending: prevPendingForSimilar,
+			rect,
+			targets
+		});
 	}
 
 	// Default entry-based navigation.

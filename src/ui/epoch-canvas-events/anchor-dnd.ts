@@ -8,25 +8,153 @@ import { parseAnyDate, parseAnyDates } from "../../indexer/extractor";
 import { entrySummaryComponents } from "../epoch-canvas-utils";
 import { setCssStyles } from "../../dom";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument: Document | null = typeof window !== "undefined" ? window.document : null;
 
 
 type DragSource = "mouse" | "touch";
 
-function isEpochEntry(entry: any): boolean {
+type EntryLike = DateEntry & {
+	file?: string;
+	date?: string;
+	source?: string;
+	pinned?: boolean;
+	originalDate?: string;
+	blockStart?: number;
+	blockEnd?: number;
+};
+
+type SummaryRectLike = {
+	x1: number;
+	y1: number;
+	x2: number;
+	y2: number;
+	entry?: EntryLike | null;
+};
+
+type LayoutLike = {
+	index?: number;
+	y?: number;
+	summaryRects?: SummaryRectLike[];
+	summaryHoverRects?: SummaryRectLike[];
+};
+
+type DragGhost = {
+	img: HTMLCanvasElement;
+	w: number;
+	h: number;
+	offsetX: number;
+	offsetY: number;
+	x: number;
+	y: number;
+};
+
+type VaultLike = {
+	getAbstractFileByPath: (path: string) => TFile | TFolder | null;
+	createFolder: (path: string) => Promise<void>;
+	rename: (file: TFile, newPath: string) => Promise<void>;
+};
+
+type AppLike = {
+	vault: VaultLike;
+};
+
+type PluginLike = {
+	app: AppLike;
+	settings?: {
+		enableAnimation?: boolean;
+	};
+	getDailyNoteFormat?: () => string;
+	getDailyNoteFolder?: () => string;
+	setYamlDateForPath?: (path: string, dateKey: string) => Promise<void>;
+};
+
+type AnchorDndState = {
+	canvas: HTMLCanvasElement;
+	ctx: CanvasRenderingContext2D;
+	win?: Window;
+	scale?: number;
+	layouts?: LayoutLike[];
+	index?: Record<string, DateEntry[]>;
+	offsetY: number;
+	keepHoverUntilPointerMove?: boolean;
+	hoverSummary?: unknown;
+	animSummary?: unknown;
+	hoverDateIndex?: number | null;
+	animDateIndex?: number | null;
+	hoverTarget?: number;
+	plugin?: PluginLike;
+	getToday: () => Date;
+	getDateForIndex: (index: number, today: Date) => Date;
+	clearHover: (force?: boolean) => void;
+	requestHoverAnimation: () => void;
+	draw: () => void;
+	entryDragActive: boolean;
+	entryDragEntry: DateEntry | null;
+	entryDragSource: DragSource | null;
+	entryDragTargetDayIndex: number | null;
+	entryDragLastClientX: number;
+	entryDragLastClientY: number;
+	entryDragLastLocalX: number;
+	entryDragLastLocalY: number;
+	entryDragGhost: DragGhost | null;
+	entryDragGhostSourceEntry: DateEntry | null;
+	entryDragGhostAttemptedAt: number;
+	entryDragAutoScrollRaf: number | null;
+	entryDragAutoScrollLastAt: number;
+};
+
+function getAnchorDndState(canvas: EpochCanvas): AnchorDndState {
+	return canvas as unknown as AnchorDndState;
+}
+
+function asEntryLike(entry: DateEntry | null | undefined): EntryLike | null {
+	return entry ?? null;
+}
+
+function getEntryFile(entry: DateEntry | null | undefined): string {
+	return String(asEntryLike(entry)?.file ?? "");
+}
+
+function getEntryDate(entry: DateEntry | null | undefined): string {
+	return String(asEntryLike(entry)?.date ?? "");
+}
+
+function getEntrySource(entry: DateEntry | null | undefined): string {
+	return String(asEntryLike(entry)?.source ?? "");
+}
+
+function getEntryPinned(entry: DateEntry | null | undefined): boolean {
+	return asEntryLike(entry)?.pinned === true;
+}
+
+function getEntryOriginalDate(entry: DateEntry | null | undefined): string {
+	return String(asEntryLike(entry)?.originalDate ?? "");
+}
+
+function getEntryBlockStart(entry: DateEntry | null | undefined): number {
+	const raw = asEntryLike(entry)?.blockStart;
+	return typeof raw === "number" ? raw : -1;
+}
+
+function getEntryBlockEnd(entry: DateEntry | null | undefined): number {
+	const raw = asEntryLike(entry)?.blockEnd;
+	return typeof raw === "number" ? raw : -1;
+}
+
+function isEpochEntry(entry: DateEntry | null | undefined): boolean {
 	try {
-		const file = String(entry?.file ?? "");
+		const file = getEntryFile(entry);
 		return file.startsWith("epoch://");
 	} catch {
 		return false;
 	}
 }
 
-function isSyntheticPinnedTodayClone(entry: any): boolean {
+function isSyntheticPinnedTodayClone(entry: DateEntry | null | undefined): boolean {
 	try {
-		if (!entry || entry.pinned !== true) return false;
-		const originalDate = String(entry.originalDate ?? "").trim();
-		const date = String(entry.date ?? "").trim();
+		if (!entry || !getEntryPinned(entry)) return false;
+		const originalDate = getEntryOriginalDate(entry).trim();
+		const date = getEntryDate(entry).trim();
 		return !!originalDate && !!date && originalDate !== date;
 	} catch {
 		return false;
@@ -35,21 +163,21 @@ function isSyntheticPinnedTodayClone(entry: any): boolean {
 
 export function isDraggableAnchorEntry(entry: DateEntry | null | undefined): boolean {
 	if (!entry) return false;
-	if (isEpochEntry(entry as any)) return false;
-	if (isSyntheticPinnedTodayClone(entry as any)) return false;
-	const src = String((entry as any)?.source ?? "");
+	if (isEpochEntry(entry)) return false;
+	if (isSyntheticPinnedTodayClone(entry)) return false;
+	const src = getEntrySource(entry);
 	if (!(src === "cdate" || src === "namedate" || src === "dateprop")) return false;
-	const file = String((entry as any)?.file ?? "").trim();
+	const file = getEntryFile(entry).trim();
 	if (!file) return false;
 	try {
-		const icons = entrySummaryComponents(entry as any)?.iconIds ?? [];
+		const icons = entrySummaryComponents(entry)?.iconIds ?? [];
 		if (Array.isArray(icons) && icons.length > 0) {
 			const todayKey = resolveDateKeyForCanvasDrop(new Date());
 			const isMd = file.toLowerCase().endsWith(".md");
 			const isPinnedAnchorOnToday =
 				isMd &&
-				(entry as any)?.pinned === true &&
-				String((entry as any)?.date ?? "").trim() === todayKey &&
+				getEntryPinned(entry) &&
+				getEntryDate(entry).trim() === todayKey &&
 				icons.length === 1 &&
 				icons[0] === SUMMARY_ICON_PIN;
 			if (!isPinnedAnchorOnToday) return false;
@@ -64,33 +192,33 @@ export function isDraggableAnchorEntry(entry: DateEntry | null | undefined): boo
 export function resolveDraggableAnchorEntry(canvas: EpochCanvas, hit: DateEntry | null | undefined): DateEntry | null {
 	if (!hit) return null;
 	if (isDraggableAnchorEntry(hit)) return hit;
-	if (isEpochEntry(hit as any)) return null;
+	if (isEpochEntry(hit)) return null;
 
-	const file = String((hit as any)?.file ?? "").trim();
+	const file = getEntryFile(hit).trim();
 	if (!file) return null;
 
 	// Prefer resolving within the day the user is interacting with.
-	const dateKeyRaw = String((hit as any)?.date ?? "").trim();
+	const dateKeyRaw = getEntryDate(hit).trim();
 	if (!dateKeyRaw) return null;
 
-	const s: any = canvas as any;
-	const rawEntries: DateEntry[] | undefined = (s.index as any)?.[dateKeyRaw];
+	const s = getAnchorDndState(canvas);
+	const rawEntries: DateEntry[] | undefined = s.index?.[dateKeyRaw];
 	if (!Array.isArray(rawEntries) || rawEntries.length === 0) return null;
 
 	const anchors = rawEntries
-		.filter((e) => e && String((e as any)?.file ?? "").trim() === file)
+		.filter((e) => e && getEntryFile(e).trim() === file)
 		.filter((e) => isDraggableAnchorEntry(e));
 	if (anchors.length === 0) return null;
 	return (
-		anchors.find((e) => String((e as any)?.source ?? "") === "dateprop") ||
-		anchors.find((e) => String((e as any)?.source ?? "") === "namedate") ||
-		anchors.find((e) => String((e as any)?.source ?? "") === "cdate") ||
+		anchors.find((e) => getEntrySource(e) === "dateprop") ||
+		anchors.find((e) => getEntrySource(e) === "namedate") ||
+		anchors.find((e) => getEntrySource(e) === "cdate") ||
 		anchors[0] ||
 		null
 	);
 }
 
-function clearDragState(s: any): void {
+function clearDragState(s: AnchorDndState): void {
 	s.entryDragActive = false;
 	s.entryDragEntry = null;
 	s.entryDragSource = null;
@@ -104,7 +232,7 @@ function clearDragState(s: any): void {
 	s.entryDragGhostAttemptedAt = 0;
 	try {
 		if (s.entryDragAutoScrollRaf != null) {
-			cancelAnimationFrame(s.entryDragAutoScrollRaf);
+			window.cancelAnimationFrame(s.entryDragAutoScrollRaf);
 		}
 	} catch {
 		// ignore
@@ -136,7 +264,7 @@ function normalizeDailyFolderInput(rawFolder: string): string {
 }
 
 function getDailyNoteInfoForPath(
-	plugin: any,
+	plugin: PluginLike,
 	pathRaw: string
 ): { suffix: string; core: string; format: string; folder: string } | null {
 	try {
@@ -246,7 +374,7 @@ function buildDailyPath(folder: string, core: string, suffix: string): string {
 	return normalizePath(folder ? `${folder}/${relNoExt}.md` : `${relNoExt}.md`);
 }
 
-function getNextAvailableVariantPath(app: any, targetPathRaw: string, selfPathRaw: string): string {
+function getNextAvailableVariantPath(app: AppLike, targetPathRaw: string, selfPathRaw: string): string {
 	const targetPath = normalizePath(String(targetPathRaw || ""));
 	const selfPath = normalizePath(String(selfPathRaw || ""));
 	const targetExisting = app.vault.getAbstractFileByPath(targetPath);
@@ -266,7 +394,7 @@ function getNextAvailableVariantPath(app: any, targetPathRaw: string, selfPathRa
 	return targetPath;
 }
 
-async function ensureParentFolders(app: any, filePath: string): Promise<void> {
+async function ensureParentFolders(app: AppLike, filePath: string): Promise<void> {
 	const parent = normalizePath(String(filePath || ""))
 		.split("/")
 		.slice(0, -1)
@@ -294,14 +422,14 @@ function captureEntryRowSnapshot(canvas: EpochCanvas, entry: DateEntry): {
 	y1: number;
 } | null {
 	try {
-		const s: any = canvas as any;
+		const s = getAnchorDndState(canvas);
 		if (!s.canvas || !s.ctx) return null;
 
-		let rect: { x1: number; y1: number; x2: number; y2: number } | null = null;
+		let rect: SummaryRectLike | null = null;
 		let usedHoverRects = false;
 		for (const layout of s.layouts ?? []) {
 			const useHover = (Array.isArray(layout?.summaryHoverRects) && layout.summaryHoverRects.length > 0);
-			const stableRects: any[] = useHover ? layout.summaryHoverRects : (layout?.summaryRects ?? []);
+			const stableRects: SummaryRectLike[] = useHover ? (layout.summaryHoverRects ?? []) : (layout?.summaryRects ?? []);
 			for (const r of stableRects) {
 				if (r?.entry === entry) {
 					rect = r;
@@ -309,10 +437,10 @@ function captureEntryRowSnapshot(canvas: EpochCanvas, entry: DateEntry): {
 					break;
 				}
 				if (
-					r?.entry?.file === entry.file &&
-					r?.entry?.date === entry.date &&
-					(r?.entry?.blockStart ?? -1) === (entry.blockStart ?? -1) &&
-					(r?.entry?.blockEnd ?? -1) === (entry.blockEnd ?? -1)
+					getEntryFile(r?.entry ?? null) === getEntryFile(entry) &&
+					getEntryDate(r?.entry ?? null) === getEntryDate(entry) &&
+					getEntryBlockStart(r?.entry ?? null) === getEntryBlockStart(entry) &&
+					getEntryBlockEnd(r?.entry ?? null) === getEntryBlockEnd(entry)
 				) {
 					rect = r;
 					usedHoverRects = useHover;
@@ -320,15 +448,15 @@ function captureEntryRowSnapshot(canvas: EpochCanvas, entry: DateEntry): {
 				}
 				if (
 					!rect &&
-					r?.entry?.file === entry.file &&
-					r?.entry?.date === entry.date &&
-					r?.entry?.source === entry.source
+					getEntryFile(r?.entry ?? null) === getEntryFile(entry) &&
+					getEntryDate(r?.entry ?? null) === getEntryDate(entry) &&
+					getEntrySource(r?.entry ?? null) === getEntrySource(entry)
 				) {
 					rect = r;
 					usedHoverRects = useHover;
 					break;
 				}
-				if (!rect && r?.entry?.file === entry.file && r?.entry?.date === entry.date) {
+				if (!rect && getEntryFile(r?.entry ?? null) === getEntryFile(entry) && getEntryDate(r?.entry ?? null) === getEntryDate(entry)) {
 					rect = r;
 					usedHoverRects = useHover;
 					break;
@@ -367,7 +495,7 @@ function captureEntryRowSnapshot(canvas: EpochCanvas, entry: DateEntry): {
 		if (!built) return null;
 		const { clippedX1, clippedY1, clippedWCss, clippedHCss } = built;
 
-		const w: any = s.win ?? window;
+		const w = s.win ?? window;
 		const dpr = (w && typeof w.devicePixelRatio === "number" ? w.devicePixelRatio : window.devicePixelRatio) || 1;
 		const sx = Math.max(0, Math.floor(clippedX1 * dpr));
 		const sy = Math.max(0, Math.floor(clippedY1 * dpr));
@@ -383,6 +511,7 @@ function captureEntryRowSnapshot(canvas: EpochCanvas, entry: DateEntry): {
 		}
 		if (!imgData) return null;
 
+		if (!activeDocument) return null;
 		const off = activeDocument.createElement("canvas");
 		off.width = sw;
 		off.height = sh;
@@ -400,13 +529,13 @@ function captureEntryRowSnapshot(canvas: EpochCanvas, entry: DateEntry): {
 	}
 }
 
-function findDayIndexForLocalY(s: any, localY: number): number | null {
-	const layouts: any[] = Array.isArray(s.layouts) ? s.layouts : [];
+function findDayIndexForLocalY(s: AnchorDndState, localY: number): number | null {
+	const layouts: LayoutLike[] = Array.isArray(s.layouts) ? s.layouts : [];
 	if (layouts.length === 0) return null;
 	const half = (BASE_SPACING * (Number(s.scale) || 1)) / 2;
 	let best: { index: number; dist: number } | null = null;
 	for (const l of layouts) {
-		if (!l || typeof l.index !== "number" || !Number.isFinite(l.y)) continue;
+		if (!l || typeof l.index !== "number" || !Number.isFinite(Number(l.y))) continue;
 		const y = Number(l.y);
 		if (localY >= y - half && localY <= y + half) return l.index;
 		const d = Math.abs(localY - y);
@@ -416,9 +545,9 @@ function findDayIndexForLocalY(s: any, localY: number): number | null {
 }
 
 function ensureAutoScrollLoop(canvas: EpochCanvas): void {
-	const s: any = canvas as any;
+	const s = getAnchorDndState(canvas);
 	if (s.entryDragAutoScrollRaf != null) return;
-	s.entryDragAutoScrollLastAt = performance.now();
+	s.entryDragAutoScrollLastAt = window.performance.now();
 
 	const step = () => {
 		if (!s.entryDragActive) {
@@ -430,7 +559,7 @@ function ensureAutoScrollLoop(canvas: EpochCanvas): void {
 		// appears as soon as the layout catches up, even if the pointer stops moving.
 		try {
 			if (!s.entryDragGhost && s.entryDragGhostSourceEntry) {
-				const now = performance.now();
+				const now = window.performance.now();
 				const lastTry = Number(s.entryDragGhostAttemptedAt) || 0;
 				if (now - lastTry > 140) {
 					s.entryDragGhostAttemptedAt = now;
@@ -456,7 +585,7 @@ function ensureAutoScrollLoop(canvas: EpochCanvas): void {
 		} catch {
 			// ignore
 		}
-		const now = performance.now();
+		const now = window.performance.now();
 		const dt = Math.max(0, Math.min(64, now - (Number(s.entryDragAutoScrollLastAt) || now)));
 		s.entryDragAutoScrollLastAt = now;
 
@@ -494,7 +623,7 @@ export function beginAnchorEntryDrag(
 	clientY: number,
 	ghostEntry?: DateEntry | null
 ): void {
-	const s: any = canvas as any;
+	const s = getAnchorDndState(canvas);
 	s.entryDragActive = true;
 	s.entryDragEntry = entry;
 	s.entryDragSource = source;
@@ -547,7 +676,7 @@ export function beginAnchorEntryDrag(
 }
 
 export function updateAnchorEntryDrag(canvas: EpochCanvas, clientX: number, clientY: number): void {
-	const s: any = canvas as any;
+	const s = getAnchorDndState(canvas);
 	if (!s.entryDragActive) return;
 	s.entryDragLastClientX = clientX;
 	s.entryDragLastClientY = clientY;
@@ -587,7 +716,7 @@ export function updateAnchorEntryDrag(canvas: EpochCanvas, clientX: number, clie
 	// even if the pointer stops moving.
 	try {
 		if (shouldTryGhostCaptureAfterDraw && !s.entryDragGhost && s.entryDragGhostSourceEntry) {
-			const now = performance.now();
+			const now = window.performance.now();
 			const lastTry = Number(s.entryDragGhostAttemptedAt) || 0;
 			if (now - lastTry > 80) {
 				s.entryDragGhostAttemptedAt = now;
@@ -614,7 +743,7 @@ export function updateAnchorEntryDrag(canvas: EpochCanvas, clientX: number, clie
 }
 
 export function cancelAnchorEntryDrag(canvas: EpochCanvas): void {
-	const s: any = canvas as any;
+	const s = getAnchorDndState(canvas);
 	if (!s.entryDragActive) return;
 	clearDragState(s);
 	try {
@@ -626,7 +755,7 @@ export function cancelAnchorEntryDrag(canvas: EpochCanvas): void {
 }
 
 export async function commitAnchorEntryDrag(canvas: EpochCanvas): Promise<void> {
-	const s: any = canvas as any;
+	const s = getAnchorDndState(canvas);
 	if (!s.entryDragActive) return;
 	const entry: DateEntry | null = s.entryDragEntry ?? null;
 	const targetIndex: number | null = typeof s.entryDragTargetDayIndex === "number" ? s.entryDragTargetDayIndex : null;
@@ -672,13 +801,13 @@ export async function commitAnchorEntryDrag(canvas: EpochCanvas): Promise<void> 
 		const today = s.getToday();
 		const date = s.getDateForIndex(targetIndex, today);
 		const dateKey = resolveDateKeyForCanvasDrop(date);
-		const prevKey = String((entry as any)?.date ?? "").trim();
+		const prevKey = getEntryDate(entry).trim();
 		if (prevKey && prevKey === dateKey) {
 			s.draw();
 			return;
 		}
-		const plugin = (canvas as any)?.plugin;
-		let pathToUpdate = String((entry as any).file ?? "");
+		const plugin = s.plugin;
+		let pathToUpdate = getEntryFile(entry);
 		if (plugin && plugin.app && plugin.app.vault && typeof plugin.setYamlDateForPath === "function") {
 			const app = plugin.app;
 			const af = app.vault.getAbstractFileByPath(pathToUpdate);
@@ -705,7 +834,7 @@ export async function commitAnchorEntryDrag(canvas: EpochCanvas): Promise<void> 
 						}
 					}
 					pathToUpdate = targetPath;
-				} else if (String((entry as any)?.source ?? "") === "namedate") {
+				} else if (getEntrySource(entry) === "namedate") {
 					const isMd = String(af.path || "").toLowerCase().endsWith(".md");
 					if (isMd) {
 						const dates = parseAnyDates(String(af.basename || ""));

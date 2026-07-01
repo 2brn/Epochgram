@@ -25,15 +25,45 @@ import { announceEpochDesktopTaskAfter, cancelEpochDesktopTaskAnnouncement } fro
 import { isLikelyTextFileExtension } from "../../utils";
 import { hasSimilarityAccess } from "../pro-feature-state";
 
+type SimilarityStoreFileRecordLike = {
+	h?: string;
+	v?: number[];
+};
+
+type SimilarityRebuildWorkingStore = {
+	model: string;
+	dim: number;
+	files: Record<string, { v: number[]; h: string; updatedAt: number }>;
+};
+
+type SimilarityRebuildPluginState = EpochPlugin & {
+	similarityFullRebuildRunning?: boolean;
+	similarityQueueTimer?: number | null;
+	similarityPendingFiles?: Set<string>;
+	similarityQueueTotal?: number;
+	similarityQueueProcessed?: number;
+	similarityVectorUpdateStartedAt?: number;
+	similarityRebuildStartedAt?: number;
+	similarityWorkerLastLoadError?: string;
+	similarityWorkerLastLoadErrorModelId?: string;
+	similarityWorkerLastCreateError?: string;
+	queueTermSimilarityUpdate?: (path: string) => void;
+	__epochCancelRequestedAt?: { semanticBuild?: number };
+};
+
+function asStoreFileRecord(value: unknown): SimilarityStoreFileRecordLike {
+	return value && typeof value === "object" ? value : {};
+}
+
 
 async function preflightFullRebuild(plugin: EpochPlugin): Promise<void> {
-	const anyPlugin: any = plugin as any;
+	const state = plugin as SimilarityRebuildPluginState;
 	if (Platform.isDesktopApp) {
 		announceEpochDesktopTaskAfter(plugin, "semanticBuild:started", "Building semantics started", {
 			graceMs: 1000,
 			still: () => {
 				try {
-					return !!(plugin as any).similarityFullRebuildRunning;
+					return state.similarityFullRebuildRunning === true;
 				} catch {
 					return true;
 				}
@@ -41,18 +71,18 @@ async function preflightFullRebuild(plugin: EpochPlugin): Promise<void> {
 		});
 	}
 	try {
-		anyPlugin.similarityFullRebuildRunning = true;
+		state.similarityFullRebuildRunning = true;
 		// A full rebuild supersedes incremental vector updates; clear any pending queue
 		// so users don't see both "Updating" and "Building" notices for the same action.
 		try {
-			if (anyPlugin.similarityQueueTimer) {
-					window.clearTimeout(anyPlugin.similarityQueueTimer);
-				anyPlugin.similarityQueueTimer = null;
+			if (state.similarityQueueTimer) {
+				window.clearTimeout(state.similarityQueueTimer);
+				state.similarityQueueTimer = null;
 			}
-			anyPlugin.similarityPendingFiles = new Set<string>();
-			anyPlugin.similarityQueueTotal = 0;
-			anyPlugin.similarityQueueProcessed = 0;
-			anyPlugin.similarityVectorUpdateStartedAt = 0;
+			state.similarityPendingFiles = new Set<string>();
+			state.similarityQueueTotal = 0;
+			state.similarityQueueProcessed = 0;
+			state.similarityVectorUpdateStartedAt = 0;
 		} catch {
 			// ignore
 		}
@@ -60,21 +90,23 @@ async function preflightFullRebuild(plugin: EpochPlugin): Promise<void> {
 		// ignore
 	}
 	try {
-		anyPlugin.similarityRebuildStartedAt = now();
+		state.similarityRebuildStartedAt = now();
 	} catch {
 		// ignore
 	}
 }
 
 function finishFullRebuild(plugin: EpochPlugin): void {
-	const anyPlugin: any = plugin as any;
+	const state = plugin as SimilarityRebuildPluginState;
 	try {
-		anyPlugin.similarityFullRebuildRunning = false;
+		state.similarityFullRebuildRunning = false;
 	} catch {
 		// ignore
 	}
 	try {
-		delete (plugin as any)?.__epochCancelRequestedAt?.semanticBuild;
+		if (state.__epochCancelRequestedAt) {
+			delete state.__epochCancelRequestedAt.semanticBuild;
+		}
 	} catch {
 		// ignore
 	}
@@ -88,7 +120,7 @@ function finishFullRebuild(plugin: EpochPlugin): void {
 }
 
 async function rebuildSemanticVectorsWithProgress(plugin: EpochPlugin): Promise<void> {
-	const anyPlugin: any = plugin as any;
+	const state = plugin as SimilarityRebuildPluginState;
 	if (!hasSimilarityAccess(plugin)) return;
 	if (!embeddingsAllowed()) return;
 	if (!embeddingsSimilarityEnabled(plugin)) return;
@@ -96,9 +128,9 @@ async function rebuildSemanticVectorsWithProgress(plugin: EpochPlugin): Promise<
 	const modelId = getSimilarityModelId(plugin);
 	const loaded = await loadEmbeddingsModelViaWorker(plugin, modelId);
 	if (!loaded) {
-		const lastErr = String(anyPlugin?.similarityWorkerLastLoadError ?? "").trim();
-		const lastErrModel = String(anyPlugin?.similarityWorkerLastLoadErrorModelId ?? "").trim();
-		const createErr = String(anyPlugin?.similarityWorkerLastCreateError ?? "").trim();
+		const lastErr = String(state.similarityWorkerLastLoadError ?? "").trim();
+		const lastErrModel = String(state.similarityWorkerLastLoadErrorModelId ?? "").trim();
+		const createErr = String(state.similarityWorkerLastCreateError ?? "").trim();
 		const sanitizeReason = (value: string): string => {
 			const raw = String(value ?? "").replace(/\r/g, "").trim();
 			if (!raw) return "";
@@ -134,25 +166,26 @@ async function rebuildSemanticVectorsWithProgress(plugin: EpochPlugin): Promise<
 			reuseVectorByHash = new Map<string, number[]>();
 			for (const [p, rec] of Object.entries(prev.files)) {
 				void p;
-				const h = typeof (rec as any)?.h === "string" ? String((rec as any).h) : "";
-				const v = (rec as any)?.v;
+				const record = asStoreFileRecord(rec);
+				const h = typeof record.h === "string" ? String(record.h) : "";
+				const v = record.v;
 				if (!h) continue;
 				if (!Array.isArray(v) || v.length === 0) continue;
-				reuseVectorByHash.set(h, v as number[]);
+				reuseVectorByHash.set(h, v);
 			}
 		}
 	} catch {
 		reuseVectorByHash = null;
 	}
 
-	const store = { model: modelId, dim: 0, files: {} as Record<string, any> };
-	await writeStore(plugin, store as any);
+	const store: SimilarityRebuildWorkingStore = { model: modelId, dim: 0, files: {} };
+	await writeStore(plugin, store);
 
 	const files = sortFilesNewestRecordFirst(
 		plugin,
 		plugin.app.vault
 			.getFiles()
-			.filter((f) => plugin.shouldIndexFile(f) && isLikelyTextFileExtension(String((f as any)?.extension ?? "")))
+			.filter((f) => plugin.shouldIndexFile(f) && isLikelyTextFileExtension(String(f.extension ?? "")))
 	);
 	const total = files.length;
 	let processed = 0;
@@ -169,8 +202,8 @@ async function rebuildSemanticVectorsWithProgress(plugin: EpochPlugin): Promise<
 		try {
 			const built = await buildNoteVector(plugin, f, modelId, reuseVectorByHash ?? undefined);
 			if (!built) continue;
-			(store as any).files[f.path] = { v: built.vector, h: built.hash, updatedAt: now() };
-			if (!(store as any).dim && built.vector.length) (store as any).dim = built.vector.length;
+			store.files[f.path] = { v: built.vector, h: built.hash, updatedAt: now() };
+			if (!store.dim && built.vector.length) store.dim = built.vector.length;
 		} catch {
 			// ignore
 		}
@@ -188,12 +221,12 @@ async function rebuildSemanticVectorsWithProgress(plugin: EpochPlugin): Promise<
 		}
 		const elapsedSinceWrite = now() - lastWriteAt;
 		if (processed % 250 === 0 || elapsedSinceWrite > 15_000) {
-			await writeStore(plugin, store as any);
+			await writeStore(plugin, store);
 			lastWriteAt = now();
 		}
 	}
 
-	await writeStore(plugin, store as any);
+	await writeStore(plugin, store);
 	scheduleSimilarityNoticeAfterGrace(
 		plugin,
 		"similarityRebuildStartedAt",
@@ -215,7 +248,7 @@ async function rebuildTopics(plugin: EpochPlugin): Promise<void> {
 
 	try {
 		const vocab = getTermVocabulary(plugin);
-		await writeTermStore(plugin, { model: "zeroshot", files: {} } as any);
+		await writeTermStore(plugin, { model: "zeroshot", files: {} });
 		const mdFiles = sortFilesNewestRecordFirst(
 			plugin,
 			plugin.app.vault.getMarkdownFiles().filter((f) => plugin.shouldIndexFile(f))
@@ -225,7 +258,7 @@ async function rebuildTopics(plugin: EpochPlugin): Promise<void> {
 				try {
 					const explicit = getEmbeddingTermForPath(plugin, f.path);
 					if (explicit) continue;
-					(plugin as any).queueTermSimilarityUpdate?.(f.path);
+					(plugin as SimilarityRebuildPluginState).queueTermSimilarityUpdate?.(f.path);
 				} catch {
 					// ignore
 				}
@@ -241,13 +274,13 @@ export const methodsRebuild: Pick<
 	"rebuildRelationsWithProgress" | "rebuildSemanticVectorsWithProgress" | "rebuildTopicsWithProgress"
 > = {
 	async rebuildSemanticVectorsWithProgress(this: EpochPlugin): Promise<void> {
-		const anyPlugin: any = this as any;
+		const state = this as SimilarityRebuildPluginState;
 		try {
 			await preflightFullRebuild(this);
 			await rebuildSemanticVectorsWithProgress(this);
 		} finally {
 			try {
-				anyPlugin.similarityFullRebuildRunning = false;
+				state.similarityFullRebuildRunning = false;
 			} catch {
 				// ignore
 			}

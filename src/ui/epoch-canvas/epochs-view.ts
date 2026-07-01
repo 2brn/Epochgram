@@ -7,10 +7,72 @@ import { getEntriesForDate, isAttachmentEntry } from "../entry-helpers";
 
 import { resetScrollNavTargetState } from "./scroll-nav-reset";
 
+type SemanticRelatedScore = { path?: string };
+
+type EpochRange = { start: string; end: string };
+
+type EpochsPluginState = {
+	settings?: {
+		generateEpochs?: boolean;
+	};
+	viewPreferences?: {
+		showEpochsView: boolean;
+	};
+	refreshEpochViews?: () => void;
+};
+
+type EpochsCanvasState = {
+	plugin?: EpochsPluginState;
+	epochsView: boolean;
+	epochsViewBucket: unknown;
+	epochsViewPrevBucket: unknown;
+	epochsViewBucketAnimStart: number | null;
+	__epochsPrevSemanticRelatedForPath: string | null;
+	__epochsPrevSemanticRelatedPaths: Set<string> | null;
+	__epochsPrevSemanticRelatedScored: SemanticRelatedScore[] | null;
+	activeFilePath: string | null;
+	semanticRelatedPaths: Set<string> | null;
+	semanticRelatedScored: SemanticRelatedScore[] | null;
+	__epochPackInstantAppearOnce: boolean;
+	focusedEpochRange: EpochRange | null;
+	semanticRelatedRequestId: number;
+	searchQuery: string;
+	refreshSemanticRelatedForActiveFile?: (force?: boolean) => void;
+	cancelFocusClear: () => void;
+	keepHoverUntilPointerMove: boolean;
+	keepHoverAfterMenu: boolean;
+	hoverDateIndex: number | null;
+	hoverSummary: { dayIndex?: number | null } | null;
+	animDateIndex: number | null;
+	animSummary: { dayIndex?: number | null } | null;
+	hoverOverlay: unknown;
+	hoverTarget: number;
+	hoverAnim: number;
+	hoverPreviewKey: string | null;
+	lastPointerEvent: unknown;
+	modKeyActive: boolean;
+	previewLockedNotified: boolean;
+	previewLockedUntilAltRelease: boolean;
+	scrollNavIndex: number;
+	scrollNavFile: string | null;
+	pendingScrollNavHighlight: { dayIndex?: number; date?: Date } | null;
+	__scrollNavLastModeKey: string | null;
+	outgoingSummaries: unknown[];
+	outgoingDates: unknown[];
+	index: Record<string, DateEntry[]>;
+	clearHover: (immediate?: boolean) => void;
+	draw: () => void;
+	openEntry: (entry: DateEntry) => unknown;
+};
+
+function asEpochsState(canvas: EpochCanvas): EpochsCanvasState {
+	return canvas as unknown as EpochsCanvasState;
+}
+
 export function setEpochsView(canvas: EpochCanvas, value: boolean): void {
-	const c: any = canvas as any;
+	const c = asEpochsState(canvas);
 	const next = value === true;
-	if (next && c?.plugin?.settings?.generateEpochs !== true) return;
+	if (next && c.plugin?.settings?.generateEpochs !== true) return;
 	if (c.epochsView === next) return;
 	const wasEpochsView = c.epochsView === true;
 	c.epochsView = next;
@@ -80,21 +142,13 @@ export function setEpochsView(canvas: EpochCanvas, value: boolean): void {
 		c.hoverPreviewKey = null;
 		c.lastPointerEvent = null;
 		c.pendingScrollNavHighlight = null;
-		try {
-			(c as any).outgoingSummaries = [];
-			(c as any).outgoingDates = [];
-		} catch {
-			// ignore
-		}
+		c.outgoingSummaries = [];
+		c.outgoingDates = [];
 	}
 	// Switching timeline views should reset scroll-nav state.
 	resetScrollNavTargetState(canvas);
 	c.scrollNavFile = null;
-	try {
-		(c as any).__scrollNavLastModeKey = null;
-	} catch {
-		// ignore
-	}
+	c.__scrollNavLastModeKey = null;
 	c.clearHover(true);
 	// If we were in epochs view, ensure the first normal redraw has the right state.
 	if (wasEpochsView) {
@@ -104,9 +158,9 @@ export function setEpochsView(canvas: EpochCanvas, value: boolean): void {
 }
 
 export function setEpochsViewWithToolbar(canvas: EpochCanvas, value: boolean): void {
-	const c: any = canvas as any;
+	const c = asEpochsState(canvas);
 	const next = value === true;
-	if (c?.plugin?.viewPreferences) {
+	if (c.plugin?.viewPreferences) {
 		c.plugin.viewPreferences.showEpochsView = next;
 		try {
 			c.plugin.refreshEpochViews?.();
@@ -123,11 +177,11 @@ export function findFirstRelatedEntryForEpochRange(canvas: EpochCanvas, start: s
 }
 
 export function listRelatedEntriesForEpochRange(canvas: EpochCanvas, start: string, end: string): DateEntry[] {
-	const c: any = canvas as any;
+	const c = asEpochsState(canvas);
 	const isDateKey = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
 	if (!isDateKey(start) || !isDateKey(end)) return [];
 
-	const isSyntheticPinnedTodayClone = (entry: any): boolean => {
+	const isSyntheticPinnedTodayClone = (entry: DateEntry): boolean => {
 		try {
 			if (!entry || entry.pinned !== true) return false;
 			const originalDate = String(entry.originalDate ?? "").trim();
@@ -146,14 +200,14 @@ export function listRelatedEntriesForEpochRange(canvas: EpochCanvas, start: stri
 
 	const isNonEpochEntry = (e: DateEntry | null | undefined): boolean => {
 		if (!e) return false;
-		if (isSyntheticPinnedTodayClone(e as any)) return false;
-		const file = String((e as any).file || "");
+		if (isSyntheticPinnedTodayClone(e)) return false;
+		const file = String(e.file || "");
 		if (!file) return false;
 		return !file.startsWith("epoch://");
 	};
 
 	const groupRank = (e: DateEntry): number => {
-		const src = String((e as any)?.source ?? "");
+		const src = String(e.source ?? "");
 		if (src === "cdate" || src === "namedate" || src === "dateprop") return 0;
 		if (src === "content") return 1;
 		if (src === "tracked") return 2;
@@ -169,8 +223,8 @@ export function listRelatedEntriesForEpochRange(canvas: EpochCanvas, start: stri
 			const ar = groupRank(a);
 			const br = groupRank(b);
 			if (ar !== br) return ar - br;
-			const af = String((a as any)?.file || "");
-			const bf = String((b as any)?.file || "");
+			const af = String(a.file || "");
+			const bf = String(b.file || "");
 			if (af < bf) return -1;
 			if (af > bf) return 1;
 			return 0;
@@ -192,9 +246,9 @@ export function listRelatedEntriesForEpochRange(canvas: EpochCanvas, start: stri
 
 	for (const key of keys) {
 		const raw = Array.isArray(c.index[key]) ? c.index[key] : [];
-		const candidates = raw.filter((e: any) => isNonEpochEntry(e));
+		const candidates = raw.filter((e) => isNonEpochEntry(e));
 		if (candidates.length === 0) continue;
-		const ordered = orderByPriority(selectTimelineEntries(candidates as any));
+		const ordered = orderByPriority(selectTimelineEntries(candidates));
 		for (const e of ordered) out.push(e);
 	}
 
@@ -202,7 +256,7 @@ export function listRelatedEntriesForEpochRange(canvas: EpochCanvas, start: stri
 }
 
 export function exitEpochsViewAndFocusEpoch(canvas: EpochCanvas, entry: DateEntry): void {
-	const c: any = canvas as any;
+	const c = asEpochsState(canvas);
 	const range = getEpochRangeFromEntry(entry);
 	setEpochsViewWithToolbar(canvas, false);
 	c.focusedEpochRange = range ? { start: range.start, end: range.end } : null;

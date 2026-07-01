@@ -2,7 +2,15 @@ import { App, Modal, Notice } from "obsidian";
 import { truncateToChars } from "./text-utils";
 import { setCssStyles } from "../../dom";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = typeof window !== "undefined" ? window.document : ({} as Document);
+
+type FocusableElement = HTMLElement & {
+	focus(options?: FocusOptions): void;
+};
+
+function toFocusableElement(value: Element | null): FocusableElement | null {
+	return value instanceof HTMLElement ? value : null;
+}
 
 
 export class EditSummaryModal extends Modal {
@@ -34,7 +42,9 @@ export class EditSummaryModal extends Modal {
 	}
 
 	onOpen() {
-		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = typeof activeDocument !== "undefined"
+			? toFocusableElement(activeDocument.activeElement)
+			: null;
 		this.modalEl.addClass("mod-file-rename");
 		this.modalEl.addClass("mod-epochgram-edit-summary");
 		this.titleEl.setText(this.titleText);
@@ -92,7 +102,7 @@ export class EditSummaryModal extends Modal {
 
 		window.requestAnimationFrame(() => {
 			try {
-				(textarea as any).focus?.({ preventScroll: true });
+				textarea.focus({ preventScroll: true });
 			} catch {
 				textarea.focus();
 			}
@@ -112,7 +122,7 @@ export class EditSummaryModal extends Modal {
 		if (el && typeof el.focus === "function") {
 			window.requestAnimationFrame(() => {
 				try {
-					(el as any).focus?.({ preventScroll: true });
+					(el as FocusableElement).focus({ preventScroll: true });
 				} catch {
 					try {
 						el.focus();

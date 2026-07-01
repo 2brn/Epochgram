@@ -68,19 +68,19 @@ class EpochPluginImpl extends Plugin {
 	excludedFilterMatchers: RegExp[] = [];
 	excludedSyncInFlight: Promise<void> | null = null;
 	lastRebuildNoticeAt = 0;
-	aiSummarizer: any = null;
+	aiSummarizer: unknown = null;
 	aiSummarizerLoadingPromise: Promise<void> | null = null;
 	aiSummaryPendingFiles: Set<string> = new Set<string>();
 	aiSummaryQueueRunning = false;
-	aiBridge: any = null;
+	aiBridge: unknown = null;
 	aiBridgeLastPersistAt = 0;
 	aiBridgePersistTimer: number | null = null;
 	// Similarity (semantic relations)
 	// Used to delay background embedding work right after plugin startup.
 	similarityStartupAt = 0;
 	similarityVectorsLoaded = false;
-	similarityIndex: any = null;
-	similarityEmbedder: any = null;
+	similarityIndex: unknown = null;
+	similarityEmbedder: unknown = null;
 	similarityEmbedderLoadingPromise: Promise<void> | null = null;
 	similarityQueueRunning = false;
 	similarityPendingFiles: Set<string> = new Set<string>();

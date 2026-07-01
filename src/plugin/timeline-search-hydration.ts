@@ -3,45 +3,87 @@ import type { EpochPlugin } from '../main'
 import { frontmatterToIndexTokens } from '../utils'
 import { isTopicSimilarityEnabled } from './similarity/config'
 
+type TimelineSearchDoc = {
+	id: string
+	kind: 'file'
+	path: string
+	basename: string
+	directory: string
+	meta: string
+	content: string
+}
+
+type TimelineSearchIndexLike = {
+	clear(): void
+	upsert(doc: TimelineSearchDoc): void
+}
+
+type FileIndexDataLike = {
+	reviewState?: string
+	markColor?: number
+	pinnedFile?: boolean
+}
+
+type TermSimilarityRecordLike = { term?: string; score?: number }
+
+type HydrationPluginState = {
+	timelineSearchIndex?: TimelineSearchIndexLike
+	settings?: { similarityZeroShotMinScore?: number }
+	termSimilarityLoaded?: boolean
+	termSimilarityIndex?: { files?: Record<string, TermSimilarityRecordLike> }
+	indexer: {
+		index?: Record<string, Array<{ file?: string; summary?: string; aiSummary?: string }>>
+		files?: Record<string, unknown>
+		getIndexedPaths?: () => string[]
+		getFileIndexData?: (path: string) => FileIndexDataLike | null
+		getFileEmbeddingTerm?: (path: string) => string | null
+	}
+}
+
+type FileCacheLike = {
+	tags?: Array<{ tag?: string }>
+	frontmatter?: Record<string, unknown>
+}
+
 export function hydrateTimelineSearchIndexFromLoadedState(plugin: EpochPlugin): void {
 	try {
-		const pluginAny: any = plugin as any
-		const idxAny: any = pluginAny?.timelineSearchIndex
-		if (!idxAny || typeof idxAny.clear !== 'function' || typeof idxAny.upsert !== 'function') return
+		const state = plugin as unknown as HydrationPluginState
+		const idx = state.timelineSearchIndex
+		if (!idx || typeof idx.clear !== 'function' || typeof idx.upsert !== 'function') return
 
-		idxAny.clear()
+		idx.clear()
 
-		const indexerAny: any = plugin.indexer as any
-		const dateIndex: Record<string, any[]> = indexerAny?.index ?? {}
+		const dateIndex = state.indexer?.index ?? {}
 
 		const summariesByPath = new Map<string, string[]>()
 		for (const entries of Object.values(dateIndex)) {
 			if (!Array.isArray(entries) || entries.length === 0) continue
 			for (const e of entries) {
-				const path = String((e as any)?.file ?? '')
+				const path = String(e?.file ?? '')
 				if (!path || path.startsWith('epoch://')) continue
 				let list = summariesByPath.get(path)
 				if (!list) {
 					list = []
 					summariesByPath.set(path, list)
 				}
-				const summary = String((e as any)?.summary ?? '').trim()
+				const summary = String(e?.summary ?? '').trim()
 				if (summary) list.push(summary)
-				const aiSummary = String((e as any)?.aiSummary ?? '').trim()
+				const aiSummary = String(e?.aiSummary ?? '').trim()
 				if (aiSummary) list.push(aiSummary)
 			}
 		}
 
 		const paths: string[] = (() => {
 			try {
-				if (typeof plugin.indexer?.getIndexedPaths === 'function') {
-					return plugin.indexer.getIndexedPaths()
+				if (typeof state.indexer?.getIndexedPaths === 'function') {
+					const result = state.indexer.getIndexedPaths()
+					return Array.isArray(result) ? result.filter((p): p is string => typeof p === 'string') : []
 				}
 			} catch {
 				// ignore
 			}
 			try {
-				const filesAny: any = indexerAny?.files
+				const filesAny = state.indexer?.files
 				if (filesAny && typeof filesAny === 'object') return Object.keys(filesAny)
 			} catch {
 				// ignore
@@ -49,10 +91,11 @@ export function hydrateTimelineSearchIndexFromLoadedState(plugin: EpochPlugin): 
 			return []
 		})()
 
-		const coerceStringArray = (v: any): string[] => {
+		const coerceStringArray = (v: unknown): string[] => {
 			if (!v) return []
 			if (Array.isArray(v)) return v.map((x) => String(x ?? '').trim()).filter(Boolean)
-			return [String(v).trim()].filter(Boolean)
+			if (typeof v === 'string') return [v.trim()].filter(Boolean)
+			return []
 		}
 
 		const getBasenameFromPath = (p: string): string => {
@@ -83,7 +126,7 @@ export function hydrateTimelineSearchIndexFromLoadedState(plugin: EpochPlugin): 
 				}
 
 				try {
-					const d: any = typeof plugin.indexer?.getFileIndexData === 'function' ? plugin.indexer.getFileIndexData(p) : null
+					const d = typeof state.indexer?.getFileIndexData === 'function' ? state.indexer.getFileIndexData(p) : null
 					const reviewState = String(d?.reviewState ?? '').trim()
 					if (reviewState) metaParts.push(`review:${reviewState}`)
 					const markColor = d?.markColor
@@ -94,8 +137,8 @@ export function hydrateTimelineSearchIndexFromLoadedState(plugin: EpochPlugin): 
 				}
 
 				try {
-					if (typeof plugin.indexer?.getFileEmbeddingTerm === 'function') {
-						const term = String(plugin.indexer.getFileEmbeddingTerm(p) || '').trim()
+					if (typeof state.indexer?.getFileEmbeddingTerm === 'function') {
+						const term = String(state.indexer.getFileEmbeddingTerm(p) || '').trim()
 						if (term) metaParts.push(term)
 					}
 				} catch {
@@ -104,11 +147,11 @@ export function hydrateTimelineSearchIndexFromLoadedState(plugin: EpochPlugin): 
 
 				try {
 					if (isTopicSimilarityEnabled(plugin)) {
-						const zeroShotMinRaw = Number(pluginAny?.settings?.similarityZeroShotMinScore ?? 0)
+						const zeroShotMinRaw = Number(state?.settings?.similarityZeroShotMinScore ?? 0)
 						const zeroShotMin = Number.isFinite(zeroShotMinRaw) ? Math.max(0, Math.min(1, zeroShotMinRaw)) : 0
-						const storeLoaded = pluginAny?.termSimilarityLoaded === true && !!pluginAny?.termSimilarityIndex && typeof pluginAny.termSimilarityIndex === 'object'
+						const storeLoaded = state?.termSimilarityLoaded === true && !!state?.termSimilarityIndex && typeof state.termSimilarityIndex === 'object'
 						if (storeLoaded && zeroShotMin > 0 && zeroShotMin < 1) {
-							const rec: any = pluginAny?.termSimilarityIndex?.files?.[p]
+							const rec = state?.termSimilarityIndex?.files?.[p]
 							const inferred = typeof rec?.term === 'string' ? String(rec.term).trim() : ''
 							const score = Number(rec?.score ?? 0)
 							if (inferred && Number.isFinite(score) && score >= zeroShotMin) {
@@ -123,18 +166,18 @@ export function hydrateTimelineSearchIndexFromLoadedState(plugin: EpochPlugin): 
 				let basename = getBasenameFromPath(p)
 				let directory = getDirectoryFromPath(p)
 				try {
-					const abs: any = plugin.app.vault.getAbstractFileByPath(p)
+					const abs = plugin.app.vault.getAbstractFileByPath(p)
 					if (abs && abs instanceof TFile) {
 						basename = abs.basename ?? basename
 						directory = abs.parent?.path ?? directory
 
-						const cache: any = plugin.app.metadataCache.getFileCache(abs)
-						const tagsRaw: any[] = Array.isArray(cache?.tags) ? cache.tags : []
+						const cache = plugin.app.metadataCache.getFileCache(abs) as FileCacheLike | null | undefined
+						const tagsRaw = Array.isArray(cache?.tags) ? cache.tags : []
 						for (const t of tagsRaw) {
-							const tag = String((t as any)?.tag ?? '').trim()
+							const tag = String(t?.tag ?? '').trim()
 							if (tag) metaParts.push(tag)
 						}
-						const fm: any = cache?.frontmatter
+						const fm = cache?.frontmatter
 						for (const a of coerceStringArray(fm?.aliases)) {
 							metaParts.push(`alias:${a}`)
 						}
@@ -145,7 +188,7 @@ export function hydrateTimelineSearchIndexFromLoadedState(plugin: EpochPlugin): 
 				}
 
 				const content = (summariesByPath.get(p) ?? []).join('\n')
-				idxAny.upsert({
+				idx.upsert({
 					id: p,
 					kind: 'file',
 					path: p,

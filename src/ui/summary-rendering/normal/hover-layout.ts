@@ -46,19 +46,21 @@ export function computeHoverLayout(args: {
 	let hoveredRowIdx = -1;
 	let hoveredT = 0;
 	for (let ci = 0; ci < columns.length; ci++) {
-		const rr = columns[ci]!.rows;
+		const rr = columns[ci]?.rows ?? [];
 		for (let ri = 0; ri < rr.length; ri++) {
-			const r = rr[ri]!;
+			const r = rr[ri];
+			if (!r) continue;
 			const t = Math.max(0, Math.min(1, r.summaryHoverT)) * detailHoverScale;
 			if (t <= 0) continue;
 			const isIncoming = !!(animSummary && animSummary.dayIndex === dayIndex && animSummary.itemIndex === r.entryIndex);
+			const bestRow = hoveredColIdx >= 0 ? columns[hoveredColIdx]?.rows?.[hoveredRowIdx] : null;
 			const bestIsIncoming =
 				!!(
 					animSummary &&
 					hoveredColIdx >= 0 &&
-					columns[hoveredColIdx]?.rows?.[hoveredRowIdx] &&
+					bestRow &&
 					animSummary.dayIndex === dayIndex &&
-					animSummary.itemIndex === columns[hoveredColIdx]!.rows[hoveredRowIdx]!.entryIndex
+					animSummary.itemIndex === bestRow.entryIndex
 				);
 			if (t > hoveredT + 1e-6 || (Math.abs(t - hoveredT) <= 1e-6 && isIncoming && !bestIsIncoming)) {
 				hoveredColIdx = ci;
@@ -73,7 +75,8 @@ export function computeHoverLayout(args: {
 		const ranges: RowYRange[] = [];
 		let y = dayCenterY - col.columnHeight / 2;
 		for (let row = 0; row < col.rowsThisCol; row++) {
-			const r = col.rows[row]!;
+			const r = col.rows[row];
+			if (!r) continue;
 			const yTop = y;
 			const yBottom = yTop + r.height;
 			ranges.push({ yTop, yBottom });
@@ -88,8 +91,11 @@ export function computeHoverLayout(args: {
 		if (hoveredRowIsSingle) {
 			shiftRightDx = 0;
 		} else {
-			const hoveredCol = columns[hoveredColIdx]!;
-			const hoveredRow = hoveredCol.rows[hoveredRowIdx]!;
+			const hoveredCol = columns[hoveredColIdx];
+			const hoveredRow = hoveredCol?.rows?.[hoveredRowIdx];
+			if (!hoveredCol || !hoveredRow) {
+				shiftRightDx = 0;
+			} else {
 			const nextCol = columns[hoveredColIdx + 1] ?? null;
 			if (nextCol) {
 				const baseX = hoveredCol.x;
@@ -118,6 +124,7 @@ export function computeHoverLayout(args: {
 				const overlap = Math.max(0, hoverTextRight + recordSafeGap - nextCol.x);
 				shiftRightDx = overlap * hoveredT;
 			}
+			}
 		}
 	}
 
@@ -128,7 +135,11 @@ export function computeHoverLayout(args: {
 
 	const rowLayoutByCol: RowLayout[][] = [];
 	for (let colIdx = 0; colIdx < columns.length; colIdx++) {
-		const col = columns[colIdx]!;
+		const col = columns[colIdx];
+		if (!col) {
+			rowLayoutByCol.push([]);
+			continue;
+		}
 		const { x, rowsThisCol, rows } = col;
 		const rightEdge = xStart + rightWidth;
 		const baseX = x;
@@ -138,7 +149,11 @@ export function computeHoverLayout(args: {
 		{
 			let yCursorBase = dayCenterY - col.columnHeight / 2;
 			for (let i = 0; i < rowsThisCol; i++) {
-				const r = rows[i]!;
+				const r = rows[i];
+				if (!r) {
+					baseCenterByRow[i] = yCursorBase;
+					continue;
+				}
 				const top = yCursorBase;
 				const bottom = top + r.height;
 				baseCenterByRow[i] = (top + bottom) / 2;
@@ -150,7 +165,11 @@ export function computeHoverLayout(args: {
 		// base center, and only shift neighbors as needed to prevent overlap.
 		const rectHeightByRow: number[] = [];
 		for (let i = 0; i < rowsThisCol; i++) {
-			const r = rows[i]!;
+			const r = rows[i];
+			if (!r) {
+				rectHeightByRow[i] = rowHeight;
+				continue;
+			}
 			let h = r.height;
 			const rowT = (colIdx === hoveredColIdx && i === hoveredRowIdx)
 				? (Math.max(0, Math.min(1, r.summaryHoverT)) * detailHoverScale)
@@ -208,17 +227,21 @@ export function computeHoverLayout(args: {
 		const hasAnchor = anchorRow >= 0 && anchorRow < rowsThisCol && hoveredT > 0.001;
 		const centers: number[] = baseCenterByRow.slice();
 		if (hasAnchor && allowVerticalNeighborShift) {
-			centers[anchorRow] = baseCenterByRow[anchorRow]!;
+			const anchorCenterBase = baseCenterByRow[anchorRow];
+			if (anchorCenterBase == null) continue;
+			centers[anchorRow] = anchorCenterBase;
 
 			const TEXT_OVERLAP_EPS_PX = 0.5;
 
 			const rowHasAnyText = (row: number): boolean => {
-				const rr = rows[row]!;
+				const rr = rows[row];
+				if (!rr) return false;
 				return rr.lines.some((l) => String(l ?? "").trim().length > 0);
 			};
 
 			const textHalfHeightBase = (row: number): number => {
-				const rr = rows[row]!;
+				const rr = rows[row];
+				if (!rr) return 0;
 				if (!rowHasAnyText(row)) return 0;
 				const lines = Array.isArray(rr.lines) ? rr.lines : [];
 				const lineCount = Math.max(1, lines.length || 0);
@@ -227,10 +250,16 @@ export function computeHoverLayout(args: {
 				return h / 2;
 			};
 
-			const anchorCenter = baseCenterByRow[anchorRow]!;
-			const anchorLines = Array.isArray(rows[anchorRow]!.hoverLines) && rows[anchorRow]!.hoverLines!.length ? rows[anchorRow]!.hoverLines! : rows[anchorRow]!.lines;
+			const anchorCenter = anchorCenterBase;
+			const anchorRowData = rows[anchorRow];
+			if (!anchorRowData) continue;
+			const anchorLines =
+				Array.isArray(anchorRowData.hoverLines) && anchorRowData.hoverLines.length
+					? anchorRowData.hoverLines
+					: anchorRowData.lines;
 			const anchorLineCount = rowHasAnyText(anchorRow) ? Math.max(1, anchorLines.length || 0) : 0;
-			const anchorHoverLH = typeof rows[anchorRow]!.hoverLineHeight === "number" ? rows[anchorRow]!.hoverLineHeight! : rows[anchorRow]!.lineHeight;
+			const anchorHoverLH =
+				typeof anchorRowData.hoverLineHeight === "number" ? anchorRowData.hoverLineHeight : anchorRowData.lineHeight;
 			const anchorTextHalfHFull = anchorLineCount > 0 ? Math.max(0, anchorLineCount * anchorHoverLH) / 2 : 0;
 			const anchorTextTopFull = anchorCenter - anchorTextHalfHFull;
 			const anchorTextBottomFull = anchorCenter + anchorTextHalfHFull;
@@ -245,7 +274,8 @@ export function computeHoverLayout(args: {
 			const belowRow = anchorRow + 1;
 
 			if (aboveRow >= 0 && aboveRow < rowsThisCol) {
-				const aboveCenterBase = baseCenterByRow[aboveRow]!;
+				const aboveCenterBase = baseCenterByRow[aboveRow];
+				if (aboveCenterBase == null) continue;
 				const aboveHalfH = textHalfHeightBase(aboveRow);
 				const aboveBottomTextBase = aboveCenterBase + aboveHalfH;
 				const overlapPxFull = aboveBottomTextBase - (anchorTextTopFull - TEXT_OVERLAP_EPS_PX);
@@ -255,7 +285,8 @@ export function computeHoverLayout(args: {
 				// Clamp so we don't overlap the row two-above (text-only overlap).
 				const above2Row = aboveRow - 1;
 				if (shiftUp > 0 && above2Row >= 0) {
-					const above2Center = baseCenterByRow[above2Row]!;
+					const above2Center = baseCenterByRow[above2Row];
+					if (above2Center == null) continue;
 					const above2HalfH = textHalfHeightBase(above2Row);
 					const above2BottomTextBase = above2Center + above2HalfH;
 					const aboveTopTextBase = aboveCenterBase - aboveHalfH;
@@ -268,7 +299,8 @@ export function computeHoverLayout(args: {
 			}
 
 			if (belowRow >= 0 && belowRow < rowsThisCol) {
-				const belowCenterBase = baseCenterByRow[belowRow]!;
+				const belowCenterBase = baseCenterByRow[belowRow];
+				if (belowCenterBase == null) continue;
 				const belowHalfH = textHalfHeightBase(belowRow);
 				const belowTopTextBase = belowCenterBase - belowHalfH;
 				const overlapPxFull = (anchorTextBottomFull + TEXT_OVERLAP_EPS_PX) - belowTopTextBase;
@@ -278,7 +310,8 @@ export function computeHoverLayout(args: {
 				// Clamp so we don't overlap the row two-below (text-only overlap).
 				const below2Row = belowRow + 1;
 				if (shiftDown > 0 && below2Row < rowsThisCol) {
-					const below2Center = baseCenterByRow[below2Row]!;
+					const below2Center = baseCenterByRow[below2Row];
+					if (below2Center == null) continue;
 					const below2HalfH = textHalfHeightBase(below2Row);
 					const below2TopTextBase = below2Center - below2HalfH;
 					const belowBottomTextBase = belowCenterBase + belowHalfH;
@@ -301,21 +334,28 @@ export function computeHoverLayout(args: {
 			colIdx === hoveredColIdx &&
 			hasAnchor
 		) {
-			const rAnchor = rows[anchorRow]!;
-			const yCenter = baseCenterByRow[anchorRow]!;
-			const fullH = allowRowHeightExpansion ? (rAnchor.hoverHeight ?? rAnchor.height) : rAnchor.height;
-			if (Number.isFinite(fullH) && fullH > 0) {
-				hoverShiftYTop = yCenter - fullH / 2;
-				hoverShiftYBottom = yCenter + fullH / 2;
+			const rAnchor = rows[anchorRow];
+			if (!rAnchor) {
+				// no-op when anchor row is unavailable
+			} else {
+				const yCenter = baseCenterByRow[anchorRow];
+				if (yCenter == null) continue;
+				const fullH = allowRowHeightExpansion ? (rAnchor.hoverHeight ?? rAnchor.height) : rAnchor.height;
+				if (Number.isFinite(fullH) && fullH > 0) {
+					hoverShiftYTop = yCenter - fullH / 2;
+					hoverShiftYBottom = yCenter + fullH / 2;
+				}
 			}
 		}
 
 		const layouts: RowLayout[] = [];
 		for (let row = 0; row < rowsThisCol; row++) {
-			const r = rows[row]!;
-			const yBaseCenter = baseCenterByRow[row]!;
+			const r = rows[row];
+			if (!r) continue;
+			const yBaseCenter = baseCenterByRow[row];
+			if (yBaseCenter == null) continue;
 			const rectH = rectHeightByRow[row] ?? r.height;
-			const centerForRect = allowVerticalNeighborShift ? centers[row]! : yBaseCenter;
+			const centerForRect = allowVerticalNeighborShift ? centers[row] ?? yBaseCenter : yBaseCenter;
 			const yRectTop = centerForRect - rectH / 2;
 			const yRectBottom = centerForRect + rectH / 2;
 
@@ -360,7 +400,8 @@ function isSingleInRow(baseRowRangesByCol: { yTop: number; yBottom: number }[][]
 		if (!ranges) continue;
 		for (let rj = 0; rj < ranges.length; rj++) {
 			if (cj === colIdx && rj === rowIdx) continue;
-			const other = ranges[rj]!;
+				const other = ranges[rj];
+				if (!other) continue;
 			const overlapsY = !(targetBottom <= other.yTop || targetTop >= other.yBottom);
 			if (overlapsY) {
 				return false;

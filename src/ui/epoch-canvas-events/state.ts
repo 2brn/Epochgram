@@ -23,7 +23,7 @@ export interface CanvasEventInternals {
 	mouseDownY: number;
 	mouseDownTime: number;
 	mouseMoved: boolean;
-	touchMode: "pan" | "pinch" | "hover" | "twofinger" | "entrydrag" | null;
+	touchMode: "pan" | "pinch" | "hover" | "twofinger" | "entrydrag" | "swipehide" | null;
 	touchStartX: number;
 	touchStartY: number;
 	touchStartOffsetY: number;
@@ -108,14 +108,25 @@ export interface CanvasEventInternals {
 	isPointerDeviceEvent(): boolean;
 	attemptHoverPreview(e: MouseEvent): void;
 	startInertia(): void;
+	animatingWheelPan?: boolean;
+	animatingWheelZoom?: boolean;
+	wheelZoomDir?: number;
+	__suppressExternalAutoScrollUntil?: number;
+	scrollNavAnchorEntry?: DateEntry | null;
+	scrollNavAnchorDayIndex?: number | null;
+	suppressNextFocusScrollForPath?(path: string | null): void;
 }
 
 export function getEventState(canvas: EpochCanvas): CanvasEventInternals {
 	return canvas as unknown as CanvasEventInternals;
 }
 
-export function isWheelInteractionSuppressed(state: CanvasEventInternals, now: number = performance.now()): boolean {
-	const suppressClickUntil = Number((state as any).suppressClickUntil ?? 0);
+function nowMs(): number {
+	return window.performance?.now?.() ?? Date.now();
+}
+
+export function isWheelInteractionSuppressed(state: CanvasEventInternals, now: number = nowMs()): boolean {
+	const suppressClickUntil = Number(state.suppressClickUntil ?? 0);
 	if (Number.isFinite(suppressClickUntil) && suppressClickUntil > 0 && now < suppressClickUntil) return true;
 	return false;
 }
@@ -124,8 +135,8 @@ export function isViewMotionActive(state: CanvasEventInternals): boolean {
 	try {
 		if (state.animatingView) return true;
 		if (Math.abs(Number(state.velocityY) || 0) > 0.01) return true;
-		if ((state as any).animatingWheelPan) return true;
-		if ((state as any).animatingWheelZoom) return true;
+		if (state.animatingWheelPan) return true;
+		if (state.animatingWheelZoom) return true;
 	} catch {
 		// ignore
 	}
@@ -144,9 +155,9 @@ export function stopViewMotion(state: CanvasEventInternals): void {
 		// ignore
 	}
 	try {
-		(state as any).animatingWheelPan = false;
-		(state as any).animatingWheelZoom = false;
-		(state as any).wheelZoomDir = 0;
+		state.animatingWheelPan = false;
+		state.animatingWheelZoom = false;
+		state.wheelZoomDir = 0;
 	} catch {
 		// ignore
 	}

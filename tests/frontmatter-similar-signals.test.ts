@@ -40,6 +40,9 @@ describe("Frontmatter similar/nosimilar", () => {
 
 		add("A Note.md");
 		add("A Note Copy.md");
+		add("folder/Completely Different.md");
+		add("folder/Another Name.md");
+		add("other/Another Name.md");
 		add("Linked Only.md");
 		add("Tag Intersection Blocked.md");
 
@@ -91,5 +94,16 @@ describe("Frontmatter similar/nosimilar", () => {
 
 		const related: Set<string> = await methodsRelatedGraph.getGraphRelatedPathsForFile.call(pluginStub, "A Note.md");
 		expect(Array.from(related).sort()).toEqual(["A Note Copy.md", "A Note.md"]);
+	});
+
+	it("title threshold 1.0 matches same-folder files regardless of name", async () => {
+		pluginStub.settings.similarityTitleJwThreshold = 1;
+
+		fileCacheByPath["folder/Completely Different.md"] = { frontmatter: {}, tags: [] };
+		fileCacheByPath["folder/Another Name.md"] = { frontmatter: {}, tags: [] };
+		fileCacheByPath["other/Another Name.md"] = { frontmatter: {}, tags: [] };
+
+		const related: Set<string> = await methodsRelatedGraph.getGraphRelatedPathsForFile.call(pluginStub, "folder/Completely Different.md");
+		expect(Array.from(related).sort()).toEqual(["folder/Another Name.md", "folder/Completely Different.md"]);
 	});
 });

@@ -3,7 +3,43 @@ import type { DateEntry } from "../../indexer/types";
 import { SUMMARY_SEPARATOR_SYMBOL } from "../epoch-canvas-constants";
 import { setCssStyles } from "../../dom";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = typeof window !== "undefined" ? window.document : ({} as Document);
+
+type FocusableElement = HTMLElement & {
+	focus(options?: FocusOptions): void;
+};
+
+type SuggestChooserLike = {
+	selectedItem?: number;
+	values?: TimelineSearchSuggestion[];
+};
+
+type InputChangedLike = {
+	onInputChanged?: () => void;
+};
+
+type SearchMatchLike = {
+	entry?: DateEntry;
+	label?: string;
+};
+
+function toFocusableElement(value: Element | null): FocusableElement | null {
+	return value && typeof (value as { focus?: unknown }).focus === "function"
+		? (value as FocusableElement)
+		: null;
+}
+
+function getChooser(modal: SuggestModal<TimelineSearchSuggestion>): SuggestChooserLike | null {
+	return (modal as unknown as { chooser?: SuggestChooserLike }).chooser ?? null;
+}
+
+function getInputChangedHandle(modal: SuggestModal<TimelineSearchSuggestion>): InputChangedLike {
+	return modal as unknown as InputChangedLike;
+}
+
+function getDocument(): Document | null {
+	return window.document ?? null;
+}
 
 
 export type TimelineSearchSuggestion =
@@ -14,6 +50,7 @@ export type TimelineSearchSuggestion =
 export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> {
 	private static readonly MAX_SUGGESTIONS = 7;
 	private static sessionLastNonEmptyQuery = "";
+	private maxSuggestions: number;
 
 	private titleText: string;
 	private initialValue: string;
@@ -35,15 +72,22 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 		options: {
 			title?: string;
 			initial: string;
+			maxSuggestions?: number;
 			onCommit?: (value: string) => void;
 			getTopMatches?: (query: string, max: number) => Array<{ entry: DateEntry; label?: string }>;
 		onChooseRecord?: (entry: DateEntry, query: string, ev?: MouseEvent | KeyboardEvent) => void;
 		}
 	) {
 		super(app);
-		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = typeof activeDocument !== "undefined"
+			? toFocusableElement(activeDocument.activeElement)
+			: null;
 		this.titleText = String(options?.title ?? "Search");
 		this.initialValue = String(options?.initial ?? "");
+		const configuredMax = Math.floor(Number(options?.maxSuggestions ?? TimelineSearchModal.MAX_SUGGESTIONS));
+		this.maxSuggestions = Number.isFinite(configuredMax) && configuredMax > 0
+			? configuredMax
+			: TimelineSearchModal.MAX_SUGGESTIONS;
 		this.onCommit = typeof options?.onCommit === "function" ? options.onCommit : null;
 		this.getTopMatches = typeof options?.getTopMatches === "function" ? options.getTopMatches : null;
 		this.onChooseRecord = typeof options?.onChooseRecord === "function" ? options.onChooseRecord : null;
@@ -72,7 +116,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 				}
 			} catch { void 0; }
 			try {
-				(this as any).onInputChanged?.();
+				getInputChangedHandle(this).onInputChanged?.();
 			} catch { void 0; }
 		};
 		this.handleKeyDown = (evt: KeyboardEvent) => {
@@ -82,14 +126,15 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 				if (evt.ctrlKey || evt.metaKey) {
 					evt.preventDefault?.();
 					evt.stopPropagation?.();
-					const chooser: any = (this as any).chooser;
+					const chooser = getChooser(this);
 					const selectedIndex = typeof chooser?.selectedItem === "number" ? chooser.selectedItem : -1;
+					const chosenValues = chooser?.values ?? null;
 					const selectedValue =
-						selectedIndex >= 0 && Array.isArray(chooser?.values) && selectedIndex < chooser.values.length
-							? (chooser.values[selectedIndex] as TimelineSearchSuggestion)
+						selectedIndex >= 0 && Array.isArray(chosenValues) && selectedIndex < chosenValues.length
+							? chosenValues[selectedIndex]
 							: null;
-					const fallback = this.getSuggestions(String(this.latestQuery || "")).find((s) => (s as any)?.kind === "record") ?? null;
-					const picked = (selectedValue?.kind === "record" ? selectedValue : fallback) as TimelineSearchSuggestion | null;
+					const fallback = this.getSuggestions(String(this.latestQuery || "")).find((s) => s.kind === "record") ?? null;
+					const picked = selectedValue?.kind === "record" ? selectedValue : fallback;
 					if (picked && picked.kind === "record") {
 						this.onChooseSuggestion(picked, evt);
 					}
@@ -145,12 +190,10 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 		this.inputEl.addEventListener("input", this.handleInput);
 		this.inputEl.addEventListener("keydown", this.handleKeyDown);
 		this.newTabModifierActive = false;
-		if (typeof window !== "undefined") {
-			window.addEventListener("keydown", this.handleWindowKeyDown);
-			window.addEventListener("keyup", this.handleWindowKeyUp);
-		}
+		window.addEventListener("keydown", this.handleWindowKeyDown);
+		window.addEventListener("keyup", this.handleWindowKeyUp);
 
-		(window as any).setTimeout?.(() => {
+		window.setTimeout(() => {
 			try {
 				this.inputEl.focus();
 				const n = String(this.inputEl.value || "").length;
@@ -160,17 +203,15 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 
 		// Emit once to ensure the UI is in sync with the prefilled value.
 		try {
-			(this as any).onInputChanged?.();
+			getInputChangedHandle(this).onInputChanged?.();
 		} catch { void 0; }
 	}
 
 	onClose() {
 		this.inputEl.removeEventListener("input", this.handleInput);
 		this.inputEl.removeEventListener("keydown", this.handleKeyDown);
-		if (typeof window !== "undefined") {
-			window.removeEventListener("keydown", this.handleWindowKeyDown);
-			window.removeEventListener("keyup", this.handleWindowKeyUp);
-		}
+		window.removeEventListener("keydown", this.handleWindowKeyDown);
+		window.removeEventListener("keyup", this.handleWindowKeyUp);
 		this.newTabModifierActive = false;
 		void super.onClose();
 		if (Platform.isMobile) {
@@ -181,7 +222,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 		this.priorActiveElement = null;
 		if (el && typeof el.focus === "function") {
 			try {
-				(el as any).focus?.({ preventScroll: true });
+				(el as FocusableElement).focus({ preventScroll: true });
 			} catch {
 				try {
 					el.focus();
@@ -209,13 +250,14 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 				let pushed = 0;
 				for (const m of matches) {
 					if (pushed >= maxRecords) break;
-					const entry = (m as any)?.entry as DateEntry | null | undefined;
+					const match = m as SearchMatchLike;
+					const entry = match.entry ?? null;
 					if (!entry) continue;
-					const p = String((entry as any)?.file ?? "");
+					const p = String(entry.file ?? "");
 					if (!p) continue;
 					if (seenFiles.has(p)) continue;
 					seenFiles.add(p);
-					const label = String((m as any)?.label ?? p);
+					const label = String(match.label ?? p);
 					out.push({ kind: "record", entry, label });
 					pushed++;
 				}
@@ -237,7 +279,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 				TimelineSearchModal.sessionLastNonEmptyQuery = "";
 			}
 			this.effectiveQuery = "";
-			pushTopRecords("", TimelineSearchModal.MAX_SUGGESTIONS);
+			pushTopRecords("", this.maxSuggestions);
 			out.push({ kind: "empty" });
 			toggleHasSuggestions();
 			return out;
@@ -247,7 +289,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 		this.effectiveQuery = qTrim;
 
 		try {
-			pushTopRecords(qTrim, TimelineSearchModal.MAX_SUGGESTIONS);
+			pushTopRecords(qTrim, this.maxSuggestions);
 		} catch {
 			// ignore
 		}
@@ -261,18 +303,18 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 
 	renderSuggestion(value: TimelineSearchSuggestion, el: HTMLElement): void {
 		if (!value || typeof value !== "object") {
-			el.setText("(clear)");
+			el.setText("(Clear)");
 			return;
 		}
-		if ((value as any).kind === "empty") {
-			el.setText("(clear)");
+		if (value.kind === "empty") {
+			el.setText("(Clear)");
 			return;
 		}
-		if ((value as any).kind === "record") {
-			const entry = ((value as any)?.entry ?? null) as DateEntry | null;
-			const label = String((value as any).label ?? (entry as any)?.file ?? "");
-			const filePath = String((entry as any)?.file ?? "");
-			const summary = String((entry as any)?.summary ?? "").trim();
+		if (value.kind === "record") {
+			const entry = value.entry ?? null;
+			const label = String(value.label ?? entry?.file ?? "");
+			const filePath = String(entry?.file ?? "");
+			const summary = String(entry?.summary ?? "").trim();
 			const effectiveSummary = summary;
 
 			let title = label;
@@ -294,45 +336,46 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 			if (!meta && label && label !== title) meta = label;
 
 			try {
-				(el as any).textContent = "";
+				el.textContent = "";
 				el.addClass("epoch-timeline-search-match");
-				const titleEl = (window as any)?.activeDocument?.createElement?.("div") as HTMLElement | null;
+				const titleEl = getDocument()?.createElement("div") ?? null;
 				if (!titleEl) {
-					(el as any).setText?.(title);
+					el.setText(title);
 					return;
 				}
 				titleEl.addClass("epoch-timeline-search-match-title");
 				titleEl.textContent = title;
 				el.appendChild(titleEl);
 				if (meta) {
-					const metaEl = (window as any).activeDocument.createElement("small");
+					const metaEl = getDocument()?.createElement("small");
+					if (!metaEl) return;
 					metaEl.addClass("epoch-timeline-search-match-meta");
 					try {
-						setCssStyles(metaEl as any, { fontSize: "0.7em", lineHeight: "1.15" });
+						setCssStyles(metaEl, { fontSize: "0.7em", lineHeight: "1.15" });
 					} catch { void 0; }
 					metaEl.textContent = meta;
 					el.appendChild(metaEl);
 				}
 			} catch {
 				try {
-					(el as any).setText?.(title);
+					el.setText(title);
 				} catch { void 0; }
 			}
 			return;
 		}
-		if ((value as any).kind === "filter") {
-			const q = String((value as any).query ?? "").trim();
+		if (value.kind === "filter") {
+			const q = String(value.query ?? "").trim();
 			el.setText(q ? `(Filter ${q})` : "(Filter)");
 			return;
 		}
-		el.setText("(clear)");
+		el.setText("(Clear)");
 	}
 
 	onChooseSuggestion(value: TimelineSearchSuggestion, _evt: MouseEvent | KeyboardEvent): void {
 		if (!value || typeof value !== "object") {
 			return;
 		}
-		if ((value as any).kind === "empty") {
+		if (value.kind === "empty") {
 			const v = "";
 			try {
 				this.latestQuery = v;
@@ -347,30 +390,30 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 			this.close();
 			return;
 		}
-		if ((value as any).kind === "record") {
-			const entry = ((value as any).entry ?? null) as DateEntry | null;
+		if (value.kind === "record") {
+			const entry = value.entry ?? null;
 			if (!entry) return;
 			const q = String(this.effectiveQuery || this.latestQuery || "");
 			const hasNewTabModifier =
-				!!((_evt as any)?.ctrlKey || (_evt as any)?.metaKey) ||
+				!!(_evt.ctrlKey || _evt.metaKey) ||
 				this.newTabModifierActive;
-			const eventForOpen = hasNewTabModifier
-				? ((_evt as any)?.ctrlKey != null || (_evt as any)?.metaKey != null
+			const eventForOpen: MouseEvent | KeyboardEvent | undefined = hasNewTabModifier
+				? (_evt.ctrlKey != null || _evt.metaKey != null
 					? _evt
 					: ({
 						ctrlKey: !Platform.isMacOS,
 						metaKey: Platform.isMacOS
-					} as any))
+					} as MouseEvent))
 				: _evt;
 			try {
-				this.onChooseRecord?.(entry, q, eventForOpen as any);
+				this.onChooseRecord?.(entry, q, eventForOpen);
 			} catch { void 0; }
 			this.committed = true;
 			this.close();
 			return;
 		}
-		if ((value as any).kind === "filter") {
-			const q = String((value as any).query ?? this.latestQuery ?? "");
+		if (value.kind === "filter") {
+			const q = String(value.query ?? this.latestQuery ?? "");
 			try {
 				this.latestQuery = q;
 				this.effectiveQuery = q;

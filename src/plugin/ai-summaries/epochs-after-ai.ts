@@ -10,9 +10,38 @@ import { buildEpochJobs, buildEpochJobsForDateKeys, type EpochJobMode } from "./
 import { ensureAiBridgeServerRunning, maybeNudgeBridgeNotReady } from "./bridge-server";
 import { isGenerateEpochsEffective } from "../pro-feature-state";
 
+type EpochAfterRuntime = {
+	__epochAiEnqueueCancelKey?: number;
+	epochRegenAfterAiBucketsQueue?: EpochBucket[] | null;
+	epochRegenAfterAiShowQueuedNotice?: boolean;
+	epochRegenAfterAiMode?: EpochJobMode | null;
+	epochRegenAfterAiAll?: boolean;
+	epochRegenAfterAiBuckets?: Set<string> | null;
+	epochRegenAfterAiDateKeys?: Set<string> | null;
+	epochRegenAfterAiTimer?: number | null;
+	__epochRegenAfterAiCreatedAt?: number;
+	__epochRegenAfterAiLastWaitLogAt?: number;
+	__epochRegenAfterAiLastReopenAt?: number;
+	__epochEpochHierarchyTotalJobs?: number;
+	__epochEpochHierarchyTotalTokens?: number;
+	__epochEpochHierarchyRunKey?: number;
+	indexer?: {
+		index?: Record<string, unknown[]>;
+		files?: Record<string, {
+			cdate?: { date?: string; file?: string };
+			namedDate?: { date?: string; file?: string };
+			contentDates?: Array<{ date?: string; file?: string }>;
+			trackedDates?: Record<string, Array<{ date?: string; file?: string }>>;
+		}>;
+	};
+	aiBridge?: AiBridgeServer;
+	openAiBridgeWindow?: (options?: { silent?: boolean; source?: string; forceOpen?: boolean }) => void;
+};
+
 function getAiEnqueueCancelKey(plugin: EpochPlugin): number {
 	try {
-		return Number((plugin as any)?.__epochAiEnqueueCancelKey) || 0;
+		const runtime = plugin as unknown as EpochAfterRuntime;
+		return Number(runtime.__epochAiEnqueueCancelKey) || 0;
 	} catch {
 		return 0;
 	}
@@ -60,7 +89,7 @@ export function scheduleEpochRegenerationCascadeAfterAiIdleForDateKeys(
 	bucketQueue: EpochBucket[],
 	showQueuedNotice?: boolean
 ): void {
-	const anyPlugin: any = plugin as any;
+	const anyPlugin = plugin as unknown as EpochAfterRuntime;
 	// IMPORTANT: multiple producers can schedule an after-idle epoch cascade while the timer is already running
 	// (e.g. per-entry epoch nudges during AI processing). Do not let later schedules overwrite the existing
 	// cascade queue and accidentally drop earlier buckets like "day".
@@ -96,7 +125,10 @@ async function computeEpochHierarchyTotalsForDateKeys(
 			totalJobs += jobs.length;
 			if (bucket === "year") yearJobs += jobs.length;
 			else nonYearJobs += jobs.length;
-			for (const j of jobs) totalTokens += estimateTokens(String((j as any)?.input ?? ""));
+			for (const j of jobs) {
+				const input = (j as { input?: unknown }).input;
+				totalTokens += estimateTokens(typeof input === "string" ? input : "");
+			}
 		} catch {
 			// ignore
 		}
@@ -107,8 +139,8 @@ async function computeEpochHierarchyTotalsForDateKeys(
 		const hasYear = buckets.includes("year");
 		const hasNonYearBucket = buckets.some((b) => b && b !== "year");
 		if (hasYear && hasNonYearBucket && yearJobs === 0 && nonYearJobs > 0) {
-			const indexerAny: any = (plugin as any)?.indexer as any;
-			const index: Record<string, any[]> = indexerAny?.index ?? {};
+			const runtime = plugin as unknown as EpochAfterRuntime;
+			const index = runtime.indexer?.index ?? {};
 			const touched = Array.from(new Set((Array.isArray(dateKeys) ? dateKeys : []).map(String).filter(isDateKey)));
 			const yearStarts = new Set<string>();
 			for (const k of touched) {
@@ -119,7 +151,7 @@ async function computeEpochHierarchyTotalsForDateKeys(
 			let extraYearJobs = 0;
 			for (const start of yearStarts) {
 				try {
-					const existing = Array.isArray(index[start]) ? index[start]! : [];
+					const existing = Array.isArray(index[start]) ? index[start] : [];
 					const hasManual = existing.some(() => false);
 					if (!hasManual) extraYearJobs++;
 				} catch {
@@ -141,16 +173,16 @@ export function scheduleEpochRegenerationAfterAiIdleForDateKeys(
 	buckets?: EpochBucket[],
 	showQueuedNotice?: boolean
 ): void {
-	const anyPlugin: any = plugin as any;
+	const anyPlugin = plugin as unknown as EpochAfterRuntime;
 	if (showQueuedNotice === true) {
 		anyPlugin.epochRegenAfterAiShowQueuedNotice = true;
 	}
-	anyPlugin.epochRegenAfterAiMode = mergeEpochMode(anyPlugin.epochRegenAfterAiMode as EpochJobMode, mode);
+	anyPlugin.epochRegenAfterAiMode = mergeEpochMode(anyPlugin.epochRegenAfterAiMode, mode);
 	anyPlugin.epochRegenAfterAiAll = anyPlugin.epochRegenAfterAiAll === true ? true : false;
 	if (Array.isArray(buckets) && buckets.length > 0) {
 		const prev: Set<string> | null = anyPlugin.epochRegenAfterAiBuckets ?? null;
 		if (prev == null) {
-			anyPlugin.epochRegenAfterAiBuckets = new Set<string>(buckets as unknown as string[]);
+			anyPlugin.epochRegenAfterAiBuckets = new Set<string>(buckets);
 		} else {
 			for (const b of buckets) prev.add(String(b));
 			anyPlugin.epochRegenAfterAiBuckets = prev;
@@ -168,6 +200,7 @@ export function scheduleEpochRegenerationAfterAiIdleForDateKeys(
 	anyPlugin.epochRegenAfterAiTimer = window.setInterval(() => {
 		void (async () => {
 			try {
+			const runtime = plugin as unknown as EpochAfterRuntime;
 			const isCanceled = (): boolean => getAiEnqueueCancelKey(plugin) !== startCancelKey;
 			if (isCanceled()) {
 				if (anyPlugin.epochRegenAfterAiTimer != null) {
@@ -176,21 +209,21 @@ export function scheduleEpochRegenerationAfterAiIdleForDateKeys(
 				}
 				return;
 			}
-			let bridge: AiBridgeServer | null = (plugin as any).aiBridge ?? null;
+			let bridge: AiBridgeServer | null = runtime.aiBridge ?? null;
 			if (!bridge) {
 				await ensureAiBridgeServerRunning(plugin);
-				bridge = (plugin as any).aiBridge ?? null;
+				bridge = runtime.aiBridge ?? null;
 				if (!bridge) return;
 			}
 			if (isCanceled()) return;
-			const s = bridge.getStatus();
+			const s = bridge.getStatus() as { queued?: number; inProgress?: number; clientConnected?: boolean };
 			if ((s.queued ?? 0) > 0 || (s.inProgress ?? 0) > 0) {
 				try {
 					const now = Date.now();
 					const lastAt = Number(anyPlugin.__epochRegenAfterAiLastWaitLogAt ?? 0);
 					if (!(lastAt > 0) || now - lastAt > 15000) {
 						anyPlugin.__epochRegenAfterAiLastWaitLogAt = now;
-						const clientConnected = !!(s as any)?.clientConnected;
+						const clientConnected = s.clientConnected === true;
 
 						// If work is queued but no client is connected, try re-opening the bridge page.
 						// Throttle this to avoid duplicate tabs.
@@ -199,7 +232,7 @@ export function scheduleEpochRegenerationAfterAiIdleForDateKeys(
 							if (!(lastReopenAt > 0) || (now - lastReopenAt) > 30_000) {
 								anyPlugin.__epochRegenAfterAiLastReopenAt = now;
 								try {
-									void (plugin as any).openAiBridgeWindow?.({ silent: true, source: "auto", forceOpen: true });
+									void runtime.openAiBridgeWindow?.({ silent: true, source: "auto", forceOpen: true });
 								} catch {
 									// ignore
 								}
@@ -211,7 +244,9 @@ export function scheduleEpochRegenerationAfterAiIdleForDateKeys(
 				}
 				return;
 			}
-			window.clearInterval(anyPlugin.epochRegenAfterAiTimer);
+			if (typeof anyPlugin.epochRegenAfterAiTimer === "number") {
+				window.clearInterval(anyPlugin.epochRegenAfterAiTimer);
+			}
 			anyPlugin.epochRegenAfterAiTimer = null;
 			const chosen: EpochJobMode = (anyPlugin.epochRegenAfterAiMode as EpochJobMode) ?? "staleOrMissing";
 			anyPlugin.epochRegenAfterAiMode = null;
@@ -227,18 +262,18 @@ export function scheduleEpochRegenerationAfterAiIdleForDateKeys(
 			if (isCanceled()) return;
 			const bucketQueueRaw: unknown = anyPlugin.epochRegenAfterAiBucketsQueue;
 			const bucketQueue: EpochBucket[] | null = Array.isArray(bucketQueueRaw) ? (bucketQueueRaw as EpochBucket[]) : null;
-			const queueHead: EpochBucket | null = bucketQueue && bucketQueue.length > 0 ? bucketQueue[0]! : null;
+			const queueHead: EpochBucket | null = bucketQueue && bucketQueue.length > 0 ? bucketQueue[0] : null;
 			const queueRest: EpochBucket[] | null = bucketQueue && bucketQueue.length > 1 ? bucketQueue.slice(1) : null;
 
 			// If the caller didn't pre-compute full-hierarchy totals, compute them once now
 			// so progress starts with the correct total instead of growing as buckets enqueue.
 			try {
-				const planned = Number((anyPlugin as any)?.__epochEpochHierarchyTotalJobs ?? 0);
+				const planned = Number((anyPlugin)?.__epochEpochHierarchyTotalJobs ?? 0);
 				if (queueHead && bucketQueue && bucketQueue.length > 1 && !(Number.isFinite(planned) && planned > 0)) {
 					const totals = await computeEpochHierarchyTotalsForDateKeys(plugin, pendingKeysArr, chosen, bucketQueue);
-					(anyPlugin as any).__epochEpochHierarchyTotalJobs = totals.totalJobs;
-					(anyPlugin as any).__epochEpochHierarchyTotalTokens = totals.totalTokens;
-					(anyPlugin as any).__epochEpochHierarchyRunKey = (Number((anyPlugin as any).__epochEpochHierarchyRunKey) || 0) + 1;
+					(anyPlugin).__epochEpochHierarchyTotalJobs = totals.totalJobs;
+					(anyPlugin).__epochEpochHierarchyTotalTokens = totals.totalTokens;
+					(anyPlugin).__epochEpochHierarchyRunKey = (Number((anyPlugin).__epochEpochHierarchyRunKey) || 0) + 1;
 				}
 			} catch {
 				// ignore
@@ -256,7 +291,7 @@ export function scheduleEpochRegenerationAfterAiIdleForDateKeys(
 
 			const jobs = regenAll
 				? await buildEpochJobs(plugin, chosen)
-				: await buildEpochJobsForDateKeys(plugin, pendingKeysArr, chosen, bucketsList);
+				: await buildEpochJobsForDateKeys(plugin, pendingKeysArr, chosen, bucketsList ?? []);
 			if (isCanceled()) return;
 
 
@@ -268,29 +303,29 @@ export function scheduleEpochRegenerationAfterAiIdleForDateKeys(
 					? "all"
 					: (Array.isArray(bucketsList) && bucketsList.length > 0 ? String(bucketsList[0]) : "");
 				if (!regenAll && bucketName === "day" && jobs.length === 0 && pendingKeysArr.length > 0) {
-					const indexerAny: any = (plugin as any)?.indexer as any;
-					const files: Record<string, any> = indexerAny?.files ?? {};
+					const files = runtime.indexer?.files ?? {};
 					const sampleKeys = pendingKeysArr.slice().sort().slice(0, 5);
 
 					const fileCountsByKey = new Map<string, { total: number; likelyText: number }>();
 					for (const k of sampleKeys) fileCountsByKey.set(k, { total: 0, likelyText: 0 });
 					for (const data of Object.values(files)) {
-						const bump = (entry: any): void => {
+						const bump = (entry: unknown): void => {
 							try {
-								const d = String(entry?.date ?? "");
+								const e = entry as { date?: unknown; file?: unknown };
+								const d = typeof e.date === "string" ? e.date : "";
 								if (!fileCountsByKey.has(d)) return;
 								const rec = fileCountsByKey.get(d)!;
 								rec.total++;
-								const fp = String(entry?.file ?? "");
+								const fp = typeof e.file === "string" ? e.file : "";
 								if (isLikelyTextFilePath(fp)) rec.likelyText++;
 							} catch {
 								// ignore
 							}
 						};
-						bump((data as any)?.cdate);
-						bump((data as any)?.namedDate);
-						for (const e of Array.isArray((data as any)?.contentDates) ? (data as any).contentDates : []) bump(e);
-						const tracked = (data as any)?.trackedDates ?? {};
+						bump((data)?.cdate);
+						bump((data)?.namedDate);
+						for (const e of Array.isArray((data)?.contentDates) ? (data).contentDates : []) bump(e);
+						const tracked = (data)?.trackedDates ?? {};
 						for (const list of Object.values(tracked)) {
 							for (const e of Array.isArray(list) ? list : []) bump(e);
 						}
@@ -304,7 +339,8 @@ export function scheduleEpochRegenerationAfterAiIdleForDateKeys(
 			// Enqueue work if needed. Note: for cascaded bucket queues, we must continue
 			// to the next bucket even if this bucket had nothing to generate.
 			if (jobs.length > 0) {
-				const bridge2: AiBridgeServer = (plugin as any).aiBridge;
+				const bridge2 = runtime.aiBridge;
+				if (!bridge2) return;
 				if (isCanceled()) return;
 				bridge2.enqueue(jobs);
 				if (anyPlugin.epochRegenAfterAiShowQueuedNotice === true) {
@@ -315,7 +351,7 @@ export function scheduleEpochRegenerationAfterAiIdleForDateKeys(
 				}
 				maybeNudgeBridgeNotReady(plugin, bridge2);
 				if (!bridge2.getStatus().clientConnected) {
-					void (plugin as any).openAiBridgeWindow?.({ silent: true });
+					void runtime.openAiBridgeWindow?.({ silent: true });
 				}
 			}
 
@@ -331,8 +367,8 @@ export function scheduleEpochRegenerationAfterAiIdleForDateKeys(
 }
 
 export function scheduleEpochRegenerationAfterAiIdle(plugin: EpochPlugin, mode: EpochJobMode, showQueuedNotice?: boolean): void {
-	const anyPlugin: any = plugin as any;
+	const anyPlugin = plugin as unknown as EpochAfterRuntime;
 	anyPlugin.epochRegenAfterAiAll = true;
-	anyPlugin.epochRegenAfterAiMode = mergeEpochMode(anyPlugin.epochRegenAfterAiMode as EpochJobMode, mode);
-	scheduleEpochRegenerationAfterAiIdleForDateKeys(plugin, [], (anyPlugin.epochRegenAfterAiMode as EpochJobMode) ?? mode, undefined, showQueuedNotice);
+	anyPlugin.epochRegenAfterAiMode = mergeEpochMode(anyPlugin.epochRegenAfterAiMode, mode);
+	scheduleEpochRegenerationAfterAiIdleForDateKeys(plugin, [], anyPlugin.epochRegenAfterAiMode ?? mode, undefined, showQueuedNotice);
 }

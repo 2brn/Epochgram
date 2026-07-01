@@ -13,22 +13,40 @@ import { loadEmbeddingsModelViaWorker } from "./worker-embed";
 import { buildNoteVector } from "./vectors-build";
 import type { SimilarityStore } from "./types";
 
+type SimilarityQueuePluginState = EpochPlugin & {
+	similarityQueueRunning?: boolean;
+	similarityQueueTimer?: number | null;
+	similarityResetKey?: number;
+	similarityPendingFiles?: Set<string>;
+	similarityQueueTotal?: number;
+	similarityQueueProcessed?: number;
+	similarityVectorUpdateStartedAt?: number;
+	similarityStartupAt?: number;
+	similarityVectorUpdateProcessingStartedAt?: number;
+	similarityFullRebuildRunning?: boolean;
+	similarityStoreRev?: number;
+};
+
+function state(plugin: EpochPlugin): SimilarityQueuePluginState {
+	return plugin;
+}
+
 export function scheduleProcessPendingQueue(plugin: EpochPlugin, delayMs: number = 0): void {
-	const anyPlugin: any = plugin as any;
-	if (anyPlugin.similarityQueueRunning) return;
-	if (anyPlugin.similarityQueueTimer) return;
-	anyPlugin.similarityQueueTimer = window.setTimeout(() => {
-		anyPlugin.similarityQueueTimer = null;
+	const pluginState = state(plugin);
+	if (pluginState.similarityQueueRunning) return;
+	if (pluginState.similarityQueueTimer) return;
+	pluginState.similarityQueueTimer = window.setTimeout(() => {
+		pluginState.similarityQueueTimer = null;
 		void processPendingQueue(plugin);
 	}, Math.max(0, Math.floor(delayMs)));
 }
 
 export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
-	const anyPlugin: any = plugin as any;
-	if (anyPlugin.similarityQueueRunning) return;
+	const pluginState = state(plugin);
+	if (pluginState.similarityQueueRunning) return;
 	const resetKeyAtStart = (() => {
 		try {
-			const v = Number(anyPlugin.similarityResetKey ?? 0);
+			const v = Number(pluginState.similarityResetKey ?? 0);
 			return Number.isFinite(v) ? v : 0;
 		} catch {
 			return 0;
@@ -36,11 +54,11 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 	})();
 	try {
 		if (Platform.isDesktopApp && consumeCancelRequested(plugin, "semantic")) {
-			anyPlugin.similarityPendingFiles = new Set<string>();
-			anyPlugin.similarityQueueTotal = 0;
-			anyPlugin.similarityQueueProcessed = 0;
+			pluginState.similarityPendingFiles = new Set<string>();
+			pluginState.similarityQueueTotal = 0;
+			pluginState.similarityQueueProcessed = 0;
 			try {
-				anyPlugin.similarityVectorUpdateStartedAt = 0;
+				pluginState.similarityVectorUpdateStartedAt = 0;
 			} catch {
 				// ignore
 			}
@@ -50,9 +68,9 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 		// ignore
 	}
 	try {
-		if (anyPlugin.similarityFullRebuildRunning) {
+		if (pluginState.similarityFullRebuildRunning) {
 			// Full rebuild already computes vectors for all files; avoid redundant work + notices.
-			if (anyPlugin.similarityPendingFiles && anyPlugin.similarityPendingFiles.size > 0) {
+			if (pluginState.similarityPendingFiles && pluginState.similarityPendingFiles.size > 0) {
 				scheduleProcessPendingQueue(plugin, 1000);
 			}
 			return;
@@ -61,11 +79,11 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 		// ignore
 	}
 	try {
-		if (typeof anyPlugin.similarityVectorUpdateStartedAt !== "number" || !(anyPlugin.similarityVectorUpdateStartedAt > 0)) {
-			anyPlugin.similarityVectorUpdateStartedAt = now();
+		if (typeof pluginState.similarityVectorUpdateStartedAt !== "number" || !(pluginState.similarityVectorUpdateStartedAt > 0)) {
+			pluginState.similarityVectorUpdateStartedAt = now();
 			try {
-				anyPlugin.similarityQueueProcessed = 0;
-				anyPlugin.similarityQueueTotal = 0;
+				pluginState.similarityQueueProcessed = 0;
+				pluginState.similarityQueueTotal = 0;
 			} catch {
 				// ignore
 			}
@@ -75,12 +93,11 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 					minIntervalMs: 1000,
 					still: () => {
 						try {
-							const anyPlugin: any = plugin as any;
-							const startedAt = Number(anyPlugin?.similarityVectorUpdateStartedAt ?? 0);
+							const startedAt = Number(state(plugin).similarityVectorUpdateStartedAt ?? 0);
 							if (!(Number.isFinite(startedAt) && startedAt > 0)) return false;
-							const p: any = anyPlugin?.similarityPendingFiles;
-							const hasPending = p instanceof Set && p.size > 0;
-							return anyPlugin?.similarityQueueRunning === true || hasPending;
+							const pending = state(plugin).similarityPendingFiles;
+							const hasPending = pending instanceof Set && pending.size > 0;
+							return state(plugin).similarityQueueRunning === true || hasPending;
 						} catch {
 							return true;
 						}
@@ -91,14 +108,14 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 	} catch {
 		// ignore
 	}
-	anyPlugin.similarityQueueRunning = true;
+	pluginState.similarityQueueRunning = true;
 	try {
 		if (!embeddingsComputeEnabled(plugin)) {
 			return;
 		}
 
 		try {
-			const startedAt = Number(anyPlugin.similarityStartupAt ?? 0);
+			const startedAt = Number(pluginState.similarityStartupAt ?? 0);
 			if (Number.isFinite(startedAt) && startedAt > 0) {
 				const STARTUP_GRACE_MS = 8000;
 				const elapsed = now() - startedAt;
@@ -115,23 +132,27 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 		// (i.e. after startup grace deferrals).
 		try {
 			if (
-				typeof anyPlugin.similarityVectorUpdateProcessingStartedAt !== "number" ||
-				!(anyPlugin.similarityVectorUpdateProcessingStartedAt > 0)
+				typeof pluginState.similarityVectorUpdateProcessingStartedAt !== "number" ||
+				!(pluginState.similarityVectorUpdateProcessingStartedAt > 0)
 			) {
-				anyPlugin.similarityVectorUpdateProcessingStartedAt = now();
+				pluginState.similarityVectorUpdateProcessingStartedAt = now();
 			}
 		} catch {
 			// ignore
 		}
 
-		if (!(anyPlugin.similarityPendingFiles instanceof Set)) {
-			anyPlugin.similarityPendingFiles = new Set<string>();
+		if (!(pluginState.similarityPendingFiles instanceof Set)) {
+			pluginState.similarityPendingFiles = new Set<string>();
 		}
 
-		anyPlugin.similarityQueueProcessed = typeof anyPlugin.similarityQueueProcessed === "number" ? Math.max(0, anyPlugin.similarityQueueProcessed) : 0;
-		const prevProcessed = anyPlugin.similarityQueueProcessed as number;
-		const pendingNow = (anyPlugin.similarityPendingFiles as Set<string>).size;
-		anyPlugin.similarityQueueTotal = Math.max(1, prevProcessed + pendingNow);
+		pluginState.similarityQueueProcessed = typeof pluginState.similarityQueueProcessed === "number" ? Math.max(0, pluginState.similarityQueueProcessed) : 0;
+		const prevProcessed = pluginState.similarityQueueProcessed;
+		const pendingFiles = pluginState.similarityPendingFiles;
+		if (!(pendingFiles instanceof Set)) {
+			pluginState.similarityPendingFiles = new Set<string>();
+		}
+		const pendingNow = pluginState.similarityPendingFiles?.size ?? 0;
+		pluginState.similarityQueueTotal = Math.max(1, prevProcessed + pendingNow);
 
 		let processedThisTick = 0;
 		const MAX_FILES_PER_TICK = 1;
@@ -145,7 +166,7 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 
 		const maybeFlushStore = async (force: boolean) => {
 			try {
-				const currentKeyRaw = Number(anyPlugin.similarityResetKey ?? 0);
+				const currentKeyRaw = Number(pluginState.similarityResetKey ?? 0);
 				const currentKey = Number.isFinite(currentKeyRaw) ? currentKeyRaw : 0;
 				if (currentKey !== resetKeyAtStart) {
 					store = null;
@@ -171,14 +192,14 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 			}
 		};
 
-		while (anyPlugin.similarityPendingFiles instanceof Set && anyPlugin.similarityPendingFiles.size > 0) {
+		while (pluginState.similarityPendingFiles instanceof Set && pluginState.similarityPendingFiles.size > 0) {
 			try {
 				if (Platform.isDesktopApp && consumeCancelRequested(plugin, "semantic")) {
 					try {
-						anyPlugin.similarityPendingFiles = new Set<string>();
-						anyPlugin.similarityQueueTotal = 0;
-						anyPlugin.similarityQueueProcessed = 0;
-						anyPlugin.similarityVectorUpdateStartedAt = 0;
+						pluginState.similarityPendingFiles = new Set<string>();
+						pluginState.similarityQueueTotal = 0;
+						pluginState.similarityQueueProcessed = 0;
+						pluginState.similarityVectorUpdateStartedAt = 0;
 					} catch {
 						// ignore
 					}
@@ -199,13 +220,14 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 				modelLoadedOk = true;
 			}
 
-			const nextPath = pickNewestPendingPath(plugin, anyPlugin.similarityPendingFiles as Set<string>);
+			const pendingSet = pluginState.similarityPendingFiles;
+			if (!(pendingSet instanceof Set)) break;
+			const nextPath = pickNewestPendingPath(plugin, pendingSet);
 			if (!nextPath) break;
-			(anyPlugin.similarityPendingFiles as Set<string>).delete(nextPath);
+			pendingSet.delete(nextPath);
 
-			anyPlugin.similarityQueueProcessed =
-				(typeof anyPlugin.similarityQueueProcessed === "number" ? anyPlugin.similarityQueueProcessed : 0) + 1;
-			anyPlugin.similarityQueueTotal = Math.max(1, (anyPlugin.similarityQueueProcessed as number) + (anyPlugin.similarityPendingFiles as Set<string>).size);
+			pluginState.similarityQueueProcessed = (typeof pluginState.similarityQueueProcessed === "number" ? pluginState.similarityQueueProcessed : 0) + 1;
+			pluginState.similarityQueueTotal = Math.max(1, pluginState.similarityQueueProcessed + pluginState.similarityPendingFiles.size);
 
 			const file = nextPath ? plugin.app.vault.getAbstractFileByPath(nextPath) : null;
 			if (nextPath && !(file instanceof TFile)) continue;
@@ -232,8 +254,7 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 					if (!store.dim && built.vector.length) store.dim = built.vector.length;
 					dirtyUpdates++;
 					try {
-						anyPlugin.similarityStoreRev =
-							(typeof anyPlugin.similarityStoreRev === "number" ? anyPlugin.similarityStoreRev : 0) + 1;
+						pluginState.similarityStoreRev = (typeof pluginState.similarityStoreRev === "number" ? pluginState.similarityStoreRev : 0) + 1;
 					} catch {
 						// ignore
 					}
@@ -246,8 +267,8 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 
 			processedThisTick++;
 			if (shouldShowVectorUpdateNotice(plugin) && !isUserEditingMarkdown(plugin.app)) {
-				const done = typeof anyPlugin.similarityQueueProcessed === "number" ? anyPlugin.similarityQueueProcessed : 0;
-				const tot = typeof anyPlugin.similarityQueueTotal === "number" ? anyPlugin.similarityQueueTotal : 0;
+				const done = typeof pluginState.similarityQueueProcessed === "number" ? pluginState.similarityQueueProcessed : 0;
+				const tot = typeof pluginState.similarityQueueTotal === "number" ? pluginState.similarityQueueTotal : 0;
 				if (shouldAllowSimilarityProgressNotice(plugin, "similarityVectorUpdateProcessingStartedAt")) {
 					if (Platform.isDesktopApp) {
 						setEpochProgress(plugin, "semantic", `Semantics… ${done}/${Math.max(done, tot)}`);
@@ -263,13 +284,13 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 
 		await maybeFlushStore(true);
 	} finally {
-		anyPlugin.similarityQueueRunning = false;
-		if (!anyPlugin.similarityPendingFiles || anyPlugin.similarityPendingFiles.size === 0) {
-			anyPlugin.similarityQueueTotal = 0;
-			anyPlugin.similarityQueueProcessed = 0;
+		pluginState.similarityQueueRunning = false;
+		if (!pluginState.similarityPendingFiles || pluginState.similarityPendingFiles.size === 0) {
+			pluginState.similarityQueueTotal = 0;
+			pluginState.similarityQueueProcessed = 0;
 			try {
-				anyPlugin.similarityVectorUpdateStartedAt = 0;
-				anyPlugin.similarityVectorUpdateProcessingStartedAt = 0;
+				pluginState.similarityVectorUpdateStartedAt = 0;
+				pluginState.similarityVectorUpdateProcessingStartedAt = 0;
 			} catch {
 				// ignore
 			}
@@ -283,7 +304,7 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 			}
 		}
 		try {
-			if (anyPlugin.similarityPendingFiles && anyPlugin.similarityPendingFiles.size > 0) {
+			if (pluginState.similarityPendingFiles && pluginState.similarityPendingFiles.size > 0) {
 				const computeOk = embeddingsComputeEnabled(plugin);
 				const delay = computeOk ? (isUserEditingMarkdown(plugin.app) ? 500 : 50) : 2000;
 				scheduleProcessPendingQueue(plugin, delay);

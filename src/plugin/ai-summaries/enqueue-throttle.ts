@@ -13,12 +13,18 @@ type AiEnqueueThrottleState = {
 	pendingJobs: AiSummaryJob[] | null;
 };
 
+type AiEnqueuePluginState = {
+	aiSummaryEnqueueThrottleByFile?: Map<string, AiEnqueueThrottleState>;
+	aiBridge?: AiBridgeServer;
+	openAiBridgeWindow?: (options?: { silent?: boolean }) => void;
+};
+
 function getAiEnqueueThrottleMap(plugin: EpochPlugin): Map<string, AiEnqueueThrottleState> {
-	const anyPlugin: any = plugin as any;
-	if (!anyPlugin.aiSummaryEnqueueThrottleByFile) {
-		anyPlugin.aiSummaryEnqueueThrottleByFile = new Map<string, AiEnqueueThrottleState>();
+	const state = plugin as EpochPlugin & AiEnqueuePluginState;
+	if (!state.aiSummaryEnqueueThrottleByFile) {
+		state.aiSummaryEnqueueThrottleByFile = new Map<string, AiEnqueueThrottleState>();
 	}
-	return anyPlugin.aiSummaryEnqueueThrottleByFile as Map<string, AiEnqueueThrottleState>;
+	return state.aiSummaryEnqueueThrottleByFile;
 }
 
 export function shouldApplyEnqueueCooldown(options: { force?: boolean; showNotice?: boolean; enableIfDisabled?: boolean } | undefined): boolean {
@@ -55,14 +61,16 @@ export async function enqueueThrottledJobs(
 
 	const enqueueNow = async (batch: AiSummaryJob[]) => {
 		await ensureAiBridgeServerRunning(plugin);
-		const bridge: AiBridgeServer = (plugin as any).aiBridge;
+		const pluginState = plugin as EpochPlugin & AiEnqueuePluginState;
+		const bridge = pluginState.aiBridge;
+		if (!bridge) return;
 		bridge.enqueue(batch);
-		state!.lastQueuedAt = Date.now();
+		state.lastQueuedAt = Date.now();
 		if (options?.showNotice) {
 			new Notice(`AI summaries: queued ${batch.length} job(s).`);
 		}
 		if (!bridge.getStatus().clientConnected) {
-			void (plugin as any).openAiBridgeWindow?.({ silent: true });
+			void pluginState.openAiBridgeWindow?.({ silent: true });
 		}
 	};
 
@@ -78,11 +86,12 @@ export async function enqueueThrottledJobs(
 
 	state.pendingJobs = jobs;
 	if (state.timerId == null) {
+		const queuedState = state;
 		state.timerId = window.setTimeout(() => {
 			void (async () => {
-				state!.timerId = null;
-				const pending = state!.pendingJobs;
-				state!.pendingJobs = null;
+				queuedState.timerId = null;
+				const pending = queuedState.pendingJobs;
+				queuedState.pendingJobs = null;
 				if (!pending || pending.length === 0) return;
 				try {
 					if (!Platform.isDesktopApp) return;

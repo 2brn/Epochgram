@@ -18,6 +18,7 @@ const SYNC_SAFE_SETTING_KEYS = [
 	"openEpochViewOnStartup",
 	"enableAnimation",
 	"compactModeMinWidthPercent",
+	"searchResultsLimit",
 	"trackChanges",
 	"anchorMdate",
 	"timelineFilters",
@@ -50,18 +51,37 @@ type StorageLike = {
 	removeItem(key: string): void;
 };
 
+type WindowWithStorage = Window & {
+	localStorage?: StorageLike;
+};
+
+type LocalActivationPluginLike = {
+	app?: {
+		vault?: {
+			adapter?: { basePath?: string };
+			getName?: () => string;
+			configDir?: string;
+		};
+	};
+	dataFilePath?: string;
+	pluginDirPath?: string;
+	manifest?: {
+		id?: string;
+	};
+};
+
 type LocalActivationPayload = {
 	v: number;
 	state: Partial<Pick<EpochSettings, LocalActivationSettingKey>>;
 };
 
 function getStorage(): StorageLike | null {
-	const storage = (window as any)?.localStorage;
+	const storage = (window as WindowWithStorage).localStorage;
 	if (!storage) return null;
 	if (typeof storage.getItem !== "function") return null;
 	if (typeof storage.setItem !== "function") return null;
 	if (typeof storage.removeItem !== "function") return null;
-	return storage as StorageLike;
+	return storage;
 }
 
 function fastStringHash(input: string): string {
@@ -73,21 +93,31 @@ function fastStringHash(input: string): string {
 	return Math.abs(hash).toString(36);
 }
 
-function getVaultIdentity(plugin: any): string {
+function getVaultIdentity(plugin: unknown): string {
+	const pluginLike = plugin as LocalActivationPluginLike;
 	const candidates = [
-		String(plugin?.app?.vault?.adapter?.basePath ?? "").trim(),
-		typeof plugin?.app?.vault?.getName === "function" ? String(plugin.app.vault.getName() ?? "").trim() : "",
-		String(plugin?.dataFilePath ?? "").trim(),
-		String(plugin?.pluginDirPath ?? "").trim(),
-		String(plugin?.app?.vault?.configDir ?? "").trim()
+		String(pluginLike.app?.vault?.adapter?.basePath ?? "").trim(),
+		typeof pluginLike.app?.vault?.getName === "function" ? String(pluginLike.app.vault.getName() ?? "").trim() : "",
+		String(pluginLike.dataFilePath ?? "").trim(),
+		String(pluginLike.pluginDirPath ?? "").trim(),
+		String(pluginLike.app?.vault?.configDir ?? "").trim()
 	].filter(Boolean);
 	return candidates.join("|") || "default-vault";
 }
 
-function getStorageKey(plugin: any): string {
-	const pluginId = String(plugin?.manifest?.id ?? "obsidian-epochgram").trim() || "obsidian-epochgram";
+function getStorageKey(plugin: unknown): string {
+	const pluginLike = plugin as LocalActivationPluginLike;
+	const pluginId = String(pluginLike.manifest?.id ?? "obsidian-epochgram").trim() || "obsidian-epochgram";
 	const scope = fastStringHash(getVaultIdentity(plugin));
 	return `${pluginId}:local-activation:${scope}`;
+}
+
+function setActivationStateValue(
+	target: Partial<Pick<EpochSettings, LocalActivationSettingKey>>,
+	key: LocalActivationSettingKey,
+	value: string | number
+): void {
+	(target as Partial<Record<LocalActivationSettingKey, string | number>>)[key] = value;
 }
 
 function normalizeLocalActivationState(raw: unknown): Partial<Pick<EpochSettings, LocalActivationSettingKey>> {
@@ -96,11 +126,11 @@ function normalizeLocalActivationState(raw: unknown): Partial<Pick<EpochSettings
 	for (const key of LOCAL_ACTIVATION_SETTING_KEYS) {
 		const value = input[key];
 		if (typeof value === "string") {
-			(next as any)[key] = value;
+			setActivationStateValue(next, key, value);
 			continue;
 		}
 		if (typeof value === "number" && Number.isFinite(value)) {
-			(next as any)[key] = Math.max(0, Math.floor(value));
+			setActivationStateValue(next, key, Math.max(0, Math.floor(value)));
 		}
 	}
 	return next;
@@ -115,12 +145,12 @@ export function stripLocalActivationState(settings: Partial<EpochSettings> | nul
 	const next: Partial<Pick<EpochSettings, SyncSafeSettingKey>> = {};
 	for (const key of SYNC_SAFE_SETTING_KEYS) {
 		if (!Object.prototype.hasOwnProperty.call(input, key)) continue;
-		(next as any)[key] = input[key];
+		(next as Partial<Record<SyncSafeSettingKey, unknown>>)[key] = input[key];
 	}
-	return next as Partial<EpochSettings>;
+	return next;
 }
 
-export function readLocalActivationState(plugin: any): Partial<Pick<EpochSettings, LocalActivationSettingKey>> {
+export function readLocalActivationState(plugin: unknown): Partial<Pick<EpochSettings, LocalActivationSettingKey>> {
 	const storage = getStorage();
 	if (!storage) return {};
 	try {
@@ -134,12 +164,12 @@ export function readLocalActivationState(plugin: any): Partial<Pick<EpochSetting
 	}
 }
 
-export function writeLocalActivationState(plugin: any, settings: Partial<EpochSettings> | null | undefined): void {
+export function writeLocalActivationState(plugin: unknown, settings: Partial<EpochSettings> | null | undefined): void {
 	const storage = getStorage();
 	if (!storage) return;
 	const state = pickLocalActivationState(settings);
 	const hasAnyValue = LOCAL_ACTIVATION_SETTING_KEYS.some((key) => {
-		const value = (state as any)[key];
+		const value = (state as Partial<Record<LocalActivationSettingKey, string | number | undefined>>)[key];
 		if (typeof value === "string") return value.trim().length > 0;
 		if (typeof value === "number") return value > 0;
 		return false;

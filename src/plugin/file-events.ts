@@ -5,16 +5,51 @@ import { normalizeSnapshotValue } from "../indexer/snapshot-helpers";
 import { computeTextHash } from "../utils";
 import { isTrackChangesEffective } from "./pro-feature-state";
 
+type FileIndexDataLike = {
+	indexedMtimeMs?: number;
+	indexedSize?: number;
+	contentHash?: string;
+};
+
+type TimelineSearchIndexLike = {
+	removeById?: (id: string) => boolean;
+};
+
+type FileEventPluginState = EpochPlugin & {
+	__epochDeferredIndexResync?: Set<string>;
+	__epochDeferredIndexResyncForce?: Set<string>;
+	__epochDeferredIndexResyncTimer?: number | null;
+	timelineSearchIndex?: TimelineSearchIndexLike;
+	maybeIndexOpenedFile?: (file: TFile) => Promise<void>;
+	queueVectorUpdate?: (path: string) => void;
+	queueTermSimilarityUpdate?: (path: string) => void;
+	removeVector?: (path: string) => Promise<void>;
+	removeTermSimilarity?: (path: string) => Promise<void>;
+	renameVector?: (oldPath: string, newPath: string) => Promise<void>;
+	renameTermSimilarity?: (oldPath: string, newPath: string) => Promise<void>;
+};
+
+function state(plugin: EpochPlugin): FileEventPluginState {
+	return plugin;
+}
+
+function getIndexData(plugin: EpochPlugin, path: string): FileIndexDataLike | null {
+	if (typeof plugin.indexer?.getFileIndexData !== "function") return null;
+	const data = plugin.indexer.getFileIndexData(path) as unknown;
+	if (!data || typeof data !== "object") return null;
+	return data;
+}
+
 async function shouldSkipUnchangedModify(plugin: EpochPlugin, file: TFile, force: boolean): Promise<boolean> {
 	if (force) return false;
 	if (typeof plugin.indexer?.isFileKnown !== "function" || !plugin.indexer.isFileKnown(file.path)) return false;
 
 	try {
-		const prev: any = typeof plugin.indexer?.getFileIndexData === "function" ? plugin.indexer.getFileIndexData(file.path) : null;
+		const prev = getIndexData(plugin, file.path);
 		const prevMtime = Number(prev?.indexedMtimeMs);
 		const prevSize = Number(prev?.indexedSize);
-		const curMtime = Number((file as any)?.stat?.mtime);
-		const curSize = Number((file as any)?.stat?.size);
+		const curMtime = Number(file.stat.mtime);
+		const curSize = Number(file.stat.size);
 		if (
 			Number.isFinite(prevMtime) && Number.isFinite(prevSize) &&
 			Number.isFinite(curMtime) && Number.isFinite(curSize) &&
@@ -29,9 +64,9 @@ async function shouldSkipUnchangedModify(plugin: EpochPlugin, file: TFile, force
 	}
 
 	try {
-		const prev: any = typeof plugin.indexer?.getFileIndexData === "function" ? plugin.indexer.getFileIndexData(file.path) : null;
+		const prev = getIndexData(plugin, file.path);
 		const prevHash = typeof prev?.contentHash === "string" ? prev.contentHash.trim() : "";
-		const ext = String((file as any)?.extension || "").toLowerCase();
+		const ext = String(file.extension || "").toLowerCase();
 		if (prevHash && ext && (ext === "md" || ext === "txt" || ext === "markdown" || ext === "mdown" || ext === "mkd" || ext === "mdx")) {
 			const raw = await plugin.app.vault.read(file);
 			const normalized = normalizeSnapshotValue(raw) ?? "";
@@ -49,16 +84,16 @@ async function shouldSkipUnchangedModify(plugin: EpochPlugin, file: TFile, force
 
 function deferIndexResync(plugin: EpochPlugin, path: string, options?: { force?: boolean }): void {
 	try {
-		const anyPlugin: any = plugin as any;
-		if (!(anyPlugin.__epochDeferredIndexResync instanceof Set)) {
-			anyPlugin.__epochDeferredIndexResync = new Set<string>();
+		const pluginState = state(plugin);
+		if (!(pluginState.__epochDeferredIndexResync instanceof Set)) {
+			pluginState.__epochDeferredIndexResync = new Set<string>();
 		}
-		anyPlugin.__epochDeferredIndexResync.add(String(path || ""));
+		pluginState.__epochDeferredIndexResync.add(String(path || ""));
 		if (options?.force) {
-			if (!(anyPlugin.__epochDeferredIndexResyncForce instanceof Set)) {
-				anyPlugin.__epochDeferredIndexResyncForce = new Set<string>();
+			if (!(pluginState.__epochDeferredIndexResyncForce instanceof Set)) {
+				pluginState.__epochDeferredIndexResyncForce = new Set<string>();
 			}
-			anyPlugin.__epochDeferredIndexResyncForce.add(String(path || ""));
+			pluginState.__epochDeferredIndexResyncForce.add(String(path || ""));
 		}
 	} catch {
 		// ignore
@@ -67,16 +102,16 @@ function deferIndexResync(plugin: EpochPlugin, path: string, options?: { force?:
 }
 
 async function scheduleDeferredIndexResync(plugin: EpochPlugin): Promise<void> {
-	const anyPlugin: any = plugin as any;
+	const pluginState = state(plugin);
 	try {
-		if (anyPlugin.__epochDeferredIndexResyncTimer != null) return;
+		if (pluginState.__epochDeferredIndexResyncTimer != null) return;
 	} catch {
 		// ignore
 	}
 	try {
-		anyPlugin.__epochDeferredIndexResyncTimer = window.setTimeout(() => {
+		pluginState.__epochDeferredIndexResyncTimer = window.setTimeout(() => {
 			try {
-				anyPlugin.__epochDeferredIndexResyncTimer = null;
+				pluginState.__epochDeferredIndexResyncTimer = null;
 			} catch {
 				// ignore
 			}
@@ -88,12 +123,12 @@ async function scheduleDeferredIndexResync(plugin: EpochPlugin): Promise<void> {
 }
 
 async function flushDeferredIndexResync(plugin: EpochPlugin): Promise<void> {
-	const anyPlugin: any = plugin as any;
+	const pluginState = state(plugin);
 	let set: Set<string> | null = null;
 	let forceSet: Set<string> | null = null;
 	try {
-		set = anyPlugin.__epochDeferredIndexResync as Set<string>;
-		forceSet = anyPlugin.__epochDeferredIndexResyncForce as Set<string>;
+		set = pluginState.__epochDeferredIndexResync ?? null;
+		forceSet = pluginState.__epochDeferredIndexResyncForce ?? null;
 	} catch {
 		set = null;
 		forceSet = null;
@@ -160,7 +195,7 @@ async function flushDeferredIndexResync(plugin: EpochPlugin): Promise<void> {
 				// ignore
 			}
 			try {
-				const timelineMutated = (plugin as any)?.timelineSearchIndex?.removeById?.(p) === true;
+				const timelineMutated = pluginState.timelineSearchIndex?.removeById?.(p) === true;
 				if (timelineMutated) {
 					markTimelineSearchIndexDirty(plugin);
 					scheduleTimelineSearchCacheSave(plugin);
@@ -227,7 +262,7 @@ export const fileEventMethods: FileEventMethods = {
 				try {
 					const active = this.app.workspace.getActiveFile();
 					if (active && active.path === file.path) {
-						void (this as any).maybeIndexOpenedFile?.(file);
+						void state(this).maybeIndexOpenedFile?.(file);
 					}
 				} catch {
 					// ignore
@@ -248,12 +283,12 @@ export const fileEventMethods: FileEventMethods = {
 			await this.indexer.processFile(file, { reason: "create" });
 			await this.persist({ skipEnsure: true });
 			try {
-				(this as any).queueVectorUpdate?.(file.path);
+				state(this).queueVectorUpdate?.(file.path);
 			} catch {
 				// ignore
 			}
 			try {
-				(this as any).queueTermSimilarityUpdate?.(file.path);
+				state(this).queueTermSimilarityUpdate?.(file.path);
 			} catch {
 				// ignore
 			}
@@ -287,12 +322,12 @@ export const fileEventMethods: FileEventMethods = {
 			this.indexer.removeFile(file.path);
 			await this.persist({ skipEnsure: true });
 			try {
-				await (this as any).removeVector?.(file.path);
+				await state(this).removeVector?.(file.path);
 			} catch {
 				// ignore
 			}
 			try {
-				await (this as any).removeTermSimilarity?.(file.path);
+				await state(this).removeTermSimilarity?.(file.path);
 			} catch {
 				// ignore
 			}
@@ -356,18 +391,18 @@ export const fileEventMethods: FileEventMethods = {
 				await this.indexer.renameFile(oldPath, file.path);
 				await this.persist({ skipEnsure: true });
 				try {
-					await (this as any).renameVector?.(oldPath, file.path);
+					await state(this).renameVector?.(oldPath, file.path);
 				} catch {
 					// ignore
 				}
 				try {
-					await (this as any).renameTermSimilarity?.(oldPath, file.path);
+					await state(this).renameTermSimilarity?.(oldPath, file.path);
 				} catch {
 					// ignore
 				}
 				try {
 					// Path is part of the classification input; reclassify after rename.
-					(this as any).queueTermSimilarityUpdate?.(file.path);
+					state(this).queueTermSimilarityUpdate?.(file.path);
 				} catch {
 					// ignore
 				}
@@ -392,12 +427,12 @@ export const fileEventMethods: FileEventMethods = {
 				await this.indexer.processFile(file, { reason: "track" });
 				await this.persist({ skipEnsure: true });
 				try {
-					(this as any).queueVectorUpdate?.(file.path);
+					state(this).queueVectorUpdate?.(file.path);
 				} catch {
 					// ignore
 				}
 				try {
-					(this as any).queueTermSimilarityUpdate?.(file.path);
+					state(this).queueTermSimilarityUpdate?.(file.path);
 				} catch {
 					// ignore
 				}
@@ -428,7 +463,7 @@ export const fileEventMethods: FileEventMethods = {
 					try {
 						const active = this.app.workspace.getActiveFile();
 						if (active && active.path === file.path) {
-							void (this as any).maybeIndexOpenedFile?.(file);
+							void state(this).maybeIndexOpenedFile?.(file);
 						}
 					} catch {
 						// ignore
@@ -450,12 +485,12 @@ export const fileEventMethods: FileEventMethods = {
 				await this.indexer.processFile(file, { reason: "modify" });
 				await this.persist({ skipEnsure: true });
 				try {
-					(this as any).queueVectorUpdate?.(file.path);
+					state(this).queueVectorUpdate?.(file.path);
 				} catch {
 					// ignore
 				}
 				try {
-					(this as any).queueTermSimilarityUpdate?.(file.path);
+					state(this).queueTermSimilarityUpdate?.(file.path);
 				} catch {
 					// ignore
 				}

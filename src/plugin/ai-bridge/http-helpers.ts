@@ -1,10 +1,33 @@
+type HeadersLike = Record<string, string | string[] | undefined>;
+
+type RequestLike = {
+	headers?: HeadersLike;
+	url?: string;
+	on(event: "data", listener: (chunk: unknown) => void): void;
+	on(event: "end", listener: () => void): void;
+	on(event: "error", listener: (error: Error) => void): void;
+};
+
+type ResponseLike = {
+	statusCode: number;
+	setHeader(name: string, value: string): void;
+	end(body?: string): void;
+};
+
 function normalizeHeaderValue(value: unknown): string {
 	if (typeof value === "string") return value;
-	if (Array.isArray(value) && typeof value[0] === "string") return value[0]!;
+	if (Array.isArray(value) && typeof value[0] === "string") return value[0] ?? "";
 	return "";
 }
 
-function getOriginHeader(req: any): string {
+function chunkToText(chunk: unknown): string {
+	if (typeof chunk === "string") return chunk;
+	if (chunk instanceof Uint8Array) return new TextDecoder().decode(chunk);
+	if (chunk instanceof ArrayBuffer) return new TextDecoder().decode(new Uint8Array(chunk));
+	return "";
+}
+
+function getOriginHeader(req: RequestLike): string {
 	try {
 		return normalizeHeaderValue(req?.headers?.origin ?? req?.headers?.Origin).trim();
 	} catch {
@@ -27,7 +50,7 @@ function isAllowedBridgeOrigin(origin: string): boolean {
 	}
 }
 
-export function applyBridgeCorsHeaders(req: any, res: any): void {
+export function applyBridgeCorsHeaders(req: RequestLike, res: ResponseLike): void {
 	const origin = getOriginHeader(req);
 	if (origin && isAllowedBridgeOrigin(origin)) {
 		res.setHeader("Access-Control-Allow-Origin", origin);
@@ -38,7 +61,7 @@ export function applyBridgeCorsHeaders(req: any, res: any): void {
 	res.setHeader("Access-Control-Max-Age", "86400");
 }
 
-export function safeJson(req: any, res: any, status: number, payload: any): void {
+export function safeJson(req: RequestLike, res: ResponseLike, status: number, payload: unknown): void {
 	const body = JSON.stringify(payload);
 	res.statusCode = status;
 	res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -51,11 +74,11 @@ export function safeJson(req: any, res: any, status: number, payload: any): void
 	res.end(body);
 }
 
-export async function readBody(req: any): Promise<string> {
+export async function readBody(req: RequestLike): Promise<string> {
 	return await new Promise((resolve, reject) => {
 		let data = "";
-		req.on("data", (chunk: any) => {
-			data += chunk;
+		req.on("data", (chunk: unknown) => {
+			data += chunkToText(chunk);
 			if (data.length > 2_000_000) {
 				reject(new Error("Body too large"));
 			}
@@ -65,7 +88,7 @@ export async function readBody(req: any): Promise<string> {
 	});
 }
 
-export function getQueryToken(req: any): string {
+export function getQueryToken(req: RequestLike): string {
 	try {
 		const u = new URL(req.url ?? "/", "http://127.0.0.1");
 		return u.searchParams.get("token") ?? "";
@@ -74,7 +97,7 @@ export function getQueryToken(req: any): string {
 	}
 }
 
-export function sendHtml(res: any, html: string): void {
+export function sendHtml(res: ResponseLike, html: string): void {
 	res.statusCode = 200;
 	res.setHeader("Content-Type", "text/html; charset=utf-8");
 	res.setHeader("Cache-Control", "no-store");

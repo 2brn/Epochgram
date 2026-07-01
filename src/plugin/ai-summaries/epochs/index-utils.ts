@@ -15,10 +15,10 @@ function prevDateKey(dateKey: string): string {
 }
 
 export function removeEpochEntriesFromIndexByStart(index: Record<string, DateEntry[]>, bucket: EpochBucket, start: string): boolean {
-	const list = Array.isArray(index[start]) ? index[start]! : [];
+	const list = Array.isArray(index[start]) ? index[start] : [];
 	if (list.length === 0) return false;
 	const next = list.filter(e => {
-		if (!e || !String((e as any)?.file ?? "").startsWith("epoch://")) return true;
+		if (!e || !String(e.file ?? "").startsWith("epoch://")) return true;
 		return !(e.epochBucket === bucket && e.epochStart === start);
 	});
 	if (next.length === list.length) return false;
@@ -29,20 +29,20 @@ export function removeEpochEntriesFromIndexByStart(index: Record<string, DateEnt
 
 export function normalizeEpochEntriesInIndex(plugin: EpochPlugin, index: Record<string, DateEntry[]>): boolean {
 	let changed = false;
-	const isEpochFile = (e: any): boolean => String(e?.file ?? "").startsWith("epoch://");
+	const isEpochFile = (e: DateEntry | null | undefined): boolean => String(e?.file ?? "").startsWith("epoch://");
 
 	const buckets: ReadonlyArray<EpochBucket> = EPOCH_BUCKET_ORDER;
-	const bucketSet = new Set<string>(buckets as unknown as string[]);
+	const bucketSet = new Set<string>(buckets);
 	for (const start of Object.keys(index)) {
 		if (!isDateKey(start)) continue;
-		const list = Array.isArray(index[start]) ? index[start]! : [];
-		const epochEntries = list.filter(e => e && isEpochFile(e)) as any[];
+		const list = Array.isArray(index[start]) ? index[start] : [];
+		const epochEntries = list.filter(e => e && isEpochFile(e));
 		if (epochEntries.length === 0) continue;
-		const keepByBucket = new Map<EpochBucket, any>();
+		const keepByBucket = new Map<EpochBucket, DateEntry>();
 		for (const e of epochEntries) {
-			const bRaw = String((e as any).epochBucket || "");
+			const bRaw = String(e.epochBucket || "");
 			const b = bucketSet.has(bRaw) ? (bRaw as EpochBucket) : undefined;
-			const s = String((e as any).epochStart || "");
+			const s = String(e.epochStart || "");
 			if (!b || s !== start) {
 				changed = true;
 				continue;
@@ -52,10 +52,10 @@ export function normalizeEpochEntriesInIndex(plugin: EpochPlugin, index: Record<
 				keepByBucket.set(b, e);
 				continue;
 			}
-			const prevEnd = String((prev as any).epochEnd || "");
-			const end = String((e as any).epochEnd || "");
-			const prevSummaryLen = String((prev as any).aiSummary || (prev as any).summary || "").trim().length;
-			const summaryLen = String((e as any).aiSummary || (e as any).summary || "").trim().length;
+			const prevEnd = String(prev.epochEnd || "");
+			const end = String(e.epochEnd || "");
+			const prevSummaryLen = String(prev.aiSummary || prev.summary || "").trim().length;
+			const summaryLen = String(e.aiSummary || e.summary || "").trim().length;
 			if (end > prevEnd || (end === prevEnd && summaryLen > prevSummaryLen)) {
 				keepByBucket.set(b, e);
 			}
@@ -74,28 +74,28 @@ export function normalizeEpochEntriesInIndex(plugin: EpochPlugin, index: Record<
 	}
 
 	for (const bucket of buckets) {
-		const entries: Array<{ start: string; entry: any }> = [];
+		const entries: Array<{ start: string; entry: DateEntry }> = [];
 		for (const start of Object.keys(index)) {
 			if (!isDateKey(start)) continue;
-			const list = Array.isArray(index[start]) ? index[start]! : [];
-			const epoch = list.find(e => e && isEpochFile(e) && (e as any).epochBucket === bucket && String((e as any).epochStart || "") === start) as any;
+			const list = Array.isArray(index[start]) ? index[start] : [];
+			const epoch = list.find(e => e && isEpochFile(e) && e.epochBucket === bucket && String(e.epochStart || "") === start);
 			if (!epoch) continue;
 			entries.push({ start, entry: epoch });
 		}
 		entries.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
 		for (let i = 0; i < entries.length - 1; i++) {
-			const cur = entries[i]!.entry;
-			const nextStart = entries[i + 1]!.start;
-			const curStart = String((cur as any).epochStart || "");
-			let curEnd = String((cur as any).epochEnd || curStart);
+			const cur = entries[i].entry;
+			const nextStart = entries[i + 1].start;
+			const curStart = String(cur.epochStart || "");
+			let curEnd = String(cur.epochEnd || curStart);
 			if (!isDateKey(curStart) || !isDateKey(curEnd) || !isDateKey(nextStart)) continue;
 			if (curEnd < nextStart) continue;
 			let truncated = prevDateKey(nextStart);
 			if (truncated < curStart) truncated = curStart;
 			if (truncated !== curEnd) {
-				(cur as any).epochEnd = truncated;
-				(cur as any).file = `epoch://${bucket}/${curStart}-${truncated}`;
-				(cur as any).aiSummaryInputHash = "";
+				cur.epochEnd = truncated;
+				cur.file = `epoch://${bucket}/${curStart}-${truncated}`;
+				cur.aiSummaryInputHash = "";
 				changed = true;
 			}
 		}
@@ -119,8 +119,8 @@ export function truncateOverlappingEpochPeriods<T extends { bucket: EpochBucket;
 	for (const list of byBucket.values()) {
 		list.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
 		for (let i = 0; i < list.length - 1; i++) {
-			const cur = list[i]!;
-			const next = list[i + 1]!;
+			const cur = list[i];
+			const next = list[i + 1];
 			if (!isDateKey(cur.end) || !isDateKey(next.start)) continue;
 			if (cur.end < next.start) continue;
 			let truncated = prevDateKey(next.start);

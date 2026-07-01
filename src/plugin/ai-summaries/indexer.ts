@@ -2,10 +2,15 @@ import type { EpochPlugin } from "../../main";
 import type { FileDateEntry, FileIndexData } from "../../indexer/types";
 import type { AiSummaryJob } from "../ai-bridge";
 
+type IndexerInternalsLike = {
+	files?: Record<string, FileIndexData>;
+	latestLines?: Record<string, string[]>;
+};
+
 export function getIndexerInternals(plugin: EpochPlugin): { files: Record<string, FileIndexData>; latestLines: Record<string, string[]> } | null {
-	const indexerAny: any = plugin.indexer as any;
-	const files: Record<string, FileIndexData> | undefined = indexerAny?.files;
-	const latestLines: Record<string, string[]> | undefined = indexerAny?.latestLines;
+	const indexerState = plugin.indexer as unknown as IndexerInternalsLike;
+	const files: Record<string, FileIndexData> | undefined = indexerState?.files;
+	const latestLines: Record<string, string[]> | undefined = indexerState?.latestLines;
 	if (!files) return null;
 	return { files, latestLines: latestLines ?? {} };
 }
@@ -21,9 +26,9 @@ export async function getLinesForFile(plugin: EpochPlugin, filePath: string): Pr
 }
 
 export function findEntryForJob(data: FileIndexData, job: AiSummaryJob): FileDateEntry | null {
-	if (job.kind === "cdate") return (data.cdate ?? null) as any;
-	if (job.kind === "namedDate") return (data.namedDate ?? null) as any;
-	if (job.kind === "dateProp") return (data.dateProp ?? null) as any;
+	if (job.kind === "cdate") return data.cdate ?? null;
+	if (job.kind === "namedDate") return data.namedDate ?? null;
+	if (job.kind === "dateProp") return data.dateProp ?? null;
 
 	const list = job.kind === "tracked"
 		? Object.values(data.trackedDates ?? {}).flat()

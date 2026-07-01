@@ -18,9 +18,9 @@ function redactDatesFromPromptText(text: string): string {
 
 function pickEntrySummary(entry: FileDateEntry | null): string {
 	if (!entry) return "";
-	const ai = typeof (entry as any).aiSummary === "string" ? String((entry as any).aiSummary).trim() : "";
+	const ai = typeof entry.aiSummary === "string" ? String(entry.aiSummary).trim() : "";
 	if (ai) return ai;
-	const s = typeof (entry as any).summary === "string" ? String((entry as any).summary).trim() : "";
+	const s = typeof entry.summary === "string" ? String(entry.summary).trim() : "";
 	return s;
 }
 
@@ -51,7 +51,7 @@ function clipText(text: string, maxChars: number): string {
 
 function entryTimeMsNewestFirst(entry: FileDateEntry): number {
 	try {
-		const raw = typeof (entry as any)?.trackedTime === "string" ? String((entry as any).trackedTime) : "";
+		const raw = typeof entry.trackedTime === "string" ? String(entry.trackedTime) : "";
 		if (!raw) return 0;
 		const ms = Date.parse(raw);
 		return Number.isFinite(ms) ? ms : 0;
@@ -82,9 +82,8 @@ export async function getRelatedScoredForFile(plugin: EpochPlugin, filePath: str
 	if (!hasSimilarityAccess(plugin)) return [];
 	if (!filePath) return [];
 	try {
-		const fn: any = (plugin as any).getSemanticRelatedScoredForFile;
-		if (typeof fn !== "function") return [];
-		const scored = await fn.call(plugin, filePath);
+		if (typeof plugin.getSemanticRelatedScoredForFile !== "function") return [];
+		const scored = await plugin.getSemanticRelatedScoredForFile(filePath);
 		if (!Array.isArray(scored)) return [];
 		return scored
 			.filter(it => it && typeof it.path === "string" && isLikelyTextFilePath(it.path))
@@ -136,7 +135,7 @@ export function buildRelatedSummariesAllDates(
 			}
 			if (sortMs > g.newestMs) g.newestMs = sortMs;
 
-			const dedupeKey = `${String((e as any)?.source ?? "")}|${String((e as any)?.date ?? "")}|${String((e as any)?.blockStart ?? 0)}|${clipped}`;
+			const dedupeKey = `${String(e.source ?? "")}|${String(e.date ?? "")}|${String(e.blockStart ?? 0)}|${clipped}`;
 			const prev = g.byKey.get(dedupeKey);
 			if (!prev || sortMs > prev.sortMs) {
 				g.byKey.set(dedupeKey, { sortMs, seq: seq++, text: clipped });

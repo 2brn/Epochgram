@@ -12,6 +12,12 @@ import { resolveFrontmatterSuppressionFlags } from "./frontmatter-flags";
 import { stripYamlFrontmatterBlock } from "../utils";
 import { getYamlDescriptionPropertyKey } from "../plugin/frontmatter-keys";
 
+type FileWithMtime = TFile & { stat?: { mtime?: number } };
+type TrackedInternalFlags = FileIndexData & {
+	__pendingTrackedReviewStateClear?: boolean;
+	__trackedReviewStateClearedDates?: string[];
+};
+
 export function updateTrackedDatesInternal(
 	s: IndexerPipeline,
 	file: TFile,
@@ -39,7 +45,7 @@ export function updateTrackedDatesInternal(
 	const systemDay = formatDate(s.today());
 	const clampedMtimeMs = (() => {
 		const nowMs = s.today().getTime();
-		const mtime = Number((file as any)?.stat?.mtime);
+		const mtime = Number((file as FileWithMtime)?.stat?.mtime);
 		if (!Number.isFinite(mtime) || mtime <= 0) return nowMs;
 		return Math.min(mtime, nowMs);
 	})();
@@ -60,9 +66,10 @@ export function updateTrackedDatesInternal(
 		dayKey = fileDay;
 	}
 	try {
-		if ((data as any)?.__pendingTrackedReviewStateClear === true) {
-			(data as any).__trackedReviewStateClearedDates = [dayKey];
-			delete (data as any).__pendingTrackedReviewStateClear;
+		const trackedFlags = data as TrackedInternalFlags;
+		if (trackedFlags.__pendingTrackedReviewStateClear === true) {
+			trackedFlags.__trackedReviewStateClearedDates = [dayKey];
+			delete trackedFlags.__pendingTrackedReviewStateClear;
 		}
 	} catch {
 		// ignore

@@ -18,7 +18,6 @@ import { packVerticalBlocks } from "./packing-shared";
 export function computePackedEpochDayCenterY(params: {
 	canvas: EpochCanvas;
 	s: CanvasDrawState;
-	anyS: any;
 	w: number;
 	frameNow: number;
 	epochBucket: EpochBucketName | null;
@@ -41,13 +40,12 @@ export function computePackedEpochDayCenterY(params: {
 	colTextHover: string;
 	colHighlight: string;
 	colRelated: string;
-	markColors: any;
+	markColors: string[];
 	inheritedMarkIndexByPath: Map<string, number> | null;
 }): Map<number, number> {
 	const {
 		canvas,
 		s,
-		anyS,
 		w,
 		frameNow,
 		epochBucket,
@@ -84,49 +82,41 @@ export function computePackedEpochDayCenterY(params: {
 	// - To avoid this, keep a persistent set of packed blocks (with cached measured heights)
 	//   and include that cached set in packing, so the packing solution is stable across pan.
 	// Cache is invalidated when layout-affecting inputs change (bucket/scale/width/search/etc).
-	const searchQuery = (() => {
-		try {
-			const anyCanvas: any = canvas as any;
-			const q = typeof anyCanvas?.getSearchQuery === "function" ? anyCanvas.getSearchQuery() : anyCanvas?.searchQuery;
-			return String(q || "");
-		} catch {
-			return "";
-		}
-	})();
+	const searchQuery = String(s.searchQuery || "");
 	const packSig = (() => {
 		const b = epochBucket ? String(epochBucket) : "__any__";
 		const rw = Math.round(rightWidth);
 		const sc = Math.round((Number(s.scale) || 0) * 1e6);
 		const rh = Math.round((Number(rowHeight) || 0) * 1e3);
 		const hg = Math.round((Number(hoverGap) || 0) * 1e3);
-		const sh = (s as any)?.showHidden ? 1 : 0;
+		const sh = s.showHidden ? 1 : 0;
 		return `${b}|${rw}|${sc}|${rh}|${hg}|${sh}|${searchQuery}`;
 	})();
-	const prevPackSig = String((anyS as any).__epochPackSig || "");
+	const prevPackSig = String(s.__epochPackSig || "");
 	if (prevPackSig !== packSig) {
-		(anyS as any).__epochPackSig = packSig;
-		(anyS as any).epochPackCenterCache = new Map();
-		(anyS as any).epochPackAlphaByIndex = new Map();
-		(anyS as any).__epochPackInstantAppearOnce = true;
-		(anyS as any).__epochPackBaselineShift = 0;
-		(anyS as any).__epochPackBaselineShiftTarget = 0;
-		(anyS as any).__epochPackBaselineShiftMoveUntil = Number.NaN;
-		(anyS as any).__epochPackBaselineShiftLastAt = frameNow;
-		(anyS as any).__epochPackBaselineAnchorIndex = null;
-		(anyS as any).__epochPackBaselineAnchorLockUntil = Number.NaN;
+		s.__epochPackSig = packSig;
+		s.epochPackCenterCache = new Map();
+		s.epochPackAlphaByIndex = new Map();
+		s.__epochPackInstantAppearOnce = true;
+		s.__epochPackBaselineShift = 0;
+		s.__epochPackBaselineShiftTarget = 0;
+		s.__epochPackBaselineShiftMoveUntil = Number.NaN;
+		s.__epochPackBaselineShiftLastAt = frameNow;
+		s.__epochPackBaselineAnchorIndex = null;
+		s.__epochPackBaselineAnchorLockUntil = Number.NaN;
 	}
 
 	const xStart = TIMELINE_X + SUMMARY_OFFSET_X;
 	const blocks: PackedBlock[] = [];
-	const prevAnimSummary: { dayIndex: number; itemIndex: number } | null = (s as any).prevAnimSummary ?? null;
+	const prevAnimSummary: { dayIndex: number; itemIndex: number } | null = s.prevAnimSummary ?? null;
 	const outgoingSummaries: Array<{ dayIndex: number; itemIndex: number; t: number }> | null =
-		(s as any).outgoingSummaries ?? null;
+		s.outgoingSummaries ?? null;
 
-	if (!(anyS.epochPackCenterCache instanceof Map)) {
-		anyS.epochPackCenterCache = new Map();
+	if (!(s.epochPackCenterCache instanceof Map)) {
+		s.epochPackCenterCache = new Map();
 	}
 	type PackCacheState = { offset: number; lastAt: number; appearAt: number; moveUntil?: number; height?: number };
-	const cache: Map<number, PackCacheState> = anyS.epochPackCenterCache;
+	const cache: Map<number, PackCacheState> = s.epochPackCenterCache;
 
 	// Seed blocks with cached (offscreen) blocks so the packed solution stays stable while panning.
 	// Only include cached blocks that have a measured height.
@@ -148,7 +138,8 @@ export function computePackedEpochDayCenterY(params: {
 	const it = indices ? indices : null;
 	if (it) {
 		for (let idx = 0; idx < it.length; idx++) {
-			const i = it[idx]!;
+			const i = it[idx];
+			if (typeof i !== "number") continue;
 			if (i < minIndex || i > maxIndex) continue;
 			const worldY = i * BASE_SPACING;
 			const yScreen = worldY * s.scale + s.offsetY;
@@ -262,33 +253,33 @@ export function computePackedEpochDayCenterY(params: {
 	packVerticalBlocks(blocks, packGap);
 
 	const now = frameNow;
-	if (!(anyS.epochPackAlphaByIndex instanceof Map)) {
-		anyS.epochPackAlphaByIndex = new Map();
+	if (!(s.epochPackAlphaByIndex instanceof Map)) {
+		s.epochPackAlphaByIndex = new Map();
 	}
-	const alphaByIndex: Map<number, number> = anyS.epochPackAlphaByIndex;
-	const instantAppearOnce = (anyS as any).__epochPackInstantAppearOnce === true;
+	const alphaByIndex: Map<number, number> = s.epochPackAlphaByIndex;
+	const instantAppearOnce = s.__epochPackInstantAppearOnce === true;
 	const visible = new Set<number>();
 	const animMs = Math.max(1, Math.min(800, Number(EPOCH_BUCKET_TRANSITION_MS) || 320));
 	const baselineAnimMs = Math.max(80, Math.min(420, Math.round(animMs * 0.7)));
 
-	if (typeof (anyS as any).__epochPackBaselineShift !== "number" || !Number.isFinite(Number((anyS as any).__epochPackBaselineShift))) {
-		(anyS as any).__epochPackBaselineShift = 0;
+	if (typeof s.__epochPackBaselineShift !== "number" || !Number.isFinite(Number(s.__epochPackBaselineShift))) {
+		s.__epochPackBaselineShift = 0;
 	}
-	if (typeof (anyS as any).__epochPackBaselineShiftTarget !== "number" || !Number.isFinite(Number((anyS as any).__epochPackBaselineShiftTarget))) {
-		(anyS as any).__epochPackBaselineShiftTarget = Number((anyS as any).__epochPackBaselineShift) || 0;
+	if (typeof s.__epochPackBaselineShiftTarget !== "number" || !Number.isFinite(Number(s.__epochPackBaselineShiftTarget))) {
+		s.__epochPackBaselineShiftTarget = Number(s.__epochPackBaselineShift) || 0;
 	}
-	let baselineShift = Number((anyS as any).__epochPackBaselineShift) || 0;
-	let baselineShiftTarget = Number((anyS as any).__epochPackBaselineShiftTarget) || baselineShift;
-	const prevMoveUntil0 = Number((anyS as any).__epochPackBaselineShiftMoveUntil);
+	let baselineShift = Number(s.__epochPackBaselineShift) || 0;
+	let baselineShiftTarget = Number(s.__epochPackBaselineShiftTarget) || baselineShift;
+	const prevMoveUntil0 = Number(s.__epochPackBaselineShiftMoveUntil);
 	const wasMoving0 = Number.isFinite(prevMoveUntil0) && now < prevMoveUntil0;
-	const lockUntil0 = Number((anyS as any).__epochPackBaselineAnchorLockUntil);
+	const lockUntil0 = Number(s.__epochPackBaselineAnchorLockUntil);
 	const anchorLocked = wasMoving0 || (Number.isFinite(lockUntil0) && now < lockUntil0);
 
 	try {
 		const baselineY = getTodayOffset(canvas);
 		const viewportH = (() => {
 			try {
-				const rect = (canvas as any).root?.getBoundingClientRect?.();
+				const rect = s.root?.getBoundingClientRect?.();
 				const hh = Number(rect?.height);
 				if (Number.isFinite(hh) && hh > 0) return hh;
 			} catch {
@@ -296,7 +287,7 @@ export function computePackedEpochDayCenterY(params: {
 			}
 			try {
 				const dpr = (window && typeof window.devicePixelRatio === "number") ? window.devicePixelRatio : 1;
-				const ch = Number((canvas as any).canvas?.height);
+				const ch = Number(s.canvas?.height);
 				if (Number.isFinite(ch) && ch > 0 && dpr > 0) return ch / dpr;
 			} catch {
 				// ignore
@@ -312,7 +303,7 @@ export function computePackedEpochDayCenterY(params: {
 
 			let best: PackedBlock | null = null;
 			let bestDist = Number.POSITIVE_INFINITY;
-			const lockedIndexRaw = (anyS as any).__epochPackBaselineAnchorIndex;
+			const lockedIndexRaw = s.__epochPackBaselineAnchorIndex;
 			const lockedIndex = (typeof lockedIndexRaw === "number" && Number.isFinite(lockedIndexRaw)) ? lockedIndexRaw : null;
 			if (anchorLocked && lockedIndex != null) {
 				best = findBlockByIndex(lockedIndex);
@@ -333,7 +324,7 @@ export function computePackedEpochDayCenterY(params: {
 					}
 				}
 				if (best) {
-					(anyS as any).__epochPackBaselineAnchorIndex = best.i;
+					s.__epochPackBaselineAnchorIndex = best.i;
 				}
 			}
 			const maxNearDist = Math.max(BASE_SPACING * s.scale, rowHeight * 6, 120);
@@ -354,33 +345,33 @@ export function computePackedEpochDayCenterY(params: {
 	}
 
 	let baselineNeedsAnimation = false;
-	const prevBaselineTarget = Number((anyS as any).__epochPackBaselineShiftTarget) || baselineShift;
+	const prevBaselineTarget = Number(s.__epochPackBaselineShiftTarget) || baselineShift;
 	if (Number.isFinite(baselineShiftTarget) && Math.abs(baselineShiftTarget - prevBaselineTarget) > 0.5) {
-		(anyS as any).__epochPackBaselineShiftTarget = baselineShiftTarget;
-		(anyS as any).__epochPackBaselineShiftMoveUntil = now + baselineAnimMs;
-		(anyS as any).__epochPackBaselineShiftLastAt = now;
-		(anyS as any).__epochPackBaselineAnchorLockUntil = now + baselineAnimMs + 140;
+		s.__epochPackBaselineShiftTarget = baselineShiftTarget;
+		s.__epochPackBaselineShiftMoveUntil = now + baselineAnimMs;
+		s.__epochPackBaselineShiftLastAt = now;
+		s.__epochPackBaselineAnchorLockUntil = now + baselineAnimMs + 140;
 		baselineNeedsAnimation = true;
 	} else {
 		baselineShiftTarget = prevBaselineTarget;
 	}
-	const moveUntil = Number((anyS as any).__epochPackBaselineShiftMoveUntil);
+	const moveUntil = Number(s.__epochPackBaselineShiftMoveUntil);
 	const moving = Number.isFinite(moveUntil) && now < moveUntil;
 	if (moving) {
-		const prevAt = Number((anyS as any).__epochPackBaselineShiftLastAt) || now;
+		const prevAt = Number(s.__epochPackBaselineShiftLastAt) || now;
 		const dt = Math.max(0, now - prevAt);
 		const remaining = Math.max(1, moveUntil - prevAt);
 		const t = Math.max(0, Math.min(1, dt / remaining));
 		baselineShift = baselineShift + (baselineShiftTarget - baselineShift) * t;
-		(anyS as any).__epochPackBaselineShift = baselineShift;
-		(anyS as any).__epochPackBaselineShiftLastAt = now;
+		s.__epochPackBaselineShift = baselineShift;
+		s.__epochPackBaselineShiftLastAt = now;
 		baselineNeedsAnimation = true;
 	} else {
 		baselineShift = baselineShiftTarget;
-		(anyS as any).__epochPackBaselineShift = baselineShift;
+		s.__epochPackBaselineShift = baselineShift;
 	}
 
-	const lastScale = Number((anyS as any).epochPackLastScale);
+	const lastScale = Number(s.epochPackLastScale);
 	const scaleChanged = !Number.isFinite(lastScale) || Math.abs(lastScale - s.scale) > 1e-6;
 	const hasNewBlocks = (() => {
 		for (const b of blocks) {
@@ -393,18 +384,18 @@ export function computePackedEpochDayCenterY(params: {
 	const instantLayout = true;
 
 	if (scaleChanged && !instantLayout) {
-		(anyS as any).epochPackZoomUntil = now + animMs;
+		s.epochPackZoomUntil = now + animMs;
 	}
-	const wasBucketAnimating = (anyS as any).epochPackBucketAnimating === true;
+	const wasBucketAnimating = s.epochPackBucketAnimating === true;
 	if (!instantLayout && bucketAnimating && !wasBucketAnimating) {
-		(anyS as any).epochPackZoomUntil = now + animMs;
+		s.epochPackZoomUntil = now + animMs;
 	}
 	if (!instantLayout && hasNewBlocks) {
-		(anyS as any).epochPackZoomUntil = now + animMs;
+		s.epochPackZoomUntil = now + animMs;
 	}
-	(anyS as any).epochPackBucketAnimating = bucketAnimating;
-	(anyS as any).epochPackLastScale = s.scale;
-	const zoomUntil = instantLayout ? Number.NaN : Number((anyS as any).epochPackZoomUntil);
+	s.epochPackBucketAnimating = bucketAnimating;
+	s.epochPackLastScale = s.scale;
+	const zoomUntil = instantLayout ? Number.NaN : Number(s.epochPackZoomUntil);
 	const zoomAnimating = !instantLayout && Number.isFinite(zoomUntil) && now < zoomUntil;
 	let needsAnimation = zoomAnimating;
 	if (baselineNeedsAnimation) needsAnimation = true;
@@ -496,7 +487,7 @@ export function computePackedEpochDayCenterY(params: {
 			st.offset = st.offset + (desiredOffset - st.offset) * t;
 			st.lastAt = now;
 			if (Math.abs(desiredOffset - st.offset) > 0.5) {
-				anyS.packAnimating = true;
+				s.packAnimating = true;
 			}
 			needsAnimation = true;
 		} else {
@@ -506,7 +497,7 @@ export function computePackedEpochDayCenterY(params: {
 		packedEpochDayCenterY.set(b.i, b.centerY + st.offset - baselineShift);
 	}
 	if (instantAppearOnce) {
-		(anyS as any).__epochPackInstantAppearOnce = false;
+		s.__epochPackInstantAppearOnce = false;
 	}
 	if (cache.size > 2000) {
 		// Prune far-away cached blocks so the stable packing set doesn't grow without bound.
@@ -526,8 +517,8 @@ export function computePackedEpochDayCenterY(params: {
 			if (k < minKeep || k > maxKeep) alphaByIndex.delete(k);
 		}
 	}
-	if (anyS.packAnimating || needsAnimation) {
-		(canvas as any).requestHoverAnimation?.();
+	if (s.packAnimating || needsAnimation) {
+		s.requestHoverAnimation?.();
 	}
 
 	return packedEpochDayCenterY;

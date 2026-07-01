@@ -1,4 +1,4 @@
-import { Menu } from "obsidian";
+import { Menu, type MenuItem, type TFile } from "obsidian";
 import type { DateEntry } from "../../../indexer/types";
 import type { EpochCanvas } from "../../epoch-canvas";
 import {
@@ -16,21 +16,64 @@ import { getMenuState } from "../menu-state";
 import { getTopicGroupForPath } from "./topic-group";
 import { setCssStyles } from "../../../dom";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = typeof window !== "undefined" ? window.document : null;
+
+type MarkGroupIndexerLike = {
+	getFileMarkColor(path: string): number | null | undefined;
+	setFileMarkColor(path: string, color: number | null): boolean;
+};
+
+type MenuItemLike = MenuItem & {
+	iconEl?: HTMLElement | null;
+	dom?: (HTMLElement & { addClass?: (name: string) => void; on?: (event: string, cb: () => void) => void }) | null;
+	setSubmenu?: () => Menu | null;
+};
+
+type MenuLike = Menu & {
+	hide?: () => void;
+	onHide?: (cb: () => void) => void;
+};
+
+type MarkMenuPluginLike = {
+	app?: {
+		vault?: { getConfig?: (key: string) => unknown };
+		workspace?: { getActiveFile?: () => TFile | null };
+	};
+	clearInheritedMarksCache?: () => void;
+	recomputeInheritedMarksNow?: (reason: string) => Promise<void>;
+	scheduleInheritedMarkRecompute?: (reason: string) => void;
+	persistIndex?: (options: { skipEnsure?: boolean }) => Promise<void>;
+	shouldIndexFile?: (file: TFile) => boolean;
+	indexer?: { isFileKnown?: (path: string) => boolean };
+};
+
+type MarkMenuStateLike = ReturnType<typeof getMenuState> & {
+	plugin?: MarkMenuPluginLike;
+	clearHover: (force?: boolean) => void;
+	refreshIndex: () => void;
+};
+
+type CanvasRootLike = {
+	root?: HTMLElement;
+	semanticRelatedPaths?: Set<string>;
+};
 
 export function addMarkSubmenu(
 	menu: Menu,
 	state: ReturnType<typeof getMenuState>,
 	canvas: EpochCanvas,
 	entry: DateEntry,
-	indexer: any,
+	indexer: MarkGroupIndexerLike,
 	currentMarkColor: unknown,
 	inheritedSourcePath: string | null
 ): void {
 	menu.addItem((item) => {
+		const typedState = state as MarkMenuStateLike;
+		const typedCanvas = canvas as unknown as CanvasRootLike;
+		const typedMenu = menu as MenuLike;
 		const nativeMenusEnabled = (() => {
 			try {
-				const plugin: any = (state as any)?.plugin ?? null;
+				const plugin = typedState.plugin ?? null;
 				return !!plugin?.app?.vault?.getConfig?.("nativeMenus");
 			} catch {
 				return false;
@@ -39,7 +82,8 @@ export function addMarkSubmenu(
 		const useTextLabels = nativeMenusEnabled;
 		const labelOrIconOnly = (label: string): string => (useTextLabels ? label : "\u00A0");
 
-		const root = (canvas as any)?.root ?? activeDocument.body;
+		const root = typedCanvas.root ?? activeDocument?.body;
+		if (!root) return;
 		const palette = getEpochMarkColorSet(root);
 		const groups = getEpochMarkColorGroups(root);
 		const current = normalizeMarkColorIndex(currentMarkColor);
@@ -52,11 +96,11 @@ export function addMarkSubmenu(
 		})();
 		item.setTitle("Mark");
 		item.setIcon("highlighter");
-		const submenu = (item as any).setSubmenu?.();
+		const submenu = (item as MenuItemLike).setSubmenu?.();
 		if (!submenu) return;
 		const hideContextMenu = () => {
 			try {
-				(menu as any)?.hide?.();
+				typedMenu.hide?.();
 			} catch {
 				// ignore
 			}
@@ -64,7 +108,7 @@ export function addMarkSubmenu(
 
 		let activeGroupSubmenu: Menu | null = null;
 		try {
-			(menu as any)?.onHide?.(() => {
+			typedMenu.onHide?.(() => {
 				activeGroupSubmenu = null;
 			});
 		} catch {
@@ -74,7 +118,7 @@ export function addMarkSubmenu(
 		const applyMarkColor = async (color: number | null) => {
 			if (!indexer) return;
 			let changed = false;
-			const plugin = (state as any).plugin;
+			const plugin = typedState.plugin;
 
 			try {
 				const activeFilePath = (() => {
@@ -106,7 +150,7 @@ export function addMarkSubmenu(
 					if (!activeFilePath) return false;
 					if (entry.file === activeFilePath) return true;
 					try {
-						const set: unknown = (canvas as any)?.semanticRelatedPaths;
+						const set: unknown = typedCanvas.semanticRelatedPaths;
 						return set instanceof Set ? set.has(entry.file) : false;
 					} catch {
 						return false;
@@ -168,8 +212,8 @@ export function addMarkSubmenu(
 				}
 			}
 			if (typeof plugin?.persistIndex === "function") await plugin.persistIndex({ skipEnsure: true });
-			state.clearHover(true);
-			state.refreshIndex();
+			typedState.clearHover(true);
+			typedState.refreshIndex();
 		};
 
 		const hasAny = !!current || explicit != null || inheritedSourcePath != null;
@@ -181,7 +225,7 @@ export function addMarkSubmenu(
 				return true;
 			}
 		};
-		submenu.addItem((subItem: any) => {
+		submenu.addItem((subItem) => {
 			subItem
 				.setTitle(useTextLabels ? "Clear mark" : ICON_ONLY_LABEL)
 				.setIcon("ban")
@@ -192,10 +236,11 @@ export function addMarkSubmenu(
 		});
 
 		for (const group of groups) {
-			submenu.addItem((groupItem: any) => {
+			submenu.addItem((groupItem) => {
+				const typedGroupItem = groupItem as MenuItemLike;
 				groupItem.setTitle(labelOrIconOnly(group.name)).setIcon("circle").setDisabled(false);
 				try {
-					const el: any = groupItem.iconEl;
+					const el = typedGroupItem.iconEl;
 					if (el) {
 						el.style.color = group.base.css;
 						setCssStyles(el, { opacity: "1", filter: "none", webkitFilter: "none" });
@@ -204,10 +249,10 @@ export function addMarkSubmenu(
 					// ignore
 				}
 
-				const groupSub = (groupItem as any).setSubmenu?.();
+				const groupSub = typedGroupItem.setSubmenu?.();
 				if (!groupSub) return;
 				try {
-					const dom: any = (groupItem as any)?.dom;
+					const dom = typedGroupItem.dom;
 					if (dom) {
 						if (typeof dom.addClass === "function") dom.addClass("epoch-menu-no-arrow");
 						else dom.classList?.add?.("epoch-menu-no-arrow");
@@ -219,7 +264,8 @@ export function addMarkSubmenu(
 				for (const shade of group.shades) {
 					const idx = shade.index;
 					const css = palette[idx - 1] || "";
-					groupSub.addItem((subItem: any) => {
+					groupSub.addItem((subItem) => {
+						const typedSubItem = subItem as MenuItemLike;
 						subItem
 							.setTitle(labelOrIconOnly(shade.name))
 							.setIcon("circle")
@@ -228,7 +274,7 @@ export function addMarkSubmenu(
 								void Promise.resolve(applyMarkColor(idx)).finally(hideContextMenu);
 							});
 						try {
-							const iconEl: any = subItem.iconEl;
+							const iconEl = typedSubItem.iconEl;
 							if (iconEl) {
 								iconEl.style.color = css;
 								setCssStyles(iconEl, { opacity: "1", filter: "none", webkitFilter: "none" });
@@ -240,12 +286,12 @@ export function addMarkSubmenu(
 				}
 
 				try {
-					const domAny: any = (groupItem as any)?.dom ?? null;
-					const iconEl: any = (groupItem as any)?.iconEl ?? null;
+					const domAny = typedGroupItem.dom ?? null;
+					const iconEl = typedGroupItem.iconEl ?? null;
 					const domEl: HTMLElement | null = domAny && typeof domAny?.addEventListener === "function" ? domAny : null;
 					const iconHTMLElement: HTMLElement | null =
 						iconEl && typeof iconEl?.addEventListener === "function" ? iconEl : null;
-					const targets = [domEl, iconHTMLElement].filter(Boolean) as HTMLElement[];
+					const targets = [domEl, iconHTMLElement].filter((target): target is HTMLElement => target instanceof HTMLElement);
 					const handler = (evt: Event) => {
 						if (!isDesktopPointer()) return;
 						try {
@@ -264,16 +310,16 @@ export function addMarkSubmenu(
 				}
 
 				try {
-					const domAny: any = (groupItem as any)?.dom ?? null;
-					const iconEl: any = (groupItem as any)?.iconEl ?? null;
+					const domAny = typedGroupItem.dom ?? null;
+					const iconEl = typedGroupItem.iconEl ?? null;
 					const domEl: HTMLElement | null = domAny && typeof domAny?.addEventListener === "function" ? domAny : null;
 					const iconHTMLElement: HTMLElement | null =
 						iconEl && typeof iconEl?.addEventListener === "function" ? iconEl : null;
-					const anchor = (domEl ?? iconHTMLElement) as any;
+					const anchor = domEl ?? iconHTMLElement;
 					anchor?.addEventListener?.("mouseenter", () => {
 						if (activeGroupSubmenu && activeGroupSubmenu !== groupSub) {
 							try {
-								(activeGroupSubmenu as any)?.hide?.();
+								(activeGroupSubmenu as MenuLike).hide?.();
 							} catch {
 								// ignore
 							}
@@ -284,7 +330,7 @@ export function addMarkSubmenu(
 						domAny.on("mouseenter", () => {
 							if (activeGroupSubmenu && activeGroupSubmenu !== groupSub) {
 								try {
-									(activeGroupSubmenu as any)?.hide?.();
+									(activeGroupSubmenu as MenuLike).hide?.();
 								} catch {
 									// ignore
 								}

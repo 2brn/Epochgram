@@ -8,24 +8,54 @@ import type { DateEntry } from "../../../indexer/types";
 import type { CanvasMenuState } from "../menu-state";
 import { getTopicGroupForPath } from "./topic-group";
 import { promptEditTopic } from "../../modals/topic-edit-modal";
+import type { TopicEditResult } from "../../modals/topic-edit-modal";
 import { hasSimilarityAccess } from "../../../plugin/pro-feature-state";
 import { isTopicSimilarityEnabled } from "../../../plugin/similarity/config";
 
-async function listKnownTopics(state: CanvasMenuState): Promise<string[]> {
-	if (!hasSimilarityAccess((state as any).plugin)) return [];
-	const plugin = (state as any).plugin;
+type TopicPluginLike = CanvasMenuState["plugin"] & {
+	indexer?: {
+		getIndexedPaths?: () => unknown;
+		getFileEmbeddingTerm?: (path: string) => unknown;
+		setFileEmbeddingTerm?: (path: string, value: string) => boolean;
+	};
+	termSimilarityIndex?: { files?: Record<string, { term?: unknown } | undefined> };
+	ensureTermSimilarityStoreLoaded?: () => Promise<void>;
+	removeTermSimilarity?: (path: string) => Promise<void>;
+	renameTopicGroup?: (from: string, to: string) => Promise<void>;
+	queueVectorUpdate?: (path: string) => void;
+	queueTermSimilarityUpdate?: (path: string) => void;
+	scheduleMissingTopicClassificationSweep?: (reason: string) => void;
+	scheduleInheritedMarkRecompute?: (reason: string) => void;
+	persistIndex?: (options: { skipEnsure?: boolean }) => Promise<void>;
+	refreshEpochViews?: () => void;
+	app?: { workspace?: { getActiveFile?: () => { path?: string } | null } };
+};
+
+type TopicMenuState = CanvasMenuState & {
+	plugin: TopicPluginLike;
+	__suppressExternalAutoScrollUntil?: number;
+	suppressNextFocusScrollForPath?: (path: string | null) => void;
+};
+
+function isTopicEditResult(value: TopicEditResult | null): value is TopicEditResult {
+	return value != null;
+}
+
+async function listKnownTopics(state: TopicMenuState): Promise<string[]> {
+	const plugin = state.plugin;
+	if (!hasSimilarityAccess(plugin)) return [];
 	if (!isTopicSimilarityEnabled(plugin)) return [];
 	const indexer = plugin?.indexer;
 	try {
-		await plugin?.ensureTermSimilarityStoreLoaded?.();
+		await plugin.ensureTermSimilarityStoreLoaded?.();
 	} catch { void 0; }
 	const topics = new Set<string>();
 	try {
-		const indexedPaths: unknown = indexer.getIndexedPaths();
+		const indexedPaths: unknown = indexer?.getIndexedPaths?.();
 		const list = Array.isArray(indexedPaths) ? indexedPaths : [];
 		for (const p of list) {
 			if (!p || typeof p !== "string" || p.startsWith("epoch://")) continue;
-			const t0 = String(indexer.getFileEmbeddingTerm(p) || "").trim();
+			const t0 = String(indexer?.getFileEmbeddingTerm?.(p) || "").trim();
 			const t = canonicalizeTopicTerm(t0);
 			if (t && !isNoTopicSentinel(t)) topics.add(t);
 		}
@@ -33,8 +63,9 @@ async function listKnownTopics(state: CanvasMenuState): Promise<string[]> {
 	try {
 		const filesObj = plugin?.termSimilarityIndex?.files;
 		if (filesObj && typeof filesObj === "object") {
-			for (const v of Object.values(filesObj as any)) {
-				const t0 = typeof (v as any)?.term === "string" ? String((v as any).term).trim() : "";
+			for (const v of Object.values(filesObj)) {
+				const termValue = v?.term;
+				const t0 = typeof termValue === "string" ? termValue.trim() : "";
 				const t = canonicalizeTopicTerm(t0);
 				if (t && !isNoTopicSentinel(t)) topics.add(t);
 			}
@@ -45,7 +76,8 @@ async function listKnownTopics(state: CanvasMenuState): Promise<string[]> {
 
 export function addEditTopic(menu: Menu, state: CanvasMenuState, entry: DateEntry, title: string): void {
 	try {
-		const plugin = (state as any).plugin;
+		const menuState = state as TopicMenuState;
+		const plugin = menuState.plugin;
 		const topicsEnabled = isTopicSimilarityEnabled(plugin);
 		const isPro = hasSimilarityAccess(plugin);
 		const enabled = isPro && topicsEnabled;
@@ -61,9 +93,9 @@ export function addEditTopic(menu: Menu, state: CanvasMenuState, entry: DateEntr
 					// Avoid jumping the canvas to the currently-open note when this modal closes.
 					// This can happen because the active file regains focus after SuggestModal resolves.
 					try {
-						(state as any).__suppressExternalAutoScrollUntil = performance.now() + 1000;
+						menuState.__suppressExternalAutoScrollUntil = (window.performance?.now?.() ?? Date.now()) + 1000;
 						const activePath = plugin?.app?.workspace?.getActiveFile?.()?.path ?? null;
-						(state as any).suppressNextFocusScrollForPath?.(activePath);
+						menuState.suppressNextFocusScrollForPath?.(activePath);
 					} catch { void 0; }
 
 					const queueNotice = (): void => {
@@ -97,11 +129,11 @@ export function addEditTopic(menu: Menu, state: CanvasMenuState, entry: DateEntr
 						maxWords: 12,
 						maxChars: 140
 					});
-					if (res == null) return;
+					if (!isTopicEditResult(res)) return;
 
-					if ((res as any).action === "remove-topic") {
-						const topic = String((res as any).topic || "").trim();
-						if (topic && typeof plugin?.renameTopicGroup === "function") {
+					if (res.action === "remove-topic") {
+						const topic = String(res.topic || "").trim();
+						if (topic && typeof plugin.renameTopicGroup === "function") {
 							try {
 								await plugin.renameTopicGroup(topic, "");
 							} catch { void 0; }
@@ -118,13 +150,13 @@ export function addEditTopic(menu: Menu, state: CanvasMenuState, entry: DateEntr
 						return;
 					}
 
-					if ((res as any).action === "clear") {
+					if (res.action === "clear") {
 						const hasAnyTopicNow = !!existing || !!inferred;
 						if (!hasAnyTopicNow) return;
 
 						let changed = false;
 						try {
-							changed = !!indexer.setFileEmbeddingTerm(entry.file, "") || changed;
+							changed = !!indexer.setFileEmbeddingTerm?.(entry.file, "") || changed;
 						} catch {
 							// ignore
 						}
@@ -151,7 +183,7 @@ export function addEditTopic(menu: Menu, state: CanvasMenuState, entry: DateEntr
 						return;
 					}
 
-					const value = canonicalizeTopicTerm(String((res as any).value ?? "").trim());
+					const value = canonicalizeTopicTerm(String(res.value ?? "").trim());
 					const next = value;
 					if (!next || isNoTopicSentinel(next)) return;
 
@@ -159,7 +191,7 @@ export function addEditTopic(menu: Menu, state: CanvasMenuState, entry: DateEntr
 					const wantsRename =
 						hasExisting &&
 						existing !== next &&
-						typeof plugin?.renameTopicGroup === "function";
+						typeof plugin.renameTopicGroup === "function";
 					if (wantsRename) {
 						await plugin.renameTopicGroup(existing, next);
 						try {

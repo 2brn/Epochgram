@@ -19,6 +19,34 @@ import {
     resolveViewportHeight
 } from "./epoch-canvas/viewport-limits";
 
+type CanvasDrawStateInternals = ReturnType<typeof getDrawState> & {
+    __lastKnownCanvasCssHeight?: number;
+    win?: { devicePixelRatio?: number };
+    hoverTarget?: number;
+    entryDragGhost?: {
+        img: HTMLCanvasElement;
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+    } | null;
+    pinFly?: {
+        img: HTMLCanvasElement;
+        fromX: number;
+        fromY: number;
+        toX: number;
+        toY: number;
+        w: number;
+        h: number;
+        startAt: number;
+        durationMs: number;
+        t: number;
+    } | null;
+    pendingActiveFileFocus?: { path: string; line: number | null } | null;
+    focusFile?: (path: string, line: number | null, useHoverHighlight: boolean) => boolean;
+    __pendingFocusFirstFilteredTimelineRecord?: boolean;
+};
+
 function drawTodayDistanceIndicator(params: {
     canvas: EpochCanvas;
     s: ReturnType<typeof getDrawState>;
@@ -88,7 +116,8 @@ function colorWithAlpha(color: string, alpha: number): string {
     const raw = String(color || "").trim();
     const hex = raw.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
     if (hex) {
-        const value = hex[1]!;
+		const value = hex[1];
+		if (!value) return `rgba(0, 0, 0, ${a})`;
         const full = value.length === 3
             ? `${value[0]}${value[0]}${value[1]}${value[1]}${value[2]}${value[2]}`
             : value;
@@ -99,11 +128,11 @@ function colorWithAlpha(color: string, alpha: number): string {
     }
     const rgb = raw.match(/^rgba?\(([^)]+)\)$/i);
     if (rgb) {
-        const parts = rgb[1]!.split(",").map((p) => Number(p.trim()));
+		const parts = rgb[1].split(",").map((p) => Number(p.trim()));
         if (parts.length >= 3 && parts.slice(0, 3).every((n) => Number.isFinite(n))) {
-            const r = Math.max(0, Math.min(255, Math.round(parts[0]!)));
-            const g = Math.max(0, Math.min(255, Math.round(parts[1]!)));
-            const b = Math.max(0, Math.min(255, Math.round(parts[2]!)));
+            const r = Math.max(0, Math.min(255, Math.round(parts[0] ?? 0)));
+            const g = Math.max(0, Math.min(255, Math.round(parts[1] ?? 0)));
+            const b = Math.max(0, Math.min(255, Math.round(parts[2] ?? 0)));
             return `rgba(${r}, ${g}, ${b}, ${a})`;
         }
     }
@@ -165,7 +194,7 @@ function drawTimelineFadeMask(params: {
 }
 
 export function drawCanvas(canvas: EpochCanvas): void {
-    const s = getDrawState(canvas);
+    const s = getDrawState(canvas) as CanvasDrawStateInternals;
     const ctx = s.ctx;
     const canvasElement = s.canvas;
 
@@ -176,7 +205,7 @@ export function drawCanvas(canvas: EpochCanvas): void {
     const rect = s.root.getBoundingClientRect();
     const w = rect.width;
     const h = rect.height;
-    const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+    const viewportHeight = resolveViewportHeight(s.root, Number(s.__lastKnownCanvasCssHeight ?? 0));
     if (viewportHeight > 0) {
         const nowToday = s.getToday();
         s.offsetY = clampTimelineOffsetToBounds({
@@ -204,8 +233,8 @@ export function drawCanvas(canvas: EpochCanvas): void {
     }
 
     try {
-        const win: any = (canvas as any).win ?? window;
-        const dpr = (win && typeof win.devicePixelRatio === "number") ? win.devicePixelRatio : (window.devicePixelRatio || 1);
+        const win = s.win ?? window;
+        const dpr = typeof win.devicePixelRatio === "number" ? win.devicePixelRatio : (window.devicePixelRatio || 1);
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = "source-over";
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -219,7 +248,7 @@ export function drawCanvas(canvas: EpochCanvas): void {
         }
     }
 
-    const css = getComputedStyle(s.root);
+    const css = window.getComputedStyle(s.root);
     const colLine = s.getCssValue(css, "--graph-line");
     const colTextBase = s.getCssValue(css, "--text-muted");
     const colTextHover = s.getCssValue(css, "--text-accent");
@@ -257,8 +286,8 @@ export function drawCanvas(canvas: EpochCanvas): void {
         try {
             let el: HTMLElement | null = s.root;
             for (let i = 0; i < 8 && el; i++) {
-                const st = getComputedStyle(el);
-                const bg = String((st as any)?.backgroundColor ?? "").trim();
+                const st = window.getComputedStyle(el);
+                const bg = String(st.backgroundColor ?? "").trim();
                 if (!isTransparent(bg)) return bg;
                 el = el.parentElement;
             }
@@ -266,7 +295,7 @@ export function drawCanvas(canvas: EpochCanvas): void {
             // ignore
         }
 
-        const bg0 = String((css as any)?.backgroundColor ?? "").trim();
+        const bg0 = String(css.backgroundColor ?? "").trim();
         if (!isTransparent(bg0)) return bg0;
         return s.getCssValue(css, "--background-primary");
     })();
@@ -326,7 +355,7 @@ export function drawCanvas(canvas: EpochCanvas): void {
             ctx,
             hoverOverlay: s.hoverOverlay,
             hoverAnim: s.hoverAnim,
-            hoverTarget: Number((s as any).hoverTarget ?? 0),
+            hoverTarget: Number(s.hoverTarget ?? 0),
             colSummaryHoverBg,
             iconCache: s.iconCache,
             epochsViewActive
@@ -336,16 +365,7 @@ export function drawCanvas(canvas: EpochCanvas): void {
 
     // Drag ghost: draw a semi-transparent snapshot that follows the pointer while dragging.
     try {
-        const ghost = (canvas as any)?.entryDragGhost as
-            | {
-                img: HTMLCanvasElement;
-                x: number;
-                y: number;
-                w: number;
-                h: number;
-            }
-            | null
-            | undefined;
+        const ghost = s.entryDragGhost;
         if (ghost && ghost.img && ghost.w > 0 && ghost.h > 0) {
             const x = Number(ghost.x);
             const y = Number(ghost.y);
@@ -362,21 +382,7 @@ export function drawCanvas(canvas: EpochCanvas): void {
 
     // Pin animation: fly a semi-transparent copy of the pinned record to Today.
     try {
-        const pinFly = (canvas as any)?.pinFly as
-            | {
-                img: HTMLCanvasElement;
-                fromX: number;
-                fromY: number;
-                toX: number;
-                toY: number;
-                w: number;
-                h: number;
-                startAt: number;
-                durationMs: number;
-                t: number;
-            }
-            | null
-            | undefined;
+        const pinFly = s.pinFly;
         if (pinFly && pinFly.img && pinFly.w > 0 && pinFly.h > 0) {
             const t0 = Number(pinFly.t ?? 0);
             const t = Math.max(0, Math.min(1, Number.isFinite(t0) ? t0 : 0));
@@ -406,14 +412,14 @@ export function drawCanvas(canvas: EpochCanvas): void {
     });
 
     try {
-        const pending = (canvas as any)?.pendingActiveFileFocus as { path: string; line: number | null } | null | undefined;
+        const pending = s.pendingActiveFileFocus;
         if (pending && w > 0 && h > 0) {
             // Clear first to avoid loops if focusing triggers another draw.
-            (canvas as any).pendingActiveFileFocus = null;
+            s.pendingActiveFileFocus = null;
             const visible = canvas.hasVisibleEntryForFile(pending.path, pending.line);
             if (!visible) {
                 // Scroll only; don't force hover highlight.
-                (canvas as any).focusFile?.(pending.path, pending.line, false);
+                s.focusFile?.(pending.path, pending.line, false);
             }
         }
     } catch {
@@ -427,9 +433,9 @@ export function drawCanvas(canvas: EpochCanvas): void {
     }
 
     try {
-        const pending = (canvas as any)?.__pendingFocusFirstFilteredTimelineRecord === true;
+        const pending = s.__pendingFocusFirstFilteredTimelineRecord === true;
         if (pending) {
-            (canvas as any).__pendingFocusFirstFilteredTimelineRecord = false;
+            s.__pendingFocusFirstFilteredTimelineRecord = false;
             focusFirstFilteredTimelineRecord(canvas);
         }
     } catch {

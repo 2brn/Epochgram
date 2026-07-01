@@ -1,11 +1,17 @@
-import { Notice, Setting } from "obsidian";
+import { Notice, Setting, type App } from "obsidian";
 import type { EpochPlugin } from "../main";
 import { promptMaintenanceChoices } from "../ui/modals";
 import type { MaintenanceChoice } from "../ui/modals";
 import { runSimilarityStartupMaintenance } from "../plugin/similarity/startup-maintenance";
 import { computeRebuildGating, runRebuild, runReset } from "../plugin/maintenance";
 
-export function renderMaintenanceSettings(containerEl: HTMLElement, app: any, plugin: EpochPlugin, refresh: () => void): void {
+type MaintenancePluginState = {
+	__epochMaintenanceInFlight?: boolean;
+	rebuildTimelineSearchIndex?: () => Promise<void>;
+};
+
+export function renderMaintenanceSettings(containerEl: HTMLElement, app: App, plugin: EpochPlugin, refresh: () => void): void {
+	const state = plugin as EpochPlugin & MaintenancePluginState;
 	new Setting(containerEl)
 		.setName("Index")
 		.setDesc("Rebuild recomputes selected stores. Reset clears selected data.")
@@ -14,8 +20,8 @@ export function renderMaintenanceSettings(containerEl: HTMLElement, app: any, pl
 				.setButtonText("Rebuild")
 				.onClick(async () => {
 						try {
-							if ((plugin as any).__epochMaintenanceInFlight) return;
-							(plugin as any).__epochMaintenanceInFlight = true;
+							if (state.__epochMaintenanceInFlight) return;
+							state.__epochMaintenanceInFlight = true;
 						} catch {
 							// ignore
 						}
@@ -73,17 +79,17 @@ export function renderMaintenanceSettings(containerEl: HTMLElement, app: any, pl
 							});
 							if (picked.searchIndex === true) {
 								try {
-									await (plugin as any).rebuildTimelineSearchIndex?.();
+									await state.rebuildTimelineSearchIndex?.();
 								} catch {
 									// ignore
 								}
 							}
 						} catch (error) {
-							console.error("Epochgram rebuild failed", error);
+							void error;
 							new Notice("Epochgram rebuild failed (see console)", 0);
 						} finally {
 							try {
-								(plugin as any).__epochMaintenanceInFlight = false;
+								state.__epochMaintenanceInFlight = false;
 							} catch {
 								// ignore
 							}
@@ -101,8 +107,8 @@ export function renderMaintenanceSettings(containerEl: HTMLElement, app: any, pl
 				.setWarning()
 				.onClick(async () => {
 						try {
-							if ((plugin as any).__epochMaintenanceInFlight) return;
-							(plugin as any).__epochMaintenanceInFlight = true;
+							if (state.__epochMaintenanceInFlight) return;
+							state.__epochMaintenanceInFlight = true;
 						} catch {
 							// ignore
 						}
@@ -161,11 +167,11 @@ export function renderMaintenanceSettings(containerEl: HTMLElement, app: any, pl
 							);
 							void runSimilarityStartupMaintenance(plugin).catch(() => undefined);
 						} catch (error) {
-							console.error("Epochgram reset failed", error);
+							void error;
 							new Notice("Epochgram reset failed (see console)", 5000);
 						} finally {
 							try {
-								(plugin as any).__epochMaintenanceInFlight = false;
+								state.__epochMaintenanceInFlight = false;
 							} catch {
 								// ignore
 							}

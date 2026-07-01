@@ -1,5 +1,91 @@
 import type { EpochCanvas } from "./epoch-canvas";
 
+type CanvasWindowLike = {
+	devicePixelRatio?: number;
+	setTimeout(handler: () => void, timeout?: number): number;
+	clearTimeout(handle: number): void;
+	clearInterval(handle: number): void;
+	cancelAnimationFrame(handle: number): void;
+	addEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: AddEventListenerOptions | boolean): void;
+	removeEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: EventListenerOptions | boolean): void;
+	visualViewport?: {
+		removeEventListener?: (
+			type: string,
+			listener: EventListenerOrEventListenerObject,
+			options?: EventListenerOptions | boolean
+		) => void;
+	};
+};
+
+type CanvasSetupState = {
+	win?: CanvasWindowLike;
+	root: HTMLElement;
+	canvas: HTMLCanvasElement;
+	ctx: CanvasRenderingContext2D;
+	handleWheel: EventListener;
+	handleMouseDown: EventListener;
+	handleMouseMoveWindow: EventListener;
+	handleMouseUpWindow: EventListener;
+	handleDblClick: EventListener;
+	handleContextMenu: EventListener;
+	handleMouseMoveCanvas: EventListener;
+	handleMouseLeaveCanvas: EventListener;
+	handleTouchStart: EventListener;
+	handleTouchMove: EventListener;
+	handleTouchEnd: EventListener;
+	handleTouchCancel: EventListener;
+	handleClick: EventListener;
+	handleAuxClick: EventListener;
+	handleKeyDownWindow: EventListener;
+	handleKeyUpWindow: EventListener;
+	scheduleResize: EventListener;
+	isPointerDeviceEvent(): boolean;
+	cancelFocusClear(): void;
+	clearHover(force?: boolean): void;
+	draw(): void;
+	scheduleVisibilityCheck(): void;
+	visibilityRetryTimeout: number | null;
+	animFrame: number | null;
+	touchLongPressTimeout: number | null;
+	dateOverlayTimer: number | null;
+	dateOverlayEl: HTMLElement | null;
+	pendingVisibilityDraw: boolean;
+	hoverPreviewKey: string | null;
+	lastPointerEvent: MouseEvent | null;
+	modKeyActive: boolean;
+	velocityY: number;
+	animatingView: boolean;
+	lastFrameTime: number | null;
+	keepHoverAfterMenu: boolean;
+	keepHoverUntilPointerMove: boolean;
+	pendingScrollNavHighlight: unknown;
+	lastCanvasWidth: number;
+	lastCanvasHeight: number;
+	sizePoller: number | null;
+	postResizeTimeout1: number | null;
+	postResizeTimeout2: number | null;
+	resizeObserver: ResizeObserver | null;
+	resizeScheduled: boolean;
+	targetScale: number;
+	targetOffsetY: number;
+	offsetY: number;
+	scale: number;
+	__lastKnownCanvasCssWidth?: number;
+	__lastKnownCanvasCssHeight?: number;
+	__epochCanvasHidden?: boolean;
+	animatingWheelPan?: boolean;
+	animatingWheelZoom?: boolean;
+	wheelZoomDir?: number;
+};
+
+function asCanvasSetupState(canvas: EpochCanvas): CanvasSetupState {
+	return canvas as unknown as CanvasSetupState;
+}
+
+function getCanvasWindow(state: CanvasSetupState): CanvasWindowLike {
+	return state.win ?? (window as unknown as CanvasWindowLike);
+}
+
 interface CanvasSetupMethods {
 	bind(): void;
 	resize(): void;
@@ -9,8 +95,8 @@ interface CanvasSetupMethods {
 
 export const canvasSetupMethods: CanvasSetupMethods = {
 	bind(this: EpochCanvas): void {
-		const state = this as any;
-		const w: any = state.win ?? window;
+		const state = asCanvasSetupState(this);
+		const w = getCanvasWindow(state);
 		state.root.addEventListener("wheel", state.handleWheel, { passive: false, capture: true });
 		if (state.isPointerDeviceEvent()) {
 			state.root.addEventListener("pointerdown", state.handleMouseDown, { capture: true });
@@ -46,7 +132,7 @@ export const canvasSetupMethods: CanvasSetupMethods = {
 	},
 
 	resize(this: EpochCanvas): void {
-		const state = this as any;
+		const state = asCanvasSetupState(this);
 		const rect = state.canvas?.getBoundingClientRect?.() ?? state.root.getBoundingClientRect();
 		const width = rect.width || state.canvas?.clientWidth || state.root.clientWidth;
 		const height = rect.height || state.canvas?.clientHeight || state.root.clientHeight;
@@ -62,21 +148,21 @@ export const canvasSetupMethods: CanvasSetupMethods = {
 		// clear any persistent hover (scroll-nav date hover, touch hover, etc.) so it
 		// doesn't reappear when the panel is expanded again.
 		if (!width || !height) {
-			const wasHidden = (state as any).__epochCanvasHidden === true;
-			(state as any).__epochCanvasHidden = true;
+			const wasHidden = state.__epochCanvasHidden === true;
+			state.__epochCanvasHidden = true;
 			try {
 				state.velocityY = 0;
 				state.animatingView = false;
-				(state as any).animatingWheelPan = false;
-				(state as any).animatingWheelZoom = false;
-				(state as any).wheelZoomDir = 0;
+				state.animatingWheelPan = false;
+				state.animatingWheelZoom = false;
+				state.wheelZoomDir = 0;
 				state.lastFrameTime = null;
 			} catch {
 				// ignore
 			}
 			if (state.animFrame != null) {
 				try {
-					cancelAnimationFrame(state.animFrame);
+					window.cancelAnimationFrame(state.animFrame);
 				} catch {
 					// ignore
 				}
@@ -94,9 +180,9 @@ export const canvasSetupMethods: CanvasSetupMethods = {
 			}
 			return;
 		}
-		(state as any).__epochCanvasHidden = false;
+		state.__epochCanvasHidden = false;
 
-		const w: any = state.win ?? window;
+		const w = getCanvasWindow(state);
 		const dpr = w.devicePixelRatio || 1;
 		const bufWidth = Math.round(width * dpr);
 		const bufHeight = Math.round(height * dpr);
@@ -112,8 +198,8 @@ export const canvasSetupMethods: CanvasSetupMethods = {
 	},
 
 	scheduleVisibilityCheck(this: EpochCanvas): void {
-		const state = this as any;
-		const w: any = state.win ?? window;
+		const state = asCanvasSetupState(this);
+		const w = getCanvasWindow(state);
 		if (state.visibilityRetryTimeout != null) return;
 		if (!state.root?.isConnected) return;
 		state.visibilityRetryTimeout = w.setTimeout(() => {
@@ -129,11 +215,11 @@ export const canvasSetupMethods: CanvasSetupMethods = {
 	},
 
 	destroy(this: EpochCanvas): void {
-		const state = this as any;
-		const w: any = state.win ?? window;
+		const state = asCanvasSetupState(this);
+		const w = getCanvasWindow(state);
 		state.cancelFocusClear();
 		try {
-			w.removeEventListener?.("resize", state.scheduleResize);
+			w.removeEventListener("resize", state.scheduleResize);
 			w.visualViewport?.removeEventListener?.("resize", state.scheduleResize);
 		} catch {
 			// ignore
@@ -198,7 +284,7 @@ export const canvasSetupMethods: CanvasSetupMethods = {
 			try {
 				w.cancelAnimationFrame(state.animFrame);
 			} catch {
-				cancelAnimationFrame(state.animFrame);
+				window.cancelAnimationFrame(state.animFrame);
 			}
 			state.animFrame = null;
 		}

@@ -1,6 +1,20 @@
 import { normalizeMarkColorIndex } from "./mark-colors";
 import { hasSimilarityAccess } from "../plugin/pro-feature-state";
 import { embeddingsSimilarityEnabled } from "../plugin/similarity/config";
+import type { EpochPlugin } from "../main";
+
+type MarkGroupPluginLike = EpochPlugin & {
+	__epochInheritedMarkSourceByPath?: Map<string, string>;
+	getSemanticRelatedPathsForFile?: (path: string) => Promise<unknown>;
+	getGraphRelatedPathsForFile?: (path: string) => Promise<unknown>;
+	getSemanticRelatedScoredForFile?: (path: string) => Promise<unknown>;
+};
+
+type MarkGroupIndexerLike = {
+	getFileMarkColor(path: string): number | null | undefined;
+};
+
+type ScoredPathLike = { path?: string };
 
 function normalizeNonEpochPath(value: unknown): string {
 	const p = typeof value === "string" ? String(value || "").trim() : "";
@@ -9,7 +23,7 @@ function normalizeNonEpochPath(value: unknown): string {
 }
 
 
-export function isPathInheritedMarked(plugin: any, indexer: any, path: string): boolean {
+export function isPathInheritedMarked(plugin: unknown, indexer: MarkGroupIndexerLike, path: string): boolean {
 	const p = normalizeNonEpochPath(path);
 	if (!p) return false;
 
@@ -21,7 +35,7 @@ export function isPathInheritedMarked(plugin: any, indexer: any, path: string): 
 	}
 
 	try {
-		const srcMap: unknown = plugin?.__epochInheritedMarkSourceByPath;
+		const srcMap: unknown = (plugin as MarkGroupPluginLike | null | undefined)?.__epochInheritedMarkSourceByPath;
 		if (!(srcMap instanceof Map)) return false;
 		const src = normalizeNonEpochPath(srcMap.get(p));
 		return !!src && src !== p;
@@ -30,7 +44,7 @@ export function isPathInheritedMarked(plugin: any, indexer: any, path: string): 
 	}
 }
 
-export function computeTargetsForMarkMenuAction(_plugin: any, args: {
+export function computeTargetsForMarkMenuAction(_plugin: unknown, args: {
 	entryPath: string;
 	resolvedAncestorPath: string;
 	isEntryInherited: boolean;
@@ -82,21 +96,22 @@ export function computeTargetsForMarkMenuAction(_plugin: any, args: {
 }
 
 export async function getSimilarGroupPathsForMarking(
-	plugin: any,
+	plugin: unknown,
 	centerPath: string
 ): Promise<Set<string>> {
 	const out = new Set<string>();
 	const base = String(centerPath || "");
 	if (!base || base.startsWith("epoch://")) return out;
 	out.add(base);
+	const p = plugin as MarkGroupPluginLike;
 
 	try {
-		const hasPro = hasSimilarityAccess(plugin);
+		const hasPro = hasSimilarityAccess(p);
 		if (!hasPro) return out;
-		const vectorsEnabled = embeddingsSimilarityEnabled(plugin);
+		const vectorsEnabled = embeddingsSimilarityEnabled(p);
 
-		if (vectorsEnabled && typeof plugin?.getSemanticRelatedPathsForFile === "function") {
-			const related: unknown = await plugin.getSemanticRelatedPathsForFile(base);
+		if (vectorsEnabled && typeof p.getSemanticRelatedPathsForFile === "function") {
+			const related: unknown = await p.getSemanticRelatedPathsForFile(base);
 			if (related instanceof Set) {
 				for (const p of related) {
 					if (typeof p === "string" && p && !p.startsWith("epoch://")) out.add(p);
@@ -105,8 +120,8 @@ export async function getSimilarGroupPathsForMarking(
 			return out;
 		}
 
-		if (typeof plugin?.getGraphRelatedPathsForFile === "function") {
-			const related: unknown = await plugin.getGraphRelatedPathsForFile(base);
+		if (typeof p.getGraphRelatedPathsForFile === "function") {
+			const related: unknown = await p.getGraphRelatedPathsForFile(base);
 			if (related instanceof Set) {
 				for (const p of related) {
 					if (typeof p === "string" && p && !p.startsWith("epoch://")) out.add(p);
@@ -121,7 +136,7 @@ export async function getSimilarGroupPathsForMarking(
 }
 
 export function getMarkCenterPathForGroupActions(
-	indexer: any,
+	indexer: MarkGroupIndexerLike,
 	entryPath: string,
 	inheritedSourcePath: string | null
 ): string {
@@ -141,13 +156,14 @@ export function getMarkCenterPathForGroupActions(
 }
 
 export async function resolveMarkAncestorPath(
-	plugin: any,
-	indexer: any,
+	plugin: unknown,
+	indexer: MarkGroupIndexerLike,
 	entryPath: string,
 	inheritedSourcePath?: string | null
 ): Promise<string> {
 	const entry = normalizeNonEpochPath(entryPath);
 	if (!entry) return String(entryPath || "");
+	const p = plugin as MarkGroupPluginLike;
 
 	// Explicitly marked entries are their own ancestor.
 	try {
@@ -163,7 +179,7 @@ export async function resolveMarkAncestorPath(
 
 	// Try cached inherited-source map from the plugin.
 	try {
-		const srcMap: unknown = plugin?.__epochInheritedMarkSourceByPath;
+		const srcMap: unknown = p.__epochInheritedMarkSourceByPath;
 		if (srcMap instanceof Map) {
 			const cached = normalizeNonEpochPath(srcMap.get(entry));
 			if (cached && cached !== entry) return cached;
@@ -174,16 +190,17 @@ export async function resolveMarkAncestorPath(
 
 	// Fallback: scan semantic scored results for the first explicitly marked file.
 	try {
-		const hasPro = hasSimilarityAccess(plugin);
-		if (hasPro && typeof plugin?.getSemanticRelatedScoredForFile === "function") {
-			const scored: any[] = await plugin.getSemanticRelatedScoredForFile(entry);
+		const hasPro = hasSimilarityAccess(p);
+		if (hasPro && typeof p.getSemanticRelatedScoredForFile === "function") {
+			const scoredRaw: unknown = await p.getSemanticRelatedScoredForFile(entry);
+			const scored: ScoredPathLike[] = Array.isArray(scoredRaw) ? scoredRaw as ScoredPathLike[] : [];
 			if (Array.isArray(scored)) {
 				for (const item of scored) {
-					const p = normalizeNonEpochPath(item?.path);
-					if (!p || p === entry) continue;
+					const candidate = normalizeNonEpochPath(item?.path);
+					if (!candidate || candidate === entry) continue;
 					try {
-						const idx = indexer.getFileMarkColor(p);
-						if (normalizeMarkColorIndex(idx) != null) return p;
+						const idx = indexer.getFileMarkColor(candidate);
+						if (normalizeMarkColorIndex(idx) != null) return candidate;
 					} catch {
 						// ignore
 					}
@@ -196,16 +213,16 @@ export async function resolveMarkAncestorPath(
 
 	// Fallback: scan graph-related set for any explicitly marked file.
 	try {
-		const hasPro = hasSimilarityAccess(plugin);
-		if (hasPro && typeof plugin?.getGraphRelatedPathsForFile === "function") {
-			const related: unknown = await plugin.getGraphRelatedPathsForFile(entry);
+		const hasPro = hasSimilarityAccess(p);
+		if (hasPro && typeof p.getGraphRelatedPathsForFile === "function") {
+			const related: unknown = await p.getGraphRelatedPathsForFile(entry);
 			if (related instanceof Set) {
 				for (const p0 of related) {
-					const p = normalizeNonEpochPath(p0);
-					if (!p || p === entry) continue;
+					const candidate = normalizeNonEpochPath(p0);
+					if (!candidate || candidate === entry) continue;
 					try {
-						const idx = indexer.getFileMarkColor(p);
-						if (normalizeMarkColorIndex(idx) != null) return p;
+						const idx = indexer.getFileMarkColor(candidate);
+						if (normalizeMarkColorIndex(idx) != null) return candidate;
 					} catch {
 						// ignore
 					}
@@ -221,8 +238,8 @@ export async function resolveMarkAncestorPath(
 }
 
 export async function resolveMarkGroupAnchorPath(
-	plugin: any,
-	indexer: any,
+	plugin: unknown,
+	indexer: MarkGroupIndexerLike,
 	entryPath: string,
 	options?: {
 		inheritedSourcePath?: string | null;

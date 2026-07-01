@@ -1,12 +1,30 @@
 import { describe, it, expect, vi } from "vitest";
+import { Platform, TFile } from "obsidian";
 
 import { runReset } from "../src/plugin/maintenance";
 import { DEFAULT_SIMILARITY_MODEL } from "../src/plugin/similarity/config";
 import { runSimilarityStartupMaintenance } from "../src/plugin/similarity/startup-maintenance";
 import { withTrustedPro } from "./helpers/trusted-pro";
 
+// Create a fake TFile class that can be used for instanceof checks
+class FakeTFile {
+	path: string;
+	stat: any;
+	extension?: string;
+	constructor(path: string, stat: any = {}) {
+		this.path = path;
+		this.stat = stat;
+		const lastDot = path.lastIndexOf(".");
+		this.extension = lastDot > -1 ? path.slice(lastDot + 1) : "";
+	}
+}
+// Make instanceof work by setting the prototype
+Object.setPrototypeOf(FakeTFile.prototype, TFile.prototype);
+
 describe("Reset semantics", () => {
 	it("clears the vectors store and resets in-memory similarity state", async () => {
+		Platform.isDesktopApp = true;
+		Platform.isMobileApp = false;
 		const fileStore = new Map<string, string>();
 		const adapter = {
 			write: vi.fn(async (p: string, data: string) => {
@@ -15,6 +33,8 @@ describe("Reset semantics", () => {
 		};
 
 		const plugin: any = {
+			proActive: true,
+			manifest: { id: "epochgram", version: "0.4.3-test" },
 			indexer: {
 				getIndexedPaths: () => []
 			},
@@ -27,8 +47,8 @@ describe("Reset semantics", () => {
 			app: {
 				vault: {
 					adapter,
-					getFiles: () => [{ path: "a.md" }, { path: "b.md" }],
-					getMarkdownFiles: () => [{ path: "a.md" }, { path: "b.md" }]
+					getFiles: () => [new FakeTFile("a.md"), new FakeTFile("b.md")],
+					getMarkdownFiles: () => [new FakeTFile("a.md"), new FakeTFile("b.md")]
 				}
 			},
 			shouldIndexFile: () => true,

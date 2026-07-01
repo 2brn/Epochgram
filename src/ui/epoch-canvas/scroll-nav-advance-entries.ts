@@ -1,16 +1,61 @@
-import type { DateEntry } from "../../indexer/types";
 import type { EpochCanvas } from "../epoch-canvas";
 import type { ScrollNavTarget } from "../epoch-canvas-types";
 
 import { focusDate as focusDateHelper, getDayIndexForDate as getDayIndexForDateHelper } from "../epoch-canvas-focus";
 import { BASE_SPACING } from "../epoch-canvas-constants";
 
+type PendingHighlight = { dayIndex?: number | null } | null;
+
+type ScrollNavAdvanceEntriesState = {
+	scrollNavIndex: number;
+	pendingScrollNavHighlight: PendingHighlight;
+	hoverSummary: { dayIndex?: number | null } | null;
+	animSummary: { dayIndex?: number | null } | null;
+	hoverDateIndex: number | null;
+	animDateIndex: number | null;
+	hoverTarget: number;
+	scrollNavAnchorEntry?: unknown;
+	scrollNavAnchorDayIndex?: number | null;
+	animatingView: boolean;
+	offsetY: number;
+	scale: number;
+	__scrollNavAnchorMode?: string | null;
+};
+
+type CanvasWithTodayOffset = { getTodayOffset?: () => number };
+
+function readEntryKey(entry: unknown): { file: string; source: string; blockStart: number; blockEnd: number } | null {
+	if (!entry || typeof entry !== "object") return null;
+	const rec = entry as Record<string, unknown>;
+	const file = typeof rec.file === "string" ? rec.file : "";
+	const source = typeof rec.source === "string" ? rec.source : "";
+	const blockStart = typeof rec.blockStart === "number" && Number.isFinite(rec.blockStart) ? rec.blockStart : -1;
+	const blockEnd = typeof rec.blockEnd === "number" && Number.isFinite(rec.blockEnd) ? rec.blockEnd : -1;
+	return {
+		file,
+		source,
+		blockStart,
+		blockEnd
+	};
+}
+
+function entriesMatch(a: unknown, b: unknown): boolean {
+	if (a === b) return true;
+	const aKey = readEntryKey(a);
+	const bKey = readEntryKey(b);
+	if (!aKey || !bKey) return false;
+	if (aKey.file !== bKey.file) return false;
+	if (aKey.source !== bKey.source) return false;
+	if (aKey.blockStart !== bKey.blockStart) return false;
+	return aKey.blockEnd === bKey.blockEnd;
+}
+
 export function advanceScrollNavEntries(params: {
 	canvas: EpochCanvas;
-	c: any;
+	c: ScrollNavAdvanceEntriesState;
 	direction: number;
 	wrap: boolean;
-	prevPending: any;
+	prevPending: PendingHighlight;
 	rect: DOMRect;
 	targets: Array<Extract<ScrollNavTarget, { kind: "entry" }>>;
 }): boolean {
@@ -21,23 +66,6 @@ export function advanceScrollNavEntries(params: {
 		c.pendingScrollNavHighlight = null;
 		return false;
 	}
-
-	const entriesMatch = (a: any, b: any): boolean => {
-		if (a === b) return true;
-		if (!a || !b) return false;
-		const af = String(a.file ?? "");
-		const bf = String(b.file ?? "");
-		if (af !== bf) return false;
-		const as = String(a.source ?? "");
-		const bs = String(b.source ?? "");
-		if (as !== bs) return false;
-		const abs = Number(a.blockStart ?? -1);
-		const bbs = Number(b.blockStart ?? -1);
-		if (abs !== bbs) return false;
-		const abe = Number(a.blockEnd ?? -1);
-		const bbe = Number(b.blockEnd ?? -1);
-		return abe === bbe;
-	};
 
 	const dayTargets: Array<{ dayIndex: number; date: Date }> = (() => {
 		const out: Array<{ dayIndex: number; date: Date }> = [];
@@ -59,7 +87,7 @@ export function advanceScrollNavEntries(params: {
 		return false;
 	}
 	if (dayTargets.length === 1) {
-		const only = dayTargets[0]!;
+		const only = dayTargets[0];
 		c.scrollNavIndex = 0;
 		try {
 			c.scrollNavAnchorEntry = null;
@@ -109,14 +137,16 @@ export function advanceScrollNavEntries(params: {
 	}
 	if (anchorDayIndex == null) {
 		try {
-			const anchoredEntry: DateEntry | null = (c.scrollNavAnchorEntry as any) ?? null;
+			const anchoredEntry = c.scrollNavAnchorEntry ?? null;
 			if (anchoredEntry) {
 				let anchoredIndex = targets.findIndex((t) => t.entry === anchoredEntry);
 				if (anchoredIndex < 0) {
-					anchoredIndex = targets.findIndex((t) => entriesMatch(t.entry as any, anchoredEntry as any));
+					anchoredIndex = targets.findIndex((t) => entriesMatch(t.entry, anchoredEntry));
 				}
 				if (anchoredIndex >= 0) {
-					const di0 = getDayIndexForDateHelper(canvas, targets[anchoredIndex]!.date);
+					const target = targets[anchoredIndex];
+					if (!target) return false;
+					const di0 = getDayIndexForDateHelper(canvas, target.date);
 					anchorDayIndex = Number.isFinite(di0) ? Number(di0) : null;
 					anchorFromFocus = true;
 					if (anchorDayIndex != null) {
@@ -141,7 +171,7 @@ export function advanceScrollNavEntries(params: {
 	if (anchorDayIndex == null) {
 		let anchorScreenY = (() => {
 			try {
-				const y = (canvas as any)?.getTodayOffset?.();
+				const y = (canvas as unknown as CanvasWithTodayOffset).getTodayOffset?.();
 				if (typeof y === "number" && Number.isFinite(y)) return y;
 			} catch {
 				// ignore
@@ -149,7 +179,7 @@ export function advanceScrollNavEntries(params: {
 			return rect.height * 0.33;
 		})();
 		try {
-			if (String((c as any).__scrollNavAnchorMode || "") === "center") {
+			if (String(c.__scrollNavAnchorMode || "") === "center") {
 				anchorScreenY = rect.height / 2;
 			}
 		} catch {
@@ -157,7 +187,7 @@ export function advanceScrollNavEntries(params: {
 		}
 		const anchorWorldY = (anchorScreenY - c.offsetY) / c.scale;
 		try {
-			(c as any).__scrollNavAnchorMode = null;
+			c.__scrollNavAnchorMode = null;
 		} catch {
 			// ignore
 		}
@@ -177,7 +207,9 @@ export function advanceScrollNavEntries(params: {
 	let chosenIndex = -1;
 	let chosenDiff = direction >= 0 ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
 	for (let i = 0; i < dayTargets.length; i++) {
-		const pos = dayTargets[i]!.dayIndex;
+		const target = dayTargets[i];
+		if (!target) continue;
+		const pos = target.dayIndex;
 		const diff = pos - anchorValue;
 		if (direction >= 0) {
 			if ((diff > 0 || (allowEqual && diff === 0)) && diff < chosenDiff) {
@@ -200,7 +232,8 @@ export function advanceScrollNavEntries(params: {
 					((c.hoverDateIndex == null && c.animDateIndex == null && c.hoverSummary == null && c.animSummary == null) ||
 						Number(c.hoverTarget ?? 0) <= 0);
 				if (c.scrollNavIndex === boundaryIndex && hoverGone) {
-					const boundary = dayTargets[boundaryIndex]!;
+					const boundary = dayTargets[boundaryIndex];
+					if (!boundary) return false;
 					try {
 						c.scrollNavAnchorEntry = null;
 						c.scrollNavAnchorDayIndex = boundary.dayIndex;
@@ -219,7 +252,8 @@ export function advanceScrollNavEntries(params: {
 			return false;
 		}
 		c.scrollNavIndex = direction >= 0 ? 0 : dayTargets.length - 1;
-		const wrapped = dayTargets[c.scrollNavIndex]!;
+		const wrapped = dayTargets[c.scrollNavIndex];
+		if (!wrapped) return false;
 		try {
 			c.scrollNavAnchorEntry = null;
 			c.scrollNavAnchorDayIndex = wrapped.dayIndex;
@@ -233,7 +267,8 @@ export function advanceScrollNavEntries(params: {
 	}
 
 	c.scrollNavIndex = chosenIndex;
-	const target = dayTargets[chosenIndex]!;
+	const target = dayTargets[chosenIndex];
+	if (!target) return false;
 	try {
 		c.scrollNavAnchorEntry = null;
 		c.scrollNavAnchorDayIndex = target.dayIndex;

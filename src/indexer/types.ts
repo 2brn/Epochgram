@@ -68,6 +68,7 @@ export interface DateEntry {
 	reviewState?: ReviewState;
 	markColor?: number;
     pinned?: boolean;
+	fileMtimeMs?: number;
     trackedChange?: TrackedChangeType;
     trackedTime?: string;
     trackedHash?: string;

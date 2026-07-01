@@ -7,37 +7,53 @@ import { isDateKey, isEpochBucket } from "./shared";
 import { formatEpochSummaryForIndex } from "../epoch-summary-format";
 import { schedulePersist } from "./persistence";
 
+type EpochJobLike = AiSummaryJob & {
+	epochBucket?: string;
+	epochStart?: string;
+	epochEnd?: string;
+	createdAt?: number;
+	inputHash?: string;
+};
+
+type EpochStorePluginState = EpochPlugin & {
+	__epochLatestEpochJobCreatedAt?: Map<string, number>;
+	__epochEpochEntriesRefreshTimer?: number | null;
+	scheduleInheritedMarkRecompute?: (reason: string) => void;
+	refreshEpochViews?: () => void;
+	indexer: {
+		index: Record<string, DateEntry[]>;
+	};
+};
+
 export function isEpochJob(job: AiSummaryJob): boolean {
 	return job?.kind === "epoch";
 }
 
 function getLatestEpochJobCreatedAt(plugin: EpochPlugin): Map<string, number> {
-	const anyPlugin: any = plugin as any;
-	if (!anyPlugin.__epochLatestEpochJobCreatedAt) {
-		anyPlugin.__epochLatestEpochJobCreatedAt = new Map<string, number>();
+	const state = plugin as EpochStorePluginState;
+	if (!state.__epochLatestEpochJobCreatedAt) {
+		state.__epochLatestEpochJobCreatedAt = new Map<string, number>();
 	}
-	return anyPlugin.__epochLatestEpochJobCreatedAt as Map<string, number>;
+	return state.__epochLatestEpochJobCreatedAt;
 }
 
 function scheduleEpochViewsRefresh(plugin: EpochPlugin): void {
-	const anyPlugin: any = plugin as any;
+	const state = plugin as EpochStorePluginState;
 	try {
-		if (anyPlugin.__epochEpochEntriesRefreshTimer != null) return;
+		if (state.__epochEpochEntriesRefreshTimer != null) return;
 	} catch {
 		// ignore
 	}
-	const timeoutFn: any = (typeof window !== "undefined" && typeof (window as any).setTimeout === "function")
-		? (window as any).setTimeout.bind(window)
-		: setTimeout;
+	if (typeof window === "undefined" || typeof window.setTimeout !== "function") return;
 	try {
-		anyPlugin.__epochEpochEntriesRefreshTimer = timeoutFn(() => {
+		state.__epochEpochEntriesRefreshTimer = window.setTimeout(() => {
 			try {
-				anyPlugin.__epochEpochEntriesRefreshTimer = null;
+				state.__epochEpochEntriesRefreshTimer = null;
 			} catch {
 				// ignore
 			}
 			try {
-				plugin.refreshEpochViews?.();
+				state.refreshEpochViews?.();
 			} catch {
 				// ignore
 			}
@@ -50,18 +66,20 @@ function scheduleEpochViewsRefresh(plugin: EpochPlugin): void {
 export function storeEpochSummary(plugin: EpochPlugin, job: AiSummaryJob, rawSummary: string): void {
 	if (!isGenerateEpochsEffective(plugin)) return;
 	if (plugin?.hasProAccess?.() !== true) return;
+	const state = plugin as EpochStorePluginState;
+	const epochJob = job as EpochJobLike;
 
 	const summary = formatEpochSummaryForIndex(rawSummary);
 	if (!summary) return;
-	const bucketRaw = String((job as any).epochBucket || "");
+	const bucketRaw = String(epochJob.epochBucket || "");
 	if (!isEpochBucket(bucketRaw)) return;
 	const bucket: EpochBucket = bucketRaw;
-	const start = String((job as any).epochStart || "");
-	const end = String((job as any).epochEnd || start);
+	const start = String(epochJob.epochStart || "");
+	const end = String(epochJob.epochEnd || start);
 	if (!isDateKey(start)) return;
 
 	const epochFilePath = `epoch://${bucket}/${start}-${end}`;
-	const createdAt = typeof (job as any).createdAt === "number" ? (job as any).createdAt : Date.now();
+	const createdAt = typeof epochJob.createdAt === "number" ? epochJob.createdAt : Date.now();
 	const latestByKey = getLatestEpochJobCreatedAt(plugin);
 	const prevApplied = latestByKey.get(epochFilePath) ?? 0;
 	if (createdAt < prevApplied) {
@@ -79,24 +97,23 @@ export function storeEpochSummary(plugin: EpochPlugin, job: AiSummaryJob, rawSum
 		epochStart: start,
 		epochEnd: end,
 		aiSummary: summary,
-		aiSummaryInputHash: (job as any).inputHash
+		aiSummaryInputHash: epochJob.inputHash
 	};
 
-	const indexerAny: any = plugin.indexer as any;
-	const index: any = indexerAny.index;
-	const list: any[] = Array.isArray(index?.[start]) ? index[start].slice() : [];
-	const isEpochFile = (e: any): boolean => String(e?.file ?? "").startsWith("epoch://");
+	const index = state.indexer.index;
+	const list: DateEntry[] = Array.isArray(index?.[start]) ? index[start].slice() : [];
+	const isEpochFile = (e: DateEntry): boolean => String(e?.file ?? "").startsWith("epoch://");
 	const filtered = list.filter((e) => {
 		if (!e || !isEpochFile(e)) return true;
 		return String(e?.file ?? "") !== epochFilePath;
 	});
-	filtered.push(entry as any);
+	filtered.push(entry);
 	index[start] = filtered;
 	latestByKey.set(epochFilePath, createdAt);
 	scheduleEpochViewsRefresh(plugin);
 
 	schedulePersist(plugin);
 	try {
-		(plugin as any).scheduleInheritedMarkRecompute?.("epoch");
+		state.scheduleInheritedMarkRecompute?.("epoch");
 	} catch { void 0; }
 }

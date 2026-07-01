@@ -11,7 +11,7 @@ import { getSimilarityWorker } from "./worker-factory";
 import { readStore } from "./store";
 import { dot } from "./math";
 import { getDirectLinkedPaths, getSameTagPaths } from "./graph";
-import { getNoteTitleFromPath, jaroWinkler, normalizeTitleForSimilarity } from "../../utils";
+import { getFolderPathFromFilePath, getNoteTitleFromPath, jaroWinkler, normalizeTitleForSimilarity } from "../../utils";
 import { canonicalizeTopicTerm, parseTopicTerm } from "../../utils";
 import { getEmbeddingTermForPath, getTermVocabulary } from "./topic";
 import { readTermStore } from "../similarity-term-store";
@@ -32,13 +32,38 @@ import {
 	SIGNAL_TOPICS
 } from "./file-similarity-signals";
 
+type SimilarityQueueMethods = {
+	queueTermSimilarityUpdate?: (path: string) => void;
+	queueVectorUpdate?: (path: string) => void;
+};
+
+type TermStoreRecord = {
+	term?: string;
+	score?: number;
+	vocabularySig?: string;
+};
+
+type IndexerTermApi = {
+	getIndexedPaths: () => unknown;
+	getFileEmbeddingTerm: (path: string) => unknown;
+};
+
+type VectorStoreRecord = {
+	v?: number[];
+};
+
+type VectorStoreLike = {
+	model?: string;
+	files?: Record<string, VectorStoreRecord>;
+};
+
 export const methodsRelatedSemantic: Pick<
 	SimilarityMethods,
 	"getSemanticRelatedPathsForFile" | "getSemanticRelatedScoredForFile"
 > = {
 	async getSemanticRelatedPathsForFile(this: EpochPlugin, filePath: string): Promise<Set<string>> {
 		const out = new Set<string>();
-		const scored = await (this as any).getSemanticRelatedScoredForFile(filePath);
+		const scored = await methodsRelatedSemantic.getSemanticRelatedScoredForFile.call(this, filePath);
 		for (const s of scored) out.add(s.path);
 		return out;
 	},
@@ -55,7 +80,7 @@ export const methodsRelatedSemantic: Pick<
 		const mask = (p: string): number => {
 			const prev = maskByPath.get(p);
 			if (typeof prev === "number") return prev;
-			const m = getFileSimilaritySignalMask(this as any, p);
+			const m = getFileSimilaritySignalMask(this, p);
 			maskByPath.set(p, m);
 			return m;
 		};
@@ -69,7 +94,7 @@ export const methodsRelatedSemantic: Pick<
 		if (!embeddingTerm && isTopicSimilarityEnabled(this) && (centerMask & SIGNAL_TOPICS) !== 0) {
 			try {
 				const store0 = await readTermStore(this);
-				const rec0: any = store0?.files ? (store0.files as any)[filePath] : null;
+				const rec0: TermStoreRecord | undefined = store0?.files?.[filePath];
 				const inferred = typeof rec0?.term === "string" ? String(rec0.term).trim() : "";
 				const s0 = Number(rec0?.score ?? 0);
 				const okScore = inferred && Number.isFinite(s0) && s0 >= zeroShotMin;
@@ -116,15 +141,23 @@ export const methodsRelatedSemantic: Pick<
 		try {
 			const titleThr = getEffectiveTitleSimilarityThreshold(this);
 			const titleMaxLenDiff = TITLE_SIMILARITY_MAX_LEN_DIFF;
+			const sameFolderMode = titleThr >= 1;
 
-			const centerTitle = titleThr > 0 && (centerMask & SIGNAL_TITLE) !== 0 ? normalizeTitleForSimilarity(getNoteTitleFromPath(filePath)) : "";
-			if (centerTitle) {
+			const centerTitle = titleThr > 0 && (centerMask & SIGNAL_TITLE) !== 0 && !sameFolderMode ? normalizeTitleForSimilarity(getNoteTitleFromPath(filePath)) : "";
+			const centerFolder = sameFolderMode ? getFolderPathFromFilePath(filePath) : "";
+			if (centerTitle || sameFolderMode) {
 				const files = this.app.vault.getFiles();
 				for (const f of files) {
 					if (!f || f.path === filePath) continue;
 					if (!this.shouldIndexFile(f)) continue;
 					if (forcedLinks.has(f.path) || forcedTags.has(f.path)) continue;
 					if (!allows(f.path, SIGNAL_TITLE)) continue;
+					if (sameFolderMode) {
+						if (getFolderPathFromFilePath(f.path) === centerFolder) {
+							titleScored.push({ path: f.path, score: 1 });
+						}
+						continue;
+					}
 					const otherTitle = normalizeTitleForSimilarity(getNoteTitleFromPath(f.path));
 					if (!otherTitle) continue;
 					if (titleMaxLenDiff >= 0) {
@@ -144,16 +177,16 @@ export const methodsRelatedSemantic: Pick<
 		const termScored: Array<{ path: string; score: number }> = [];
 		if (wantsZeroShot) {
 			try {
-				const idxAny: any = this.indexer as any;
+				const idx: IndexerTermApi = this.indexer;
 				const workerAvailable = !!getSimilarityWorker(this);
 				const vocab = getTermVocabulary(this);
 
 				if (workerAvailable) {
 					try {
 						const store0 = await readTermStore(this);
-						const rec0 = (store0.files as any)?.[filePath];
+						const rec0 = store0.files?.[filePath];
 						if (!rec0 || rec0.vocabularySig !== vocab.sig) {
-							(this as any).queueTermSimilarityUpdate?.(filePath);
+							(this as SimilarityQueueMethods).queueTermSimilarityUpdate?.(filePath);
 						}
 					} catch {
 						// ignore
@@ -161,14 +194,17 @@ export const methodsRelatedSemantic: Pick<
 				}
 
 				try {
-					const indexed: unknown = idxAny.getIndexedPaths();
-					const paths: string[] = Array.isArray(indexed) ? indexed : [];
+					const indexed: unknown = idx.getIndexedPaths();
+					const paths: string[] = Array.isArray(indexed)
+						? indexed.filter((v): v is string => typeof v === "string")
+						: [];
 					for (const p of paths) {
-						if (!p || typeof p !== "string") continue;
+						if (!p) continue;
 						if (p === filePath) continue;
 						if (forcedLinks.has(p) || forcedTags.has(p)) continue;
 						if (!allows(p, SIGNAL_TOPICS)) continue;
-						const t = String(idxAny.getFileEmbeddingTerm(p) || "").trim();
+						const embeddingValue = idx.getFileEmbeddingTerm(p);
+						const t = typeof embeddingValue === "string" ? embeddingValue.trim() : "";
 						const tc = canonicalizeTopicTerm(t);
 						if (!tc || tc !== embeddingTerm) continue;
 						const af = this.app.vault.getAbstractFileByPath(p);
@@ -189,18 +225,19 @@ export const methodsRelatedSemantic: Pick<
 					if (!p || p === filePath) continue;
 					if (forcedLinks.has(p) || forcedTags.has(p)) continue;
 					if (!allows(p, SIGNAL_TOPICS)) continue;
-					if (workerAvailable && typeof (rec as any)?.vocabularySig === "string" && (rec as any).vocabularySig !== vocab.sig) {
+					if (workerAvailable && typeof rec.vocabularySig === "string" && rec.vocabularySig !== vocab.sig) {
 						if (enqueuedStale < ENQUEUE_STALE_LIMIT) {
-							(this as any).queueTermSimilarityUpdate?.(p);
+							(this as SimilarityQueueMethods).queueTermSimilarityUpdate?.(p);
 							enqueuedStale++;
 						}
 					}
-					const recTerm = typeof (rec as any)?.term === "string" ? String((rec as any).term).trim() : "";
+					const recTerm = typeof rec.term === "string" ? String(rec.term).trim() : "";
 					if (!recTerm || recTerm !== embeddingTerm) continue;
-					const s = Number((rec as any)?.score ?? 0);
+					const s = Number(rec.score ?? 0);
 					if (!(s >= zeroShotMin)) continue;
 					try {
-						const explicitOther = String(idxAny.getFileEmbeddingTerm(p) || "").trim();
+						const embeddingValue = idx.getFileEmbeddingTerm(p);
+						const explicitOther = typeof embeddingValue === "string" ? embeddingValue.trim() : "";
 						const explicitCanon = canonicalizeTopicTerm(explicitOther);
 						if (explicitCanon && explicitCanon !== embeddingTerm) continue;
 					} catch {
@@ -238,25 +275,27 @@ export const methodsRelatedSemantic: Pick<
 		}
 
 		const store = await readStore(this);
+		const vectorStore = store as VectorStoreLike;
 		const modelId = getSimilarityModelId(this);
-		if ((store as any).model !== modelId) {
+		if (vectorStore.model !== modelId) {
 			return mergeSignals([]);
 		}
 
-		const center: any = (store as any).files?.[filePath];
+		const center = vectorStore.files?.[filePath];
 		if (!center) {
-			(this as any).queueVectorUpdate?.(filePath);
+			(this as SimilarityQueueMethods).queueVectorUpdate?.(filePath);
 			return mergeSignals([]);
 		}
 
 		const scored: Array<{ path: string; score: number }> = [];
-		for (const [path, rec] of Object.entries((store as any).files ?? {})) {
-			if (!rec || !Array.isArray((rec as any).v) || (rec as any).v.length === 0) continue;
+		for (const [path, rec] of Object.entries(vectorStore.files ?? {})) {
+			if (!rec || !Array.isArray(rec.v) || rec.v.length === 0) continue;
 			if (path === filePath) continue;
 			if (forcedLinks.has(path) || forcedTags.has(path)) continue;
 			if ((centerMask & SIGNAL_SEMANTICS) === 0) continue;
 			if (!allows(path, SIGNAL_SEMANTICS)) continue;
-			const score = dot((center as any).v, (rec as any).v);
+			const centerVector = Array.isArray(center.v) ? center.v : [];
+			const score = dot(centerVector, rec.v);
 			if (threshold > 0) {
 				if (score >= threshold) scored.push({ path, score });
 			} else {

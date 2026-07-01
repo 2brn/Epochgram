@@ -12,12 +12,12 @@ export function devConsoleWarnOnce(plugin: EpochPlugin, key: string, message: st
 	void message;
 }
 
-export function debugLog(...args: any[]): void {
+export function debugLog(...args: unknown[]): void {
 	// Intentionally no-op: user requested no DevTools console logs.
 	void args;
 }
 
-export function safeStringify(value: any, maxLen: number = 2000): string {
+export function safeStringify(value: unknown, maxLen: number = 2000): string {
 	try {
 		const s = JSON.stringify(value);
 		if (!s) return "";

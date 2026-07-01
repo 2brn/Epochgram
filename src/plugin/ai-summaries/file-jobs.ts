@@ -10,6 +10,13 @@ import { buildRelatedSummariesAllDates, getRelatedScoredForFile } from "./relate
 import { getYamlDatePropertyKey, getYamlDescriptionPropertyKey } from "../frontmatter-keys";
 import { splitIntoAiChunks } from "./shared";
 
+type SortableAiSummaryJob = AiSummaryJob & {
+	groupDate?: string;
+	groupType?: "anchor" | "content" | "tracked";
+	groupId?: string;
+	chunkIndex?: number;
+};
+
 function sanitizeAiInputText(input: string): string {
 	const raw = String(input || "");
 	if (!raw) return "";
@@ -132,8 +139,8 @@ export async function buildJobsForFile(
 		if (force) return false;
 		if (!entries.length) return false;
 		return entries.every(e => {
-			const h = typeof (e as any).aiSummaryInputHash === "string" ? (e as any).aiSummaryInputHash : "";
-			const s = typeof (e as any).aiSummary === "string" ? (e as any).aiSummary.trim() : "";
+			const h = typeof e.aiSummaryInputHash === "string" ? e.aiSummaryInputHash : "";
+			const s = typeof e.aiSummary === "string" ? e.aiSummary.trim() : "";
 			return !!s && h === expectedHash;
 		});
 	};
@@ -197,7 +204,7 @@ export async function buildJobsForFile(
 			jobs.push({
 				id: mkId(),
 				...baseJob,
-				input: chunks[i]!,
+				input: chunks[i],
 				reduce: true,
 				reduceDepth: 0,
 				groupId,
@@ -217,7 +224,7 @@ export async function buildJobsForFile(
 		anchorEntries.push(e);
 	}
 	if (anchorEntries.length > 0) {
-		const rep = anchorEntries[0]!;
+		const rep = anchorEntries[0];
 		pushGroupJobs({
 			groupType: "anchor",
 			groupDate: rep.date,
@@ -237,7 +244,7 @@ export async function buildJobsForFile(
 		(contentByDate.get(entry.date) ?? contentByDate.set(entry.date, []).get(entry.date)!).push(entry);
 	}
 	for (const [date, entries] of contentByDate) {
-		const rep = entries[0]!;
+		const rep = entries[0];
 		const parts = entries
 			.map(e => sanitizeAiInputText(lines.slice(e.blockStart, e.blockEnd + 1).join("\n").trim()))
 			.filter(Boolean);
@@ -253,7 +260,7 @@ export async function buildJobsForFile(
 
 	for (const [date, entries] of Object.entries(data.trackedDates ?? {})) {
 		if (!Array.isArray(entries) || entries.length === 0) continue;
-		const rep = entries[0]!;
+		const rep = entries[0];
 		const parts = entries.map(e => sanitizeAiInputText(String(e.summary ?? "").trim())).filter(Boolean);
 		pushGroupJobs({
 			groupType: "tracked",
@@ -274,7 +281,7 @@ export async function buildJobsForFile(
 function newestDateForFileData(data: FileIndexData | undefined | null): string {
 	if (!data) return "";
 	let max = "";
-	const consider = (d: any) => {
+	const consider = (d: unknown) => {
 		const s = typeof d === "string" ? d : "";
 		if (s && s > max) max = s;
 	};
@@ -282,7 +289,7 @@ function newestDateForFileData(data: FileIndexData | undefined | null): string {
 	consider(data.namedDate?.date);
 	consider(data.dateProp?.date);
 	for (const e of data.contentDates ?? []) {
-		consider((e as any)?.date);
+		consider(e.date);
 	}
 	for (const k of Object.keys(data.trackedDates ?? {})) {
 		consider(k);
@@ -303,19 +310,21 @@ export function getIndexedPathsNewestFirst(plugin: EpochPlugin): string[] {
 }
 
 export function sortJobsNewestFirst(jobs: AiSummaryJob[]): AiSummaryJob[] {
-	const groupTypeOrder = (t: any): number => (t === "anchor" ? 0 : t === "content" ? 1 : t === "tracked" ? 2 : 9);
+	const groupTypeOrder = (t: unknown): number => (t === "anchor" ? 0 : t === "content" ? 1 : t === "tracked" ? 2 : 9);
 	return jobs.slice().sort((a, b) => {
-		const da = String((a as any).groupDate ?? a.date ?? "");
-		const db = String((b as any).groupDate ?? b.date ?? "");
+		const aa = a as SortableAiSummaryJob;
+		const bb = b as SortableAiSummaryJob;
+		const da = String(aa.groupDate ?? a.date ?? "");
+		const db = String(bb.groupDate ?? b.date ?? "");
 		if (da !== db) return da < db ? 1 : -1;
-		const ta = groupTypeOrder((a as any).groupType);
-		const tb = groupTypeOrder((b as any).groupType);
+		const ta = groupTypeOrder(aa.groupType);
+		const tb = groupTypeOrder(bb.groupType);
 		if (ta !== tb) return ta - tb;
-		const ga = String((a as any).groupId ?? "");
-		const gb = String((b as any).groupId ?? "");
+		const ga = String(aa.groupId ?? "");
+		const gb = String(bb.groupId ?? "");
 		if (ga !== gb) return ga < gb ? -1 : 1;
-		const ia = typeof (a as any).chunkIndex === "number" ? (a as any).chunkIndex : 999999;
-		const ib = typeof (b as any).chunkIndex === "number" ? (b as any).chunkIndex : 999999;
+		const ia = typeof aa.chunkIndex === "number" ? aa.chunkIndex : 999999;
+		const ib = typeof bb.chunkIndex === "number" ? bb.chunkIndex : 999999;
 		if (ia !== ib) return ia - ib;
 		const ca = typeof a.createdAt === "number" ? a.createdAt : 0;
 		const cb = typeof b.createdAt === "number" ? b.createdAt : 0;
@@ -327,7 +336,7 @@ export async function countMissingAiSummaries(plugin: EpochPlugin): Promise<numb
 	const internals = getIndexerInternals(plugin);
 	if (!internals) return 0;
 
-	const hasAi = (entry: any): boolean => {
+	const hasAi = (entry: FileDateEntry | null | undefined): boolean => {
 		const s = typeof entry?.aiSummary === "string" ? entry.aiSummary.trim() : "";
 		const h = typeof entry?.aiSummaryInputHash === "string" ? entry.aiSummaryInputHash.trim() : "";
 		return !!s && !!h;
@@ -340,7 +349,7 @@ export async function countMissingAiSummaries(plugin: EpochPlugin): Promise<numb
 
 		const groups = new Map<string, { groupType: "anchor" | "content" | "tracked"; entry: FileDateEntry; eligible?: boolean }>();
 		const addGroup = (entry: FileDateEntry, groupType: "anchor" | "content" | "tracked"): void => {
-			const date = String((entry as any)?.date ?? "");
+			const date = String(entry.date ?? "");
 			if (!date) return;
 			const key = `${date}|${groupType}`;
 			if (!groups.has(key)) groups.set(key, { groupType, entry });
@@ -363,12 +372,12 @@ export async function countMissingAiSummaries(plugin: EpochPlugin): Promise<numb
 			const entry = rec.entry;
 			if (!entry) continue;
 			if (rec.groupType === "tracked") {
-				rec.eligible = String((entry as any).summary ?? "").trim().length > 0;
+				rec.eligible = String(entry.summary ?? "").trim().length > 0;
 			} else {
 				rec.eligible = hasText;
 			}
 			if (!rec.eligible) continue;
-			if (!hasAi(entry as any)) missing++;
+			if (!hasAi(entry)) missing++;
 		}
 	}
 
@@ -379,12 +388,12 @@ export function hasMissingAiSummariesFast(plugin: EpochPlugin): boolean {
 	const internals = getIndexerInternals(plugin);
 	if (!internals) return false;
 
-	const hasAi = (entry: any): boolean => {
+	const hasAi = (entry: FileDateEntry | null | undefined): boolean => {
 		const s = typeof entry?.aiSummary === "string" ? entry.aiSummary.trim() : "";
 		const h = typeof entry?.aiSummaryInputHash === "string" ? entry.aiSummaryInputHash.trim() : "";
 		return !!s && !!h;
 	};
-	const hasEvidenceOfText = (entry: any): boolean => {
+	const hasEvidenceOfText = (entry: FileDateEntry | null | undefined): boolean => {
 		const s = typeof entry?.summary === "string" ? entry.summary.trim() : "";
 		return s.length > 0;
 	};
@@ -403,7 +412,7 @@ export function hasMissingAiSummariesFast(plugin: EpochPlugin): boolean {
 
 		for (const entry of entries) {
 			if (!entry) continue;
-			if (hasAi(entry as any)) continue;
+			if (hasAi(entry)) continue;
 			if (entry.source === "tracked") {
 				if (hasEvidenceOfText(entry)) return true;
 				continue;

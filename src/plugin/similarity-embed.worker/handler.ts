@@ -2,7 +2,37 @@ import type { WorkerRequest, WorkerResponse } from "./types";
 import { embedPooled, ensureEmbedder, ensureZeroShotClassifier, zeroShotScoreBatch, zeroShotScoreLabels } from "./models";
 import { primeOrtWasmFromBuffers } from "./wasm";
 
-const workerCtx: any = typeof self !== "undefined" ? (self as any) : {};
+declare const self: unknown;
+
+type WorkerGlobalLike = {
+	postMessage?: (msg: WorkerResponse) => void;
+	onmessage?: (ev: MessageEvent) => void;
+};
+
+type PrimeWasmFileLike = { name?: string; data?: unknown };
+
+function asRecord(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function toStringArray(value: unknown): string[] {
+	if (!Array.isArray(value)) return [];
+	return value.map((x) => (typeof x === "string" ? x : "")).filter((x) => x.length > 0);
+}
+
+function toText(value: unknown): string {
+	return typeof value === "string" ? value : "";
+}
+
+function toErrorMessage(error: unknown): string {
+	if (error instanceof Error) {
+		return String(error.stack || error.message || "Worker error");
+	}
+	if (typeof error === "string") return error;
+	return "Worker error";
+}
+
+const workerCtx: WorkerGlobalLike = typeof self !== "undefined" ? (self as unknown as WorkerGlobalLike) : {};
 
 function post(msg: WorkerResponse): void {
 	if (typeof workerCtx?.postMessage === "function") {
@@ -11,9 +41,11 @@ function post(msg: WorkerResponse): void {
 }
 
 export function installSimilarityEmbedWorkerHandler(): void {
-	workerCtx.onmessage = async (ev: MessageEvent) => {
-		const data: WorkerRequest = ev?.data as any;
-		const id = Number((data as any)?.id);
+	workerCtx.onmessage = (ev: MessageEvent) => {
+		void (async () => {
+		const data = ev?.data as WorkerRequest;
+		const dataObj = asRecord(data);
+		const id = Number(dataObj.id ?? NaN);
 		if (!Number.isFinite(id)) return;
 		try {
 			if (data.type === "ping") {
@@ -21,8 +53,8 @@ export function installSimilarityEmbedWorkerHandler(): void {
 				return;
 			}
 			if (data.type === "primeWasm") {
-				const files = Array.isArray((data as any).files) ? (data as any).files : [];
-				const nonEmpty = files.filter((f: any) => {
+				const files = Array.isArray(dataObj.files) ? (dataObj.files as PrimeWasmFileLike[]) : [];
+				const nonEmpty = files.filter((f) => {
 					try {
 						const ab = f?.data;
 						return ab instanceof ArrayBuffer && ab.byteLength > 0;
@@ -30,54 +62,51 @@ export function installSimilarityEmbedWorkerHandler(): void {
 						return false;
 					}
 				});
-				const hasBase = nonEmpty.some((f: any) => String(f?.name || "").trim() === "ort-wasm.wasm");
+				const hasBase = nonEmpty.some((f) => String(f?.name || "").trim() === "ort-wasm.wasm");
 				if (!hasBase) {
 					throw new Error("primeWasm failed: missing or empty ort-wasm.wasm");
 				}
-				primeOrtWasmFromBuffers(nonEmpty as any);
+				primeOrtWasmFromBuffers(nonEmpty as { name: string; data: ArrayBuffer }[]);
 				post({ id, ok: true, type: "primeWasm" });
 				return;
 			}
 			if (data.type === "loadModel") {
-				const modelId = String((data as any).modelId || "").trim();
+				const modelId = toText(dataObj.modelId).trim();
 				await ensureEmbedder(modelId);
 				post({ id, ok: true, type: "loadModel" });
 				return;
 			}
 			if (data.type === "loadZeroShot") {
-				const modelId = String((data as any).modelId || "").trim();
+				const modelId = toText(dataObj.modelId).trim();
 				await ensureZeroShotClassifier(modelId || undefined);
 				post({ id, ok: true, type: "loadZeroShot" });
 				return;
 			}
 			if (data.type === "embedPooled") {
-				const modelId = String((data as any).modelId || "").trim();
-				const chunks = Array.isArray((data as any).chunks)
-					? (data as any).chunks.map((x: any) => String(x || ""))
-					: [];
+				const modelId = toText(dataObj.modelId).trim();
+				const chunks = toStringArray(dataObj.chunks);
 				const vector = await embedPooled(modelId, chunks);
 				post({ id, ok: true, type: "embedPooled", vector, dim: vector.length });
 				return;
 			}
 			if (data.type === "zeroShotScoreBatch") {
-				const label = String((data as any).label || "");
-				const sequences = Array.isArray((data as any).sequences)
-					? (data as any).sequences.map((x: any) => String(x || ""))
-					: [];
+				const label = toText(dataObj.label);
+				const sequences = toStringArray(dataObj.sequences);
 				const scores = await zeroShotScoreBatch(label, sequences);
 				post({ id, ok: true, type: "zeroShotScoreBatch", scores });
 				return;
 			}
 			if (data.type === "zeroShotScoreLabels") {
-				const labels = Array.isArray((data as any).labels) ? (data as any).labels.map((x: any) => String(x || "")) : [];
-				const sequence = String((data as any).sequence || "");
+				const labels = toStringArray(dataObj.labels);
+				const sequence = toText(dataObj.sequence);
 				const res = await zeroShotScoreLabels(labels, sequence);
 				post({ id, ok: true, type: "zeroShotScoreLabels", labels: res.labels, scores: res.scores });
 				return;
 			}
 			post({ id, ok: false, type: "error", error: "Unknown message type" });
-		} catch (e: any) {
-			post({ id, ok: false, type: "error", error: String(e?.stack || e?.message || e || "Worker error") });
+		} catch (e: unknown) {
+			post({ id, ok: false, type: "error", error: toErrorMessage(e) });
 		}
+		})();
 	};
 }

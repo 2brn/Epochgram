@@ -4,7 +4,7 @@ import { getSimilarityWorker } from "./worker-factory";
 
 export function embeddingsComputeEnabled(plugin: EpochPlugin): boolean {
 	if (!embeddingsSimilarityEnabled(plugin)) return false;
-	if ((plugin as any).similarityWorkerDisabled) return false;
+	if ((plugin as EpochPlugin & { similarityWorkerDisabled?: boolean }).similarityWorkerDisabled) return false;
 	const w = getSimilarityWorker(plugin);
 	if (!w) return false;
 	return true;

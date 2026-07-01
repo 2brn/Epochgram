@@ -4,19 +4,40 @@ import { HOVER_PREVIEW_RETRIGGER_DELAY_MS } from "../epoch-canvas-constants";
 import type { EpochCanvas } from "../epoch-canvas";
 import { getEntriesForDate as getEntriesForDateHelper } from "../entry-helpers";
 import type { CanvasHoverInternals, HoverPreviewTarget } from "./types";
-import { state } from "./types";
+import { state as canvasState } from "./types";
 import { hoverState } from "./internals";
 
 const SCROLL_NAV_HOLD_INTERVAL_MS = 90;
 const SCROLL_NAV_HOLD_START_DELAY_MS = 180;
-const timerHost: any = typeof window !== "undefined" ? (window as any) : (typeof global !== "undefined" ? (global as any) : {});
+const timerHost: Window = window;
+
+type PreviewScrollNavState = ReturnType<typeof canvasState> & {
+	__scrollNavKeyHoldStartHandle?: number | null;
+	__scrollNavKeyHoldStartAt?: number | null;
+	__scrollNavKeyHoldHandle?: number | null;
+	__scrollNavKeyHoldDirection?: number | null;
+};
+
+type HoverParentWithPopover = HoverParent & {
+	hoverPopover?: { hide?: () => void };
+};
+
+function hideHoverPopover(parent: HoverParent | null): void {
+	const popover = (parent as HoverParentWithPopover | null)?.hoverPopover;
+	if (typeof popover?.hide !== "function") return;
+	try {
+		popover.hide();
+	} catch {
+		// ignore
+	}
+}
 
 function stopScrollNavKeyHold(canvas: EpochCanvas): void {
-	const s: any = state(canvas) as any;
-	const startHandle = s.__scrollNavKeyHoldStartHandle as number | null | undefined;
+	const s = canvasState(canvas) as PreviewScrollNavState;
+	const startHandle = s.__scrollNavKeyHoldStartHandle;
 	if (startHandle != null) {
 		try {
-			timerHost.clearTimeout?.(startHandle);
+			timerHost.clearTimeout(startHandle);
 		} catch {
 			// ignore
 		}
@@ -24,10 +45,10 @@ function stopScrollNavKeyHold(canvas: EpochCanvas): void {
 	s.__scrollNavKeyHoldStartHandle = null;
 	s.__scrollNavKeyHoldStartAt = null;
 
-	const handle = s.__scrollNavKeyHoldHandle as number | null | undefined;
+	const handle = s.__scrollNavKeyHoldHandle;
 	if (handle != null) {
 		try {
-			timerHost.clearInterval?.(handle);
+			timerHost.clearInterval(handle);
 		} catch {
 			// ignore
 		}
@@ -37,13 +58,13 @@ function stopScrollNavKeyHold(canvas: EpochCanvas): void {
 }
 
 function startScrollNavKeyHold(canvas: EpochCanvas, direction: number): void {
-	const s: any = state(canvas) as any;
-	const existing = s.__scrollNavKeyHoldHandle as number | null | undefined;
+	const s = canvasState(canvas) as PreviewScrollNavState;
+	const existing = s.__scrollNavKeyHoldHandle;
 	s.__scrollNavKeyHoldDirection = direction;
 	if (existing != null) return;
 	try {
-		s.__scrollNavKeyHoldHandle = timerHost.setInterval?.(() => {
-			const dir = Number((s as any).__scrollNavKeyHoldDirection);
+		s.__scrollNavKeyHoldHandle = timerHost.setInterval(() => {
+			const dir = Number(s.__scrollNavKeyHoldDirection);
 			if (!Number.isFinite(dir) || dir === 0) return;
 			s.advanceScrollNav(dir);
 		}, SCROLL_NAV_HOLD_INTERVAL_MS);
@@ -53,17 +74,17 @@ function startScrollNavKeyHold(canvas: EpochCanvas, direction: number): void {
 }
 
 function scheduleScrollNavKeyHoldStart(canvas: EpochCanvas, direction: number): void {
-	const s: any = state(canvas) as any;
+	const s = canvasState(canvas) as PreviewScrollNavState;
 	s.__scrollNavKeyHoldDirection = direction;
-	const existingInterval = s.__scrollNavKeyHoldHandle as number | null | undefined;
+	const existingInterval = s.__scrollNavKeyHoldHandle;
 	if (existingInterval != null) return;
-	const existingStart = s.__scrollNavKeyHoldStartHandle as number | null | undefined;
+	const existingStart = s.__scrollNavKeyHoldStartHandle;
 	if (existingStart != null) return;
 	try {
-		s.__scrollNavKeyHoldStartAt = performance.now();
-		s.__scrollNavKeyHoldStartHandle = timerHost.setTimeout?.(() => {
+		s.__scrollNavKeyHoldStartAt = window.performance.now();
+		s.__scrollNavKeyHoldStartHandle = timerHost.setTimeout(() => {
 			s.__scrollNavKeyHoldStartHandle = null;
-			const dir = Number((s as any).__scrollNavKeyHoldDirection);
+			const dir = Number(s.__scrollNavKeyHoldDirection);
 			if (!Number.isFinite(dir) || dir === 0) return;
 			startScrollNavKeyHold(canvas, dir);
 		}, SCROLL_NAV_HOLD_START_DELAY_MS);
@@ -76,15 +97,7 @@ function scheduleScrollNavKeyHoldStart(canvas: EpochCanvas, direction: number): 
 export function hideHoverPreview(canvas: EpochCanvas): void {
 	const state = hoverState(canvas);
 	if (state.hoverPreviewKey == null) return;
-	const hoverParent = getHoverParent(canvas);
-	const maybePopover = (hoverParent as any)?.hoverPopover;
-	if (maybePopover?.hide instanceof Function) {
-		try {
-			maybePopover.hide();
-		} catch (error) {
-			void error;
-		}
-	}
+	hideHoverPopover(getHoverParent(canvas));
 	state.hoverPreviewKey = null;
 }
 
@@ -113,8 +126,8 @@ export function attemptHoverPreview(canvas: EpochCanvas, event: MouseEvent | nul
 		const rect = state.canvas.getBoundingClientRect();
 		const localX = event.clientX - rect.left;
 		const localY = event.clientY - rect.top;
-		const entry = (canvas as any)?.findSummaryEntryAtPoint?.(localX, localY) as DateEntry | null;
-		const filePath = entry ? String((entry as any).file || "") : "";
+		const entry = canvasState(canvas).findSummaryEntryAtPoint(localX, localY);
+		const filePath = entry ? String(entry.file || "") : "";
 		if (entry && filePath.startsWith("epoch://")) {
 			state.hoverPreviewKey = null;
 			return;
@@ -199,14 +212,7 @@ function emitHoverPreview(canvas: EpochCanvas, target: HoverPreviewTarget, event
 	const sourcePath = target.sourcePath || file.path;
 	const metadataCache = state.plugin.app.metadataCache;
 	const linktext = metadataCache?.fileToLinktext?.(file, sourcePath) ?? file.path;
-	const maybePopover = (hoverParent as any)?.hoverPopover;
-	if (maybePopover?.hide instanceof Function) {
-		try {
-			maybePopover.hide();
-		} catch (error) {
-			void error;
-		}
-	}
+	hideHoverPopover(hoverParent);
 	state.hoverPreviewKey = target.key;
 	const expectedKey = target.key;
 	window.setTimeout(() => {
@@ -259,9 +265,8 @@ function getHoverParent(canvas: EpochCanvas): HoverParent | null {
 	const state = hoverState(canvas);
 	if (state.hoverParent) return state.hoverParent;
 	const workspace = state.plugin?.app?.workspace;
-	const getMostRecentLeaf = workspace?.getMostRecentLeaf;
-	if (typeof getMostRecentLeaf === "function") {
-		return getMostRecentLeaf.call(workspace) ?? null;
+	if (workspace && typeof workspace.getMostRecentLeaf === "function") {
+		return workspace.getMostRecentLeaf() ?? null;
 	}
 	return null;
 }
@@ -296,11 +301,11 @@ export function onWindowKeyDown(canvas: EpochCanvas, event: KeyboardEvent): void
 		if (direction !== null) {
 			event.preventDefault();
 			// Ignore OS key-repeat keydown events; use our own timer to keep motion smooth.
-			if ((event as any).repeat === true) {
+			if (event.repeat === true) {
 				scheduleScrollNavKeyHoldStart(canvas, direction);
 				return;
 			}
-			const s = state(canvas);
+			const s = canvasState(canvas);
 			s.advanceScrollNav(direction);
 			scheduleScrollNavKeyHoldStart(canvas, direction);
 			s.previewLockedUntilAltRelease = true;

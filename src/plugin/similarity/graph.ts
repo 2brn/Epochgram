@@ -1,19 +1,34 @@
 import { TFile } from "obsidian";
 import type { EpochPlugin } from "../../main";
 
+type TagLike = { tag?: string };
+type FrontmatterLike = { tags?: string | string[] };
+type FileCacheLike = {
+	links?: Array<{ link?: string }>;
+	tags?: TagLike[];
+	frontmatter?: FrontmatterLike;
+};
+
+type MetadataCacheLike = {
+	getFileCache?: (file: TFile) => FileCacheLike | null | undefined;
+	getFirstLinkpathDest?: (linkpath: string, sourcePath: string) => TFile | null;
+	getBacklinksForFile?: (file: TFile) => { data?: Record<string, unknown> } | null;
+	resolvedLinks?: Record<string, Record<string, number>>;
+};
+
 function normalizeTag(tag: string): string {
 	const t = String(tag || "").trim().toLowerCase();
 	if (!t) return "";
 	return t.startsWith("#") ? t.slice(1) : t;
 }
 
-function collectTagsFromFileCache(cache: any): Set<string> {
+function collectTagsFromFileCache(cache: FileCacheLike | null | undefined): Set<string> {
 	const out = new Set<string>();
 	try {
 		const tags = cache?.tags;
 		if (Array.isArray(tags)) {
 			for (const t of tags) {
-				const norm = normalizeTag(t?.tag ?? t);
+				const norm = normalizeTag(typeof t?.tag === "string" ? t.tag : "");
 				if (norm) out.add(norm);
 			}
 		}
@@ -25,7 +40,7 @@ function collectTagsFromFileCache(cache: any): Set<string> {
 			}
 		} else if (Array.isArray(fmTags)) {
 			for (const seg of fmTags) {
-				const norm = normalizeTag(seg);
+				const norm = normalizeTag(typeof seg === "string" ? seg : "");
 				if (norm) out.add(norm);
 			}
 		}
@@ -38,7 +53,7 @@ function collectTagsFromFileCache(cache: any): Set<string> {
 export function getDirectLinkedPaths(plugin: EpochPlugin, filePath: string): Set<string> {
 	const out = new Set<string>();
 	try {
-		const mc: any = (plugin.app as any)?.metadataCache;
+		const mc = plugin.app.metadataCache as unknown as MetadataCacheLike;
 
 		// Outgoing links: prefer getFileCache (sync, reflects both additions and removals
 		// immediately when metadataCache fires "changed"). resolvedLinks[filePath] lags and
@@ -50,7 +65,7 @@ export function getDirectLinkedPaths(plugin: EpochPlugin, filePath: string): Set
 				const cache = mc?.getFileCache?.(f);
 				if (cache) {
 					outgoingFromFileCache = true;
-					const rawLinks: any[] = cache?.links ?? [];
+					const rawLinks = Array.isArray(cache.links) ? cache.links : [];
 					for (const link of rawLinks) {
 						const raw = typeof link?.link === "string" ? String(link.link) : "";
 						if (!raw) continue;
@@ -65,7 +80,7 @@ export function getDirectLinkedPaths(plugin: EpochPlugin, filePath: string): Set
 			// ignore
 		}
 
-		const resolvedLinks: any = mc?.resolvedLinks;
+		const resolvedLinks = mc?.resolvedLinks;
 		if (resolvedLinks && typeof resolvedLinks === "object") {
 			// Outgoing from filePath: only use resolvedLinks as fallback when getFileCache was unavailable.
 			if (!outgoingFromFileCache) {
@@ -109,7 +124,7 @@ export function getDirectLinkedPaths(plugin: EpochPlugin, filePath: string): Set
 export function getSameTagPaths(plugin: EpochPlugin, filePath: string): Set<string> {
 	const out = new Set<string>();
 	try {
-		const mc: any = (plugin.app as any)?.metadataCache;
+		const mc = plugin.app.metadataCache as unknown as MetadataCacheLike;
 		const f = plugin.app.vault.getAbstractFileByPath(filePath);
 		if (!(f instanceof TFile)) return out;
 		const cache = mc?.getFileCache?.(f);

@@ -1,9 +1,10 @@
 import type { TFile } from "obsidian";
+import type { EpochPlugin } from "../main";
 import type { ProcessOptions } from "./indexer";
 import type { DateSource, EpochIndex, FileDateEntry, FileIndexData } from "./types";
 
 export interface IndexerPipeline {
-	plugin: any;
+	plugin: EpochPlugin;
 	index: EpochIndex;
 	files: Record<string, FileIndexData>;
 	latestLines: Record<string, string[]>;

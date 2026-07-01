@@ -7,16 +7,45 @@ import { promptEditSummary } from "../../modals/edit-summary-modal";
 import { hasSummarizeAIAccess } from "../../../plugin/pro-feature-state";
 import { addMenuTitle } from "../menu-title";
 
+type EntryActionsMenuLike = Menu & { hide?: () => void };
+type EntryMenuDomLike = HTMLElement & { addClass?: (name: string) => void };
+type EntryMenuItemLike = {
+	setTitle(title: string): EntryMenuItemLike;
+	setIcon(icon: string): EntryMenuItemLike;
+	setDisabled(disabled: boolean): EntryMenuItemLike;
+	onClick(callback: () => void | Promise<void>): EntryMenuItemLike;
+	dom?: EntryMenuDomLike;
+};
+
+type EntryActionsPluginLike = CanvasMenuState["plugin"] & {
+	settings?: { summaryWordsCount?: number };
+	enqueueAiSummaryForEntry?: (entry: DateEntry, options: { force?: boolean; showNotice?: boolean }) => void;
+	setYamlDescriptionForPath?: (path: string, value: string) => Promise<boolean>;
+	getYamlDescriptionForPath?: (path: string) => Promise<string | null>;
+	persistIndex?: (options: { skipEnsure?: boolean }) => Promise<void>;
+	app?: { vault?: { getAbstractFileByPath?: (path: string) => unknown } };
+	indexer?: {
+		clearFileSummaryState?: (path: string) => boolean;
+		setEntryPinned?: (entry: DateEntry, pinned: boolean) => boolean;
+		setEntryReviewState?: (entry: DateEntry, next: "draft" | "reviewed") => boolean;
+		setEntryHidden?: (entry: DateEntry, hidden: boolean) => boolean;
+	};
+};
+
+type PinAnimationStateLike = CanvasMenuState & {
+	startPinFlyToToday?: (entry: DateEntry, onComplete: () => void) => boolean;
+};
+
 export function addOpenFile(menu: Menu, canvas: EpochCanvas, entry: DateEntry, title: string): void {
 	addMenuTitle(menu, title, "file");
 	menu.addSeparator();
 }
 
 export function addSummarizeAi(menu: Menu, state: CanvasMenuState, entry: DateEntry): void {
-	const isPro = hasSummarizeAIAccess((state as any).plugin);
+	const plugin: EntryActionsPluginLike = state.plugin;
+	const isPro = hasSummarizeAIAccess(plugin);
 	if (!String(entry.file ?? "").toLowerCase().endsWith(".md")) return;
 	if (!Platform.isDesktopApp) return;
-	const plugin = (state as any).plugin;
 	const enabled = isPro && typeof plugin?.enqueueAiSummaryForEntry === "function";
 
 	menu.addItem((item) => {
@@ -29,14 +58,14 @@ export function addSummarizeAi(menu: Menu, state: CanvasMenuState, entry: DateEn
 					state.requirePro("Summarize AI");
 					return;
 				}
-				plugin?.enqueueAiSummaryForEntry?.(entry, { force: true, showNotice: true });
+				void plugin?.enqueueAiSummaryForEntry?.(entry, { force: true, showNotice: true });
 			});
 	});
 }
 
 export function addEditSummary(menu: Menu, state: CanvasMenuState, entry: DateEntry, title: string): void {
 	if (!String(entry.file ?? "").toLowerCase().endsWith(".md")) return;
-	const plugin = (state as any).plugin;
+	const plugin: EntryActionsPluginLike = state.plugin;
 	const summaryWords = Math.max(0, plugin?.settings?.summaryWordsCount ?? 0);
 	if (summaryWords <= 0) return;
 	menu.addItem((item) => {
@@ -47,7 +76,7 @@ export function addEditSummary(menu: Menu, state: CanvasMenuState, entry: DateEn
 			.onClick(async () => {
 				const indexer = plugin?.indexer;
 				if (!plugin || typeof plugin.setYamlDescriptionForPath !== "function") return;
-				const visibleSummary = String(entry.summary || (entry as any)?.aiSummary || "").trim();
+				const visibleSummary = String(entry.summary || entry.aiSummary || "").trim();
 				const initialValue = typeof plugin.getYamlDescriptionForPath === "function"
 					? (await plugin.getYamlDescriptionForPath(entry.file)) || visibleSummary
 					: visibleSummary;
@@ -78,14 +107,15 @@ export function addPinToggle(menu: Menu, state: CanvasMenuState, entry: DateEntr
 			.setIcon(pinned ? "pin-off" : "pin")
 			.setDisabled(false)
 			.onClick(async () => {
-				const plugin = (state as any).plugin;
+				const plugin: EntryActionsPluginLike = state.plugin;
 				const indexer = plugin?.indexer;
 				if (!indexer || typeof indexer.setEntryPinned !== "function") return;
 
 				if (!pinned) {
 					let started = false;
 					try {
-						started = (state as any)?.startPinFlyToToday?.(entry, () => {
+						const pinState: PinAnimationStateLike = state;
+						started = pinState.startPinFlyToToday?.(entry, () => {
 							void (async () => {
 								try {
 									if (!indexer.setEntryPinned(entry, true)) return;
@@ -100,11 +130,11 @@ export function addPinToggle(menu: Menu, state: CanvasMenuState, entry: DateEntr
 									// ignore
 								}
 							})();
-						});
+						}) === true;
 					} catch {
 						started = false;
 					}
-					if (started) {
+					if (started === true) {
 						return;
 					}
 				}
@@ -128,11 +158,14 @@ export function addPinToggle(menu: Menu, state: CanvasMenuState, entry: DateEntr
 	});
 }
 
-function normalizeReviewState(v: any): ReviewState {
+function normalizeReviewState(v: unknown): ReviewState {
 	if (v == null) return "draft";
 	if (typeof v === "string") {
 		const s = v.trim().toLowerCase();
-		return s === "draft" || s === "reviewed" || s === "hidden" ? (s as ReviewState) : "draft";
+		if (s === "draft") return "draft";
+		if (s === "reviewed") return "reviewed";
+		if (s === "hidden") return "hidden";
+		return "draft";
 	}
 	return "draft";
 }
@@ -145,7 +178,7 @@ function reviewStateIcon(state: ReviewState): string {
 
 export function addReviewSubmenu(menu: Menu, state: CanvasMenuState, entry: DateEntry, current: ReviewState): void {
 	const normalizedCurrent = normalizeReviewState(current);
-	const plugin = (state as any).plugin;
+	const plugin: EntryActionsPluginLike = state.plugin;
 	const indexer = plugin?.indexer;
 	const applyRecord = async (next: "draft" | "reviewed") => {
 		if (!indexer || typeof indexer.setEntryReviewState !== "function") return;
@@ -170,6 +203,7 @@ export function addReviewSubmenu(menu: Menu, state: CanvasMenuState, entry: Date
 
 	for (const action of actions) {
 		menu.addItem((item) => {
+			const menuWithHide: EntryActionsMenuLike = menu;
 			if (action === "draft") {
 				item
 					.setTitle("Draft")
@@ -178,7 +212,7 @@ export function addReviewSubmenu(menu: Menu, state: CanvasMenuState, entry: Date
 					.onClick(() => {
 						void Promise.resolve(applyRecord("draft")).finally(() => {
 							try {
-								(menu as any)?.hide?.();
+								menuWithHide.hide?.();
 							} catch { void 0; }
 						});
 					});
@@ -192,7 +226,7 @@ export function addReviewSubmenu(menu: Menu, state: CanvasMenuState, entry: Date
 					.onClick(() => {
 						void Promise.resolve(applyRecord("reviewed")).finally(() => {
 							try {
-								(menu as any)?.hide?.();
+								menuWithHide.hide?.();
 							} catch { void 0; }
 						});
 					});
@@ -205,7 +239,7 @@ export function addReviewSubmenu(menu: Menu, state: CanvasMenuState, entry: Date
 				.onClick(() => {
 					void Promise.resolve(applyHidden()).finally(() => {
 						try {
-							(menu as any)?.hide?.();
+							menuWithHide.hide?.();
 						} catch { void 0; }
 					});
 				});
@@ -214,7 +248,7 @@ export function addReviewSubmenu(menu: Menu, state: CanvasMenuState, entry: Date
 }
 
 export function addFileRenameMove(menu: Menu, state: CanvasMenuState, canvas: EpochCanvas, entry: DateEntry): void {
-	const plugin = (state as any).plugin;
+	const plugin: EntryActionsPluginLike = state.plugin;
 	const af = plugin?.app?.vault?.getAbstractFileByPath?.(entry.file);
 	if (!(af instanceof TFile)) return;
 
@@ -250,7 +284,7 @@ export function addFileRenameMove(menu: Menu, state: CanvasMenuState, canvas: Ep
 export function addDelete(menu: Menu, state: CanvasMenuState, canvas: EpochCanvas, entry: DateEntry): void {
 	void state;
 	menu.addSeparator();
-	menu.addItem((item) => {
+	menu.addItem((item: EntryMenuItemLike) => {
 		item
 			.setTitle("Delete")
 			.setIcon("trash")
@@ -258,7 +292,7 @@ export function addDelete(menu: Menu, state: CanvasMenuState, canvas: EpochCanva
 			.onClick(async () => {
 				await deleteEntryFile(canvas, entry);
 			});
-		const dom: any = (item as any)?.dom;
+		const dom = item.dom;
 		if (dom) {
 			if (typeof dom.addClass === "function") dom.addClass("epoch-menu-danger");
 			else dom.classList?.add?.("epoch-menu-danger");

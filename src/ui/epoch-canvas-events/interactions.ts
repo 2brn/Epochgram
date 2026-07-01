@@ -5,9 +5,48 @@ import { getEpochRangeFromEntry } from "../epoch-canvas-utils";
 import { listRelatedEntriesForEpochRange } from "../epoch-canvas/epochs-view";
 import { setCssStyles } from "../../dom";
 
+type OpenModifiers = Pick<MouseEvent, "ctrlKey" | "metaKey">;
+
+function nowMs(): number {
+	return window.performance?.now?.() ?? Date.now();
+}
+
+type CanvasInteractionState = ReturnType<typeof getEventState> & {
+	__suppressExternalAutoScrollUntil?: number;
+	__epochOpenCursor?: EpochOpenCursorState;
+	scrollNavAnchorEntry?: DateEntry;
+	scrollNavAnchorDayIndex?: number | null;
+	suppressNextFocusScrollForPath?(path: string): void;
+	openEntry(entry: DateEntry, ev: OpenModifiers, suppressFocusHover: boolean): Promise<void>;
+	openDateNote(date: Date, ev: OpenModifiers | undefined, focus: boolean, options?: { allowFallbackToFirstEntry?: boolean }): Promise<boolean>;
+	keepHoverUntilPointerMove: boolean;
+	hoverSummary: { dayIndex: number; itemIndex: number } | null;
+	hoverDateIndex: number | null;
+	animSummary: { dayIndex: number; itemIndex: number } | null;
+	animDateIndex: number | null;
+	hoverTarget: number;
+	requestHoverAnimation(): void;
+	clearHover(force?: boolean): void;
+	findSummaryEntryAtPoint(x: number, y: number): DateEntry | null;
+	findDayLayoutAtPoint(x: number, y: number): { index: number } | null;
+	createNoteForDate(date: Date, focus: boolean): Promise<void>;
+	resetScrollNavToToday(): void;
+	getToday(): Date;
+	getDateForIndex(index: number, today: Date): Date;
+	epochsView?: boolean;
+	isPointerDeviceEvent(): boolean;
+	layouts: Array<{
+		hasVisibleDate: boolean;
+		index: number;
+		dateRect: { x1: number; x2: number; y1: number; y2: number };
+		summaryRects: Array<{ x1: number; x2: number; y1: number; y2: number; itemIndex: number; entry: DateEntry }>;
+	}>;
+	canvas: HTMLCanvasElement;
+};
+
 function isEpochEntry(entry: DateEntry | null | undefined): boolean {
 	if (!entry) return false;
-	const file = String((entry as any)?.file || "");
+	const file = String(entry.file || "");
 	return file.startsWith("epoch://");
 }
 
@@ -17,17 +56,17 @@ async function openEpochEntryTarget(
 	ev: { ctrlKey: boolean; metaKey: boolean },
 	suppressFocusHover: boolean
 ): Promise<boolean> {
-	const s: any = getEventState(canvas) as any;
+	const s = getEventState(canvas) as CanvasInteractionState;
 	const range = getEpochRangeFromEntry(entry);
 	if (!range) return false;
 	const next = pickNextEpochEntryFromRange(canvas, range.start, range.end, s);
 	if (!next) return false;
 	try {
-		(s as any).suppressNextFocusScrollForPath?.(next.file);
+		s.suppressNextFocusScrollForPath?.(next.file);
 	} catch {
 		// ignore
 	}
-	await s.openEntry(next, ev as any, suppressFocusHover);
+	await s.openEntry(next, ev, suppressFocusHover);
 	return true;
 }
 
@@ -36,7 +75,7 @@ type EpochOpenCursorState = {
 	index: number;
 };
 
-export function pickNextEpochEntryFromRange(canvas: EpochCanvas, start: string, end: string, state: any): DateEntry | null {
+export function pickNextEpochEntryFromRange(canvas: EpochCanvas, start: string, end: string, state: CanvasInteractionState & { __epochOpenCursor?: EpochOpenCursorState }): DateEntry | null {
 	const ordered = listRelatedEntriesForEpochRange(canvas, start, end);
 	if (!ordered.length) return null;
 	const key = `${start}|${end}`;
@@ -65,10 +104,11 @@ export async function handlePointClick(
 	options?: { preserveHoverOnNonPointer?: boolean }
 ): Promise<void> {
 	const s = getEventState(canvas);
+	const interactionState = s as CanvasInteractionState;
 	const preserveHoverOnNonPointer = options?.preserveHoverOnNonPointer === true;
 	const suppressAutoScrollFor = (ms: number) => {
 		try {
-			(s as any).__suppressExternalAutoScrollUntil = performance.now() + ms;
+			interactionState.__suppressExternalAutoScrollUntil = nowMs() + ms;
 		} catch {
 			// ignore
 		}
@@ -90,8 +130,8 @@ export async function handlePointClick(
 	if (best) {
 		suppressAutoScrollFor(1000);
 		try {
-			(s as any).scrollNavAnchorEntry = best.entry;
-			(s as any).scrollNavAnchorDayIndex = best.dayIndex;
+			s.scrollNavAnchorEntry = best.entry;
+			s.scrollNavAnchorDayIndex = best.dayIndex;
 		} catch {
 			// ignore
 		}
@@ -108,8 +148,8 @@ export async function handlePointClick(
 		}
 		// Clicking a visible record (including dense bars / placeholders) should not
 		// trigger a follow-focus scroll as the file becomes active.
-		(s as any).suppressNextFocusScrollForPath?.(best.entry.file);
-		await s.openEntry(best.entry, { ctrlKey, metaKey } as any, true);
+			interactionState.suppressNextFocusScrollForPath?.(best.entry.file);
+			await interactionState.openEntry(best.entry, { ctrlKey, metaKey }, true);
 		if (s.isPointerDeviceEvent()) {
 			s.keepHoverUntilPointerMove = true;
 			s.setHoverSummary(best.dayIndex, best.itemIndex, true);
@@ -126,7 +166,7 @@ export async function handlePointClick(
 			suppressAutoScrollFor(1000);
 			const today = s.getToday();
 			const date = s.getDateForIndex(day.index, today);
-			await s.openDateNote(date, { ctrlKey, metaKey } as any, true, {
+			await interactionState.openDateNote(date, { ctrlKey, metaKey }, true, {
 				allowFallbackToFirstEntry: false
 			});
 			return;
@@ -136,9 +176,10 @@ export async function handlePointClick(
 
 export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: number): Promise<void> {
 	const s = getEventState(canvas);
+	const interactionState = s as CanvasInteractionState;
 	const suppressAutoScrollFor = (ms: number) => {
 		try {
-			(s as any).__suppressExternalAutoScrollUntil = performance.now() + ms;
+			interactionState.__suppressExternalAutoScrollUntil = nowMs() + ms;
 		} catch {
 			// ignore
 		}
@@ -160,8 +201,8 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 	if (best) {
 		suppressAutoScrollFor(1000);
 		try {
-			(s as any).scrollNavAnchorEntry = best.entry;
-			(s as any).scrollNavAnchorDayIndex = best.dayIndex;
+			interactionState.scrollNavAnchorEntry = best.entry;
+			interactionState.scrollNavAnchorDayIndex = best.dayIndex;
 		} catch {
 			// ignore
 		}
@@ -186,8 +227,8 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 			}
 			return;
 		}
-		(s as any).suppressNextFocusScrollForPath?.(best.entry.file);
-		await s.openEntry(best.entry, { ctrlKey: false, metaKey: false } as any, true);
+		interactionState.suppressNextFocusScrollForPath?.(best.entry.file);
+		await interactionState.openEntry(best.entry, { ctrlKey: false, metaKey: false }, true);
 		if (s.isPointerDeviceEvent()) {
 			s.keepHoverUntilPointerMove = true;
 			s.setHoverSummary(best.dayIndex, best.itemIndex, true);
@@ -222,16 +263,17 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 
 export async function handleDoublePoint(canvas: EpochCanvas, x: number, y: number): Promise<void> {
 	const s = getEventState(canvas);
+	const interactionState = s as CanvasInteractionState;
 	try {
-		(s as any).__suppressExternalAutoScrollUntil = performance.now() + 1000;
+		interactionState.__suppressExternalAutoScrollUntil = nowMs() + 1000;
 	} catch {
 		// ignore
 	}
 	const summaryEntry = s.findSummaryEntryAtPoint(x, y);
 	if (summaryEntry) {
 		try {
-			(s as any).scrollNavAnchorEntry = summaryEntry;
-			(s as any).scrollNavAnchorDayIndex = null;
+			interactionState.scrollNavAnchorEntry = summaryEntry;
+			interactionState.scrollNavAnchorDayIndex = null;
 		} catch {
 			// ignore
 		}
@@ -245,8 +287,8 @@ export async function handleDoublePoint(canvas: EpochCanvas, x: number, y: numbe
 			}
 			return;
 		}
-		(s as any).suppressNextFocusScrollForPath?.(summaryEntry.file);
-		await s.openEntry(summaryEntry, { ctrlKey: false, metaKey: false } as any, true);
+		interactionState.suppressNextFocusScrollForPath?.(summaryEntry.file);
+		await s.openEntry(summaryEntry, undefined, true);
 		if (s.isPointerDeviceEvent()) {
 			s.keepHoverUntilPointerMove = true;
 		} else {

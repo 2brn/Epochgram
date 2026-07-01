@@ -2,6 +2,7 @@ export interface EpochSettings {
 	openEpochViewOnStartup: boolean;
 	enableAnimation: boolean;
 	compactModeMinWidthPercent: number;
+	searchResultsLimit: number;
 	trackChanges: boolean;
 	anchorMdate?: boolean;
 	claimKeyPreview?: string;
@@ -52,6 +53,7 @@ export const DEFAULT_SETTINGS: EpochSettings = {
 	openEpochViewOnStartup: true,
 	enableAnimation: true,
 	compactModeMinWidthPercent: 30,
+	searchResultsLimit: 7,
 	trackChanges: true,
 	anchorMdate: false,
 	timelineFilters: {

@@ -4,6 +4,10 @@ import type { EpochCanvas } from "../epoch-canvas";
 import { normalizeMarkColorIndex } from "../mark-colors";
 import { hoverState } from "./internals";
 
+type HoverCanvasState = {
+	inheritedMarkSourceByPath?: Map<string, string> | null;
+};
+
 export function findSummaryEntryAtPoint(canvas: EpochCanvas, x: number, y: number): DateEntry | null {
 	const state = hoverState(canvas);
 	for (const layout of state.layouts) {
@@ -11,7 +15,7 @@ export function findSummaryEntryAtPoint(canvas: EpochCanvas, x: number, y: numbe
 		let bestDist = Number.POSITIVE_INFINITY;
 		let bestPriority = -1;
 		const hitRects = new Map<number, { entry: DateEntry; x1: number; y1: number; x2: number; y2: number }>();
-		const stableRects = (layout as any).summaryHoverRects ?? layout.summaryRects;
+		const stableRects = layout.summaryHoverRects ?? layout.summaryRects;
 
 		for (const rect of stableRects ?? []) {
 			hitRects.set(rect.itemIndex, {
@@ -43,7 +47,7 @@ export function findSummaryEntryAtPoint(canvas: EpochCanvas, x: number, y: numbe
 
 		const inheritedSourceMap: Map<string, string> | null = (() => {
 			try {
-				const map = (canvas as any)?.inheritedMarkSourceByPath as Map<string, string> | null | undefined;
+				const map = (canvas as unknown as HoverCanvasState).inheritedMarkSourceByPath;
 				return map && typeof map.get === "function" ? map : null;
 			} catch {
 				return null;
@@ -53,8 +57,8 @@ export function findSummaryEntryAtPoint(canvas: EpochCanvas, x: number, y: numbe
 		for (const rect of hitRects.values()) {
 			if (!(x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2)) continue;
 			const entry = rect.entry;
-			const filePath = (entry as any)?.file;
-			const isMarked = !!normalizeMarkColorIndex((entry as any)?.markColor);
+			const filePath = entry.file;
+			const isMarked = !!normalizeMarkColorIndex(entry.markColor);
 			const hasInherited = !!(inheritedSourceMap && typeof filePath === "string" && filePath && inheritedSourceMap.get(filePath));
 			const isActive = !!(state.activeFilePath && typeof filePath === "string" && filePath === state.activeFilePath);
 			const centerY = (rect.y1 + rect.y2) / 2;

@@ -1,4 +1,4 @@
-import { Platform } from "obsidian";
+import { Platform, TFile } from "obsidian";
 import type { EpochPlugin } from "../../main";
 import { embeddingsSimilarityEnabled, isTopicSimilarityEnabled } from "./config";
 import { readStore } from "./store";
@@ -9,24 +9,52 @@ import { sleep } from "./time";
 import { sortFilesNewestRecordFirst } from "./files";
 import { hasSimilarityAccess } from "../pro-feature-state";
 
-function getLowerFileExtension(file: any): string {
-	const ext = String(file?.extension ?? "").trim();
+type SimilarityRuntime = {
+	__epochHugeSimilarityBackfillTimer?: number | null;
+	__epochHugeSimilarityBackfillRunning?: boolean;
+	__epochHugeVectorsQueuedAll?: boolean;
+	__epochHugeSimilarityBackfillFiles?: TFile[] | null;
+	__epochHugeSimilarityBackfillIndex?: number;
+	__epochDidSimilarityStartupMaintenance?: boolean;
+	termSimilarityPendingFiles?: Set<string>;
+	queueVectorUpdate?: (path: string) => void;
+	queueTermSimilarityUpdate?: (path: string) => void;
+	ensureTermSimilarityStoreLoaded?: () => Promise<void>;
+};
+
+type VectorRecord = { h?: string; v?: unknown[] };
+type TopicRecord = { term?: string; h?: string; vocabularySig?: string };
+type VectorStoreLike = { files?: Record<string, VectorRecord> };
+type TopicStoreLike = { files?: Record<string, TopicRecord> };
+
+function isVitestEnv(): boolean {
+	try {
+		const env = (window as unknown as { process?: { env?: Record<string, unknown> } }).process?.env;
+		return env?.VITEST != null;
+	} catch {
+		return false;
+	}
+}
+
+function getLowerFileExtension(file: unknown): string {
+	const fileLike = (file as { extension?: unknown; path?: unknown }) ?? {};
+	const ext = typeof fileLike.extension === "string" ? fileLike.extension.trim() : "";
 	if (ext) return ext.toLowerCase();
-	const p = String(file?.path ?? "");
+	const p = typeof fileLike.path === "string" ? fileLike.path : "";
 	const lastDot = p.lastIndexOf(".");
 	if (lastDot <= -1) return "";
 	return p.slice(lastDot + 1).toLowerCase();
 }
 
 function scheduleHugeVaultSimilarityBackfill(plugin: EpochPlugin, delayMs: number): void {
-	const anyPlugin: any = plugin as any;
+	const runtime = plugin as unknown as SimilarityRuntime;
 	try {
-		if (anyPlugin.__epochHugeSimilarityBackfillTimer != null) return;
+		if (runtime.__epochHugeSimilarityBackfillTimer != null) return;
 	} catch { void 0; }
 	try {
-		anyPlugin.__epochHugeSimilarityBackfillTimer = window.setTimeout(() => {
+		runtime.__epochHugeSimilarityBackfillTimer = window.setTimeout(() => {
 			try {
-				anyPlugin.__epochHugeSimilarityBackfillTimer = null;
+				runtime.__epochHugeSimilarityBackfillTimer = null;
 			} catch { void 0; }
 			void runHugeVaultSimilarityBackfillTick(plugin);
 		}, Math.max(0, Math.floor(delayMs)));
@@ -34,10 +62,10 @@ function scheduleHugeVaultSimilarityBackfill(plugin: EpochPlugin, delayMs: numbe
 }
 
 async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<void> {
-	const anyPlugin: any = plugin as any;
+	const runtime = plugin as unknown as SimilarityRuntime;
 	try {
-		if (anyPlugin.__epochHugeSimilarityBackfillRunning) return;
-		anyPlugin.__epochHugeSimilarityBackfillRunning = true;
+		if (runtime.__epochHugeSimilarityBackfillRunning) return;
+		runtime.__epochHugeSimilarityBackfillRunning = true;
 	} catch { void 0; }
 	try {
 		try {
@@ -52,22 +80,23 @@ async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<
 
 		const vectorsQueuedAll = (() => {
 			try {
-				return anyPlugin.__epochHugeVectorsQueuedAll === true;
+				return runtime.__epochHugeVectorsQueuedAll === true;
 			} catch {
 				return false;
 			}
 		})();
 
-		const files: any[] = Array.isArray(anyPlugin.__epochHugeSimilarityBackfillFiles)
-			? (anyPlugin.__epochHugeSimilarityBackfillFiles as any[])
-			: (anyPlugin.__epochHugeSimilarityBackfillFiles = sortFilesNewestRecordFirst(
+		const files: TFile[] = Array.isArray(runtime.__epochHugeSimilarityBackfillFiles)
+			? runtime.__epochHugeSimilarityBackfillFiles
+			: (runtime.__epochHugeSimilarityBackfillFiles = sortFilesNewestRecordFirst(
 				plugin,
 				plugin.app.vault
 					.getFiles()
 					.filter((f) => {
 						try {
 							if (!f) return false;
-							if (!plugin.shouldIndexFile(f as any)) return false;
+							if (!(f instanceof TFile)) return false;
+							if (!plugin.shouldIndexFile(f)) return false;
 							const ext = getLowerFileExtension(f);
 							return isLikelyTextFileExtension(ext);
 						} catch {
@@ -77,17 +106,17 @@ async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<
 			));
 		if (!Array.isArray(files) || files.length === 0) return;
 
-		const nextIndexRaw = Number(anyPlugin.__epochHugeSimilarityBackfillIndex ?? 0);
+		const nextIndexRaw = Number(runtime.__epochHugeSimilarityBackfillIndex ?? 0);
 		let nextIndex = Number.isFinite(nextIndexRaw) ? Math.max(0, Math.floor(nextIndexRaw)) : 0;
 		if (nextIndex >= files.length) {
-			anyPlugin.__epochHugeSimilarityBackfillFiles = null;
-			anyPlugin.__epochHugeSimilarityBackfillIndex = 0;
+			runtime.__epochHugeSimilarityBackfillFiles = null;
+			runtime.__epochHugeSimilarityBackfillIndex = 0;
 			return;
 		}
 
 		const topicPending = (() => {
 			try {
-				return anyPlugin.termSimilarityPendingFiles instanceof Set ? anyPlugin.termSimilarityPendingFiles.size : 0;
+				return runtime.termSimilarityPendingFiles instanceof Set ? runtime.termSimilarityPendingFiles.size : 0;
 			} catch {
 				return 0;
 			}
@@ -100,16 +129,16 @@ async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<
 		const SCAN_PER_TICK = 250;
 		const MAX_ENQUEUE_TOPICS_PER_TICK = 100;
 
-		let store: any = null;
-		let termStore: any = null;
+			let store: VectorStoreLike | null = null;
+			let termStore: TopicStoreLike | null = null;
 		let vocab: { terms: string[]; sig: string } | null = null;
 		let enqTopics = 0;
 
 		let scanned = 0;
 		for (; nextIndex < files.length && scanned < SCAN_PER_TICK; nextIndex++) {
 			scanned++;
-			const f: any = files[nextIndex];
-			const p = String(f?.path ?? "").trim();
+			const f = files[nextIndex];
+			const p = String(f.path ?? "").trim();
 			if (!p) continue;
 			const ext = getLowerFileExtension(f);
 			try {
@@ -122,11 +151,11 @@ async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<
 			if (!vectorsQueuedAll && vectorsEnabled) {
 				try {
 					if (!store) store = await readStore(plugin);
-					const existing: any = (store.files as any)?.[p];
+					const existing = store.files?.[p];
 					const hasHash = typeof existing?.h === "string" && existing.h.trim().length > 0;
 					const hasVector = Array.isArray(existing?.v);
 					if (!(hasHash && hasVector)) {
-						(plugin as any).queueVectorUpdate?.(p);
+						runtime.queueVectorUpdate?.(p);
 					}
 				} catch { void 0; }
 			}
@@ -142,12 +171,12 @@ async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<
 						continue;
 					}
 					if (!termStore) termStore = await readTermStore(plugin);
-					const rec: any = (termStore.files as any)?.[p];
+					const rec = termStore.files?.[p];
 					const termOk = typeof rec?.term === "string" && rec.term.trim().length > 0;
 					const hashOk = typeof rec?.h === "string" && rec.h.trim().length > 0;
 					const vocabOk = typeof rec?.vocabularySig === "string" && rec.vocabularySig === vocab.sig;
 					if (!(termOk && hashOk && vocabOk)) {
-						(plugin as any).queueTermSimilarityUpdate?.(p);
+						runtime.queueTermSimilarityUpdate?.(p);
 						enqTopics++;
 					}
 				} catch { void 0; }
@@ -163,32 +192,26 @@ async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<
 			}
 		}
 
-		anyPlugin.__epochHugeSimilarityBackfillIndex = nextIndex;
+		runtime.__epochHugeSimilarityBackfillIndex = nextIndex;
 		if (nextIndex >= files.length) {
-			anyPlugin.__epochHugeSimilarityBackfillFiles = null;
-			anyPlugin.__epochHugeSimilarityBackfillIndex = 0;
+			runtime.__epochHugeSimilarityBackfillFiles = null;
+			runtime.__epochHugeSimilarityBackfillIndex = 0;
 			return;
 		}
 
-		const isTestEnv = (() => {
-			try {
-				return typeof process !== "undefined" && !!(process as any)?.env?.VITEST;
-			} catch {
-				return false;
-			}
-		})();
+		const isTestEnv = isVitestEnv();
 		scheduleHugeVaultSimilarityBackfill(plugin, isTestEnv ? 0 : Platform.isMobileApp ? 2000 : 250);
 	} finally {
 		try {
-			anyPlugin.__epochHugeSimilarityBackfillRunning = false;
+			runtime.__epochHugeSimilarityBackfillRunning = false;
 		} catch { void 0; }
 	}
 }
 
 export async function runSimilarityStartupMaintenance(plugin: EpochPlugin): Promise<void> {
-	const anyPlugin: any = plugin as any;
+	const runtime = plugin as unknown as SimilarityRuntime;
 	try {
-		if (anyPlugin.__epochDidSimilarityStartupMaintenance === true) return;
+		if (runtime.__epochDidSimilarityStartupMaintenance === true) return;
 	} catch { void 0; }
 
 	try {
@@ -198,18 +221,12 @@ export async function runSimilarityStartupMaintenance(plugin: EpochPlugin): Prom
 	}
 
 	try {
-		anyPlugin.__epochDidSimilarityStartupMaintenance = true;
+		runtime.__epochDidSimilarityStartupMaintenance = true;
 	} catch { void 0; }
 
 	// Give Obsidian time to settle; avoid doing vault-wide scans during startup.
 	// In tests, do not delay.
-	const isTestEnv = (() => {
-		try {
-			return typeof process !== "undefined" && !!(process as any)?.env?.VITEST;
-		} catch {
-			return false;
-		}
-	})();
+	const isTestEnv = isVitestEnv();
 	await sleep(isTestEnv ? 0 : Platform.isMobileApp ? 30000 : 15000);
 
 	const vectorsEnabled = embeddingsSimilarityEnabled(plugin);
@@ -220,10 +237,11 @@ export async function runSimilarityStartupMaintenance(plugin: EpochPlugin): Prom
 		plugin,
 		plugin.app.vault
 			.getFiles()
-			.filter((f: any) => {
+			.filter((f: unknown) => {
 				try {
 					if (!f) return false;
-					if (!plugin.shouldIndexFile(f as any)) return false;
+					if (!(f instanceof TFile)) return false;
+					if (!plugin.shouldIndexFile(f)) return false;
 					const ext = getLowerFileExtension(f);
 					return isLikelyTextFileExtension(ext);
 				} catch {
@@ -238,7 +256,7 @@ export async function runSimilarityStartupMaintenance(plugin: EpochPlugin): Prom
 	const isHuge = files.length > 5000;
 	if (isHuge && vectorsEnabled) {
 		try {
-			let store: any = null;
+			let store: VectorStoreLike | null = null;
 			try {
 				store = await readStore(plugin);
 			} catch {
@@ -246,22 +264,22 @@ export async function runSimilarityStartupMaintenance(plugin: EpochPlugin): Prom
 			}
 
 			for (let i = 0; i < files.length; i++) {
-				const f: any = files[i];
-				const p = String(f?.path ?? "").trim();
+				const f = files[i];
+				const p = String(f.path ?? "").trim();
 				if (!p) continue;
-				if (store && store.files) {
-					const existing: any = (store.files as any)?.[p];
+				if (store?.files) {
+					const existing = store.files[p];
 					const hasHash = typeof existing?.h === "string" && existing.h.trim().length > 0;
 					const hasVector = Array.isArray(existing?.v);
 					if (hasHash && hasVector) continue;
 				}
-				(plugin as any).queueVectorUpdate?.(p);
+				runtime.queueVectorUpdate?.(p);
 				if ((i + 1) % 100 === 0) {
 					await sleep(0);
 				}
 			}
 			try {
-				(anyPlugin as any).__epochHugeVectorsQueuedAll = true;
+				runtime.__epochHugeVectorsQueuedAll = true;
 			} catch {
 				// ignore
 			}
@@ -271,19 +289,17 @@ export async function runSimilarityStartupMaintenance(plugin: EpochPlugin): Prom
 	}
 	try {
 		if (Platform.isDesktopApp) {
-			(plugin as any).ensureTermSimilarityStoreLoaded?.();
+			void runtime.ensureTermSimilarityStoreLoaded?.();
 		}
 	} catch { void 0; }
 	try {
-		const anyPlugin2: any = plugin as any;
-		anyPlugin2.__epochHugeSimilarityBackfillFiles = files;
-		anyPlugin2.__epochHugeSimilarityBackfillIndex = 0;
+		runtime.__epochHugeSimilarityBackfillFiles = files;
+		runtime.__epochHugeSimilarityBackfillIndex = 0;
 	} catch { void 0; }
 	if (isHuge && vectorsEnabled && !topicsEnabled) {
 		try {
-			const anyPlugin2: any = plugin as any;
-			anyPlugin2.__epochHugeSimilarityBackfillFiles = null;
-			anyPlugin2.__epochHugeSimilarityBackfillIndex = 0;
+			runtime.__epochHugeSimilarityBackfillFiles = null;
+			runtime.__epochHugeSimilarityBackfillIndex = 0;
 		} catch { void 0; }
 		return;
 	}

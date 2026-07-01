@@ -19,6 +19,14 @@ type StorageLike = {
 	removeItem(key: string): void;
 };
 
+type DeviceProofPluginLike = EpochPlugin & {
+	manifest?: { id?: string };
+	settings: EpochPlugin["settings"] & {
+		installId?: string;
+		devicePublicKey?: string;
+	};
+};
+
 const memoryKeyStore = new Map<string, StoredKeyRecord>();
 
 function normalizeText(value: unknown): string {
@@ -35,17 +43,18 @@ function fastStringHash(input: string): string {
 }
 
 function getStorage(): StorageLike | null {
-	const storage = (window as any)?.localStorage;
+	const storage = window.localStorage;
 	if (!storage) return null;
 	if (typeof storage.getItem !== "function") return null;
 	if (typeof storage.setItem !== "function") return null;
 	if (typeof storage.removeItem !== "function") return null;
-	return storage as StorageLike;
+	return storage;
 }
 
-function getVaultIdentity(plugin: any): string {
+function getVaultIdentity(plugin: DeviceProofPluginLike): string {
+	const adapter = plugin?.app?.vault?.adapter as unknown as { basePath?: string } | undefined;
 	const candidates = [
-		String(plugin?.app?.vault?.adapter?.basePath ?? "").trim(),
+		String(adapter?.basePath ?? "").trim(),
 		typeof plugin?.app?.vault?.getName === "function" ? String(plugin.app.vault.getName() ?? "").trim() : "",
 		String(plugin?.dataFilePath ?? "").trim(),
 		String(plugin?.pluginDirPath ?? "").trim(),
@@ -54,16 +63,16 @@ function getVaultIdentity(plugin: any): string {
 	return candidates.join("|") || "default-vault";
 }
 
-function getScopeKey(plugin: any): string {
+function getScopeKey(plugin: DeviceProofPluginLike): string {
 	const pluginId = normalizeText(plugin?.manifest?.id) || "obsidian-epochgram";
 	return `${pluginId}:device-proof:${fastStringHash(getVaultIdentity(plugin))}`;
 }
 
-function getInstallIdStorageKey(plugin: any): string {
+function getInstallIdStorageKey(plugin: DeviceProofPluginLike): string {
 	return `${getScopeKey(plugin)}:install-id`;
 }
 
-function getDeviceMaterialStorageKey(plugin: any): string {
+function getDeviceMaterialStorageKey(plugin: DeviceProofPluginLike): string {
 	return `${getScopeKey(plugin)}:material`;
 }
 
@@ -142,7 +151,7 @@ function normalizeStoredMaterial(raw: unknown): StoredKeyRecord | null {
 }
 
 async function openIndexedDb(): Promise<IDBDatabase | null> {
-	const factory = (window as any)?.indexedDB;
+	const factory = window.indexedDB;
 	if (!factory || typeof factory.open !== "function") return null;
 	return await new Promise((resolve) => {
 		const request = factory.open(KEY_DB_NAME, KEY_DB_VERSION);
@@ -157,7 +166,7 @@ async function openIndexedDb(): Promise<IDBDatabase | null> {
 	});
 }
 
-async function readIndexedMaterial(plugin: any): Promise<StoredKeyRecord | null> {
+async function readIndexedMaterial(plugin: DeviceProofPluginLike): Promise<StoredKeyRecord | null> {
 	const db = await openIndexedDb();
 	if (!db) return null;
 	return await new Promise((resolve) => {
@@ -175,7 +184,7 @@ async function readIndexedMaterial(plugin: any): Promise<StoredKeyRecord | null>
 	});
 }
 
-async function writeIndexedMaterial(plugin: any, value: StoredKeyRecord): Promise<boolean> {
+async function writeIndexedMaterial(plugin: DeviceProofPluginLike, value: StoredKeyRecord): Promise<boolean> {
 	const db = await openIndexedDb();
 	if (!db) return false;
 	return await new Promise((resolve) => {
@@ -197,7 +206,7 @@ async function writeIndexedMaterial(plugin: any, value: StoredKeyRecord): Promis
 	});
 }
 
-async function readStoredMaterial(plugin: any): Promise<StoredKeyRecord | null> {
+async function readStoredMaterial(plugin: DeviceProofPluginLike): Promise<StoredKeyRecord | null> {
 	const storageKey = getDeviceMaterialStorageKey(plugin);
 	const memoryValue = memoryKeyStore.get(storageKey) ?? null;
 	if (memoryValue) return memoryValue;
@@ -210,7 +219,7 @@ async function readStoredMaterial(plugin: any): Promise<StoredKeyRecord | null> 
 }
 
 
-async function writeStoredMaterial(plugin: any, value: StoredKeyRecord): Promise<void> {
+async function writeStoredMaterial(plugin: DeviceProofPluginLike, value: StoredKeyRecord): Promise<void> {
 	const storageKey = getDeviceMaterialStorageKey(plugin);
 	memoryKeyStore.set(storageKey, value);
 	const wroteIndexed = await writeIndexedMaterial(plugin, value);
@@ -243,14 +252,15 @@ async function generateMaterial(): Promise<StoredKeyRecord> {
 }
 
 export function ensureInstallId(plugin: EpochPlugin, saveIfChanged: boolean = false): string {
-	const current = normalizeText((plugin.settings as any).installId);
+	const state: DeviceProofPluginLike = plugin;
+	const current = normalizeText(state.settings.installId);
 	if (current) return current;
 	const storage = getStorage();
-	const storageKey = getInstallIdStorageKey(plugin);
+	const storageKey = getInstallIdStorageKey(state);
 	try {
 		const stored = normalizeText(storage?.getItem(storageKey));
 		if (stored) {
-			(plugin.settings as any).installId = stored;
+			state.settings.installId = stored;
 			if (saveIfChanged) void plugin.saveSettings();
 			return stored;
 		}
@@ -258,7 +268,7 @@ export function ensureInstallId(plugin: EpochPlugin, saveIfChanged: boolean = fa
 		// ignore
 	}
 	const next = createUuid();
-	(plugin.settings as any).installId = next;
+	state.settings.installId = next;
 	try {
 		storage?.setItem(storageKey, next);
 	} catch {
@@ -272,23 +282,25 @@ export async function ensureDeviceProofMaterial(
 	plugin: EpochPlugin,
 	saveIfChanged: boolean = false
 ): Promise<{ publicKey: string }> {
-	const stored = await readStoredMaterial(plugin);
+	const state: DeviceProofPluginLike = plugin;
+	const stored = await readStoredMaterial(state);
 	const material = stored ?? await generateMaterial();
 	if (!stored) {
-		await writeStoredMaterial(plugin, material);
+		await writeStoredMaterial(state, material);
 	}
-	const currentPublicKey = normalizeText((plugin.settings as any).devicePublicKey);
+	const currentPublicKey = normalizeText(state.settings.devicePublicKey);
 	if (currentPublicKey !== material.publicKey) {
-		(plugin.settings as any).devicePublicKey = material.publicKey;
+		state.settings.devicePublicKey = material.publicKey;
 		if (saveIfChanged) await plugin.saveSettings();
 	}
 	return { publicKey: material.publicKey };
 }
 
 export async function signUpdateChallenge(plugin: EpochPlugin, payload: string): Promise<string> {
-	const material = await readStoredMaterial(plugin) ?? await generateMaterial();
-	if (!(await readStoredMaterial(plugin))) {
-		await writeStoredMaterial(plugin, material);
+	const state: DeviceProofPluginLike = plugin;
+	const material = await readStoredMaterial(state) ?? await generateMaterial();
+	if (!(await readStoredMaterial(state))) {
+		await writeStoredMaterial(state, material);
 	}
 	const payloadBytes = utf8Bytes(payload);
 	const signature = await getSubtle().sign(

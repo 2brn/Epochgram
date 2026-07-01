@@ -17,14 +17,19 @@ import {
 } from "./summary-menu/entry-actions";
 import { addEditTopic } from "./summary-menu/topic-menu";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+type MenuDomLike = HTMLElement & { addClass?: (name: string) => void };
+type MenuWithDom = Menu & { dom?: MenuDomLike; containerEl?: MenuDomLike };
+type CanvasMarksLike = EpochCanvas & { inheritedMarkSourceByPath?: Map<string, string> };
+
+const activeDocument: Document = typeof window !== "undefined" ? window.document : ({} as Document);
 
 export function showSummaryMenu(canvas: EpochCanvas, entry: DateEntry, clientX: number, clientY: number): Menu {
 	const state = getMenuState(canvas);
 	const menu = new Menu();
 	const addMenuClass = (className: string) => {
 		try {
-			const dom: any = (menu as any)?.dom ?? (menu as any)?.containerEl;
+			const typedMenu = menu as MenuWithDom;
+			const dom = typedMenu.dom ?? typedMenu.containerEl;
 			if (!dom) return;
 			if (typeof dom.addClass === "function") dom.addClass(className);
 			else dom.classList?.add?.(className);
@@ -52,16 +57,17 @@ export function showSummaryMenu(canvas: EpochCanvas, entry: DateEntry, clientX: 
 
 	addMenuClass("epoch-menu-record");
 
-	const plugin = (state as any).plugin;
+	const plugin = state.plugin;
 	const indexer = plugin?.indexer;
 	const entryPath = normalizePath(String(entry.file || ""));
 	const reviewState: ReviewState =
 		entry.reviewState === "hidden"
 			? "hidden"
 			: (entry.reviewState === "reviewed" ? "reviewed" : "draft");
-	const explicitMarkColor = (() => {
+	const explicitMarkColor: number | null = (() => {
 		try {
-			return indexer?.getFileMarkColor(entryPath) ?? null;
+			const color = indexer?.getFileMarkColor(entryPath);
+			return typeof color === "number" ? color : null;
 		} catch {
 			return null;
 		}
@@ -70,7 +76,7 @@ export function showSummaryMenu(canvas: EpochCanvas, entry: DateEntry, clientX: 
 		try {
 			const map: unknown = plugin?.__epochInheritedMarkIndexByPath;
 			if (!(map instanceof Map)) return null;
-			return normalizeMarkColorIndex(map.get(entryPath) as any);
+			return normalizeMarkColorIndex(map.get(entryPath));
 		} catch {
 			return null;
 		}
@@ -81,8 +87,8 @@ export function showSummaryMenu(canvas: EpochCanvas, entry: DateEntry, clientX: 
 	const menuTitle = formatMenuTitleWithPath(entryPath) || title;
 	const inheritedSourcePath = (() => {
 		try {
-			const map = (canvas as any)?.inheritedMarkSourceByPath;
-			if (!map || typeof map.get !== "function") return null;
+			const map = (canvas as CanvasMarksLike).inheritedMarkSourceByPath;
+			if (!(map instanceof Map)) return null;
 			const v = map.get(entryPath);
 			return typeof v === "string" && v ? v : null;
 		} catch {
@@ -106,9 +112,11 @@ export function showSummaryMenu(canvas: EpochCanvas, entry: DateEntry, clientX: 
 	// On mobile, tapping outside the menu can dismiss it without reliably triggering
 	// Menu.onHide(). Clear hover/focus on the first outside tap.
 	try {
+		const toElement = (value: EventTarget | null): Element | null => {
+			return value instanceof Element ? value : null;
+		};
 		const onOutside = (ev: Event) => {
-			const target = ev.target as any;
-			const el: HTMLElement | null = target instanceof HTMLElement ? target : null;
+			const el = toElement(ev.target);
 			if (el && el.closest(".menu")) return;
 			state.keepHoverAfterMenu = false;
 			state.clearHover(true);
@@ -128,5 +136,5 @@ export function showSummaryMenu(canvas: EpochCanvas, entry: DateEntry, clientX: 
 	}
 
 	return menu;
-	}
+}
 

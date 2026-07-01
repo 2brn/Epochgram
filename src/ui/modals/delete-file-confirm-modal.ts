@@ -1,11 +1,36 @@
 import type { App } from "obsidian";
 import { Modal, TFile } from "obsidian";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = typeof window !== "undefined" ? window.document : ({} as Document);
+
+type FocusableElement = HTMLElement & {
+	focus(options?: FocusOptions): void;
+};
+
+type VaultLike = {
+	getConfig?(key: string): unknown;
+	setConfig?(key: string, value: boolean): void;
+	config?: Record<string, unknown> & { promptDelete?: boolean };
+};
+
+type FileLike = {
+	name?: unknown;
+	basename?: unknown;
+	extension?: unknown;
+	path?: unknown;
+};
+
+function toFocusableElement(value: Element | null): FocusableElement | null {
+	return value instanceof HTMLElement ? value : null;
+}
+
+function getVaultLike(app: App): VaultLike | null {
+	return (app as unknown as { vault?: VaultLike }).vault ?? null;
+}
 
 
 function getVaultConfigString(app: App, key: string): string | null {
-	const vault: any = (app as any)?.vault;
+	const vault = getVaultLike(app);
 	try {
 		if (vault && typeof vault.getConfig === "function") {
 			const v = vault.getConfig(key);
@@ -57,7 +82,7 @@ function deletedFilesBehaviorMessage(app: App): string {
 }
 
 function getPromptDeleteConfig(app: App): boolean | null {
-	const vault: any = (app as any)?.vault;
+	const vault = getVaultLike(app);
 	try {
 		if (vault && typeof vault.getConfig === "function") {
 			const v = vault.getConfig("promptDelete");
@@ -76,7 +101,7 @@ function getPromptDeleteConfig(app: App): boolean | null {
 }
 
 function setPromptDeleteConfig(app: App, value: boolean): void {
-	const vault: any = (app as any)?.vault;
+	const vault = getVaultLike(app);
 	try {
 		if (vault && typeof vault.setConfig === "function") {
 			vault.setConfig("promptDelete", value);
@@ -95,13 +120,13 @@ function setPromptDeleteConfig(app: App, value: boolean): void {
 }
 
 function fileDisplayName(file: TFile): string {
-	const anyFile: any = file as any;
-	const name = typeof anyFile?.name === "string" ? anyFile.name : "";
+	const anyFile = file as unknown as FileLike;
+	const name = typeof anyFile.name === "string" ? anyFile.name : "";
 	if (name) return name;
-	const base = String((file as any)?.basename ?? "");
-	const ext = String((file as any)?.extension ?? "");
+	const base = typeof anyFile.basename === "string" ? anyFile.basename : "";
+	const ext = typeof anyFile.extension === "string" ? anyFile.extension : "";
 	if (base && ext) return `${base}.${ext}`;
-	return base || String((file as any)?.path ?? "");
+	return base || (typeof anyFile.path === "string" ? anyFile.path : "");
 }
 
 class DeleteFileConfirmModal extends Modal {
@@ -126,29 +151,31 @@ class DeleteFileConfirmModal extends Modal {
 	}
 
 	onOpen() {
-		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = typeof activeDocument !== "undefined"
+			? toFocusableElement(activeDocument.activeElement)
+			: null;
 		try {
-			(this.modalEl as any)?.addClass?.("mod-confirm");
+			this.modalEl.addClass("mod-confirm");
 		} catch {
 			// ignore
 		}
 
 		try {
-			(this.titleEl as any)?.setText?.("Delete file");
+			this.titleEl.setText("Delete file");
 		} catch {
 			// ignore
 		}
 
 		try {
-			(this.contentEl as any)?.empty?.();
+			this.contentEl.empty();
 		} catch {
 			// ignore
 		}
 
-		const contentEl: any = this.contentEl as any;
+		const contentEl = this.contentEl;
 		if (contentEl?.createEl) {
 			contentEl.createEl("p", { text: `Are you sure you want to delete "${this.fileName}"?` });
-			contentEl.createEl("p", { text: deletedFilesBehaviorMessage(this.app as any) });
+			contentEl.createEl("p", { text: deletedFilesBehaviorMessage(this.app) });
 		}
 
 		try {
@@ -169,7 +196,7 @@ class DeleteFileConfirmModal extends Modal {
 			deleteBtn?.setAttr?.("type", "button");
 			deleteBtn?.addEventListener?.("click", () => {
 				if (this.shouldDisablePrompt) {
-					setPromptDeleteConfig(this.app as any, false);
+					setPromptDeleteConfig(this.app, false);
 				}
 				this.finish(true);
 			});
@@ -184,7 +211,7 @@ class DeleteFileConfirmModal extends Modal {
 
 	onClose() {
 		try {
-			(this.contentEl as any)?.empty?.();
+			this.contentEl.empty();
 		} catch {
 			// ignore
 		}
@@ -196,7 +223,7 @@ class DeleteFileConfirmModal extends Modal {
 		if (el && typeof el.focus === "function") {
 			window.requestAnimationFrame(() => {
 				try {
-					(el as any).focus?.({ preventScroll: true });
+					(el as FocusableElement).focus({ preventScroll: true });
 				} catch {
 					try {
 						el.focus();

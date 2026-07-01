@@ -4,7 +4,13 @@ function normalizeNonEpochPath(value: unknown): string {
 	return p;
 }
 
-export function dropCachedInheritedMarkForPath(plugin: any, path: string): void {
+type InheritedMarkCachePluginLike = {
+	__epochInheritedMarkIndexByPath?: Map<string, unknown>;
+	__epochInheritedMarkSourceByPath?: Map<string, unknown>;
+	__epochInheritedMarkReasonByPath?: Map<string, unknown>;
+};
+
+export function dropCachedInheritedMarkForPath(plugin: InheritedMarkCachePluginLike, path: string): void {
 	const p = normalizeNonEpochPath(path);
 	if (!p) return;
 	try {

@@ -72,7 +72,7 @@ export function drawHoverOverlay(params: {
                 if (dropCapActive && useEpochLayout && epochDropLines > 0 && i < epochDropLines) {
                     const parseFontPx = (font: string): number => {
                         const m = String(font || "").match(/(\d+(?:\.\d+)?)px/);
-                        const v = m ? parseFloat(m[1]!) : NaN;
+						const v = m && m[1] ? parseFloat(m[1]) : NaN;
                         return Number.isFinite(v) ? v : 12;
                     };
                     const replaceFontPx = (font: string, px: number): string => {

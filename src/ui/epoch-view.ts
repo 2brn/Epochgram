@@ -21,7 +21,7 @@ import {
 	epochViewSyncPreferencesFromPlugin,
 	epochViewUpdateFilterButtons,
 	epochViewUpdateProUiState,
-	epochViewUpdateReviewFilterButtonUi,
+	epochViewUpdateReviewFilterButtonUi
 } from "./epoch-view/filters";
 import {
 	epochViewLayoutSearchControl,
@@ -32,8 +32,30 @@ import {
 import { epochViewSnapToBestTimelineSearchMatch } from "./epoch-view/search-snap";
 import "../../styles.css";
 
+type EpochViewPluginLike = {
+	settings?: { generateEpochs?: boolean };
+	hasProAccess?: () => boolean;
+	indexer?: { index?: Record<string, DateEntry[]> };
+	__epochTimelineSearchFocusToken?: number;
+};
+
+type EpochCanvasStateLike = EpochCanvas & {
+	__suppressExternalAutoScrollUntil?: number;
+	__forcedActiveFileCursorUntil?: number;
+	__forcedActiveFileCursorPath?: string | null;
+	__forcedActiveFileCursorLine?: number | null;
+};
+
+type LeafViewStateLike = {
+	state?: { file?: string; path?: string };
+};
+
+function nowMs(): number {
+	return Date.now();
+}
+
 export class EpochView extends ItemView {
-	plugin: any;
+	plugin: EpochViewPluginLike;
 	container!: HTMLElement;
 	canvas!: EpochCanvas;
 	private rootEl: HTMLElement | null = null;
@@ -96,7 +118,10 @@ export class EpochView extends ItemView {
 		return computeTimelineSearchResultCountAllDates(this.canvas, qTrim, this.searchCountCache);
 	}
 
-	private pickBestMatchEntryForRankedPaths(rankedPaths: string[], parsed: any): { path: string; entry: DateEntry } | null {
+	private pickBestMatchEntryForRankedPaths(
+		rankedPaths: string[],
+		parsed: Parameters<typeof pickBestMatchEntryForRankedPaths>[2]
+	): { path: string; entry: DateEntry } | null {
 		if (!this.canvas) return null;
 		return pickBestMatchEntryForRankedPaths(this.canvas, rankedPaths, parsed);
 	}
@@ -107,7 +132,7 @@ export class EpochView extends ItemView {
 
 	private maybeFocusTimelineSearchAfterRebuild(): void {
 		try {
-			const tokenRaw = Number((this.plugin as any)?.__epochTimelineSearchFocusToken ?? 0);
+			const tokenRaw = Number(this.plugin?.__epochTimelineSearchFocusToken ?? 0);
 			const token = Number.isFinite(tokenRaw) ? Math.max(0, Math.floor(tokenRaw)) : 0;
 			if (token <= 0) return;
 			if (token === this.lastConsumedTimelineSearchFocusToken) return;
@@ -136,7 +161,7 @@ export class EpochView extends ItemView {
 	}
 
 	private openSearchModal(): void {
-		return openSearchModal(this);
+		return openSearchModal(this as unknown as Parameters<typeof openSearchModal>[0]);
 	}
 
 	public openTimelineSearch(): void {
@@ -146,8 +171,8 @@ export class EpochView extends ItemView {
 	private shouldSuppressExternalAutoScroll(): boolean {
 		try {
 			if (this.searchModalOpen) return true;
-			const until = Number((this.canvas as any)?.__suppressExternalAutoScrollUntil ?? 0);
-			return Number.isFinite(until) && until > 0 && performance.now() < until;
+			const until = Number((this.canvas as EpochCanvasStateLike | null)?.__suppressExternalAutoScrollUntil ?? 0);
+			return Number.isFinite(until) && until > 0 && nowMs() < until;
 		} catch {
 			return false;
 		}
@@ -170,31 +195,31 @@ export class EpochView extends ItemView {
 		// If scroll-nav recently navigated to a specific entry, prefer its blockStart as the
 		// effective cursor line for a short window so follow-focus doesn't snap back.
 		try {
-			const canvasAny: any = this.canvas as any;
-			const forcedUntil = Number(canvasAny?.__forcedActiveFileCursorUntil ?? 0);
-			const forcedPath = String(canvasAny?.__forcedActiveFileCursorPath ?? "");
-			const forcedLineRaw = Number(canvasAny?.__forcedActiveFileCursorLine ?? NaN);
+			const canvasState = this.canvas as EpochCanvasStateLike;
+			const forcedUntil = Number(canvasState?.__forcedActiveFileCursorUntil ?? 0);
+			const forcedPath = String(canvasState?.__forcedActiveFileCursorPath ?? "");
+			const forcedLineRaw = Number(canvasState?.__forcedActiveFileCursorLine ?? NaN);
 			const forcedActive =
 				forcedPath === file.path &&
 				Number.isFinite(forcedUntil) && forcedUntil > 0 &&
-				performance.now() < forcedUntil &&
+				nowMs() < forcedUntil &&
 				Number.isFinite(forcedLineRaw);
 
 			const editorLine = view?.editor?.getCursor?.().line;
 			const editorFocused = !!view?.editor?.hasFocus?.();
 			if (forcedActive && editorFocused && typeof editorLine === "number" && Number.isFinite(editorLine) && editorLine !== forcedLineRaw) {
 				// User moved the cursor intentionally; stop forcing.
-				canvasAny.__forcedActiveFileCursorUntil = 0;
-				canvasAny.__forcedActiveFileCursorPath = null;
-				canvasAny.__forcedActiveFileCursorLine = null;
+				canvasState.__forcedActiveFileCursorUntil = 0;
+				canvasState.__forcedActiveFileCursorPath = null;
+				canvasState.__forcedActiveFileCursorLine = null;
 				cursorLine = editorLine;
 			} else if (forcedActive) {
 				cursorLine = Math.max(0, forcedLineRaw | 0);
 			} else {
 				if (forcedPath && forcedPath !== file.path) {
-					canvasAny.__forcedActiveFileCursorUntil = 0;
-					canvasAny.__forcedActiveFileCursorPath = null;
-					canvasAny.__forcedActiveFileCursorLine = null;
+					canvasState.__forcedActiveFileCursorUntil = 0;
+					canvasState.__forcedActiveFileCursorPath = null;
+					canvasState.__forcedActiveFileCursorLine = null;
 				}
 				if (typeof editorLine === "number") {
 					cursorLine = editorLine;
@@ -210,12 +235,12 @@ export class EpochView extends ItemView {
 		// Mobile: if startup deferred an initial snap, apply it once the file is known.
 		try {
 			if (Platform.isMobileApp && this.startupDeferredSnapPath && this.canvas) {
-				const now = performance.now();
+				const now = nowMs();
 				if (now > (this.startupDeferredSnapUntil ?? 0)) {
 					this.startupDeferredSnapPath = null;
 					this.startupDeferredSnapUntil = 0;
 				} else if (file.path === this.startupDeferredSnapPath) {
-					(this.canvas as any).__suppressExternalAutoScrollUntil = performance.now() + 1000;
+					(this.canvas as EpochCanvasStateLike).__suppressExternalAutoScrollUntil = nowMs() + 1000;
 					this.canvas.snapInitialPosition(file.path, cursorLine);
 					this.canvas.setActiveFile(file.path, cursorLine, { suppressFocus: true });
 					this.activeFilePath = file.path;
@@ -240,11 +265,11 @@ export class EpochView extends ItemView {
 		}
 	};
 
-	private updateActiveFile = (_leaf?: any, options: { suppressFocus?: boolean } = {}) => {
+	private updateActiveFile = (_leaf?: unknown, options: { suppressFocus?: boolean } = {}) => {
 		const suppressFocus = options.suppressFocus !== false;
 		const resolveFileFromLeafState = (leaf: WorkspaceLeaf | null | undefined): TFile | null => {
 			try {
-				const getViewState = (leaf as any)?.getViewState;
+				const getViewState = (leaf as unknown as { getViewState?: () => LeafViewStateLike }).getViewState;
 				if (typeof getViewState !== "function") return null;
 				const vs = getViewState.call(leaf);
 				const raw = vs?.state?.file ?? vs?.state?.path ?? null;
@@ -260,7 +285,7 @@ export class EpochView extends ItemView {
 		// immediately clears semantic highlights. workspace.getActiveFile() can return the
 		// last active file even when the current leaf has no file.
 		try {
-			const leaf = (this.app.workspace as any)?.activeLeaf as WorkspaceLeaf | null | undefined;
+			const leaf = (this.app.workspace as unknown as { activeLeaf?: WorkspaceLeaf | null }).activeLeaf;
 			const view = leaf?.view;
 			if (view instanceof MarkdownView) {
 				const f = view.file;
@@ -279,7 +304,7 @@ export class EpochView extends ItemView {
 		// If the active leaf is not a MarkdownView (e.g. switching focus to the Epoch timeline),
 		// keep highlights in sync but do not auto-scroll the timeline to the last active file.
 		// Exception: allow a short startup window so newly created default notes can still be focused.
-		const now = performance.now();
+		const now = nowMs();
 		const allowStartupFocus = this.openedAt > 0 && now - this.openedAt < 15_000 && !this.startupRefocusDone;
 		this.syncCanvasActiveFile(file instanceof TFile ? file : null, { suppressFocus: allowStartupFocus ? suppressFocus : true });
 	};
@@ -301,7 +326,7 @@ export class EpochView extends ItemView {
 	}
 
 	private refreshSyncedEpochAvailability(): void {
-		const index = (this.plugin?.indexer as any)?.index as Record<string, any[]> | undefined;
+		const index = this.plugin?.indexer?.index;
 		// During rebuild/refresh flows, the in-memory index can be temporarily empty or unset.
 		// Do not treat that transient state as "epochs unavailable" (it can cause epochs view
 		// to flip back to normal a few seconds after the user turns it on).
@@ -314,7 +339,7 @@ export class EpochView extends ItemView {
 		for (const list of lists) {
 			if (!Array.isArray(list) || list.length === 0) continue;
 			sawAnyEntries = true;
-			if (list.some((e: any) => e && String(e.file || "").startsWith("epoch://"))) {
+			if (list.some((e) => e && String(e.file || "").startsWith("epoch://"))) {
 				found = true;
 				break;
 			}
@@ -327,7 +352,7 @@ export class EpochView extends ItemView {
 		epochViewUpdateProUiState(this);
 	}
 
-	constructor(leaf: WorkspaceLeaf, plugin: any) {
+	constructor(leaf: WorkspaceLeaf, plugin: EpochViewPluginLike) {
 		super(leaf);
 		this.plugin = plugin;
 	}
@@ -367,7 +392,7 @@ export class EpochView extends ItemView {
 	}
 
 	syncPreferencesFromPlugin(preferences: { showDraftsOnly?: boolean; showAttachments: boolean; showTrackedChanges?: boolean; showParsed?: boolean; showEpochsView?: boolean }): void {
-		epochViewSyncPreferencesFromPlugin(this, preferences as any);
+		epochViewSyncPreferencesFromPlugin(this, preferences);
 	}
 
 	private updateFilterButtons() {

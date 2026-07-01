@@ -8,8 +8,55 @@ import {
 } from "../epoch-canvas-focus";
 import { getEntriesCountForDateFast, getEntriesForDate, pickEntryForFile } from "../entry-helpers";
 
+type EpochBucket = "day" | "2days" | "4days" | "week" | "2weeks" | "month" | "3months" | "6months" | "year";
+
+type EntryTarget = Extract<ScrollNavTarget, { kind: "entry" }>;
+
+type ScrollNavTargetsState = {
+	index?: Record<string, DateEntry[]>;
+	epochsViewBucket?: string | null;
+	epochsView?: boolean;
+	searchQuery?: string;
+	__indexVersion?: number;
+	showAttachments?: boolean;
+	showTrackedChanges?: boolean;
+	showContentDates?: boolean;
+	showHidden?: boolean;
+	showDraftOnly?: boolean;
+	__scrollNavVisibleTargetsSig?: string | null;
+	__scrollNavVisibleTargets?: EntryTarget[] | null;
+};
+
+function state(canvas: EpochCanvas): ScrollNavTargetsState {
+	return canvas as unknown as ScrollNavTargetsState;
+}
+
+function normalizeEpochBucket(value: unknown): EpochBucket | null {
+	const bucket = typeof value === "string" ? value : "";
+	return bucket === "day" ||
+		bucket === "2days" ||
+		bucket === "4days" ||
+		bucket === "week" ||
+		bucket === "2weeks" ||
+		bucket === "month" ||
+		bucket === "3months" ||
+		bucket === "6months" ||
+		bucket === "year"
+		? bucket
+		: null;
+}
+
+function entryKey(date: Date, entry: DateEntry): string {
+	const d = date instanceof Date ? date.getTime() : 0;
+	const file = String(entry.file ?? "");
+	const source = String(entry.source ?? "");
+	const bs = Number(entry.blockStart ?? -1);
+	const be = Number(entry.blockEnd ?? -1);
+	return `${d}|${file}|${source}|${bs}|${be}`;
+}
+
 export function computeScrollNavTargets(canvas: EpochCanvas, filePaths: string[]): ScrollNavTarget[] {
-	const c: any = canvas as any;
+	const c = state(canvas);
 	const targets: ScrollNavTarget[] = [{ kind: "today" }];
 	const pathsRaw = Array.isArray(filePaths) ? filePaths.filter((p) => typeof p === "string" && !!p) : [];
 	const paths: string[] = [];
@@ -27,14 +74,6 @@ export function computeScrollNavTargets(canvas: EpochCanvas, filePaths: string[]
 	}
 	const matches: { date: Date; dayIndex: number; entryIndex: number; entry: DateEntry }[] = [];
 	const seenEntryKeys = new Set<string>();
-	const entryKey = (date: Date, entry: DateEntry): string => {
-		const d = date instanceof Date ? date.getTime() : 0;
-		const file = String((entry as any)?.file ?? "");
-		const source = String((entry as any)?.source ?? "");
-		const bs = Number((entry as any)?.blockStart ?? -1);
-		const be = Number((entry as any)?.blockEnd ?? -1);
-		return `${d}|${file}|${source}|${bs}|${be}`;
-	};
 	for (const dateKey of Object.keys(c.index ?? {})) {
 		const date = dateKeyToDateHelper(dateKey);
 		if (!date) continue;
@@ -43,14 +82,14 @@ export function computeScrollNavTargets(canvas: EpochCanvas, filePaths: string[]
 		const dayIndex = getDayIndexForDateHelper(canvas, date);
 		const safeDayIndex = Number.isFinite(dayIndex) ? dayIndex : Number.POSITIVE_INFINITY;
 		for (const p of paths) {
-			const picked = pickEntryForFile(canvas, entries as any, p, null);
+			const picked = pickEntryForFile(canvas, entries, p, null);
 			if (!picked) continue;
-			let entryIndex = (entries as any).indexOf(picked);
+			let entryIndex = entries.indexOf(picked);
 			if (entryIndex < 0) {
-				const pf = String((picked as any)?.file ?? "");
-				const pbs = Number((picked as any)?.blockStart ?? -1);
-				const pbe = Number((picked as any)?.blockEnd ?? -1);
-				entryIndex = (entries as any).findIndex((e: any) => {
+				const pf = String(picked.file ?? "");
+				const pbs = Number(picked.blockStart ?? -1);
+				const pbe = Number(picked.blockEnd ?? -1);
+				entryIndex = entries.findIndex((e) => {
 					if (!e) return false;
 					if (String(e.file ?? "") !== pf) return false;
 					const ebs = Number(e.blockStart ?? -1);
@@ -70,12 +109,12 @@ export function computeScrollNavTargets(canvas: EpochCanvas, filePaths: string[]
 		if (di !== 0) return di;
 		const ei = a.entryIndex - b.entryIndex;
 		if (ei !== 0) return ei;
-		const af = String((a.entry as any)?.file ?? "");
-		const bf = String((b.entry as any)?.file ?? "");
+		const af = String(a.entry.file ?? "");
+		const bf = String(b.entry.file ?? "");
 		if (af < bf) return -1;
 		if (af > bf) return 1;
-		const abs = Number((a.entry as any)?.blockStart ?? -1);
-		const bbs = Number((b.entry as any)?.blockStart ?? -1);
+		const abs = Number(a.entry.blockStart ?? -1);
+		const bbs = Number(b.entry.blockStart ?? -1);
 		return abs - bbs;
 	});
 	for (const match of matches) {
@@ -84,14 +123,13 @@ export function computeScrollNavTargets(canvas: EpochCanvas, filePaths: string[]
 	return targets;
 }
 
-export function computeVisibleScrollNavEntryTargets(canvas: EpochCanvas): Array<Extract<ScrollNavTarget, { kind: "entry" }>> {
-	const c: any = canvas as any;
-	const index: any = c.index ?? null;
+export function computeVisibleScrollNavEntryTargets(canvas: EpochCanvas): EntryTarget[] {
+	const c = state(canvas);
+	const index = c.index ?? null;
 	if (!index || typeof index !== "object") return [];
 
-	const epochBucketRaw = String(c.epochsViewBucket || "");
-	const epochBucket = epochBucketRaw ? epochBucketRaw : null;
-	const epochBucketOpt = c.epochsView && epochBucket ? ({ epochBucket } as any) : undefined;
+	const epochBucket = normalizeEpochBucket(c.epochsViewBucket ?? "");
+	const epochBucketOpt = c.epochsView && epochBucket ? { epochBucket } : undefined;
 
 	const sig = (() => {
 		const q = String(c.searchQuery || "").trim().toLowerCase();
@@ -110,7 +148,7 @@ export function computeVisibleScrollNavEntryTargets(canvas: EpochCanvas): Array<
 	})();
 	try {
 		const prevSig = String(c.__scrollNavVisibleTargetsSig ?? "");
-		const prev = c.__scrollNavVisibleTargets as Array<Extract<ScrollNavTarget, { kind: "entry" }>> | null | undefined;
+		const prev = c.__scrollNavVisibleTargets;
 		if (prevSig === sig && Array.isArray(prev)) {
 			return prev;
 		}
@@ -134,16 +172,8 @@ export function computeVisibleScrollNavEntryTargets(canvas: EpochCanvas): Array<
 		return a.date.getTime() - b.date.getTime();
 	});
 
-	const out: Array<Extract<ScrollNavTarget, { kind: "entry" }>> = [];
+	const out: EntryTarget[] = [];
 	const seen = new Set<string>();
-	const entryKey = (date: Date, entry: DateEntry): string => {
-		const d = date instanceof Date ? date.getTime() : 0;
-		const file = String((entry as any)?.file ?? "");
-		const source = String((entry as any)?.source ?? "");
-		const bs = Number((entry as any)?.blockStart ?? -1);
-		const be = Number((entry as any)?.blockEnd ?? -1);
-		return `${d}|${file}|${source}|${bs}|${be}`;
-	};
 
 	for (const { date } of days) {
 		const entries = getEntriesForDate(canvas, date, epochBucketOpt);
@@ -168,18 +198,18 @@ export function computeVisibleScrollNavEntryTargets(canvas: EpochCanvas): Array<
 }
 
 export function computeVisibleScrollNavDayTargets(canvas: EpochCanvas): Array<{ dayIndex: number; date: Date }> {
-	const c: any = canvas as any;
-	const index: any = c.index ?? null;
+	const c = state(canvas);
+	const index = c.index ?? null;
 	if (!index || typeof index !== "object") return [];
 
-	const epochBucketRaw = String(c.epochsViewBucket || "");
-	const epochBucket = epochBucketRaw ? epochBucketRaw : null;
+	const epochBucket = normalizeEpochBucket(c.epochsViewBucket ?? "");
 
 	const days: Array<{ dayIndex: number; date: Date }> = [];
 	for (const dateKey of Object.keys(index)) {
 		const date = dateKeyToDateHelper(dateKey);
 		if (!date) continue;
-		const count = getEntriesCountForDateFast(canvas, date, epochBucket ? ({ epochBucket } as any) : undefined);
+		const options = epochBucket ? { epochBucket } : undefined;
+		const count = getEntriesCountForDateFast(canvas, date, options);
 		if (!Number.isFinite(count) || count <= 0) continue;
 		const dayIndexRaw = getDayIndexForDateHelper(canvas, date);
 		const dayIndex = Number.isFinite(dayIndexRaw) ? Number(dayIndexRaw) : Number.POSITIVE_INFINITY;

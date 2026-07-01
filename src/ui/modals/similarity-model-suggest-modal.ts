@@ -3,7 +3,48 @@ import type { EpochPlugin } from "../../main";
 import { DEFAULT_SIMILARITY_MODEL, DEFAULT_ZERO_SHOT_MODEL, NO_SIMILARITY_MODEL } from "../../plugin/similarity/config";
 import { hasSimilarityAccess } from "../../plugin/pro-feature-state";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = typeof window !== "undefined" ? window.document : ({} as Document);
+
+type FocusableElement = HTMLElement & {
+	focus(options?: FocusOptions): void;
+};
+
+type SuggestChooserLike = {
+	selectedItem?: number;
+	values?: ModelSuggestItem[];
+};
+
+type SuggestInputChangedLike = {
+	onInputChanged?: () => void;
+};
+
+type SimilaritySettingsLike = {
+	similarityEmbeddingModelId?: string;
+	similarityZeroShotModelId?: string;
+};
+
+type SuggestModalWithChooser = SuggestModal<ModelSuggestItem> & {
+	chooser?: SuggestChooserLike;
+	onInputChanged?: () => void;
+};
+
+function toFocusableElement(value: Element | null): FocusableElement | null {
+	return value && typeof (value as { focus?: unknown }).focus === "function"
+		? (value as FocusableElement)
+		: null;
+}
+
+function getChooser(modal: SuggestModalWithChooser): SuggestChooserLike | null {
+	return modal.chooser ?? null;
+}
+
+function getInputChangedHandle(modal: SuggestModalWithChooser): SuggestInputChangedLike {
+	return modal;
+}
+
+function getSimilaritySettings(plugin: EpochPlugin): SimilaritySettingsLike {
+	return plugin.settings;
+}
 
 
 export type SimilarityModelSuggestFocus = "semantics" | "topics";
@@ -67,7 +108,9 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 		options: { focus: SimilarityModelSuggestFocus; onDone?: () => void }
 	) {
 		super(app);
-		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = typeof activeDocument !== "undefined"
+			? toFocusableElement(activeDocument.activeElement)
+			: null;
 		this.plugin = plugin;
 		this.focus = options.focus;
 		this.resolveDone = typeof options.onDone === "function" ? options.onDone : null;
@@ -83,7 +126,7 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 		this.handleKeyDown = (event: KeyboardEvent) => {
 			if (event.key !== "Enter") return;
 			const trimmed = String(this.inputEl.value || "").trim();
-			const chooser: any = (this as any).chooser;
+			const chooser = getChooser(this);
 			const hasSelection = typeof chooser?.selectedItem === "number" && chooser.selectedItem >= 0;
 			if (hasSelection) return;
 			event.preventDefault();
@@ -96,7 +139,7 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 
 		this.handleInput = () => {
 			try {
-				(this as any).onInputChanged?.();
+				getInputChangedHandle(this).onInputChanged?.();
 			} catch { void 0; }
 		};
 	}
@@ -116,7 +159,7 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 		this.inputEl.addEventListener("input", this.handleInput);
 		window.requestAnimationFrame(() => {
 			try {
-				(this.inputEl as any).focus?.({ preventScroll: true });
+				(this.inputEl as FocusableElement).focus({ preventScroll: true });
 			} catch {
 				this.inputEl.focus();
 			}
@@ -135,7 +178,7 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 		if (el && typeof el.focus === "function") {
 			window.requestAnimationFrame(() => {
 				try {
-					(el as any).focus?.({ preventScroll: true });
+					(el as FocusableElement).focus({ preventScroll: true });
 				} catch {
 					try {
 						el.focus();
@@ -236,9 +279,9 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 
 	private getCurrentOverride(): string {
 		if (this.focus === "topics") {
-			return String((this.plugin.settings as any)?.similarityZeroShotModelId ?? "").trim();
+			return String(getSimilaritySettings(this.plugin).similarityZeroShotModelId ?? "").trim();
 		}
-		return String((this.plugin.settings as any)?.similarityEmbeddingModelId ?? "").trim();
+		return String(getSimilaritySettings(this.plugin).similarityEmbeddingModelId ?? "").trim();
 	}
 
 	private async applyChoice(choice: Choice): Promise<void> {
@@ -280,34 +323,36 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 	}
 
 	private async applySemantics(choice: Choice, trimmed: string): Promise<void> {
-		const prevRaw = (this.plugin.settings as any)?.similarityEmbeddingModelId;
+		const settings = getSimilaritySettings(this.plugin);
+		const prevRaw = settings.similarityEmbeddingModelId;
 		const prev = typeof prevRaw === "string" ? prevRaw : "";
 		const next = choice.kind === "none" ? NO_SIMILARITY_MODEL : (choice.kind === "default" ? "" : trimmed);
 		if (prev === next) return;
 		const chosenModelId = getChosenModelId(choice, trimmed, DEFAULT_SIMILARITY_MODEL);
 		showModelDownloadNotice("semantics", chosenModelId);
 
-		if (next) (this.plugin.settings as any).similarityEmbeddingModelId = next;
+		if (next) settings.similarityEmbeddingModelId = next;
 		else {
-			if (Object.prototype.hasOwnProperty.call(this.plugin.settings as any, "similarityEmbeddingModelId")) {
-				delete (this.plugin.settings as any).similarityEmbeddingModelId;
+			if (Object.prototype.hasOwnProperty.call(settings, "similarityEmbeddingModelId")) {
+				delete settings.similarityEmbeddingModelId;
 			}
 		}
 		await this.plugin.onSettingsChanged("similarityEmbeddingModelId");
 	}
 
 	private async applyTopics(choice: Choice, trimmed: string): Promise<void> {
-		const prevRaw = (this.plugin.settings as any)?.similarityZeroShotModelId;
+		const settings = getSimilaritySettings(this.plugin);
+		const prevRaw = settings.similarityZeroShotModelId;
 		const prev = typeof prevRaw === "string" ? prevRaw : "";
 		const next = choice.kind === "none" ? NO_SIMILARITY_MODEL : (choice.kind === "default" ? "" : trimmed);
 		if (prev === next) return;
 		const chosenModelId = getChosenModelId(choice, trimmed, DEFAULT_ZERO_SHOT_MODEL);
 		showModelDownloadNotice("topics", chosenModelId);
 
-		if (next) (this.plugin.settings as any).similarityZeroShotModelId = next;
+		if (next) settings.similarityZeroShotModelId = next;
 		else {
-			if (Object.prototype.hasOwnProperty.call(this.plugin.settings as any, "similarityZeroShotModelId")) {
-				delete (this.plugin.settings as any).similarityZeroShotModelId;
+			if (Object.prototype.hasOwnProperty.call(settings, "similarityZeroShotModelId")) {
+				delete settings.similarityZeroShotModelId;
 			}
 		}
 		await this.plugin.onSettingsChanged("similarityZeroShotModelId");

@@ -41,27 +41,22 @@ export default defineConfig([
       "node_modules/**",
       "tests/**",
       "scripts/**",
-      "package.json",
+      "production/**",
       "**/*.js",
       "**/*.mjs",
       "vitest.config.mts",
+      "types/**",
     ],
   },
   ...obsidianmd.configs.recommended,
   {
-    files: ["**/*.ts"],
+    files: ["src/**/*.ts"],
     languageOptions: {
       parser: tsparser,
       parserOptions: { project: "./tsconfig.eslint.json" },
       globals: {
         window: "readonly",
-        document: "readonly",
-        performance: "readonly",
-        getComputedStyle: "readonly",
-        requestAnimationFrame: "readonly",
-        cancelAnimationFrame: "readonly",
-        setTimeout: "readonly",
-        clearTimeout: "readonly",
+        activeWindow: "readonly"
       },
     },
     plugins: {
@@ -73,7 +68,6 @@ export default defineConfig([
     },
     rules: {
       "no-empty": ["error", { allowEmptyCatch: true }],
-      "no-undef": "off",
       "obsidianmd/ui/sentence-case": [
         "error",
         {
@@ -83,13 +77,15 @@ export default defineConfig([
         },
       ],
       "epochgram-internal/ui-prefix-case": "error",
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unsafe-argument": "off",
-      "@typescript-eslint/no-unsafe-assignment": "off",
-      "@typescript-eslint/no-unsafe-call": "off",
-      "@typescript-eslint/no-unsafe-member-access": "off",
-      "@typescript-eslint/no-unsafe-return": "off",
-      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+    },
+  },
+  {
+    files: [
+      "src/plugin/ai-bridge/server.ts",
+      "src/plugin/maintenance-reset.ts",
+    ],
+    rules: {
+      "import/no-nodejs-modules": "off",
     },
   },
 ]);

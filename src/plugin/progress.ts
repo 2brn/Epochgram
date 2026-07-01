@@ -2,65 +2,154 @@ import { Notice, Platform } from "obsidian";
 import type { EpochPlugin } from "../main";
 import { setCssStyles } from "../dom";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = typeof window !== "undefined" ? window.document : ({} as Document);
 
-
-type EpochProgressKind = "index" | "search" | "semantic" | "topics" | "semanticBuild" | "ai";
+export type EpochProgressKind = "index" | "search" | "semantic" | "topics" | "semanticBuild" | "ai";
 
 const KIND_PRIORITY: EpochProgressKind[] = ["ai", "topics", "semantic", "semanticBuild", "index", "search"];
 
+type ProgressByKind = Partial<Record<EpochProgressKind, string>>;
+type CancelRequestedMap = Partial<Record<EpochProgressKind, number>>;
+type NoticeTimerMap = Record<string, number>;
+
+type AiEnqueueThrottleState = {
+	timerId?: unknown;
+	pendingJobs?: unknown;
+};
+
+type AiEnqueueThrottleMap = {
+	values: () => Iterable<unknown>;
+	clear: () => void;
+};
+
+type ProgressRuntime = {
+	__epochAiEnqueueCancelKey?: number;
+	aiSummaryPendingFiles?: Set<string>;
+	aiSummaryQueueRunning?: boolean;
+		epochRegenAfterAiTimer?: unknown;
+	epochRegenAfterAiMode?: unknown;
+	epochRegenAfterAiAll?: boolean;
+	epochRegenAfterAiDateKeys?: unknown;
+	epochRegenAfterAiBuckets?: unknown;
+	epochRegenAfterAiBucketsQueue?: unknown;
+	epochRegenAfterAiShowQueuedNotice?: boolean;
+	__epochEpochHierarchyTotalJobs?: number;
+	__epochEpochHierarchyTotalTokens?: number;
+	__epochEpochHierarchyRunKey?: number;
+	__epochAiEpochsProgressStartedAt?: number;
+	__epochAiEpochsProgressBaselineDone?: number;
+	__epochAiEpochsProgressBaselineErrors?: number;
+	aiSummaryEnqueueThrottleByFile?: AiEnqueueThrottleMap;
+	aiBridgeChunkGroups?: { clear?: () => void };
+	aiBridgeReduceFallbackByJobId?: { clear?: () => void };
+	__epochStatusBarProgressTextEl?: HTMLElement;
+	__epochStatusBarProgressClickBound?: boolean;
+	__epochActiveProgressKind?: EpochProgressKind | "";
+	__epochCancelRequestedAt?: CancelRequestedMap;
+	aiBridge?: { clearQueue?: () => void };
+	__epochAiProgressStartedAt?: number;
+	__epochAiProgressBaselineDone?: number | null;
+	__epochAiProgressBaselineErrors?: number | null;
+	refreshAiBridgeStatusBar?: () => unknown;
+	refreshAiBridgeProgress?: () => unknown;
+	similarityQueueTimer?: number | null;
+	similarityPendingFiles?: Set<string>;
+	similarityQueueTotal?: number;
+	similarityQueueProcessed?: number;
+	similarityVectorUpdateProcessingStartedAt?: number;
+	termSimilarityQueueTimer?: number | null;
+	termSimilarityPendingFiles?: Set<string>;
+	termSimilarityQueueTotal?: number;
+	termSimilarityQueueProcessed?: number;
+	termSimilarityProcessingStartedAt?: number;
+	__epochStatusBarProgressEl?: HTMLElement;
+	__epochProgressByKind?: ProgressByKind;
+	__epochProgressClearTimer?: number | null;
+	__epochDesktopTaskNoticeTimer?: NoticeTimerMap;
+};
+
+function getRuntime(plugin: EpochPlugin): ProgressRuntime {
+	return plugin as unknown as ProgressRuntime;
+}
+
+function ensureCancelMap(runtime: ProgressRuntime): CancelRequestedMap {
+	if (!runtime.__epochCancelRequestedAt || typeof runtime.__epochCancelRequestedAt !== "object") {
+		runtime.__epochCancelRequestedAt = {};
+	}
+	return runtime.__epochCancelRequestedAt;
+}
+
+function ensureProgressMap(runtime: ProgressRuntime): ProgressByKind {
+	if (!runtime.__epochProgressByKind || typeof runtime.__epochProgressByKind !== "object") {
+		runtime.__epochProgressByKind = {};
+	}
+	return runtime.__epochProgressByKind;
+}
+
+function ensureNoticeTimers(runtime: ProgressRuntime): NoticeTimerMap {
+	if (!runtime.__epochDesktopTaskNoticeTimer || typeof runtime.__epochDesktopTaskNoticeTimer !== "object") {
+		runtime.__epochDesktopTaskNoticeTimer = {};
+	}
+	return runtime.__epochDesktopTaskNoticeTimer;
+}
+
 function clearPlannedAiWork(plugin: EpochPlugin): void {
 	try {
-		const anyPlugin: any = plugin as any;
-		const g: any = typeof window !== "undefined" ? (window as any) : (typeof global !== "undefined" ? (global as any) : {});
+		const runtime = getRuntime(plugin);
 
 		try {
-			anyPlugin.__epochAiEnqueueCancelKey = (Number(anyPlugin.__epochAiEnqueueCancelKey) || 0) + 1;
+			runtime.__epochAiEnqueueCancelKey = (Number(runtime.__epochAiEnqueueCancelKey) || 0) + 1;
 		} catch {
 			// ignore
 		}
 
 		try {
-			anyPlugin.aiSummaryPendingFiles = new Set<string>();
-			anyPlugin.aiSummaryQueueRunning = false;
+			runtime.aiSummaryPendingFiles = new Set<string>();
+			runtime.aiSummaryQueueRunning = false;
 		} catch {
 			// ignore
 		}
 
-		if (anyPlugin?.epochRegenAfterAiTimer != null) {
+		if (runtime.epochRegenAfterAiTimer != null) {
 			try {
-				g?.clearInterval?.(anyPlugin.epochRegenAfterAiTimer);
+				(window.clearInterval as unknown as (id: unknown) => void)(runtime.epochRegenAfterAiTimer);
 			} catch {
 				// ignore
 			}
-			anyPlugin.epochRegenAfterAiTimer = null;
+			runtime.epochRegenAfterAiTimer = null;
 		}
-		anyPlugin.epochRegenAfterAiMode = null;
-		anyPlugin.epochRegenAfterAiAll = false;
-		anyPlugin.epochRegenAfterAiDateKeys = null;
-		anyPlugin.epochRegenAfterAiBuckets = null;
-		anyPlugin.epochRegenAfterAiBucketsQueue = null;
-		anyPlugin.epochRegenAfterAiShowQueuedNotice = false;
-		anyPlugin.__epochEpochHierarchyTotalJobs = 0;
-		anyPlugin.__epochEpochHierarchyTotalTokens = 0;
-		anyPlugin.__epochEpochHierarchyRunKey = 0;
-		anyPlugin.__epochAiEpochsProgressStartedAt = 0;
-		anyPlugin.__epochAiEpochsProgressBaselineDone = 0;
-		anyPlugin.__epochAiEpochsProgressBaselineErrors = 0;
+		runtime.epochRegenAfterAiMode = null;
+		runtime.epochRegenAfterAiAll = false;
+		runtime.epochRegenAfterAiDateKeys = null;
+		runtime.epochRegenAfterAiBuckets = null;
+		runtime.epochRegenAfterAiBucketsQueue = null;
+		runtime.epochRegenAfterAiShowQueuedNotice = false;
+		runtime.__epochEpochHierarchyTotalJobs = 0;
+		runtime.__epochEpochHierarchyTotalTokens = 0;
+		runtime.__epochEpochHierarchyRunKey = 0;
+		runtime.__epochAiEpochsProgressStartedAt = 0;
+		runtime.__epochAiEpochsProgressBaselineDone = 0;
+		runtime.__epochAiEpochsProgressBaselineErrors = 0;
 
-		const throttle: any = anyPlugin?.aiSummaryEnqueueThrottleByFile;
-		if (throttle && typeof throttle?.values === "function" && typeof throttle?.clear === "function") {
+		const throttle = runtime.aiSummaryEnqueueThrottleByFile;
+		if (throttle && typeof throttle.values === "function" && typeof throttle.clear === "function") {
 			try {
 				for (const st of throttle.values()) {
 					try {
-						if (st?.timerId != null) g?.clearTimeout?.(st.timerId);
+						if (typeof st === "object" && st !== null) {
+							const state = st as AiEnqueueThrottleState;
+							if (state.timerId != null) {
+								(window.clearTimeout as unknown as (id: unknown) => void)(state.timerId);
+							}
+						}
 					} catch {
 						// ignore
 					}
 					try {
-						if (st) {
-							st.timerId = null;
-							st.pendingJobs = null;
+						if (typeof st === "object" && st !== null) {
+							const state = st as AiEnqueueThrottleState;
+							state.timerId = null;
+							state.pendingJobs = null;
 						}
 					} catch {
 						// ignore
@@ -73,12 +162,12 @@ function clearPlannedAiWork(plugin: EpochPlugin): void {
 		}
 
 		try {
-			anyPlugin?.aiBridgeChunkGroups?.clear?.();
+			runtime.aiBridgeChunkGroups?.clear?.();
 		} catch {
 			// ignore
 		}
 		try {
-			anyPlugin?.aiBridgeReduceFallbackByJobId?.clear?.();
+			runtime.aiBridgeReduceFallbackByJobId?.clear?.();
 		} catch {
 			// ignore
 		}
@@ -90,11 +179,11 @@ function clearPlannedAiWork(plugin: EpochPlugin): void {
 function getProgressParts(plugin: EpochPlugin): { root: HTMLElement; text: HTMLElement } | null {
 	const root = getProgressEl(plugin);
 	if (!root) return null;
-	const anyPlugin: any = plugin as any;
-	if (anyPlugin.__epochStatusBarProgressTextEl instanceof HTMLElement) {
+	const runtime = getRuntime(plugin);
+	if (runtime.__epochStatusBarProgressTextEl instanceof HTMLElement) {
 		return {
 			root,
-			text: anyPlugin.__epochStatusBarProgressTextEl
+			text: runtime.__epochStatusBarProgressTextEl
 		};
 	}
 
@@ -103,15 +192,15 @@ function getProgressParts(plugin: EpochPlugin): { root: HTMLElement; text: HTMLE
 		const text = activeDocument.createElement("span");
 		text.addClass?.("epoch-status-progress-text");
 		try {
-			if (!anyPlugin.__epochStatusBarProgressClickBound) {
-				anyPlugin.__epochStatusBarProgressClickBound = true;
+			if (!runtime.__epochStatusBarProgressClickBound) {
+				runtime.__epochStatusBarProgressClickBound = true;
 				root.addEventListener("click", (ev) => {
 					ev.preventDefault();
 					ev.stopPropagation();
 					try {
-						const kind: EpochProgressKind | "" = String((anyPlugin.__epochActiveProgressKind ?? "") as any) as any;
+						const kind = runtime.__epochActiveProgressKind;
 						if (!kind) return;
-						requestCancelEpochTask(plugin, kind as EpochProgressKind);
+						requestCancelEpochTask(plugin, kind);
 					} catch {
 						// ignore
 					}
@@ -122,7 +211,7 @@ function getProgressParts(plugin: EpochPlugin): { root: HTMLElement; text: HTMLE
 		}
 
 		root.appendChild(text);
-		anyPlugin.__epochStatusBarProgressTextEl = text;
+		runtime.__epochStatusBarProgressTextEl = text;
 		return { root, text };
 	} catch {
 		return { root, text: root };
@@ -131,11 +220,8 @@ function getProgressParts(plugin: EpochPlugin): { root: HTMLElement; text: HTMLE
 
 export function consumeCancelRequested(plugin: EpochPlugin, kind: EpochProgressKind): boolean {
 	try {
-		const anyPlugin: any = plugin as any;
-		const map: Record<string, number> =
-			anyPlugin.__epochCancelRequestedAt && typeof anyPlugin.__epochCancelRequestedAt === "object"
-				? anyPlugin.__epochCancelRequestedAt
-				: (anyPlugin.__epochCancelRequestedAt = {});
+		const runtime = getRuntime(plugin);
+		const map = ensureCancelMap(runtime);
 		const had = typeof map[kind] === "number" && map[kind] > 0;
 		delete map[kind];
 		return had;
@@ -147,11 +233,8 @@ export function consumeCancelRequested(plugin: EpochPlugin, kind: EpochProgressK
 export function requestCancelEpochTask(plugin: EpochPlugin, kind: EpochProgressKind): void {
 	if (!Platform.isDesktopApp) return;
 	try {
-		const anyPlugin: any = plugin as any;
-		const map: Record<string, number> =
-			anyPlugin.__epochCancelRequestedAt && typeof anyPlugin.__epochCancelRequestedAt === "object"
-				? anyPlugin.__epochCancelRequestedAt
-				: (anyPlugin.__epochCancelRequestedAt = {});
+		const runtime = getRuntime(plugin);
+		const map = ensureCancelMap(runtime);
 		map[kind] = Date.now();
 	} catch {
 		// ignore
@@ -167,79 +250,79 @@ export function requestCancelEpochTask(plugin: EpochPlugin, kind: EpochProgressK
 
 	// Best-effort immediate actions.
 	try {
-		const anyPlugin: any = plugin as any;
+		const runtime = getRuntime(plugin);
 		if (kind === "ai") {
 			clearPlannedAiWork(plugin);
 			try {
-				anyPlugin.aiBridge?.clearQueue?.();
+			runtime.aiBridge?.clearQueue?.();
 			} catch {
 				// ignore
 			}
 			try {
-				anyPlugin.__epochAiProgressStartedAt = 0;
-				anyPlugin.__epochAiProgressBaselineDone = null;
-				anyPlugin.__epochAiProgressBaselineErrors = null;
+				runtime.__epochAiProgressStartedAt = 0;
+				runtime.__epochAiProgressBaselineDone = null;
+				runtime.__epochAiProgressBaselineErrors = null;
 			} catch {
 				// ignore
 			}
 			try {
-				delete (anyPlugin as any)?.__epochCancelRequestedAt?.ai;
+				delete ensureCancelMap(runtime).ai;
 			} catch {
 				// ignore
 			}
 			try {
-				void anyPlugin.refreshAiBridgeStatusBar?.();
+				void runtime.refreshAiBridgeStatusBar?.();
 			} catch {
 				// ignore
 			}
 			try {
-				void anyPlugin.refreshAiBridgeProgress?.();
+				void runtime.refreshAiBridgeProgress?.();
 			} catch {
 				// ignore
 			}
 		}
 		if (kind === "semantic") {
 			try {
-				if (anyPlugin.similarityQueueTimer) {
-				window.clearTimeout(anyPlugin.similarityQueueTimer);
-					anyPlugin.similarityQueueTimer = null;
+				if (typeof runtime.similarityQueueTimer === "number") {
+					window.clearTimeout(runtime.similarityQueueTimer);
+					runtime.similarityQueueTimer = null;
 				}
 			} catch {
 				// ignore
 			}
 			try {
-				anyPlugin.similarityPendingFiles = new Set<string>();
-				anyPlugin.similarityQueueTotal = 0;
-				anyPlugin.similarityQueueProcessed = 0;
-				anyPlugin.similarityVectorUpdateProcessingStartedAt = 0;
+				runtime.similarityPendingFiles = new Set<string>();
+				runtime.similarityQueueTotal = 0;
+				runtime.similarityQueueProcessed = 0;
+				runtime.similarityVectorUpdateProcessingStartedAt = 0;
 			} catch {
 				// ignore
 			}
 			try {
-				delete (anyPlugin as any)?.__epochCancelRequestedAt?.semantic;
+				delete ensureCancelMap(runtime).semantic;
 			} catch {
 				// ignore
 			}
 		}
 		if (kind === "topics") {
 			try {
-				if (anyPlugin.termSimilarityQueueTimer) {
-				window.clearTimeout(anyPlugin.termSimilarityQueueTimer);
-					anyPlugin.termSimilarityQueueTimer = null;
+				if (typeof runtime.termSimilarityQueueTimer === "number") {
+					window.clearTimeout(runtime.termSimilarityQueueTimer);
+					runtime.termSimilarityQueueTimer = null;
 				}
 			} catch {
 				// ignore
 			}
 			try {
-				anyPlugin.termSimilarityPendingFiles = new Set<string>();
-				anyPlugin.termSimilarityQueueTotal = 0;
-				anyPlugin.termSimilarityQueueProcessed = 0;
-				anyPlugin.termSimilarityProcessingStartedAt = 0;
+				runtime.termSimilarityPendingFiles = new Set<string>();
+				runtime.termSimilarityQueueTotal = 0;
+				runtime.termSimilarityQueueProcessed = 0;
+				runtime.termSimilarityProcessingStartedAt = 0;
 			} catch {
 				// ignore
 			}
 			try {
-				delete (anyPlugin as any)?.__epochCancelRequestedAt?.topics;
+				delete ensureCancelMap(runtime).topics;
 			} catch {
 				// ignore
 			}
@@ -261,13 +344,12 @@ export function requestCancelEpochTask(plugin: EpochPlugin, kind: EpochProgressK
 	}
 }
 
-function 	getProgressEl(plugin: EpochPlugin): HTMLElement | null {
+function getProgressEl(plugin: EpochPlugin): HTMLElement | null {
 	if (!Platform.isDesktopApp) return null;
-	const anyPlugin: any = plugin as any;
-	if (anyPlugin.__epochStatusBarProgressEl instanceof HTMLElement) return anyPlugin.__epochStatusBarProgressEl;
+	const runtime = getRuntime(plugin);
+	if (runtime.__epochStatusBarProgressEl instanceof HTMLElement) return runtime.__epochStatusBarProgressEl;
 	try {
-		if (typeof (plugin as any).addStatusBarItem !== "function") return null;
-		const el: HTMLElement = (plugin as any).addStatusBarItem();
+		const el = plugin.addStatusBarItem();
 		setCssStyles(el, { display: "none" });
 		el.addClass?.("epoch-status-progress");
 		try {
@@ -276,7 +358,7 @@ function 	getProgressEl(plugin: EpochPlugin): HTMLElement | null {
 		} catch {
 			// ignore
 		}
-		anyPlugin.__epochStatusBarProgressEl = el;
+		runtime.__epochStatusBarProgressEl = el;
 		return el;
 	} catch {
 		return null;
@@ -287,10 +369,8 @@ function refreshDisplay(plugin: EpochPlugin): void {
 	const parts = getProgressParts(plugin);
 	if (!parts) return;
 	const el = parts.root;
-	const anyPlugin: any = plugin as any;
-	const map: Record<string, string> = (anyPlugin.__epochProgressByKind && typeof anyPlugin.__epochProgressByKind === "object")
-		? anyPlugin.__epochProgressByKind
-		: (anyPlugin.__epochProgressByKind = {});
+	const runtime = getRuntime(plugin);
+	const map = ensureProgressMap(runtime);
 
 	let nextText = "";
 	let activeKind: EpochProgressKind | "" = "";
@@ -305,7 +385,7 @@ function refreshDisplay(plugin: EpochPlugin): void {
 
 	if (!nextText) {
 		try {
-			(anyPlugin.__epochActiveProgressKind as any) = "";
+			runtime.__epochActiveProgressKind = "";
 		} catch {
 			// ignore
 		}
@@ -316,7 +396,7 @@ function refreshDisplay(plugin: EpochPlugin): void {
 			// ignore
 		}
 		try {
-			(el.style as any).cursor = "";
+			setCssStyles(el, { cursor: "" });
 		} catch {
 			// ignore
 		}
@@ -324,7 +404,7 @@ function refreshDisplay(plugin: EpochPlugin): void {
 		return;
 	}
 	try {
-		(anyPlugin.__epochActiveProgressKind as any) = activeKind;
+		runtime.__epochActiveProgressKind = activeKind;
 	} catch {
 		// ignore
 	}
@@ -340,7 +420,7 @@ function refreshDisplay(plugin: EpochPlugin): void {
 		// ignore
 	}
 	try {
-		(el.style as any).cursor = activeKind ? "pointer" : "";
+		setCssStyles(el, { cursor: activeKind ? "pointer" : "" });
 	} catch {
 		// ignore
 	}
@@ -355,20 +435,18 @@ export function initEpochStatusBarProgress(plugin: EpochPlugin): void {
 export function setEpochProgress(plugin: EpochPlugin, kind: EpochProgressKind, text: string): void {
 	const el = getProgressEl(plugin);
 	if (!el) return;
-	const anyPlugin: any = plugin as any;
+	const runtime = getRuntime(plugin);
 
 	try {
-		if (anyPlugin.__epochProgressClearTimer != null) {
-			window.clearTimeout(anyPlugin.__epochProgressClearTimer);
-			anyPlugin.__epochProgressClearTimer = null;
+		if (typeof runtime.__epochProgressClearTimer === "number") {
+			window.clearTimeout(runtime.__epochProgressClearTimer);
+			runtime.__epochProgressClearTimer = null;
 		}
 	} catch {
 		// ignore
 	}
 
-	const map: Record<string, string> = (anyPlugin.__epochProgressByKind && typeof anyPlugin.__epochProgressByKind === "object")
-		? anyPlugin.__epochProgressByKind
-		: (anyPlugin.__epochProgressByKind = {});
+	const map = ensureProgressMap(runtime);
 	map[kind] = String(text || "").trim();
 	refreshDisplay(plugin);
 }
@@ -376,11 +454,8 @@ export function setEpochProgress(plugin: EpochPlugin, kind: EpochProgressKind, t
 export function cancelEpochDesktopTaskAnnouncement(plugin: EpochPlugin, key: string): void {
 	if (!Platform.isDesktopApp) return;
 	try {
-		const anyPlugin: any = plugin as any;
-		const timers: Record<string, number> =
-			anyPlugin.__epochDesktopTaskNoticeTimer && typeof anyPlugin.__epochDesktopTaskNoticeTimer === "object"
-				? anyPlugin.__epochDesktopTaskNoticeTimer
-				: (anyPlugin.__epochDesktopTaskNoticeTimer = {});
+		const runtime = getRuntime(plugin);
+		const timers = ensureNoticeTimers(runtime);
 		const t = timers[key];
 		if (typeof t === "number") {
 			window.clearTimeout(t);
@@ -453,21 +528,19 @@ export function announceEpochDesktopTaskAfter(
 
 export function clearEpochProgress(plugin: EpochPlugin, kind: EpochProgressKind, delayMs: number = 1500): void {
 	if (!Platform.isDesktopApp) return;
-	const anyPlugin: any = plugin as any;
-	const map: Record<string, string> = (anyPlugin.__epochProgressByKind && typeof anyPlugin.__epochProgressByKind === "object")
-		? anyPlugin.__epochProgressByKind
-		: (anyPlugin.__epochProgressByKind = {});
+	const runtime = getRuntime(plugin);
+	const map = ensureProgressMap(runtime);
 	map[kind] = "";
 	refreshDisplay(plugin);
 
 	try {
-		if (anyPlugin.__epochProgressClearTimer != null) {
-			window.clearTimeout(anyPlugin.__epochProgressClearTimer);
-			anyPlugin.__epochProgressClearTimer = null;
+		if (typeof runtime.__epochProgressClearTimer === "number") {
+			window.clearTimeout(runtime.__epochProgressClearTimer);
+			runtime.__epochProgressClearTimer = null;
 		}
-		anyPlugin.__epochProgressClearTimer = window.setTimeout(() => {
+		runtime.__epochProgressClearTimer = window.setTimeout(() => {
 			try {
-				anyPlugin.__epochProgressClearTimer = null;
+				runtime.__epochProgressClearTimer = null;
 				refreshDisplay(plugin);
 			} catch {
 				// ignore

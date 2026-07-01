@@ -16,24 +16,97 @@ import {
 } from "./shared";
 import { getEffectiveZeroShotMinScore, isSummarizeAIEffective } from "../../plugin/pro-feature-state";
 import { isTopicSimilarityEnabled } from "../../plugin/similarity/config";
+import type { EpochPlugin } from "../../main";
+
+type SearchIndexerLike = {
+	getFileEmbeddingTerm?: (path: string) => string;
+};
+
+type SearchCachedTag = {
+	tag?: string;
+};
+
+type SearchFileCacheLike = {
+	tags?: SearchCachedTag[];
+	frontmatter?: Record<string, unknown>;
+};
+
+type SearchMetadataCacheLike = {
+	getFileCache?: (file: unknown) => SearchFileCacheLike | null;
+};
+
+type SearchVaultLike = {
+	getAbstractFileByPath?: (path: string) => unknown;
+};
+
+type SearchPluginLike = {
+	app?: {
+		vault?: SearchVaultLike;
+		metadataCache?: SearchMetadataCacheLike;
+	};
+	indexer?: SearchIndexerLike;
+	timelineSearchIndex?: {
+		searchFileIds?: (query: {
+			includeText: string;
+			excludeTokens: string[];
+			exactPhrases: string[];
+			excludedPhrases: string[];
+		}) => Set<string>;
+	};
+	termSimilarityLoaded?: boolean;
+	termSimilarityIndex?: {
+		files?: Record<string, { term?: string; score?: number }>;
+	};
+	__timelineSearchIndexVersion?: number;
+};
+
+type SearchCanvasRuntime = {
+	plugin?: SearchPluginLike;
+	__indexVersion?: number;
+	__timelineSearchMetaCacheVersion?: number;
+	__timelineSearchMetaByPath?: Map<string, { tags: string[]; aliases: string[] }>;
+	__timelineSearchMiniSig?: string;
+	__timelineSearchMiniVersion?: number;
+	__timelineSearchMiniMatches?: Set<string> | null;
+	__timelineSearchSig?: string;
+	__timelineSearchVersion?: number;
+	__timelineSearchMatchCache?: WeakMap<object, boolean>;
+	semanticRelatedBasePath?: string;
+	activeFilePath?: string;
+	semanticRelatedPaths?: Set<string>;
+	semanticRelatedTermPaths?: Set<string>;
+};
+
+type SearchEntryRuntime = DateEntry & {
+	summary?: string;
+	aiSummary?: string;
+	epochBucket?: string;
+	epochStart?: string;
+	epochEnd?: string;
+	markColor?: number;
+	pinned?: boolean;
+	file?: string;
+	aiSummaryVisible?: boolean;
+};
 
 function getSearchHaystackForEpochEntry(entry: DateEntry): string {
+	const e = entry as SearchEntryRuntime;
 	const parts: string[] = [];
 
-	const summary = String((entry as any)?.summary || "");
+	const summary = String(e.summary || "");
 	if (summary) parts.push(summary);
-	const aiSummary = String((entry as any)?.aiSummary || "");
+	const aiSummary = String(e.aiSummary || "");
 	if (aiSummary) parts.push(aiSummary);
 
-	const epochBucket = String((entry as any)?.epochBucket || "");
+	const epochBucket = String(e.epochBucket || "");
 	if (epochBucket) parts.push(epochBucket);
-	const epochStart = String((entry as any)?.epochStart || "");
-	const epochEnd = String((entry as any)?.epochEnd || "");
+	const epochStart = String(e.epochStart || "");
+	const epochEnd = String(e.epochEnd || "");
 	if (epochStart || epochEnd) parts.push(epochStart + " " + epochEnd);
 
-	const markColor = Number((entry as any)?.markColor ?? NaN);
+	const markColor = Number(e.markColor ?? NaN);
 	if (Number.isFinite(markColor)) parts.push("mark:" + String(Math.floor(markColor)));
-	if ((entry as any)?.pinned === true) parts.push("pinned");
+	if (e.pinned === true) parts.push("pinned");
 
 	return parts.join("\n");
 }
@@ -153,16 +226,18 @@ export function matchesEpochEntrySearch(canvas: EpochCanvas, entry: DateEntry, p
 
 function getSearchHaystackForEntry(canvas: EpochCanvas, entry: DateEntry): string {
 	const parts: string[] = [];
-	const cAny: any = canvas as any;
-	const pluginAny: any = (canvas as any)?.plugin;
+	const cAny = canvas as unknown as SearchCanvasRuntime;
+	const pluginAny = cAny.plugin;
+	const plugin = pluginAny as unknown as EpochPlugin;
+	const e = entry as SearchEntryRuntime;
 	const allowAiSummary = (() => {
 		try {
-			if (String((entry as any)?.file ?? "").startsWith("epoch://")) return true;
-			if (pluginAny && isSummarizeAIEffective(pluginAny)) return true;
+			if (String(e.file ?? "").startsWith("epoch://")) return true;
+			if (pluginAny && isSummarizeAIEffective(plugin)) return true;
 		} catch {
 			// ignore
 		}
-		return (entry as any)?.aiSummaryVisible === true;
+		return e.aiSummaryVisible === true;
 	})();
 	const file = String(entry.file || "");
 	if (file) parts.push(file);
@@ -210,17 +285,16 @@ function getSearchHaystackForEntry(canvas: EpochCanvas, entry: DateEntry): strin
 
 	// Topics/terms: include explicit file topic and inferred (term-similarity) topic.
 	try {
-		const pluginAny: any = (canvas as any)?.plugin;
 		const indexer = pluginAny?.indexer;
 		const getTerm = indexer?.getFileEmbeddingTerm;
 		if (typeof getTerm === "function" && file) {
-			const term = String(getTerm.call(indexer, file) || "").trim();
+			const term = String(getTerm(file) || "").trim();
 			if (term) addTopicTerm(term);
 		}
-		const zeroShotMin = pluginAny ? getEffectiveZeroShotMinScore(pluginAny) : 0;
+		const zeroShotMin = pluginAny ? getEffectiveZeroShotMinScore(plugin) : 0;
 		const storeLoaded = pluginAny?.termSimilarityLoaded === true && !!pluginAny?.termSimilarityIndex && typeof pluginAny.termSimilarityIndex === "object";
-		if (pluginAny && isTopicSimilarityEnabled(pluginAny) && storeLoaded && zeroShotMin > 0 && zeroShotMin < 1 && file) {
-			const rec: any = pluginAny?.termSimilarityIndex?.files?.[file];
+		if (pluginAny && isTopicSimilarityEnabled(plugin) && storeLoaded && zeroShotMin > 0 && zeroShotMin < 1 && file) {
+			const rec: { term?: string; score?: number } | undefined = pluginAny?.termSimilarityIndex?.files?.[file];
 			const inferred = typeof rec?.term === "string" ? String(rec.term).trim() : "";
 			const score = Number(rec?.score ?? 0);
 			if (inferred && Number.isFinite(score) && score >= zeroShotMin) {
@@ -233,10 +307,9 @@ function getSearchHaystackForEntry(canvas: EpochCanvas, entry: DateEntry): strin
 
 	// Obsidian tags + aliases (from metadata cache). Cached per-canvas per-file.
 	try {
-		const pluginAny: any = (canvas as any)?.plugin;
-		const app: any = pluginAny?.app;
-		const vault: any = app?.vault;
-		const mc: any = app?.metadataCache;
+		const app = pluginAny?.app;
+		const vault = app?.vault;
+		const mc = app?.metadataCache;
 		const getAbstract = vault?.getAbstractFileByPath;
 		const getCache = mc?.getFileCache;
 		if (typeof getAbstract === "function" && typeof getCache === "function" && file) {
@@ -247,7 +320,7 @@ function getSearchHaystackForEntry(canvas: EpochCanvas, entry: DateEntry): strin
 				cAny.__timelineSearchMetaByPath = new Map();
 			}
 			let map = cAny.__timelineSearchMetaByPath as Map<string, { tags: string[]; aliases: string[] }> | null | undefined;
-			if (!map || typeof (map as any).get !== "function") {
+			if (!map) {
 				map = new Map();
 				cAny.__timelineSearchMetaByPath = map;
 			}
@@ -276,13 +349,13 @@ function getSearchHaystackForEntry(canvas: EpochCanvas, entry: DateEntry): strin
 				const tagsOut: string[] = [];
 				const aliasesOut: string[] = [];
 				try {
-					const af = getAbstract.call(vault, file);
-					const cache = af ? getCache.call(mc, af) : null;
+					const af = getAbstract(file);
+					const cache = af ? getCache(af) : null;
 					const tagSet = new Set<string>();
 					const cacheTags = cache?.tags;
 					if (Array.isArray(cacheTags)) {
 						for (const t of cacheTags) {
-							const norm = normalizeTag((t as any)?.tag ?? t);
+							const norm = normalizeTag(t.tag ?? t);
 							if (norm) tagSet.add(norm);
 						}
 					}
@@ -338,9 +411,9 @@ function matchesFileMiniSearch(canvas: EpochCanvas, filePath: string, parsed: Ti
 	const file = String(filePath || "");
 	if (!file) return false;
 
-	const cAny: any = canvas as any;
+	const cAny = canvas as unknown as SearchCanvasRuntime;
 	const sig = String(parsed?.raw || "").trim().toLowerCase();
-	const pluginAny: any = (canvas as any)?.plugin;
+	const pluginAny = cAny.plugin;
 	const idxVersion = (() => {
 		try {
 			const n = Number(pluginAny?.__timelineSearchIndexVersion ?? 0);
@@ -372,7 +445,7 @@ function matchesFileMiniSearch(canvas: EpochCanvas, filePath: string, parsed: Ti
 	}
 	if (!(set instanceof Set)) {
 		try {
-			const idx: any = pluginAny?.timelineSearchIndex;
+			const idx = pluginAny?.timelineSearchIndex;
 			if (idx && typeof idx.searchFileIds === "function") {
 				set = idx.searchFileIds({ includeText, excludeTokens, exactPhrases, excludedPhrases });
 			} else {
@@ -404,8 +477,8 @@ export function matchesSearch(canvas: EpochCanvas, entry: DateEntry): boolean {
 	if (similarScopeSig) sigParts.push(similarScopeSig);
 	const sig = sigParts.join("|");
 
-	const cAny: any = canvas as any;
-	const pluginAny: any = (canvas as any)?.plugin;
+	const cAny = canvas as unknown as SearchCanvasRuntime;
+	const pluginAny = cAny.plugin;
 	const idxVersion = (() => {
 		try {
 			const n = Number(pluginAny?.__timelineSearchIndexVersion ?? 0);
@@ -442,21 +515,21 @@ export function matchesSearch(canvas: EpochCanvas, entry: DateEntry): boolean {
 	}
 
 	try {
-		const prev = cache.get(entry as any);
+		const prev = cache.get(entry);
 		if (typeof prev === "boolean") return prev;
 	} catch {
 		// ignore
 	}
 
 	let result = false;
-	const filePath = String((entry as any)?.file || "");
+	const filePath = String(entry.file || "");
 
 	if (markedOnly) {
 		try {
 			const inherited = getInheritedMarkIndexByPath(canvas);
 			if (!isColorMarked(entry, inherited)) {
 				try {
-					cache.set(entry as any, false);
+					cache.set(entry, false);
 				} catch {
 					// ignore
 				}
@@ -471,8 +544,8 @@ export function matchesSearch(canvas: EpochCanvas, entry: DateEntry): boolean {
 		const related = new Set<string>();
 		const activePath = (() => {
 			try {
-				const c: any = canvas as any;
-				const raw = String(c?.semanticRelatedBasePath ?? c?.activeFilePath ?? "").trim();
+				const c = canvas as unknown as SearchCanvasRuntime;
+				const raw = String(c.semanticRelatedBasePath ?? c.activeFilePath ?? "").trim();
 				if (!raw || raw.startsWith("epoch://")) return "";
 				return raw;
 			} catch {
@@ -481,7 +554,7 @@ export function matchesSearch(canvas: EpochCanvas, entry: DateEntry): boolean {
 		})();
 		if (activePath) related.add(activePath);
 		try {
-			const p = (canvas as any)?.semanticRelatedPaths;
+			const p = (canvas as unknown as SearchCanvasRuntime).semanticRelatedPaths;
 			if (p instanceof Set) {
 				for (const item of p) {
 					const next = String(item || "").trim();
@@ -492,7 +565,7 @@ export function matchesSearch(canvas: EpochCanvas, entry: DateEntry): boolean {
 			// ignore
 		}
 		try {
-			const p = (canvas as any)?.semanticRelatedTermPaths;
+			const p = (canvas as unknown as SearchCanvasRuntime).semanticRelatedTermPaths;
 			if (p instanceof Set) {
 				for (const item of p) {
 					const next = String(item || "").trim();
@@ -504,7 +577,7 @@ export function matchesSearch(canvas: EpochCanvas, entry: DateEntry): boolean {
 		}
 		if (activePath && related.size > 0 && !related.has(filePath)) {
 			try {
-				cache.set(entry as any, false);
+				cache.set(entry, false);
 			} catch {
 				// ignore
 			}
@@ -558,7 +631,7 @@ export function matchesSearch(canvas: EpochCanvas, entry: DateEntry): boolean {
 	}
 
 	try {
-		cache.set(entry as any, result);
+		cache.set(entry, result);
 	} catch {
 		// ignore
 	}

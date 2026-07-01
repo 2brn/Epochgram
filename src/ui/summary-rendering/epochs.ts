@@ -25,7 +25,7 @@ export interface EpochsSummaryRenderArgs {
 	animSummary: { dayIndex: number; itemIndex: number } | null;
 	prevAnimSummary?: { dayIndex: number; itemIndex: number } | null;
 	outgoingSummaries?: Array<{ dayIndex: number; itemIndex: number; t: number }> | null;
-	wrapFadeCache?: Map<string, any> | null;
+	wrapFadeCache?: Map<string, unknown> | null;
 	activeFilePath: string | null;
 	showHidden: boolean;
 	hiddenOnly?: boolean;
@@ -174,7 +174,8 @@ export function renderEpochsDaySummaries(args: EpochsSummaryRenderArgs): DaySumm
 	let yCursor = dayCenterY - totalHeight / 2;
 
 	for (let ri = 0; ri < rows.length; ri++) {
-		const r = rows[ri]!;
+		const r = rows[ri];
+		if (!r) continue;
 		if (ri > 0) yCursor += (hoverGap / 2) * Math.max(0, Math.min(1, r.hoverT));
 		const yTop = yCursor;
 		const yBottom = yTop + r.height;

@@ -1,12 +1,14 @@
 import { workerState, type OrtWasmBlobUrls } from "./state";
 
+declare const self: Worker & { location?: Location };
+
 // Keep in sync with package-lock.json (onnxruntime-web version used by similarity worker).
 export const ONNX_RUNTIME_WEB_VERSION = "1.24.3";
 export const PLUGIN_ID = "epoch";
 
 export function getWorkerLocationDebug(): { href: string; origin: string } {
-	const workerGlobal: any = typeof self !== "undefined" ? (self as any) : (typeof global !== "undefined" ? (global as any) : {});
-	const loc: any = workerGlobal?.location;
+	const workerGlobal = self;
+	const loc = workerGlobal?.location;
 	const href = String(loc?.href || "");
 	const origin = String(loc?.origin || "");
 	return { href, origin };
@@ -45,8 +47,8 @@ export function primeOrtWasmFromBuffers(files: Array<{ name: string; data: Array
 
 	const out: Record<string, string> = {};
 	for (const f of files || []) {
-		const name = String((f as any)?.name || "").trim();
-		const data = (f as any)?.data;
+		const name = String(f?.name || "").trim();
+		const data = f?.data;
 		if (!name || !(data instanceof ArrayBuffer)) continue;
 		if (data.byteLength <= 0) continue;
 		const blob = new Blob([data], { type: "application/wasm" });

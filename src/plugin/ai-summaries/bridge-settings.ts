@@ -5,7 +5,7 @@ import { validateBridgeOptionsYaml } from "../ai-bridge/sanitize";
 
 const PERIOD_ORDER = ["day", "2days", "4days", "week", "2weeks", "month", "3months", "6months", "year"] as const;
 
-function requirePositiveInteger(value: any, key: string): number {
+function requirePositiveInteger(value: unknown, key: string): number {
 	if (typeof value === "number" && Number.isFinite(value)) {
 		const normalized = Math.floor(value);
 		if (normalized > 0) return normalized;
@@ -14,14 +14,15 @@ function requirePositiveInteger(value: any, key: string): number {
 }
 
 function getStoredResolvedBridgeSettings(plugin: EpochPlugin): BridgeResolvedSettings {
-	const raw = (plugin as any)?.settings?.aiBridgeOptions;
+	const raw = plugin.settings?.aiBridgeOptions;
 	if (raw && typeof raw === "object") {
-		if (typeof (raw as any).settingsYaml === "string") {
-			return validateBridgeOptionsYaml((raw as any).settingsYaml).resolved;
+		const rawObj = raw as { settingsYaml?: unknown; resolved?: unknown };
+		if (typeof rawObj.settingsYaml === "string") {
+			return validateBridgeOptionsYaml(rawObj.settingsYaml).resolved;
 		}
-		const resolved = (raw as any).resolved;
+		const resolved = rawObj.resolved;
 		if (resolved && typeof resolved === "object") {
-			return resolved as BridgeResolvedSettings;
+			return resolved as unknown as BridgeResolvedSettings;
 		}
 	}
 	return validateBridgeOptionsYaml("").resolved;

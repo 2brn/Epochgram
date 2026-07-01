@@ -1,7 +1,7 @@
 import { getIcon } from "obsidian";
 import { setCssStyles } from "../dom";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = typeof window !== "undefined" ? window.document : ({} as Document);
 
 
 type IconPathSpec = {
@@ -76,7 +76,7 @@ function parsePoints(points: string): Array<{ x: number; y: number }> {
 }
 
 function ensureMeasureRoot(): SVGSVGElement {
-	let root = activeDocument.querySelector("svg[data-epoch-measure-root]") as SVGSVGElement | null;
+	let root = activeDocument.querySelector<SVGSVGElement>("svg[data-epoch-measure-root]");
 	if (root) return root;
 	root = activeDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
 	root.setAttribute("data-epoch-measure-root", "true");
@@ -95,7 +95,8 @@ function ensureMeasureRoot(): SVGSVGElement {
 }
 
 function measureIconBounds(svg: SVGElement): { x: number; y: number; width: number; height: number } | null {
-	if (typeof (svg as any)?.getBBox !== "function") return null;
+	const graphicsSvg = svg as SVGGraphicsElement;
+	if (typeof graphicsSvg.getBBox !== "function") return null;
 	try {
 		const root = ensureMeasureRoot();
 		const clone = svg.cloneNode(true) as SVGGraphicsElement;
@@ -199,9 +200,8 @@ function collectPaths(
 				path.rect(x, y, width, height);
 			} else {
 				const cornerRadius = Math.max(rx, ry);
-				const roundRect = (path as any).roundRect as ((x: number, y: number, w: number, h: number, radii: number) => void) | undefined;
-				if (typeof roundRect === "function") {
-					roundRect.call(path, x, y, width, height, cornerRadius);
+				if (typeof path.roundRect === "function") {
+					path.roundRect(x, y, width, height, cornerRadius);
 				} else {
 					// Manual rounded rectangle fallback for environments lacking Path2D.roundRect
 					const r = cornerRadius;

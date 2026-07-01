@@ -5,21 +5,35 @@ import { hasAiBridgeAccess } from "./pro-feature-state";
 
 import { AI_BRIDGE_GLYPH } from "./icons";
 
+type StatusBarBridgePlugin = EpochPlugin & {
+	__epochStatusBarAiBridgeEl?: HTMLElement | null;
+	__epochStatusBarAiBridgeClickBound?: boolean;
+	aiBridge?: {
+		getStatus?: () => { clientConnected: boolean };
+	} | null;
+	openAiBridgeWindow?: (options?: { silent?: boolean; source?: string; forceOpen?: boolean }) => void;
+	addStatusBarItem?: () => HTMLElement;
+};
+
+type WindowWithHTMLElement = Window & {
+	HTMLElement?: typeof HTMLElement;
+};
+
 function getEl(plugin: EpochPlugin): HTMLElement | null {
 	if (!Platform.isDesktopApp || Platform.isMobileApp) return null;
-	const anyPlugin: any = plugin as any;
-	const cached = anyPlugin.__epochStatusBarAiBridgeEl;
+	const state = plugin as StatusBarBridgePlugin;
+	const cached = state.__epochStatusBarAiBridgeEl;
 	try {
-		const HTMLElementAny: any = (window as any).HTMLElement;
-		if (cached && (typeof HTMLElementAny === "undefined" || cached instanceof HTMLElementAny)) {
+		const HTMLElementAny = (window as WindowWithHTMLElement).HTMLElement;
+		if (cached && (typeof HTMLElementAny === "undefined" || cached.instanceOf(HTMLElementAny))) {
 			return cached;
 		}
 	} catch {
 		// ignore
 	}
 	try {
-		if (typeof (plugin as any).addStatusBarItem !== "function") return null;
-		const el: HTMLElement = (plugin as any).addStatusBarItem();
+		if (typeof state.addStatusBarItem !== "function") return null;
+		const el: HTMLElement = state.addStatusBarItem();
 		setCssStyles(el, { display: "none" });
 		el.addClass?.("epoch-status-progress");
 		el.addClass?.("epoch-status-bridge");
@@ -29,7 +43,7 @@ function getEl(plugin: EpochPlugin): HTMLElement | null {
 		} catch {
 			// ignore
 		}
-		anyPlugin.__epochStatusBarAiBridgeEl = el;
+		state.__epochStatusBarAiBridgeEl = el;
 		return el;
 	} catch {
 		return null;
@@ -52,12 +66,12 @@ export function refreshAiBridgeStatusBar(plugin: EpochPlugin): void {
 		return;
 	}
 
-	const bridge: any = (plugin as any).aiBridge ?? null;
+	const bridge = (plugin as StatusBarBridgePlugin).aiBridge ?? null;
 	if (!bridge) {
 		setCssStyles(el, { display: "none" });
 		return;
 	}
-	let status: any = null;
+	let status: { clientConnected: boolean } | null = null;
 	try {
 		status = bridge?.getStatus?.() ?? null;
 	} catch {
@@ -82,7 +96,7 @@ export function refreshAiBridgeStatusBar(plugin: EpochPlugin): void {
 	// Keep the bridge button minimal; AI job progress shows in the shared progress indicator.
 	el.textContent = `${AI_BRIDGE_GLYPH} AI`;
 	try {
-		(el.style as any).cursor = "pointer";
+		setCssStyles(el, { cursor: "pointer" });
 	} catch {
 		// ignore
 	}
@@ -104,15 +118,15 @@ export function initAiBridgeStatusBar(plugin: EpochPlugin): void {
 	const el = getEl(plugin);
 	if (!el) return;
 
-	const anyPlugin: any = plugin as any;
+	const state = plugin as StatusBarBridgePlugin;
 	try {
-		if (!anyPlugin.__epochStatusBarAiBridgeClickBound) {
-			anyPlugin.__epochStatusBarAiBridgeClickBound = true;
+		if (!state.__epochStatusBarAiBridgeClickBound) {
+			state.__epochStatusBarAiBridgeClickBound = true;
 			el.addEventListener("click", (ev) => {
 				ev.preventDefault();
 				ev.stopPropagation();
 				try {
-					void (plugin as any).openAiBridgeWindow?.({ silent: false, source: "command", forceOpen: true });
+					void state.openAiBridgeWindow?.({ silent: false, source: "command", forceOpen: true });
 				} catch {
 					// ignore
 				}

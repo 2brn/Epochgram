@@ -68,7 +68,7 @@ export function parseFontSize(font: string): { size: number; prefix: string; suf
 		// produce something reasonable like "12px<suffix>".
 		return { size: 12, prefix: "", suffix: raw };
 	}
-	const size = parseFloat(m[1]!);
+	const size = parseFloat(m[1]);
 	const idx = m.index;
 	const prefix = raw.slice(0, idx);
 	const suffix = raw.slice(idx + m[0].length);
@@ -175,6 +175,22 @@ function trackedTimestamp(entry: DateEntry): number {
 	return Number.NEGATIVE_INFINITY;
 }
 
+function timelineSourcePriority(entry: DateEntry): number {
+	if (entry?.pinned === true) return 0;
+	switch (entry?.source) {
+		case "tracked":
+			return 1;
+		case "content":
+			return 2;
+		case "namedate":
+		case "dateprop":
+		case "cdate":
+			return 3;
+		default:
+			return 9;
+	}
+}
+
 function pickTimelineCandidate(candidates: TimelineCandidate[]): TimelineCandidate | null {
 	if (candidates.length === 0) return null;
 	const tracked = candidates.filter(candidate => candidate.entry.source === "tracked");
@@ -190,7 +206,7 @@ function pickTimelineCandidate(candidates: TimelineCandidate[]): TimelineCandida
 	}
 	const content = candidates.filter(candidate => candidate.entry.source === "content");
 	if (content.length > 0) {
-		const nonRecurring = content.filter(c => (c.entry as any)?.recurring !== true);
+		const nonRecurring = content.filter(c => c.entry.recurring !== true);
 		const pool = nonRecurring.length > 0 ? nonRecurring : content;
 		pool.sort((a, b) => {
 			if (a.order !== b.order) return a.order - b.order;
@@ -217,6 +233,26 @@ export function selectTimelineEntries(entries: DateEntry[]): DateEntry[] {
 	if (!Array.isArray(entries) || entries.length <= 1) {
 		return entries.slice();
 	}
+	const mtimeByFile = new Map<string, number>();
+	const readFileMtimeMs = (entry: DateEntry): number => {
+		const direct = Number(entry.fileMtimeMs ?? Number.NaN);
+		if (Number.isFinite(direct) && direct > 0) return direct;
+		const fp = String(entry.file ?? "");
+		if (!fp) return Number.NaN;
+		const cached = mtimeByFile.get(fp);
+		if (cached !== undefined) return cached;
+		let resolved = Number.NaN;
+		try {
+			const app = (window as unknown as { app?: { vault?: { getAbstractFileByPath?: (path: string) => unknown } } }).app;
+			const af = app?.vault?.getAbstractFileByPath?.(fp) as { stat?: { mtime?: unknown } } | undefined;
+			const m = Number(af?.stat?.mtime ?? Number.NaN);
+			if (Number.isFinite(m) && m > 0) resolved = m;
+		} catch {
+			resolved = Number.NaN;
+		}
+		mtimeByFile.set(fp, resolved);
+		return resolved;
+	};
 	const grouped = new Map<string, TimelineCandidate[]>();
 	entries.forEach((entry, index) => {
 		const bucket = grouped.get(entry.file);
@@ -234,7 +270,20 @@ export function selectTimelineEntries(entries: DateEntry[]): DateEntry[] {
 			selected.push(chosen);
 		}
 	}
-	selected.sort((a, b) => a.order - b.order);
+	selected.sort((a, b) => {
+		const sourceA = timelineSourcePriority(a.entry);
+		const sourceB = timelineSourcePriority(b.entry);
+		if (sourceA !== sourceB) return sourceA - sourceB;
+
+		const mA = readFileMtimeMs(a.entry);
+		const mB = readFileMtimeMs(b.entry);
+		const hasA = Number.isFinite(mA);
+		const hasB = Number.isFinite(mB);
+		if (hasA && hasB && mA !== mB) return mB - mA;
+		if (hasA && !hasB) return -1;
+		if (!hasA && hasB) return 1;
+		return a.order - b.order;
+	});
 	return selected.map(candidate => candidate.entry);
 }
 
@@ -247,12 +296,12 @@ const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function getEpochRangeFromEntry(entry: DateEntry | null | undefined): { start: string; end: string } | null {
 	if (!entry) return null;
-	const start = String((entry as any).epochStart || "");
-	const end = String((entry as any).epochEnd || "");
+	const start = String(entry.epochStart || "");
+	const end = String(entry.epochEnd || "");
 	if (DATE_KEY_RE.test(start) && DATE_KEY_RE.test(end)) {
 		return { start, end };
 	}
-	const file = String((entry as any).file || "");
+	const file = String(entry.file || "");
 	if (file.startsWith("epoch://")) {
 		// Format: epoch://<bucket>/<start>-<end>
 		const rest = file.slice("epoch://".length);
@@ -260,8 +309,12 @@ export function getEpochRangeFromEntry(entry: DateEntry | null | undefined): { s
 		if (slash >= 0) {
 			const tail = rest.slice(slash + 1);
 			const m = tail.match(/^(\d{4}-\d{2}-\d{2})-(\d{4}-\d{2}-\d{2})$/);
-			if (m && DATE_KEY_RE.test(m[1]!) && DATE_KEY_RE.test(m[2]!)) {
-				return { start: m[1]!, end: m[2]! };
+			if (m) {
+				const startKey = m[1];
+				const endKey = m[2];
+				if (DATE_KEY_RE.test(startKey) && DATE_KEY_RE.test(endKey)) {
+					return { start: startKey, end: endKey };
+				}
 			}
 		}
 	}
@@ -338,7 +391,7 @@ export function entrySummaryComponents(entry: DateEntry): { base: string; iconId
 			break;
 		case "cdate":
 		case "namedate":
-			if ((entry as any)?.namedDateRange === true) {
+			if ((entry as DateEntry & { namedDateRange?: boolean }).namedDateRange === true) {
 				addIcon(SUMMARY_ICON_PARSED);
 				if (!isMarkdownEntry(entry)) addIcon(SUMMARY_ICON_ATTACHMENT);
 				break;

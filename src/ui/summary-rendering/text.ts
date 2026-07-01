@@ -1,8 +1,14 @@
 import { SUMMARY_SEPARATOR_SYMBOL } from "../epoch-canvas-constants";
 
+type TextMetricsWithBoxes = TextMetrics & {
+	actualBoundingBoxAscent?: number;
+	actualBoundingBoxDescent?: number;
+};
+
 export function parseFontPx(font: string): number {
 	const m = String(font || "").match(/(\d+(?:\.\d+)?)px/);
-	const v = m ? parseFloat(m[1]!) : Number.NaN;
+	const rawPx = m?.[1];
+	const v = rawPx ? parseFloat(rawPx) : Number.NaN;
 	return Number.isFinite(v) ? v : 12;
 }
 
@@ -13,10 +19,10 @@ export function measureVerticalMetrics(
 	try {
 		ctx.save();
 		ctx.font = font;
-		const m = ctx.measureText("Hg");
+		const m: TextMetricsWithBoxes = ctx.measureText("Hg");
 		ctx.restore();
-		const a = (m as any).actualBoundingBoxAscent;
-		const d = (m as any).actualBoundingBoxDescent;
+		const a = m.actualBoundingBoxAscent;
+		const d = m.actualBoundingBoxDescent;
 		const ascent = typeof a === "number" && Number.isFinite(a) && a > 0 ? a : 0;
 		const descent = typeof d === "number" && Number.isFinite(d) && d >= 0 ? d : 0;
 		if (ascent > 0) {

@@ -30,7 +30,7 @@ export function isSimilarityEnabled(plugin: EpochPlugin): boolean {
 export function isTopicSimilarityEnabled(plugin: EpochPlugin): boolean {
 	if (!isSimilarityEnabled(plugin)) return false;
 	try {
-		const rawModel = (plugin as any)?.settings?.similarityZeroShotModelId;
+		const rawModel = plugin.settings?.similarityZeroShotModelId;
 		if (rawModel === NO_SIMILARITY_MODEL) return false;
 	} catch {
 		// ignore
@@ -50,7 +50,7 @@ export function embeddingsAllowed(): boolean {
 
 export function getSimilarityModelId(plugin: EpochPlugin): string {
 	try {
-		const rawAny = (plugin as any)?.settings?.similarityEmbeddingModelId;
+		const rawAny = plugin.settings?.similarityEmbeddingModelId;
 		if (rawAny === NO_SIMILARITY_MODEL) return DEFAULT_SIMILARITY_MODEL;
 		const raw = String(rawAny ?? "").trim();
 		if (raw) return raw;
@@ -62,7 +62,7 @@ export function getSimilarityModelId(plugin: EpochPlugin): string {
 
 export function getZeroShotModelId(plugin: EpochPlugin): string {
 	try {
-		const rawAny = (plugin as any)?.settings?.similarityZeroShotModelId;
+		const rawAny = plugin.settings?.similarityZeroShotModelId;
 		if (rawAny === NO_SIMILARITY_MODEL) return DEFAULT_ZERO_SHOT_MODEL;
 		const raw = String(rawAny ?? "").trim();
 		if (raw) return raw;
@@ -76,7 +76,7 @@ export function embeddingsSimilarityEnabled(plugin: EpochPlugin): boolean {
 	if (!isSimilarityEnabled(plugin)) return false;
 	if (!embeddingsAllowed()) return false;
 	try {
-		const rawModel = (plugin as any)?.settings?.similarityEmbeddingModelId;
+		const rawModel = plugin.settings?.similarityEmbeddingModelId;
 		if (rawModel === NO_SIMILARITY_MODEL) return false;
 	} catch {
 		// ignore

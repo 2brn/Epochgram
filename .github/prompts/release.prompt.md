@@ -63,6 +63,7 @@ If you can’t find a prior tag, derive bullets from `git log --oneline -n 50`.
 
 ### 4) Validate
 Run:
+- `npm run lint`
 - `npm test`
 - `npm run build:production`
 

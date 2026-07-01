@@ -1,5 +1,6 @@
 import type { HoverParent, TFile } from "obsidian";
 import type { DateEntry } from "../../indexer/types";
+import type { EpochPlugin } from "../../main";
 import type { DayLayout, HoverOverlay } from "../epoch-canvas-types";
 import type { EpochCanvas } from "../epoch-canvas";
 
@@ -111,7 +112,7 @@ export interface CanvasHoverInternals {
 	cancelFocusClear(): void;
 	layouts: DayLayout[];
 	hoverParent: HoverParent | null;
-	plugin: any;
+	plugin: EpochPlugin;
 	hoverSourceId: string;
 	activeFilePath: string | null;
 	modKeyActive: boolean;

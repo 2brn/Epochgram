@@ -1,4 +1,4 @@
-import { Notice, Platform, Setting, setIcon } from "obsidian";
+import { Notice, Platform, Setting, setIcon, type App, type SliderComponent } from "obsidian";
 import { formatDate } from "utils";
 import type { EpochPlugin } from "../main";
 import { NOTE_TITLE_SIMILARITY_JW_THRESHOLD } from "../utils";
@@ -21,15 +21,24 @@ import {
 	hasVerifiedEntitlement
 } from "../plugin/pro-feature-state";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document));
 
 type ProPanelOptions = {
 	advancedGroupsParentEl?: HTMLElement;
 };
 
+type ElectronShellApi = { openExternal?: (url: string) => unknown };
+type ElectronApi = { shell?: ElectronShellApi };
+type WindowWithRequire = Window & { require?: (moduleName: string) => unknown };
+type ProPanelRuntime = {
+	ensureIndexLoaded?: () => Promise<void>;
+	generateMissingAiSummariesForAllRecords?: () => Promise<void>;
+	regenerateMissingEpochsForAllRecords?: () => Promise<void>;
+};
+
 export function renderProPanel(
 	containerEl: HTMLElement,
-	app: any,
+	app: App,
 	plugin: EpochPlugin,
 	refresh: () => void,
 	options?: ProPanelOptions
@@ -39,11 +48,17 @@ export function renderProPanel(
 
 	const openExternalUrl = (url: string): void => {
 		try {
-			const electron = (window as any).require?.("electron");
-			if (electron?.shell?.openExternal) {
-				void electron.shell.openExternal(url);
-				return;
+			const requireFn = (window as WindowWithRequire).require;
+			if (typeof requireFn === "function") {
+				const loaded = requireFn("electron");
+				const electron = (typeof loaded === "object" && loaded !== null) ? (loaded as ElectronApi) : null;
+				const openExternal = electron?.shell?.openExternal;
+				if (typeof openExternal === "function") {
+					void openExternal(url);
+					return;
+				}
 			}
+				return;
 		} catch {
 			// ignore
 		}
@@ -159,7 +174,7 @@ export function renderProPanel(
 	};
 	const markLockedHeading = (groupEl: HTMLElement): void => {
 		if (isPro) return;
-		const headingEl = groupEl.querySelector(":scope > .setting-item-heading") as HTMLElement | null;
+		const headingEl = groupEl.querySelector(":scope > .setting-item-heading");
 		headingEl?.classList?.add("epoch-pro-locked-row");
 	};
 	const renderLicenseSetting = (parentEl: HTMLElement): Setting => {
@@ -168,8 +183,8 @@ export function renderProPanel(
 		const updateLicenseLayout = (): void => {
 			if (!licenseSetting.settingEl?.isConnected) return;
 			const hostEl = licenseSetting.settingEl;
-			const infoEl = hostEl.querySelector(":scope > .setting-item-info") as HTMLElement | null;
-			const controlEl = hostEl.querySelector(":scope > .setting-item-control") as HTMLElement | null;
+			const infoEl = hostEl.querySelector(":scope > .setting-item-info");
+			const controlEl = hostEl.querySelector(":scope > .setting-item-control");
 			if (!infoEl || !controlEl) return;
 			const hostWidth = Math.max(0, hostEl.clientWidth);
 			const infoWidth = Math.ceil(infoEl.getBoundingClientRect().width);
@@ -178,7 +193,7 @@ export function renderProPanel(
 			hostEl.classList.toggle("epoch-license-auto-stack", needsStack);
 		};
 		const scheduleLicenseLayout = (): void => {
-			if (licenseLayoutFrame) cancelAnimationFrame(licenseLayoutFrame);
+			if (licenseLayoutFrame) window.cancelAnimationFrame(licenseLayoutFrame);
 			licenseLayoutFrame = window.requestAnimationFrame(() => {
 				licenseLayoutFrame = 0;
 				updateLicenseLayout();
@@ -189,8 +204,7 @@ export function renderProPanel(
 		if (hasStoredClaimKeyPreview) {
 			licenseSetting.settingEl?.classList?.add("epoch-license-active-preview");
 		}
-		const anyPlatform: any = Platform as any;
-		const isMobile = anyPlatform?.isMobileApp === true || anyPlatform?.isMobile === true;
+		const isMobile = Platform.isMobileApp || Platform.isMobile;
 		if (isMobile) {
 			try {
 				licenseSetting.settingEl?.classList?.add("epoch-license-mobile-stack");
@@ -352,10 +366,10 @@ export function renderProPanel(
 
 	{
 		const panel = markLockedRow(new Setting(similaritySection));
-		let titleThrSlider: any = null;
+		let titleThrSlider: SliderComponent | null = null;
 		const STEP = 0.01;
 		const MIN = 0;
-		const MAX = 0.99;
+		const MAX = 1;
 		const round = (raw: number): number => {
 			const n = Number(raw);
 			if (!Number.isFinite(n)) return NOTE_TITLE_SIMILARITY_JW_THRESHOLD;
@@ -370,11 +384,11 @@ export function renderProPanel(
 			: 0;
 		const setLabel = (val: number) => {
 			const rounded = round(val);
-			const label = rounded <= 0 ? "disabled" : rounded.toFixed(2);
+			const label = rounded <= 0 ? "disabled" : rounded >= 1 ? "same folder" : rounded.toFixed(2);
 			panel.setName(`Title threshold (${label})`);
 		};
 		setLabel(titleThr);
-		panel.setDesc(canSimilarity ? "Jaro–Winkler threshold (0 disables)." : "Requires Epochgram Pro.");
+		panel.setDesc(canSimilarity ? "Jaro–Winkler threshold (0 disables, 1.0 = same folder)." : "Requires Epochgram Pro.");
 		panel.addSlider((slider) => {
 			titleThrSlider = slider;
 			const canUse = canSimilarity;
@@ -404,7 +418,7 @@ export function renderProPanel(
 
 	{
 		const similarityPanel = markLockedRow(new Setting(similaritySection));
-		let similaritySlider: any = null;
+		let similaritySlider: SliderComponent | null = null;
 		const SIMILARITY_STEP = 0.01;
 		const SIMILARITY_MIN = 0;
 		const SIMILARITY_MAX = 0.99;
@@ -422,8 +436,8 @@ export function renderProPanel(
 		};
 		const currentSimilarity = roundSimilarity(plugin.settings.similarityThreshold);
 		setSimilarityLabel(currentSimilarity);
-		const embeddingModelRaw = (plugin.settings as any)?.similarityEmbeddingModelId;
-		const embeddingModelId = String(embeddingModelRaw ?? "").trim();
+		const embeddingModelRaw = plugin.settings.similarityEmbeddingModelId;
+		const embeddingModelId = typeof embeddingModelRaw === "string" ? embeddingModelRaw.trim() : "";
 		const embeddingModel = embeddingModelRaw === NO_SIMILARITY_MODEL
 			? "(no model)"
 			: (embeddingModelId.length > 0 ? embeddingModelId : DEFAULT_SIMILARITY_MODEL);
@@ -432,7 +446,7 @@ export function renderProPanel(
 				? `Model: ${embeddingModel}.`
 				: "Requires Epochgram Pro."
 		);
-		similarityPanel.addExtraButton((btn: any) => {
+		similarityPanel.addExtraButton((btn) => {
 			btn.setIcon("globe");
 			btn.setTooltip("Browse models on huggingface.co");
 			btn.setDisabled(!canSimilarity);
@@ -441,7 +455,7 @@ export function renderProPanel(
 				void openEmbeddedUrl(HF_SEMANTICS_SEARCH_URL);
 			});
 		});
-		similarityPanel.addExtraButton((btn: any) => {
+		similarityPanel.addExtraButton((btn) => {
 			btn.setIcon("settings");
 			btn.setTooltip("Semantic model settings");
 			btn.setDisabled(!canSimilarity);
@@ -479,7 +493,7 @@ export function renderProPanel(
 
 	{
 		const zeroShotPanel = markLockedRow(new Setting(similaritySection));
-		let zeroShotSlider: any = null;
+		let zeroShotSlider: SliderComponent | null = null;
 		const STEP = 0.01;
 		const MIN = 0;
 		const MAX = 0.99;
@@ -500,8 +514,8 @@ export function renderProPanel(
 			zeroShotPanel.setName(`Topic threshold (${label})`);
 		};
 		setLabel(current);
-		const zeroShotModelRaw = (plugin.settings as any)?.similarityZeroShotModelId;
-		const zeroShotModelId = String(zeroShotModelRaw ?? "").trim();
+		const zeroShotModelRaw = plugin.settings.similarityZeroShotModelId;
+		const zeroShotModelId = typeof zeroShotModelRaw === "string" ? zeroShotModelRaw.trim() : "";
 		const zeroShotModel = zeroShotModelRaw === NO_SIMILARITY_MODEL
 			? "(no model)"
 			: (zeroShotModelId.length > 0 ? zeroShotModelId : DEFAULT_ZERO_SHOT_MODEL);
@@ -510,7 +524,7 @@ export function renderProPanel(
 				? `Model: ${zeroShotModel}.`
 				: "Requires Epochgram Pro."
 		);
-		zeroShotPanel.addExtraButton((btn: any) => {
+		zeroShotPanel.addExtraButton((btn) => {
 			btn.setIcon("globe");
 			btn.setTooltip("Browse models on huggingface.co");
 			btn.setDisabled(!canSimilarity);
@@ -519,7 +533,7 @@ export function renderProPanel(
 				void openEmbeddedUrl(HF_TOPICS_SEARCH_URL);
 			});
 		});
-		zeroShotPanel.addExtraButton((btn: any) => {
+		zeroShotPanel.addExtraButton((btn) => {
 			btn.setIcon("settings");
 			btn.setTooltip("Topic model settings");
 			btn.setDisabled(!canSimilarity);
@@ -556,6 +570,7 @@ export function renderProPanel(
 	}
 
 	if (Platform.isDesktopApp) {
+		const runtime = plugin as ProPanelRuntime;
 		const aiGroup = createSettingGroup(advancedGroupsParentEl, "Generative AI");
 		markLockedHeading(aiGroup.groupEl);
 		const { itemsEl: aiSection } = aiGroup;
@@ -577,7 +592,7 @@ export function renderProPanel(
 					if (nextEnabled && !wasEnabled) {
 						let missingCount = 0;
 						try {
-							await (plugin as any).ensureIndexLoaded?.();
+							await runtime.ensureIndexLoaded?.();
 							const maybeMissing = hasMissingAiSummariesFast(plugin);
 							missingCount = maybeMissing ? await countMissingAiSummaries(plugin) : 0;
 						} catch {
@@ -593,7 +608,7 @@ export function renderProPanel(
 						});
 						if (ok) {
 							try {
-								await (plugin as any).generateMissingAiSummariesForAllRecords?.();
+								await runtime.generateMissingAiSummariesForAllRecords?.();
 							} catch {
 								// ignore
 							}
@@ -620,7 +635,7 @@ export function renderProPanel(
 					if (prev === false && next === true) {
 						let missingCount = 0;
 						try {
-							await (plugin as any).ensureIndexLoaded?.();
+							await runtime.ensureIndexLoaded?.();
 							missingCount = countMissingEpochsFast(plugin);
 						} catch {
 							missingCount = 0;
@@ -635,7 +650,7 @@ export function renderProPanel(
 						});
 						if (ok) {
 							try {
-								await (plugin as any).regenerateMissingEpochsForAllRecords?.();
+								await runtime.regenerateMissingEpochsForAllRecords?.();
 							} catch {
 								// ignore
 							}

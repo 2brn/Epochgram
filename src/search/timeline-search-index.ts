@@ -10,6 +10,18 @@ type TimelineSearchDoc = {
 	meta: string
 }
 
+type AnyRecord = Record<string, unknown>
+
+function asRecord(v: unknown): AnyRecord {
+	return v && (typeof v === 'object' || typeof v === 'function') ? (v as AnyRecord) : {}
+}
+
+function asText(v: unknown): string {
+	if (typeof v === 'string') return v
+	if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+	return ''
+}
+
 function normalizeDiacritics(text: string): string {
 	const s = String(text || '')
 	try {
@@ -149,20 +161,20 @@ function getSearchOptionsForText(_text: string): { prefix: (term: string) => boo
 export class TimelineSearchIndex {
 	private mini: MiniSearch<TimelineSearchDoc>
 	private initialized = false
-	private getMiniSearchCtor(): any {
-		const anyMini: any = MiniSearch as any
-		return anyMini?.default ?? anyMini
+	private getMiniSearchCtor(): unknown {
+		const anyMini = asRecord(MiniSearch)
+		return anyMini.default ?? anyMini
 	}
-	private getMiniSearchStatic(name: string): any {
+	private getMiniSearchStatic(name: string): unknown {
 		try {
-			const ctor: any = this.getMiniSearchCtor()
-			if (ctor && typeof ctor[name] !== 'undefined') return ctor[name]
+			const ctor = asRecord(this.getMiniSearchCtor())
+			if (typeof ctor[name] !== 'undefined') return ctor[name]
 		} catch {
 			// ignore
 		}
 		try {
-			const anyMini: any = MiniSearch as any
-			if (anyMini && typeof anyMini[name] !== 'undefined') return anyMini[name]
+			const anyMini = asRecord(MiniSearch)
+			if (typeof anyMini[name] !== 'undefined') return anyMini[name]
 		} catch {
 			// ignore
 		}
@@ -194,7 +206,8 @@ export class TimelineSearchIndex {
 	serialize(): unknown {
 		if (!this.initialized) this.clear()
 		try {
-			return (this.mini as any).toJSON?.() ?? null
+			const mini = this.mini as MiniSearch<TimelineSearchDoc> & { toJSON?: () => unknown }
+			return typeof mini.toJSON === 'function' ? mini.toJSON() : null
 		} catch {
 			return null
 		}
@@ -203,11 +216,11 @@ export class TimelineSearchIndex {
 	loadSerialized(serialized: unknown): boolean {
 		try {
 			if (!serialized) return false
-			const ctor: any = this.getMiniSearchCtor()
-			const loadJSON: any = ctor?.loadJSON ?? this.getMiniSearchStatic('loadJSON')
+			const ctor = asRecord(this.getMiniSearchCtor())
+			const loadJSON: unknown = ctor.loadJSON ?? this.getMiniSearchStatic('loadJSON')
 			if (typeof loadJSON !== 'function') return false
 			const json = typeof serialized === 'string' ? serialized : JSON.stringify(serialized)
-			const loaded: any = loadJSON.call(ctor ?? MiniSearch, json, {
+			const loaded: unknown = loadJSON.call(Object.keys(ctor).length > 0 ? ctor : MiniSearch, json, {
 				fields: ['path', 'basename', 'directory', 'meta', 'content'],
 				storeFields: ['kind', 'path', 'basename', 'directory', 'meta', 'content'],
 				autoVacuum: false,
@@ -216,7 +229,12 @@ export class TimelineSearchIndex {
 				searchOptions: { combineWith: 'AND' }
 			})
 			if (!loaded) return false
-			if (typeof loaded.add !== 'function' || typeof loaded.search !== 'function' || typeof loaded.getStoredFields !== 'function') {
+			const loadedRecord = asRecord(loaded)
+			if (
+				typeof loadedRecord.add !== 'function' ||
+				typeof loadedRecord.search !== 'function' ||
+				typeof loadedRecord.getStoredFields !== 'function'
+			) {
 				return false
 			}
 			this.mini = loaded as MiniSearch<TimelineSearchDoc>
@@ -230,15 +248,16 @@ export class TimelineSearchIndex {
 	upsert(doc: TimelineSearchDoc): boolean {
 		if (!this.initialized) this.clear()
 		try {
-			const existing = this.mini.getStoredFields(doc.id) as any
-			if (existing) {
+			const existingRaw = this.mini.getStoredFields(doc.id)
+			if (existingRaw) {
+				const existing = asRecord(existingRaw)
 				const same =
-					String(existing.kind ?? '') === String(doc.kind ?? '') &&
-					String(existing.path ?? '') === String(doc.path ?? '') &&
-					String(existing.basename ?? '') === String(doc.basename ?? '') &&
-					String(existing.directory ?? '') === String(doc.directory ?? '') &&
-					String(existing.meta ?? '') === String(doc.meta ?? '') &&
-					String(existing.content ?? '') === String(doc.content ?? '')
+					asText(existing.kind) === doc.kind &&
+					asText(existing.path) === doc.path &&
+					asText(existing.basename) === doc.basename &&
+					asText(existing.directory) === doc.directory &&
+					asText(existing.meta) === doc.meta &&
+					asText(existing.content) === doc.content
 				if (same) return false
 				this.mini.remove({ id: doc.id, ...existing } as TimelineSearchDoc)
 				this.mini.add(doc)
@@ -260,8 +279,9 @@ export class TimelineSearchIndex {
 	removeById(id: string): boolean {
 		if (!this.initialized) this.clear()
 		try {
-			const stored = this.mini.getStoredFields(id) as any
-			if (stored) {
+			const storedRaw = this.mini.getStoredFields(id)
+			if (storedRaw) {
+				const stored = asRecord(storedRaw)
 				this.mini.remove({ id, ...stored } as TimelineSearchDoc)
 				return true
 			}
@@ -292,7 +312,7 @@ export class TimelineSearchIndex {
 			query = buildQuery(includeText)
 		} else {
 			const wildcard = this.getMiniSearchStatic('wildcard')
-			query = typeof wildcard !== 'undefined' ? wildcard : ('' as any)
+			query = typeof wildcard !== 'undefined' ? (wildcard as Query) : ''
 		}
 
 		if (excludeTokens.length > 0) {
@@ -302,9 +322,9 @@ export class TimelineSearchIndex {
 			}
 		}
 
-		const filterFile = (result: any): boolean => {
+		const filterFile = (result: unknown): boolean => {
 			try {
-				return result?.kind === 'file'
+				return asRecord(result).kind === 'file'
 			} catch {
 				return true
 			}
@@ -313,9 +333,10 @@ export class TimelineSearchIndex {
 		const exactNeedles = exactPhrases.map((p) => normalizeTextForIncludes(p)).filter(Boolean)
 		const excludedNeedles = excludedPhrases.map((p) => normalizeTextForIncludes(p)).filter(Boolean)
 
-		const matchesPostFilter = (r: any): boolean => {
+		const matchesPostFilter = (r: unknown): boolean => {
+			const rr = asRecord(r)
 			const hay = normalizeTextForIncludes(
-				[String(r?.path ?? ''), String(r?.basename ?? ''), String(r?.directory ?? ''), String(r?.meta ?? ''), String(r?.content ?? '')].join('\n')
+				[asText(rr.path), asText(rr.basename), asText(rr.directory), asText(rr.meta), asText(rr.content)].join('\n')
 			)
 			if (!hay) return false
 
@@ -346,8 +367,8 @@ export class TimelineSearchIndex {
 		}
 
 		const ids = new Set<string>()
-		for (const r of results as any[]) {
-			const id = String(r?.id ?? '')
+		for (const r of results) {
+			const id = asText(asRecord(r).id)
 			if (!id) continue
 			if (!matchesPostFilter(r)) continue
 			ids.add(id)
@@ -376,7 +397,7 @@ export class TimelineSearchIndex {
 			query = buildQuery(includeText)
 		} else {
 			const wildcard = this.getMiniSearchStatic('wildcard')
-			query = typeof wildcard !== 'undefined' ? wildcard : ('' as any)
+			query = typeof wildcard !== 'undefined' ? (wildcard as Query) : ''
 		}
 
 		if (excludeTokens.length > 0) {
@@ -386,9 +407,9 @@ export class TimelineSearchIndex {
 			}
 		}
 
-		const filterFile = (result: any): boolean => {
+		const filterFile = (result: unknown): boolean => {
 			try {
-				return result?.kind === 'file'
+				return asRecord(result).kind === 'file'
 			} catch {
 				return true
 			}
@@ -397,9 +418,10 @@ export class TimelineSearchIndex {
 		const exactNeedles = exactPhrases.map((p) => normalizeTextForIncludes(p)).filter(Boolean)
 		const excludedNeedles = excludedPhrases.map((p) => normalizeTextForIncludes(p)).filter(Boolean)
 
-		const matchesPostFilter = (r: any): boolean => {
+		const matchesPostFilter = (r: unknown): boolean => {
+			const rr = asRecord(r)
 			const hay = normalizeTextForIncludes(
-				[String(r?.path ?? ''), String(r?.basename ?? ''), String(r?.directory ?? ''), String(r?.meta ?? ''), String(r?.content ?? '')].join('\n')
+				[asText(rr.path), asText(rr.basename), asText(rr.directory), asText(rr.meta), asText(rr.content)].join('\n')
 			)
 			if (!hay) return false
 			for (const ex of excludedNeedles) {
@@ -430,8 +452,8 @@ export class TimelineSearchIndex {
 
 		const out: string[] = []
 		const seen = new Set<string>()
-		for (const r of results as any[]) {
-			const id = String(r?.id ?? '')
+		for (const r of results) {
+			const id = asText(asRecord(r).id)
 			if (!id) continue
 			if (seen.has(id)) continue
 			if (!matchesPostFilter(r)) continue

@@ -4,6 +4,7 @@ import type { EpochPlugin } from "../main";
 import { normalizeSerializedEpochIndexForDisk } from "../indexer/disk-serialization";
 import { sortIndex } from "../indexer/indexer-utils";
 import { updateAggregatedEntriesInternal } from "../indexer/update-aggregated-entries";
+import type { IndexerPipeline } from "../indexer/pipeline";
 import {
 	applyAiSummaries,
 	applyEpochEntriesByDate,
@@ -30,6 +31,24 @@ interface RefreshOptions {
 	suppressNotices?: boolean;
 }
 
+type IndexingPluginState = EpochPlugin & {
+	indexOperationStartedAt?: number;
+	timelineSearchIndex?: { clear?: () => void };
+	indexReady: boolean;
+	indexLoadPromise: Promise<void> | null;
+	__epochCancelRequestedAt?: { index?: number };
+	__epochTimelineSearchFocusToken?: number;
+	__epochInheritedMarkStartupScheduled?: boolean;
+	__epochInheritedMarkComputedAt?: number;
+	__epochInheritedMarkIndexByPath?: Map<string, number>;
+	__epochIndexOnOpenInFlight?: Set<string>;
+	queueVectorUpdate?: (path: string) => void;
+	queueTermSimilarityUpdate?: (path: string) => void;
+	scheduleInheritedMarkRecompute?: (reason: string) => void;
+	__timelineSearchAutoRebuildScheduled?: boolean;
+	rebuildTimelineSearchIndex?: () => Promise<void>;
+};
+
 async function reapplySavedAiSummaries(plugin: EpochPlugin): Promise<void> {
 	try {
 		const loaded = await loadEpochSummariesFromDisk(plugin);
@@ -44,7 +63,7 @@ function recomputeSummariesAfterAiRehydrate(plugin: EpochPlugin): void {
 		const paths = plugin.indexer.getIndexedPaths();
 		for (const p of paths) {
 			try {
-				updateAggregatedEntriesInternal(plugin.indexer as any, p, { skipSort: true });
+				updateAggregatedEntriesInternal(plugin.indexer as unknown as IndexerPipeline, p, { skipSort: true });
 			} catch {
 				// ignore per-file failures
 			}
@@ -85,10 +104,11 @@ export const indexingMethods: IndexingMethods = {
 		mode: "rebuild" | "refresh",
 		options: IndexOperationOptions = {}
 	): Promise<void> {
+		const state = this as IndexingPluginState;
 		const { skipEnsure = false, suppressNotices = false, baseline = false } = options;
 		// Track operation start so progress notices don't fire immediately.
 		try {
-			(this as any).indexOperationStartedAt = Date.now();
+			state.indexOperationStartedAt = Date.now();
 		} catch {
 			// ignore
 		}
@@ -96,7 +116,7 @@ export const indexingMethods: IndexingMethods = {
 			await this.ensureIndexLoaded();
 		}
 		try {
-			(this as any).timelineSearchIndex?.clear?.();
+			state.timelineSearchIndex?.clear?.();
 		} catch {
 			// ignore
 		}
@@ -115,7 +135,7 @@ export const indexingMethods: IndexingMethods = {
 				graceMs: 1000,
 				still: () => {
 					try {
-						return !(this as any).indexReady || !!(this as any).indexLoadPromise;
+						return !state.indexReady || !!state.indexLoadPromise;
 					} catch {
 						return true;
 					}
@@ -130,7 +150,7 @@ export const indexingMethods: IndexingMethods = {
 				const now = Date.now();
 				const startedAt = (() => {
 					try {
-						const v = Number((this as any).indexOperationStartedAt ?? 0);
+						const v = Number(state.indexOperationStartedAt ?? 0);
 						return Number.isFinite(v) ? v : 0;
 					} catch {
 						return 0;
@@ -155,9 +175,12 @@ export const indexingMethods: IndexingMethods = {
 				? this.indexer.rebuildAll(files, progressHandler)
 				: this.indexer.reprocessAll(files, progressHandler);
 
-		const isCancelledError = (e: any): boolean => {
+		const isCancelledError = (e: unknown): boolean => {
 			try {
-				return String(e?.code || "") === "EPOCH_CANCELLED" || String(e?.message || "") === "EPOCH_CANCELLED";
+				const err = e as { code?: unknown; message?: unknown };
+				const code = typeof err?.code === "string" ? err.code : "";
+				const message = typeof err?.message === "string" ? err.message : "";
+				return code === "EPOCH_CANCELLED" || message === "EPOCH_CANCELLED";
 			} catch {
 				return false;
 			}
@@ -171,7 +194,7 @@ export const indexingMethods: IndexingMethods = {
 				throw error;
 			}
 		})();
-		this.indexReady = false;
+		state.indexReady = false;
 
 		let baselineCleanup = false;
 		let cancelled = false;
@@ -192,10 +215,12 @@ export const indexingMethods: IndexingMethods = {
 			}
 			await this.persist({ skipEnsure: true });
 		} finally {
-			this.indexReady = true;
-			this.indexLoadPromise = null;
+			state.indexReady = true;
+			state.indexLoadPromise = null;
 			try {
-				delete (this as any)?.__epochCancelRequestedAt?.index;
+				if (state.__epochCancelRequestedAt) {
+					delete state.__epochCancelRequestedAt.index;
+				}
 			} catch {
 				// ignore
 			}
@@ -218,8 +243,7 @@ export const indexingMethods: IndexingMethods = {
 					new Notice(successLabel);
 				}
 				try {
-					const anyThis: any = this as any;
-					anyThis.__epochTimelineSearchFocusToken = Number(anyThis.__epochTimelineSearchFocusToken ?? 0) + 1;
+					state.__epochTimelineSearchFocusToken = Number(state.__epochTimelineSearchFocusToken ?? 0) + 1;
 				} catch {
 					// ignore
 				}
@@ -249,8 +273,7 @@ export const indexingMethods: IndexingMethods = {
 
 		try {
 			if (mode === "rebuild") {
-				const anyThis: any = this as any;
-				anyThis.__epochTimelineSearchFocusToken = Number(anyThis.__epochTimelineSearchFocusToken ?? 0) + 1;
+				state.__epochTimelineSearchFocusToken = Number(state.__epochTimelineSearchFocusToken ?? 0) + 1;
 			}
 		} catch {
 			// ignore
@@ -260,6 +283,7 @@ export const indexingMethods: IndexingMethods = {
 	},
 
 	async ensureIndexLoaded(this: EpochPlugin): Promise<void> {
+		const state = this as IndexingPluginState;
 		if (!this.indexReady) {
 			if (this.indexLoadPromise) {
 				await this.indexLoadPromise;
@@ -270,13 +294,12 @@ export const indexingMethods: IndexingMethods = {
 		// show up without requiring a manual mark change.
 		try {
 			if (!this.hasProAccess?.()) return;
-			const anyPlugin: any = this as any;
-			if (anyPlugin.__epochInheritedMarkStartupScheduled === true) return;
-			const computedAtRaw = Number(anyPlugin.__epochInheritedMarkComputedAt ?? 0);
+			if (state.__epochInheritedMarkStartupScheduled === true) return;
+			const computedAtRaw = Number(state.__epochInheritedMarkComputedAt ?? 0);
 			const computedAt = Number.isFinite(computedAtRaw) ? computedAtRaw : 0;
-			if (computedAt > 0 && anyPlugin.__epochInheritedMarkIndexByPath instanceof Map) return;
-			anyPlugin.__epochInheritedMarkStartupScheduled = true;
-			(this as any).scheduleInheritedMarkRecompute?.("startup");
+			if (computedAt > 0 && state.__epochInheritedMarkIndexByPath instanceof Map) return;
+			state.__epochInheritedMarkStartupScheduled = true;
+			state.scheduleInheritedMarkRecompute?.("startup");
 		} catch {
 			// ignore
 		}
@@ -284,15 +307,15 @@ export const indexingMethods: IndexingMethods = {
 
 	async maybeIndexOpenedFile(this: EpochPlugin, file: TFile): Promise<void> {
 		try {
+			const state = this as IndexingPluginState;
 			if (!file?.path) return;
 			if (!this.shouldIndexFile(file)) return;
 			if (this.indexer.isFileKnown(file.path)) return;
 
-			const anyPlugin: any = this as any;
-			if (!(anyPlugin.__epochIndexOnOpenInFlight instanceof Set)) {
-				anyPlugin.__epochIndexOnOpenInFlight = new Set<string>();
+			if (!(state.__epochIndexOnOpenInFlight instanceof Set)) {
+				state.__epochIndexOnOpenInFlight = new Set<string>();
 			}
-			const inFlight: Set<string> = anyPlugin.__epochIndexOnOpenInFlight;
+			const inFlight: Set<string> = state.__epochIndexOnOpenInFlight;
 			if (inFlight.has(file.path)) return;
 			inFlight.add(file.path);
 
@@ -310,12 +333,12 @@ export const indexingMethods: IndexingMethods = {
 				await this.indexer.processFile(file, { reason: "open" });
 				await this.persist({ skipEnsure: true });
 				try {
-					(this as any).queueVectorUpdate?.(file.path);
+					state.queueVectorUpdate?.(file.path);
 				} catch {
 					// ignore
 				}
 				try {
-					(this as any).queueTermSimilarityUpdate?.(file.path);
+					state.queueTermSimilarityUpdate?.(file.path);
 				} catch {
 					// ignore
 				}
@@ -351,12 +374,12 @@ export const indexingMethods: IndexingMethods = {
 						// summaries/meta (not full file text). Schedule a background rebuild so
 						// "deep" search is restored automatically.
 						try {
-							const anyThis: any = this as any;
-							if (anyThis.__timelineSearchAutoRebuildScheduled !== true && Platform.isDesktopApp) {
-								anyThis.__timelineSearchAutoRebuildScheduled = true;
-								(window as any).setTimeout?.(() => {
+							const state = this as IndexingPluginState;
+							if (state.__timelineSearchAutoRebuildScheduled !== true && Platform.isDesktopApp) {
+								state.__timelineSearchAutoRebuildScheduled = true;
+								window.setTimeout(() => {
 									try {
-										void (this as any).rebuildTimelineSearchIndex?.();
+										void state.rebuildTimelineSearchIndex?.();
 									} catch {
 										// ignore
 									}

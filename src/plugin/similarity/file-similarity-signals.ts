@@ -9,7 +9,23 @@ export const SIGNAL_SEMANTICS = 1 << 3;
 export const SIGNAL_TOPICS = 1 << 4;
 export const SIGNAL_ALL = SIGNAL_LINKS | SIGNAL_TAGS | SIGNAL_TITLE | SIGNAL_SEMANTICS | SIGNAL_TOPICS;
 
-function hasOwn(obj: any, key: string): boolean {
+type FrontmatterLike = {
+	similar?: unknown;
+	nosimilar?: unknown;
+};
+
+type SimilaritySignalPluginLike = {
+	app?: {
+		vault?: {
+			getAbstractFileByPath?: (path: string) => TFile | null | undefined;
+		};
+		metadataCache?: {
+			getFileCache?: (file: TFile | null | undefined) => { frontmatter?: unknown } | null | undefined;
+		};
+	};
+};
+
+function hasOwn(obj: unknown, key: string): boolean {
 	return !!obj && typeof obj === "object" && Object.prototype.hasOwnProperty.call(obj, key);
 }
 
@@ -88,12 +104,12 @@ function parseYamlBlockList(lines: string[], startIndex: number): { values: stri
 	return { values, endIndex: i };
 }
 
-function resolveMaskFromFrontmatterObject(frontmatter: any): { mask: number; explicit: boolean } {
+function resolveMaskFromFrontmatterObject(frontmatter: unknown): { mask: number; explicit: boolean } {
 	try {
 		if (hasOwn(frontmatter, "nosimilar")) return { mask: 0, explicit: true };
 		if (!hasOwn(frontmatter, "similar")) return { mask: SIGNAL_ALL, explicit: false };
 
-		const value = (frontmatter as any).similar;
+		const value = (frontmatter as FrontmatterLike).similar;
 		if (Array.isArray(value)) return { mask: maskFromSimilarList(value), explicit: true };
 		if (typeof value === "string") {
 			const inline = parseYamlInlineList(value);
@@ -143,13 +159,13 @@ function resolveMaskFromRawText(rawText: string): { mask: number; explicit: bool
 	}
 }
 
-export function getFileSimilaritySignalMask(plugin: any, fileOrPath: TFile | string, rawText?: string): number {
+export function getFileSimilaritySignalMask(plugin: unknown, fileOrPath: TFile | string, rawText?: string): number {
 	try {
-		const pluginAny: any = plugin as any;
+		const pluginLike = plugin as SimilaritySignalPluginLike;
 		const file =
-			typeof fileOrPath === "string" ? pluginAny?.app?.vault?.getAbstractFileByPath?.(fileOrPath) : fileOrPath;
-		const cache = pluginAny?.app?.metadataCache?.getFileCache?.(file);
-		const fm: any = cache?.frontmatter ?? null;
+			typeof fileOrPath === "string" ? pluginLike.app?.vault?.getAbstractFileByPath?.(fileOrPath) : fileOrPath;
+		const cache = pluginLike.app?.metadataCache?.getFileCache?.(file);
+		const fm = cache?.frontmatter ?? null;
 		const resolved = resolveMaskFromFrontmatterObject(fm);
 		if (resolved.explicit) return resolved.mask;
 	} catch {

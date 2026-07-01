@@ -2,6 +2,17 @@ import * as chrono from "chrono-node";
 import { flattenForDates } from "./flattener";
 import { formatDate } from "utils";
 
+type ChronoMatchLike = {
+	index?: number;
+	text?: string;
+	start?: { get(field: string): unknown } | null;
+	end?: { get(field: string): unknown } | null;
+};
+
+function hasChronoAccessor(value: unknown): value is { get(field: string): unknown } {
+	return typeof value === "object" && value !== null && typeof (value as { get?: unknown }).get === "function";
+}
+
 function buildStrictChrono() {
 	const strict = new chrono.Chrono(chrono.en.GB);
 
@@ -61,6 +72,13 @@ const MONTH_NAME_MAP: Record<string, number> = {
 function isLikelyDate(t: string): boolean {
 	const s = t.toLowerCase();
 
+	const coerce2DigitYear = (value: number): number => {
+		if (!Number.isFinite(value)) return NaN;
+		const y = Math.floor(value);
+		if (y < 0 || y > 99) return NaN;
+		return y >= 70 ? 1900 + y : 2000 + y;
+	};
+
 	const isValidYMD = (year: number, month: number, day: number): boolean => {
 		if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return false;
 		if (year <= 1000 || year >= 2100) return false;
@@ -87,7 +105,9 @@ function isLikelyDate(t: string): boolean {
 		while ((m = dayFirst.exec(scan))) {
 			const day = Number(m[1]);
 			const month = Number(m[2]);
-			const year = Number(m[3]);
+			const yRaw = String(m[3] ?? "");
+			let year = Number(yRaw);
+			if (yRaw.length === 2) year = coerce2DigitYear(year);
 			if (isValidYMD(year, month, day)) {
 				return true;
 			}
@@ -254,13 +274,13 @@ export function parseAnyDates(text: string): string[] {
 		}
 	}
 
-	const parsed = strictChrono.parse(scan);
+	const parsed = strictChrono.parse(scan) as ChronoMatchLike[];
 	for (const res of parsed) {
 		// Avoid day-first numeric matches that are embedded inside ISO range strings like
 		// "2026-02-03-2026-02-05" (contains "02-03-2026").
 		try {
-			const idx = typeof (res as any)?.index === "number" ? Number((res as any).index) : 0;
-			const t = String((res as any)?.text ?? "");
+			const idx = typeof res.index === "number" ? Number(res.index) : 0;
+			const t = String(res.text ?? "");
 			if (idx >= 5 && /^\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4}$/.test(t)) {
 				const prefix = scan.slice(idx - 5, idx);
 				if (/^\d{4}[.\-/]$/.test(prefix)) continue;
@@ -270,20 +290,21 @@ export function parseAnyDates(text: string): string[] {
 		}
 		// Avoid inferring the year for month/day inputs; accept chrono results only when
 		// the matched substring contains an explicit 4-digit year.
-		const yearInTextMatch = (res.text ?? "").match(/\b(\d{4})\b/);
+		const yearInTextMatch = String(res.text ?? "").match(/\b(\d{4})\b/);
 		if (!yearInTextMatch) continue;
 		const explicitYear = Number(yearInTextMatch[1]);
 		const index = typeof res.index === "number" ? res.index : found.size + ORDER_INCREMENT;
 
-		const cStart: any = res.start as any;
-		const year = typeof cStart?.get === "function" ? Number(cStart.get("year")) : NaN;
-		const month = typeof cStart?.get === "function" ? Number(cStart.get("month")) : NaN;
-		const day = typeof cStart?.get === "function" ? Number(cStart.get("day")) : NaN;
+		const cStart = res.start;
+		if (!hasChronoAccessor(cStart)) continue;
+		const year = Number(cStart.get("year"));
+		const month = Number(cStart.get("month"));
+		const day = Number(cStart.get("day"));
 		if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) continue;
 		if (Number.isFinite(explicitYear) && explicitYear !== year) continue;
 
-		const cEnd: any = (res as any).end as any;
-		if (cEnd && typeof cEnd?.get === "function") {
+		const cEnd = res.end;
+		if (hasChronoAccessor(cEnd)) {
 			const endYear = Number(cEnd.get("year"));
 			const endMonth = Number(cEnd.get("month"));
 			const endDay = Number(cEnd.get("day"));
@@ -298,9 +319,11 @@ export function parseAnyDates(text: string): string[] {
 					for (let j = 0; j < expanded.length; j++) {
 						const t = expanded.length === 1 ? 0 : j / (expanded.length - 1);
 						const order = index + span * t + j * 0.000001;
-						const existing = found.get(expanded[j]!);
+						const key = expanded[j];
+						if (!key) continue;
+						const existing = found.get(key);
 						if (!existing || order < existing.order) {
-							found.set(expanded[j]!, { key: expanded[j]!, order });
+							found.set(key, { key, order });
 						}
 					}
 					continue;
@@ -336,8 +359,9 @@ export function parseAnyDates(text: string): string[] {
 		.filter(t => t && typeof t.key === "string" && /^\d{4}-\d{2}-\d{2}$/.test(t.key) && Number.isFinite(t.index) && Number.isFinite(t.endIndex))
 		.sort((a, b) => a.index - b.index);
 	for (let i = 0; i < orderedTokens.length - 1; i++) {
-		const a = orderedTokens[i]!;
-		const b = orderedTokens[i + 1]!;
+		const a = orderedTokens[i];
+		const b = orderedTokens[i + 1];
+		if (!a || !b) continue;
 		const between = scan.slice(a.endIndex, b.index);
 		const beforeA = scan.slice(Math.max(0, a.index - 40), a.index);
 		if (!isRangeConnector(between, beforeA)) continue;
@@ -347,9 +371,11 @@ export function parseAnyDates(text: string): string[] {
 		for (let j = 0; j < expanded.length; j++) {
 			const t = expanded.length === 1 ? 0 : j / (expanded.length - 1);
 			const order = a.index + span * t + j * 0.000001;
-			const existing = found.get(expanded[j]!);
+			const key = expanded[j];
+			if (!key) continue;
+			const existing = found.get(key);
 			if (!existing || order < existing.order) {
-				found.set(expanded[j]!, { key: expanded[j]!, order });
+				found.set(key, { key, order });
 			}
 		}
 	}

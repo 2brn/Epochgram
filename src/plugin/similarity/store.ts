@@ -1,114 +1,138 @@
 import type { EpochPlugin } from "../../main";
 import { embeddingsSimilarityEnabled, getSimilarityModelId } from "./config";
-import type { SimilarityStore } from "./types";
+import type { SimilarityFileVector, SimilarityStore } from "./types";
 
-type SimilarityStoreDiskV2 = {
-	models: Record<
-		string,
-		{
-			dim: number;
-			files: Record<string, any>;
-		}
-	>;
+type SimilarityStoreDiskModel = {
+	dim: number;
+	files: Record<string, SimilarityFileVector>;
 };
 
+type SimilarityStoreDiskV2 = {
+	models: Record<string, SimilarityStoreDiskModel>;
+};
+
+type SimilarityPluginState = {
+	similarityIndex?: SimilarityStore;
+	similarityVectorsLoaded?: boolean;
+	similarityStoreRev?: number;
+	vectorsFilePath?: string;
+	ensurePluginDir?: () => Promise<void>;
+	scheduleInheritedMarkRecompute?: (reason: string) => void;
+};
+
+function asRecord(value: unknown): Record<string, unknown> {
+	return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function asPluginState(plugin: EpochPlugin): EpochPlugin & SimilarityPluginState {
+	return plugin as EpochPlugin & SimilarityPluginState;
+}
+
+function normalizeVectorFileVector(value: unknown): SimilarityFileVector | null {
+	const record = asRecord(value);
+	const vector = Array.isArray(record.v) ? record.v.filter((v): v is number => typeof v === "number" && Number.isFinite(v)) : [];
+	const hash = typeof record.h === "string" ? record.h : "";
+	const updatedAt = typeof record.updatedAt === "number" && Number.isFinite(record.updatedAt) ? record.updatedAt : 0;
+	if (vector.length === 0 && !hash) return null;
+	return { v: vector, h: hash, updatedAt };
+}
+
+function normalizeStoreFiles(value: unknown): Record<string, SimilarityFileVector> {
+	const record = asRecord(value);
+	const out: Record<string, SimilarityFileVector> = {};
+	for (const [path, fileVector] of Object.entries(record)) {
+		const normalized = normalizeVectorFileVector(fileVector);
+		if (normalized) out[path] = normalized;
+	}
+	return out;
+}
+
 export async function readStore(plugin: EpochPlugin): Promise<SimilarityStore> {
-	const anyPlugin: any = plugin as any;
-	if (anyPlugin.similarityIndex && anyPlugin.similarityVectorsLoaded) {
-		return anyPlugin.similarityIndex as SimilarityStore;
+	const state = asPluginState(plugin);
+	if (state.similarityIndex && state.similarityVectorsLoaded) {
+		return state.similarityIndex;
 	}
 
 	const modelId = getSimilarityModelId(plugin);
 	const empty: SimilarityStore = { model: modelId, dim: 0, files: {} };
 
-	// When embeddings similarity is not enabled (disabled/graph/threshold off), do not
-	// load or mutate the store on disk.
 	if (!embeddingsSimilarityEnabled(plugin)) {
-		// Important: do not cache an empty store here.
-		// If the user later re-enables embeddings, we need to load from disk.
 		return empty;
 	}
 
 	try {
-		const exists = await plugin.app.vault.adapter.exists((plugin as any).vectorsFilePath);
+		const vectorsFilePath = state.vectorsFilePath ?? "";
+		const exists = await plugin.app.vault.adapter.exists(vectorsFilePath);
 		if (!exists) {
-			anyPlugin.similarityIndex = empty;
-			anyPlugin.similarityVectorsLoaded = true;
+			state.similarityIndex = empty;
+			state.similarityVectorsLoaded = true;
 			return empty;
 		}
-		const raw = await plugin.app.vault.adapter.read((plugin as any).vectorsFilePath);
-		const parsed = JSON.parse(raw || "{}");
 
-		let store: SimilarityStore = empty;
-		// Disk store is multi-model: { models: { [modelId]: { dim, files } } }.
-		const models = parsed && typeof parsed === "object" ? (parsed as any).models : null;
-		if (models && typeof models === "object") {
-			const entry = (models as any)?.[modelId];
-			if (entry && typeof entry === "object") {
-				store = {
-					model: modelId,
-					dim: typeof (entry as any)?.dim === "number" ? (entry as any).dim : 0,
-					files: typeof (entry as any)?.files === "object" && (entry as any).files ? (entry as any).files : {}
-				};
-			}
-		}
+		const raw = await plugin.app.vault.adapter.read(vectorsFilePath);
+		const parsed = asRecord(JSON.parse(raw || "{}"));
+		const models = asRecord(parsed.models);
+		const modelRecord = asRecord(models[modelId]);
+		const store: SimilarityStore = {
+			model: modelId,
+			dim: typeof modelRecord.dim === "number" && Number.isFinite(modelRecord.dim) ? modelRecord.dim : 0,
+			files: normalizeStoreFiles(modelRecord.files)
+		};
 
-		anyPlugin.similarityIndex = store;
-		anyPlugin.similarityVectorsLoaded = true;
+		state.similarityIndex = store;
+		state.similarityVectorsLoaded = true;
 		return store;
 	} catch {
-		anyPlugin.similarityIndex = empty;
-		anyPlugin.similarityVectorsLoaded = true;
+		state.similarityIndex = empty;
+		state.similarityVectorsLoaded = true;
 		return empty;
 	}
 }
 
 export async function writeStore(plugin: EpochPlugin, store: SimilarityStore): Promise<void> {
+	const state = asPluginState(plugin);
 	try {
-		await (plugin as any).ensurePluginDir?.();
+		await state.ensurePluginDir?.();
 
-		// Preserve vectors for other models by writing a multi-model store.
 		let disk: SimilarityStoreDiskV2 = { models: {} };
 		try {
-			const exists = await plugin.app.vault.adapter.exists((plugin as any).vectorsFilePath);
+			const vectorsFilePath = state.vectorsFilePath ?? "";
+			const exists = await plugin.app.vault.adapter.exists(vectorsFilePath);
 			if (exists) {
-				const raw = await plugin.app.vault.adapter.read((plugin as any).vectorsFilePath);
-				const parsed = JSON.parse(raw || "{}");
-				const models = parsed && typeof parsed === "object" ? (parsed as any).models : null;
-				if (models && typeof models === "object") {
-					disk = { models } as SimilarityStoreDiskV2;
+				const raw = await plugin.app.vault.adapter.read(vectorsFilePath);
+				const parsed = asRecord(JSON.parse(raw || "{}"));
+				const models = asRecord(parsed.models);
+				for (const [modelId, modelValue] of Object.entries(models)) {
+					const modelRecord = asRecord(modelValue);
+					disk.models[modelId] = {
+						dim: typeof modelRecord.dim === "number" && Number.isFinite(modelRecord.dim) ? modelRecord.dim : 0,
+						files: normalizeStoreFiles(modelRecord.files)
+					};
 				}
 			}
 		} catch {
 			// If reading existing store fails, fall back to writing only the active model.
 		}
 
-		// Avoid persisting epoch-generated vectors; they are not used for similarity.
-		try {
-			for (const k of Object.keys(store.files || {})) {
-				if (String(k || "").startsWith("epoch://")) {
-					delete (store.files as any)[k];
-				}
-			}
-		} catch {
-			// ignore
+		const files: Record<string, SimilarityFileVector> = {};
+		for (const [path, fileVector] of Object.entries(store.files || {})) {
+			if (String(path || "").startsWith("epoch://")) continue;
+			files[path] = fileVector;
 		}
 
-		(disk.models as any)[store.model] = { dim: store.dim, files: store.files };
-		await plugin.app.vault.adapter.write((plugin as any).vectorsFilePath, JSON.stringify(disk));
+		disk.models[store.model] = { dim: store.dim, files };
+		await plugin.app.vault.adapter.write(state.vectorsFilePath ?? "", JSON.stringify(disk));
 		try {
-			const anyPlugin: any = plugin as any;
-			anyPlugin.similarityStoreRev =
-				(typeof anyPlugin.similarityStoreRev === "number" ? anyPlugin.similarityStoreRev : 0) + 1;
+			state.similarityStoreRev = (typeof state.similarityStoreRev === "number" ? state.similarityStoreRev : 0) + 1;
 		} catch {
 			// ignore
 		}
 		try {
-			(plugin as any).scheduleInheritedMarkRecompute?.("similarity");
+			state.scheduleInheritedMarkRecompute?.("similarity");
 		} catch {
 			// ignore
 		}
-	} catch (error) {
-		void error;
+	} catch {
+		// ignore
 	}
 }

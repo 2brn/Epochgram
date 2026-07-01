@@ -6,7 +6,7 @@ import { hasTrustedActivationState, hasVerifiedFeatureAccess } from "./pro-trust
 export function hasVerifiedEntitlement(plugin: EpochPlugin): boolean {
 	try {
 		if (!hasTrustedActivationState(plugin)) return false;
-		return (plugin as any)?.proActive === true;
+		return plugin.proActive === true;
 	} catch {
 		return false;
 	}
@@ -45,8 +45,7 @@ export function isTrackChangesEffective(plugin: EpochPlugin): boolean {
 }
 
 export function isSummarizeAIEffective(plugin: EpochPlugin): boolean {
-	const settings: any = plugin.settings;
-	return hasSummarizeAIAccess(plugin) && settings?.summarizeAI === true;
+	return hasSummarizeAIAccess(plugin) && plugin.settings.summarizeAI === true;
 }
 
 export function isGenerateEpochsEffective(plugin: EpochPlugin): boolean {

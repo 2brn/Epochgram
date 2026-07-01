@@ -15,6 +15,25 @@ interface PersistOptions {
 	skipEnsure?: boolean;
 }
 
+type PersistencePluginState = {
+	vectorsFilePath?: string;
+	termSimilarityFilePath?: string;
+	epochSummariesFilePath?: string;
+	similarityVectorsLoaded?: boolean;
+	similarityIndex?: unknown;
+	similarityEmbedder?: unknown;
+	similarityEmbedderLoadingPromise?: unknown;
+	termSimilarityIndex?: unknown;
+	termSimilarityLoaded?: boolean;
+	termSimilarityStoreRev?: number;
+	termSimilarityPendingFiles?: Set<string>;
+	termSimilarityQueueTotal?: number;
+	termSimilarityQueueProcessed?: number;
+	vectorsFileStat?: { mtime: number | null; size: number | null };
+	termSimilarityFileStat?: { mtime: number | null; size: number | null };
+	epochSummariesFileStat?: { mtime: number | null; size: number | null };
+};
+
 export interface PersistenceMethods {
 	saveSettings(): Promise<void>;
 	clearEpochJsonFilesAndRebuild(): Promise<void>;
@@ -49,11 +68,12 @@ export const persistenceMethods: PersistenceMethods = {
 	},
 
 	async clearEpochJsonFilesAndRebuild(this: EpochPlugin): Promise<void> {
+		const state = this as EpochPlugin & PersistencePluginState;
 		const adapter = this.app.vault.adapter;
 		const indexPath = normalizePath(this.indexFilePath);
-		const vectorsPath = normalizePath(String((this as any).vectorsFilePath || ""));
-		const termPath = normalizePath(String((this as any).termSimilarityFilePath || ""));
-		const summariesPath = normalizePath(String((this as any).epochSummariesFilePath || ""));
+		const vectorsPath = normalizePath(String(state.vectorsFilePath || ""));
+		const termPath = normalizePath(String(state.termSimilarityFilePath || ""));
+		const summariesPath = normalizePath(String(state.epochSummariesFilePath || ""));
 
 		const removeIfExists = async (p: string): Promise<void> => {
 			if (!p) return;
@@ -72,22 +92,22 @@ export const persistenceMethods: PersistenceMethods = {
 		await removeIfExists(summariesPath);
 
 		try {
-			(this as any).similarityVectorsLoaded = false;
-			(this as any).similarityIndex = null;
-			(this as any).similarityEmbedder = null;
-			(this as any).similarityEmbedderLoadingPromise = null;
-			(this as any).termSimilarityIndex = null;
-			(this as any).termSimilarityLoaded = false;
-			(this as any).termSimilarityStoreRev = 0;
-			(this as any).termSimilarityPendingFiles = new Set<string>();
-			(this as any).termSimilarityQueueTotal = 0;
-			(this as any).termSimilarityQueueProcessed = 0;
+			state.similarityVectorsLoaded = false;
+			state.similarityIndex = null;
+			state.similarityEmbedder = null;
+			state.similarityEmbedderLoadingPromise = null;
+			state.termSimilarityIndex = null;
+			state.termSimilarityLoaded = false;
+			state.termSimilarityStoreRev = 0;
+			state.termSimilarityPendingFiles = new Set<string>();
+			state.termSimilarityQueueTotal = 0;
+			state.termSimilarityQueueProcessed = 0;
 		} catch {
 			// ignore
 		}
 
 		try {
-			await (this.indexer as any)?.load?.(undefined);
+			await (this.indexer as { load?: (arg?: unknown) => Promise<void> | void })?.load?.(undefined);
 		} catch {
 			// ignore
 		}
@@ -119,11 +139,14 @@ export const persistenceMethods: PersistenceMethods = {
 
 		writeLocalActivationState(this, this.settings);
 		const syncedSettings = stripLocalActivationState(this.settings);
-		const timelineFiltersRaw = (syncedSettings as any).timelineFilters;
+		const syncedSettingsState = syncedSettings as EpochSettings & {
+			timelineFilters?: Record<string, unknown>;
+		};
+		const timelineFiltersRaw = syncedSettingsState.timelineFilters;
 		if (timelineFiltersRaw && typeof timelineFiltersRaw === "object") {
 			const timelineFilters = { ...(timelineFiltersRaw as Record<string, unknown>) };
-			delete (timelineFilters as any).showDraftsOnly;
-			(syncedSettings as any).timelineFilters = timelineFilters;
+			delete timelineFilters.showDraftsOnly;
+			syncedSettingsState.timelineFilters = timelineFilters;
 		}
 		const payload = {
 			settings: (() => {
@@ -227,7 +250,7 @@ export const persistenceMethods: PersistenceMethods = {
 
 	async statVectorsFile(this: EpochPlugin): Promise<{ mtime?: number; size?: number } | null> {
 		try {
-			const p = normalizePath(String((this as any).vectorsFilePath || ""));
+			const p = normalizePath(String((this as EpochPlugin & PersistencePluginState).vectorsFilePath || ""));
 			if (!p) return null;
 			const exists = await this.app.vault.adapter.exists(p);
 			if (!exists) return null;
@@ -240,12 +263,12 @@ export const persistenceMethods: PersistenceMethods = {
 
 	async updateVectorsFileStat(this: EpochPlugin): Promise<void> {
 		const stat = await this.statVectorsFile();
-		(this as any).vectorsFileStat = this.normalizeStat(stat);
+		(this as EpochPlugin & PersistencePluginState).vectorsFileStat = this.normalizeStat(stat);
 	},
 
 	async statTermSimilarityFile(this: EpochPlugin): Promise<{ mtime?: number; size?: number } | null> {
 		try {
-			const p = normalizePath(String((this as any).termSimilarityFilePath || ""));
+			const p = normalizePath(String((this as EpochPlugin & PersistencePluginState).termSimilarityFilePath || ""));
 			if (!p) return null;
 			const exists = await this.app.vault.adapter.exists(p);
 			if (!exists) return null;
@@ -258,12 +281,12 @@ export const persistenceMethods: PersistenceMethods = {
 
 	async updateTermSimilarityFileStat(this: EpochPlugin): Promise<void> {
 		const stat = await this.statTermSimilarityFile();
-		(this as any).termSimilarityFileStat = this.normalizeStat(stat);
+		(this as EpochPlugin & PersistencePluginState).termSimilarityFileStat = this.normalizeStat(stat);
 	},
 
 	async statEpochSummariesFile(this: EpochPlugin): Promise<{ mtime?: number; size?: number } | null> {
 		try {
-			const p = String((this as any).epochSummariesFilePath ?? "");
+			const p = String((this as EpochPlugin & PersistencePluginState).epochSummariesFilePath ?? "");
 			if (!p) return null;
 			const exists = await this.app.vault.adapter.exists(p);
 			if (!exists) return null;
@@ -276,7 +299,7 @@ export const persistenceMethods: PersistenceMethods = {
 
 	async updateEpochSummariesFileStat(this: EpochPlugin): Promise<void> {
 		const stat = await this.statEpochSummariesFile();
-		(this as any).epochSummariesFileStat = this.normalizeStat(stat);
+		(this as EpochPlugin & PersistencePluginState).epochSummariesFileStat = this.normalizeStat(stat);
 	},
 
 	normalizeStat(_stat: { mtime?: number; size?: number } | null): { mtime: number | null; size: number | null } {

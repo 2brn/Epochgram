@@ -7,12 +7,12 @@ interface TrackedBaselineState {
 	updateAggregatedEntries(filePath: string, options?: { skipSort?: boolean }): void;
 }
 
-function state(indexer: any): TrackedBaselineState {
+function asState(indexer: unknown): TrackedBaselineState {
 	return indexer as TrackedBaselineState;
 }
 
-function pruneTrackedEntriesFromIndex(indexer: any): boolean {
-	const s = state(indexer);
+function pruneTrackedEntriesFromIndex(indexer: unknown): boolean {
+	const s = asState(indexer);
 	let changed = false;
 	for (const dateKey of Object.keys(s.index)) {
 		const entries = s.index[dateKey];
@@ -29,8 +29,8 @@ function pruneTrackedEntriesFromIndex(indexer: any): boolean {
 	return changed;
 }
 
-function pruneTrackedEntriesFromIndexForPath(indexer: any, filePath: string): boolean {
-	const s = state(indexer);
+function pruneTrackedEntriesFromIndexForPath(indexer: unknown, filePath: string): boolean {
+	const s = asState(indexer);
 	const target = String(filePath || "");
 	if (!target) return false;
 	let changed = false;
@@ -49,8 +49,8 @@ function pruneTrackedEntriesFromIndexForPath(indexer: any, filePath: string): bo
 	return changed;
 }
 
-export function clearTrackedChanges(indexer: any): boolean {
-	const s = state(indexer);
+export function clearTrackedChanges(indexer: unknown): boolean {
+	const s = asState(indexer);
 	let changed = false;
 	for (const [path, data] of Object.entries(s.files)) {
 		if (!data) continue;
@@ -68,8 +68,8 @@ export function clearTrackedChanges(indexer: any): boolean {
 	return changed || indexPruned;
 }
 
-export function clearTrackedChangesForPath(indexer: any, filePath: string): boolean {
-	const s = state(indexer);
+export function clearTrackedChangesForPath(indexer: unknown, filePath: string): boolean {
+	const s = asState(indexer);
 	const target = String(filePath || "");
 	if (!target) return false;
 	let changed = false;
@@ -88,8 +88,8 @@ export function clearTrackedChangesForPath(indexer: any, filePath: string): bool
 	return changed || indexPruned;
 }
 
-export function prepareTrackedBaseline(indexer: any): void {
-	const s = state(indexer);
+export function prepareTrackedBaseline(indexer: unknown): void {
+	const s = asState(indexer);
 	for (const data of Object.values(s.files)) {
 		if (!data) continue;
 		if (!data.trackedDates || Object.keys(data.trackedDates).length === 0) continue;
@@ -99,8 +99,8 @@ export function prepareTrackedBaseline(indexer: any): void {
 	}
 }
 
-export function resetTrackedBaseline(indexer: any): boolean {
-	const s = state(indexer);
+export function resetTrackedBaseline(indexer: unknown): boolean {
+	const s = asState(indexer);
 	let removedTracked = false;
 	const pathsToUpdate: string[] = [];
 	for (const [path, data] of Object.entries(s.files)) {
@@ -129,8 +129,8 @@ export function resetTrackedBaseline(indexer: any): boolean {
 	return removedTracked;
 }
 
-export function hasTrackedChanges(indexer: any): boolean {
-	const s = state(indexer);
+export function hasTrackedChanges(indexer: unknown): boolean {
+	const s = asState(indexer);
 	for (const data of Object.values(s.files)) {
 		if (!data?.trackedDates) continue;
 		for (const entries of Object.values(data.trackedDates)) {

@@ -163,7 +163,8 @@ export function buildEpochRows(args: EpochsSummaryRenderArgs): {
 	const outgoingTFor = (itemIndex: number): number => {
 		if (!Array.isArray(outgoingSummaries) || outgoingSummaries.length === 0) return 0;
 		for (let i = 0; i < outgoingSummaries.length; i++) {
-			const o = outgoingSummaries[i]!;
+			const o = outgoingSummaries[i];
+			if (!o) continue;
 			if (o.dayIndex === dayIndex && o.itemIndex === itemIndex) {
 				return clamp01(Number(o.t));
 			}
@@ -171,7 +172,8 @@ export function buildEpochRows(args: EpochsSummaryRenderArgs): {
 		return 0;
 	};
 	for (let entryIndex = 0; entryIndex < entries.length; entryIndex++) {
-		const entry = entries[entryIndex]!;
+		const entry = entries[entryIndex];
+		if (!entry) continue;
 		if (!entry.file.startsWith("epoch://")) continue;
 
 		const isDraft = entry.reviewState === "draft";
@@ -340,10 +342,13 @@ export function buildEpochRows(args: EpochsSummaryRenderArgs): {
 					ctx.save();
 					ctx.font = dropCapFont;
 					const prefixLine = String(prefix).trim();
-					const m = ctx.measureText(prefixLine);
+					const m: TextMetrics & {
+						actualBoundingBoxAscent?: number;
+						actualBoundingBoxDescent?: number;
+					} = ctx.measureText(prefixLine);
 					ctx.restore();
-					const a = (m as any).actualBoundingBoxAscent;
-					const d = (m as any).actualBoundingBoxDescent;
+					const a = m.actualBoundingBoxAscent;
+					const d = m.actualBoundingBoxDescent;
 					const ascent = typeof a === "number" && Number.isFinite(a) && a > 0 ? a : 0;
 					const descent = typeof d === "number" && Number.isFinite(d) && d >= 0 ? d : 0;
 					if (ascent > 0) {
@@ -389,7 +394,9 @@ export function buildEpochRows(args: EpochsSummaryRenderArgs): {
 	let totalHeight = rows.reduce((acc, r) => acc + r.height, 0);
 	if (rows.length > 1) {
 		for (let ri = 0; ri < rows.length; ri++) {
-			const t = Math.max(0, Math.min(1, rows[ri]!.hoverT));
+			const row = rows[ri];
+			if (!row) continue;
+			const t = Math.max(0, Math.min(1, row.hoverT));
 			if (t <= 0) continue;
 			const gh = (hoverGap / 2) * t;
 			if (ri > 0) totalHeight += gh;

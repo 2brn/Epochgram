@@ -21,6 +21,58 @@ import { formatEpochItemText } from "./epochs/formatting";
 import { normalizeEpochEntriesInIndex, removeEpochEntriesFromIndexByStart } from "./epochs/index-utils";
 import { sortEpochJobsByHierarchy } from "./epochs/job-sort";
 
+type EpochInputEntry = DateEntry & {
+	file?: string;
+	date?: string;
+	source?: string;
+	pinned?: boolean;
+	originalDate?: string;
+	recurring?: boolean;
+	reviewState?: string;
+	blockStart?: number;
+	blockEnd?: number;
+	trackedHash?: string;
+	markColor?: number;
+	epochBucket?: EpochBucket;
+	epochStart?: string;
+	epochEnd?: string;
+	aiSummary?: string;
+	summary?: string;
+	aiSummaryInputHash?: string;
+};
+
+type EpochFileData = {
+	cdate?: EpochInputEntry;
+	namedDate?: EpochInputEntry;
+	dateProp?: EpochInputEntry;
+	contentDates?: EpochInputEntry[];
+	trackedDates?: Record<string, EpochInputEntry[]>;
+};
+
+type EpochBuildIndexerRuntime = {
+	index?: Record<string, DateEntry[]>;
+	files?: Record<string, EpochFileData>;
+	getFileEmbeddingTerm?: (filePath: string) => unknown;
+};
+
+type TermSimilarityRecord = { term?: string; score?: number };
+
+type EpochBuildRuntime = {
+	settings?: { similarityZeroShotMinScore?: number };
+	termSimilarityLoaded?: boolean;
+	termSimilarityIndex?: { files?: Record<string, TermSimilarityRecord> };
+};
+
+type MetadataCacheRuntime = {
+	resolvedLinks?: Record<string, Record<string, number | undefined>>;
+	getFileCache?: (file: unknown) => {
+		tags?: Array<{ tag?: string } | string>;
+		frontmatter?: { tags?: string | string[] };
+	} | undefined;
+};
+
+const nowMs = (): number => Date.now();
+
 export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "staleOrMissing"): Promise<AiSummaryJob[]> {
 	const INVISIBLE_FORMAT_CHARS_RE = /\u00AD|\u034F|\u061C|\u180E|[\u200B-\u200F]|[\u202A-\u202E]|[\u2060-\u206F]|\uFEFF/g;
 	const normalizeEpochInputFilePath = (rawPath: string): string => {
@@ -42,7 +94,7 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 			return String(line ?? "").trim();
 		}
 	};
-	const isSyntheticPinnedTodayClone = (entry: any): boolean => {
+	const isSyntheticPinnedTodayClone = (entry: EpochInputEntry | undefined): boolean => {
 		try {
 			if (!entry || entry.pinned !== true) return false;
 			const originalDate = String(entry.originalDate ?? "").trim();
@@ -52,9 +104,9 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 			return false;
 		}
 	};
-	const isRecurringSyntheticEntry = (entry: any): boolean => {
+	const isRecurringSyntheticEntry = (entry: EpochInputEntry | undefined): boolean => {
 		try {
-			return (entry as any)?.recurring === true;
+			return entry?.recurring === true;
 		} catch {
 			return false;
 		}
@@ -80,14 +132,14 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 	const getInboundLinkCountIndex = (): Map<string, number> => {
 		const out = new Map<string, number>();
 		try {
-			const mc: any = (plugin.app as any)?.metadataCache;
-			const resolvedLinks: any = mc?.resolvedLinks;
+			const mc = plugin.app.metadataCache as unknown as MetadataCacheRuntime;
+			const resolvedLinks = mc.resolvedLinks;
 			if (!resolvedLinks || typeof resolvedLinks !== "object") return out;
 			for (const src of Object.keys(resolvedLinks)) {
 				const outbound = resolvedLinks[src];
 				if (!outbound || typeof outbound !== "object") continue;
 				for (const dst of Object.keys(outbound)) {
-					const rawCount = (outbound as any)[dst];
+					const rawCount = outbound[dst];
 					const inc = typeof rawCount === "number" && Number.isFinite(rawCount) ? rawCount : 1;
 					if (!dst) continue;
 					out.set(dst, (out.get(dst) ?? 0) + inc);
@@ -106,14 +158,14 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 			return t.startsWith("#") ? t.slice(1) : t;
 		};
 		try {
-			const appAny: any = plugin.app as any;
-			const mc: any = appAny?.metadataCache;
-			const abs: any = appAny?.vault?.getAbstractFileByPath?.(filePath);
+			const mc = plugin.app.metadataCache as unknown as MetadataCacheRuntime;
+			const abs = plugin.app.vault.getAbstractFileByPath(filePath);
 			const cache = mc?.getFileCache?.(abs);
 			const tags = cache?.tags;
 			if (Array.isArray(tags)) {
 				for (const t of tags) {
-					const norm = normalizeTag((t as any)?.tag ?? t);
+					const value = typeof t === "string" ? t : t?.tag;
+					const norm = normalizeTag(value ?? "");
 					if (norm) out.add(norm);
 				}
 			}
@@ -142,9 +194,10 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 	};
 	const pickTopicKeyForFile = (filePath: string): string => {
 		try {
-			const indexerAny: any = plugin.indexer as any;
-			if (typeof indexerAny?.getFileEmbeddingTerm === "function") {
-				const t = String(indexerAny.getFileEmbeddingTerm(filePath) || "").trim();
+			const indexer = plugin.indexer as unknown as EpochBuildIndexerRuntime;
+			if (typeof indexer.getFileEmbeddingTerm === "function") {
+				const raw = indexer.getFileEmbeddingTerm(filePath);
+				const t = typeof raw === "string" ? raw.trim() : "";
 				if (t) return t;
 			}
 		} catch {
@@ -152,12 +205,12 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 		}
 		try {
 			if (!isTopicSimilarityEnabled(plugin)) return "";
-			const anyPlugin: any = plugin as any;
-			const thresholdRaw = Number(anyPlugin?.settings?.similarityZeroShotMinScore ?? 0);
+			const runtime = plugin as unknown as EpochBuildRuntime;
+			const thresholdRaw = Number(runtime.settings?.similarityZeroShotMinScore ?? 0);
 			const threshold = Number.isFinite(thresholdRaw) ? Math.max(0, Math.min(1, thresholdRaw)) : 0;
-			const storeLoaded = anyPlugin?.termSimilarityLoaded === true && !!anyPlugin?.termSimilarityIndex;
+			const storeLoaded = runtime.termSimilarityLoaded === true && !!runtime.termSimilarityIndex;
 			if (storeLoaded && threshold > 0 && threshold < 1) {
-				const rec: any = anyPlugin?.termSimilarityIndex?.files?.[filePath];
+				const rec = runtime.termSimilarityIndex?.files?.[filePath];
 				const inferred = typeof rec?.term === "string" ? String(rec.term).trim() : "";
 				const score = Number(rec?.score ?? 0);
 				if (inferred && Number.isFinite(score) && score >= threshold) return inferred;
@@ -224,7 +277,7 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 		for (const list of byGroup.values()) list.sort(cmpRank);
 
 		type GroupRank = { key: string; top: FileRank };
-		const groupRanks: GroupRank[] = Array.from(byGroup.entries()).map(([key, list]) => ({ key, top: list[0]! }));
+		const groupRanks: GroupRank[] = Array.from(byGroup.entries()).map(([key, list]) => ({ key, top: list[0] }));
 		groupRanks.sort((a, b) => {
 			const c = cmpRank(a.top, b.top);
 			if (c !== 0) return c;
@@ -301,16 +354,16 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 		return parts.join("\n").trim();
 	};
 
-	const indexerAny: any = plugin.indexer as any;
-	const index: Record<string, DateEntry[]> = indexerAny?.index ?? {};
-	const files: Record<string, any> = indexerAny?.files ?? {};
+	const indexer = plugin.indexer as unknown as EpochBuildIndexerRuntime;
+	const index: Record<string, DateEntry[]> = indexer.index ?? {};
+	const files: Record<string, EpochFileData> = indexer.files ?? {};
 	normalizeEpochEntriesInIndex(plugin, index);
 
-	const entriesByDate = new Map<string, any[]>();
+	const entriesByDate = new Map<string, EpochInputEntry[]>();
 	const dateKeySet = new Set<string>();
-	const recordEntry = (entry: any): void => {
+	const recordEntry = (entry: EpochInputEntry | undefined): void => {
 		if (!entry) return;
-		const d = String((entry as any)?.date ?? "");
+		const d = String(entry.date ?? "");
 		if (!isDateKey(d)) return;
 		dateKeySet.add(d);
 		const list = entriesByDate.get(d) ?? [];
@@ -319,11 +372,11 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 	};
 	for (const data of Object.values(files)) {
 		try {
-			recordEntry((data as any)?.cdate);
-			recordEntry((data as any)?.namedDate);
-			recordEntry((data as any)?.dateProp);
-			for (const e of Array.isArray((data as any)?.contentDates) ? (data as any).contentDates : []) recordEntry(e);
-			const tracked = (data as any)?.trackedDates ?? {};
+			recordEntry(data.cdate);
+			recordEntry(data.namedDate);
+			recordEntry(data.dateProp);
+			for (const e of Array.isArray(data.contentDates) ? data.contentDates : []) recordEntry(e);
+			const tracked = data.trackedDates ?? {};
 			for (const list of Object.values(tracked)) {
 				for (const e of Array.isArray(list) ? list : []) recordEntry(e);
 			}
@@ -341,20 +394,20 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 	type PrimaryAnchor = { date: string; priority: number };
 	const primaryAnchorByFile = new Map<string, PrimaryAnchor>();
 	for (const dayKey of dateKeys) {
-		const indexEntries = Array.isArray(index[dayKey]) ? index[dayKey]! : [];
+		const indexEntries = Array.isArray(index[dayKey]) ? index[dayKey] : [];
 		const fileEntries = entriesByDate.get(dayKey) ?? [];
-		const dayEntries = indexEntries.length > 0 ? indexEntries.concat(fileEntries as any[]) : (fileEntries as any[]);
+		const dayEntries: EpochInputEntry[] = indexEntries.length > 0 ? indexEntries.concat(fileEntries) : fileEntries;
 		for (const e of dayEntries) {
 			if (!e) continue;
-			if (String((e as any)?.file ?? "").startsWith("epoch://")) continue;
+			if (String(e.file ?? "").startsWith("epoch://")) continue;
 			if (e?.reviewState === "hidden") continue;
 			if (isSyntheticPinnedTodayClone(e)) continue;
 			if (isRecurringSyntheticEntry(e)) continue;
-			const filePath = normalizeEpochInputFilePath(String((e as any)?.file ?? ""));
+			const filePath = normalizeEpochInputFilePath(String(e.file ?? ""));
 			if (!filePath) continue;
-			const source = String((e as any)?.source ?? "");
+			const source = String(e.source ?? "");
 			if (!isAnchorSource(source)) continue;
-			const date = String((e as any)?.date ?? dayKey);
+			const date = String(e.date ?? dayKey);
 			if (!isDateKey(date)) continue;
 			const priority = getAnchorPriority(source);
 			const prev = primaryAnchorByFile.get(filePath);
@@ -364,20 +417,20 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 		}
 	}
 
-	const epochIndexSnapshotByDateKey = new Map<string, any[]>();
+	const epochIndexSnapshotByDateKey = new Map<string, EpochInputEntry[]>();
 	for (const dayKey of dateKeys) {
-		const list = Array.isArray(index[dayKey]) ? index[dayKey]! : [];
+		const list = Array.isArray(index[dayKey]) ? index[dayKey] : [];
 		epochIndexSnapshotByDateKey.set(
 			dayKey,
-			list.filter((e) => e && String((e as any)?.file ?? "").startsWith("epoch://"))
+			list.filter((e) => e && String(e.file ?? "").startsWith("epoch://"))
 		);
 	}
 
-	const extractEpochMeta = (e: any): { bucket: EpochBucket; start: string; end: string } | null => {
+	const extractEpochMeta = (e: EpochInputEntry): { bucket: EpochBucket; start: string; end: string } | null => {
 		try {
-			const bucketRaw = String(e?.epochBucket || "");
-			const startRaw = String(e?.epochStart || "");
-			const endRaw = String(e?.epochEnd || "");
+			const bucketRaw = String(e.epochBucket || "");
+			const startRaw = String(e.epochStart || "");
+			const endRaw = String(e.epochEnd || "");
 			if (bucketRaw && isEpochBucket(bucketRaw) && isDateKey(startRaw) && isDateKey(endRaw || startRaw)) {
 				return { bucket: bucketRaw, start: startRaw, end: endRaw || startRaw };
 			}
@@ -387,17 +440,17 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 		}
 	};
 
-	const readEpochText = (e: any): string => String(e?.aiSummary || e?.summary || "").trim();
+	const readEpochText = (e: EpochInputEntry): string => String(e.aiSummary || e.summary || "").trim();
 
-	const epochByPeriodKey = new Map<string, any>();
+	const epochByPeriodKey = new Map<string, EpochInputEntry>();
 	const inboundCounts = getInboundLinkCountIndex();
 
-	let lastYieldAt = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+	let lastYieldAt = nowMs();
 	const maybeYield = async () => {
-		const now = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+		const now = nowMs();
 		if (now - lastYieldAt >= 12) {
 			await new Promise((r) => window.setTimeout(r, 0));
-			lastYieldAt = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+			lastYieldAt = nowMs();
 		}
 	};
 
@@ -405,18 +458,18 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 	const periods = new Map<string, { bucket: EpochBucket; start: string; end: string; dates: Set<string> }>();
 
 	for (let i = 0; i < dateKeys.length; i++) {
-		const key = dateKeys[i]!;
+		const key = dateKeys[i];
 		const d = parseDateKey(key);
 		if (!d) continue;
-		const indexEntries = Array.isArray(index[key]) ? index[key]! : [];
+		const indexEntries = Array.isArray(index[key]) ? index[key] : [];
 		const fileEntries = entriesByDate.get(key) ?? [];
-		const entries = indexEntries.length > 0 ? indexEntries.concat(fileEntries as any[]) : (fileEntries as any[]);
-		const hasNonEpoch = entries.some((e) => e && !String((e as any)?.file ?? "").startsWith("epoch://"));
+		const entries: EpochInputEntry[] = indexEntries.length > 0 ? indexEntries.concat(fileEntries) : fileEntries;
+		const hasNonEpoch = entries.some((e) => e && !String(e.file ?? "").startsWith("epoch://"));
 		const hasChildEpoch = indexEntries.some((e) => {
 			if (!e) return false;
-			const filePath = String((e as any)?.file ?? "");
+			const filePath = String(e.file ?? "");
 			if (!filePath.startsWith("epoch://")) return false;
-			const bucket = String((e as any)?.epochBucket ?? "");
+			const bucket = String(e.epochBucket ?? "");
 			return bucket !== "year";
 		});
 
@@ -469,7 +522,7 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 	});
 
 	for (let pi = 0; pi < periodList.length; pi++) {
-		const rec = periodList[pi]!;
+		const rec = periodList[pi];
 		const { bucket, start, end } = rec;
 		if (!isDateKey(start) || !isDateKey(end)) continue;
 		// After removing the Detailed (full content) mode, epoch inputs are summaries-only.
@@ -486,30 +539,30 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 		};
 		const rangeKeysNewestFirst = Array.from(rec.dates.values()).sort().reverse();
 		const anchorSelectionByFile = new Map<string, { key: string; sortIdx: number; priority: number }>();
-		const entryKeyForDedupe = (e: any, filePath: string, dayKey: string): string => {
-			const source = String((e as any)?.source ?? "");
-			const date = String((e as any)?.date ?? dayKey);
-			const blockStart = Number((e as any)?.blockStart ?? 0);
-			const blockEnd = Number((e as any)?.blockEnd ?? blockStart);
-			const trackedHash = String((e as any)?.trackedHash ?? "");
+		const entryKeyForDedupe = (e: EpochInputEntry, filePath: string, dayKey: string): string => {
+			const source = String(e.source ?? "");
+			const date = String(e.date ?? dayKey);
+			const blockStart = Number(e.blockStart ?? 0);
+			const blockEnd = Number(e.blockEnd ?? blockStart);
+			const trackedHash = String(e.trackedHash ?? "");
 			return [source, filePath, date, String(blockStart), String(blockEnd), trackedHash].join("|");
 		};
 		for (let idx = 0; idx < rangeKeysNewestFirst.length; idx++) {
-			const dayKey = rangeKeysNewestFirst[idx]!;
-			const indexEntries = Array.isArray(index[dayKey]) ? index[dayKey]! : [];
+				const dayKey = rangeKeysNewestFirst[idx];
+				const indexEntries = Array.isArray(index[dayKey]) ? index[dayKey] : [];
 			const fileEntries = entriesByDate.get(dayKey) ?? [];
-			const dayEntries = indexEntries.length > 0 ? indexEntries.concat(fileEntries as any[]) : (fileEntries as any[]);
+			const dayEntries: EpochInputEntry[] = indexEntries.length > 0 ? indexEntries.concat(fileEntries) : fileEntries;
 			for (const e of dayEntries) {
 				if (!e) continue;
-				if (String((e as any)?.file ?? "").startsWith("epoch://")) continue;
+				if (String(e.file ?? "").startsWith("epoch://")) continue;
 				if (e?.reviewState === "hidden") continue;
 				if (isSyntheticPinnedTodayClone(e)) continue;
 				if (isRecurringSyntheticEntry(e)) continue;
-				const rawPath = normalizeEpochInputFilePath(String((e as any)?.file ?? "")) || "(unknown)";
-				const source = String((e as any)?.source ?? "");
+				const rawPath = normalizeEpochInputFilePath(String(e.file ?? "")) || "(unknown)";
+				const source = String(e.source ?? "");
 				if (!isAnchorSource(source)) continue;
 				const primary = primaryAnchorByFile.get(rawPath);
-				const entryDate = String((e as any)?.date ?? dayKey);
+				const entryDate = String(e.date ?? dayKey);
 				if (primary && entryDate && entryDate !== primary.date) continue;
 				const key = entryKeyForDedupe(e, rawPath, dayKey);
 				const priority = getAnchorPriority(source);
@@ -528,23 +581,23 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 			}
 		}
 
-		const resolveEpochInputItemText = async (e: any): Promise<string> => formatEpochItemText(plugin, e);
+		const resolveEpochInputItemText = async (e: EpochInputEntry): Promise<string> => formatEpochItemText(plugin, e);
 		for (const dayKey of rangeKeysNewestFirst) {
-			const indexEntries = Array.isArray(index[dayKey]) ? index[dayKey]! : [];
+			const indexEntries = Array.isArray(index[dayKey]) ? index[dayKey] : [];
 			const fileEntries = entriesByDate.get(dayKey) ?? [];
-			const dayEntries = indexEntries.length > 0 ? indexEntries.concat(fileEntries as any[]) : (fileEntries as any[]);
+			const dayEntries: EpochInputEntry[] = indexEntries.length > 0 ? indexEntries.concat(fileEntries) : fileEntries;
 			for (const e of dayEntries) {
 				if (!e) continue;
-				if (String((e as any)?.file ?? "").startsWith("epoch://")) continue;
+				if (String(e.file ?? "").startsWith("epoch://")) continue;
 				if (e?.reviewState === "hidden") continue;
 				if (isSyntheticPinnedTodayClone(e)) continue;
 				if (isRecurringSyntheticEntry(e)) continue;
-				const filePath = normalizeEpochInputFilePath(String((e as any)?.file ?? "")) || "(unknown)";
+				const filePath = normalizeEpochInputFilePath(String(e.file ?? "")) || "(unknown)";
 				try {
-					const src = String((e as any)?.source ?? "");
+					const src = String(e.source ?? "");
 					if (isAnchorSource(src)) {
 						const primary = primaryAnchorByFile.get(filePath);
-						const entryDate = String((e as any)?.date ?? dayKey);
+						const entryDate = String(e.date ?? dayKey);
 						if (primary && entryDate && entryDate !== primary.date) continue;
 					}
 				} catch {
@@ -566,13 +619,13 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 					// ignore
 				}
 				try {
-					const mc = Number((e as any)?.markColor ?? NaN);
+					const mc = Number(e.markColor ?? Number.NaN);
 					if (Number.isFinite(mc)) st.markedRecords += 1;
 				} catch {
 					// ignore
 				}
 				try {
-					const src = String((e as any)?.source ?? "");
+					const src = String(e.source ?? "");
 					if (isAnchorSource(src)) st.anchorRecords += 1;
 				} catch {
 					// ignore
@@ -595,9 +648,9 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 					const meta = extractEpochMeta(e);
 					if (!meta) continue;
 					if (meta.bucket === "year") continue;
-					const epochFilePath = String((e as any)?.file ?? "");
+					const epochFilePath = String(e.file ?? "");
 					if (!epochFilePath.startsWith("epoch://")) continue;
-					const text = formatEpochItemText(plugin, { ...(e as any), file: epochFilePath });
+					const text = formatEpochItemText(plugin, { ...e, file: epochFilePath });
 					if (!text) continue;
 					const list = childGroups.get(epochFilePath) ?? [];
 					list.push(text);
@@ -609,11 +662,11 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 			}
 		}
 
-		const existing = Array.isArray(index[start]) ? index[start]! : [];
+		const existing = Array.isArray(index[start]) ? index[start] : [];
 		const matchingEpoch =
 			epochByPeriodKey.get(`${bucket}|${start}`) ??
 			existing.find(
-				(e) => e && String((e as any)?.file ?? "").startsWith("epoch://") && e.epochBucket === bucket && e.epochStart === start
+				(e) => e && String(e.file ?? "").startsWith("epoch://") && e.epochBucket === bucket && e.epochStart === start
 			);
 
 		if (!inputText) {
@@ -626,8 +679,8 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 		const epochFilePath = `epoch://${bucket}/${start}-${end}`;
 		const inputHash = computeAiSummaryInputHash(epochFilePath, `${start}|${bucket}`, inputText, tuning.maxChunkChars);
 		const related = clipRelated(await buildRelatedSummariesForFiles(plugin, Array.from(inputGroups.keys())));
-		const existingText = matchingEpoch ? readEpochText(matchingEpoch as any) : "";
-		const existingHash = matchingEpoch ? String((matchingEpoch as any).aiSummaryInputHash || "") : "";
+		const existingText = matchingEpoch ? readEpochText(matchingEpoch) : "";
+		const existingHash = matchingEpoch ? String(matchingEpoch.aiSummaryInputHash || "") : "";
 		const isFresh = !!existingText && existingHash === inputHash;
 
 		if (mode === "missing") {
@@ -647,7 +700,7 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 				blockStart: 0,
 				blockEnd: 0,
 				source: "epoch",
-				input: chunks[0]!,
+					input: chunks[0],
 				related,
 				context: buildEpochContext(bucket, start, end, related),
 				inputHash,
@@ -672,7 +725,7 @@ export async function buildEpochJobs(plugin: EpochPlugin, mode: EpochJobMode = "
 					blockStart: 0,
 					blockEnd: 0,
 					source: "epoch",
-					input: chunks[i]!,
+						input: chunks[i],
 					related,
 					context: buildEpochContext(bucket, start, end, related),
 					inputHash,

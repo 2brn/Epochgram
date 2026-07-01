@@ -1,22 +1,26 @@
 import type { DateEntry, FileDateEntry, FileIndexData } from "./types";
 
+type FileIndexDataWithReviewClear = FileIndexData & {
+	__trackedReviewStateClearedDates?: unknown[];
+};
+
 export function applyEntryState(
 	previous: FileIndexData | undefined,
 	next: FileIndexData
 ): void {
 	try {
-		const prev = (previous as any)?.recurHiddenDates;
+		const prev = previous?.recurHiddenDates;
 		if (Array.isArray(prev)) {
-			(next as any).recurHiddenDates = prev.slice();
+			next.recurHiddenDates = prev.slice();
 		}
 	} catch {
 		// ignore
 	}
 
 	try {
-		const prev = (previous as any)?.recurReviewedDates;
+		const prev = previous?.recurReviewedDates;
 		if (Array.isArray(prev)) {
-			(next as any).recurReviewedDates = prev.slice();
+			next.recurReviewedDates = prev.slice();
 		}
 	} catch {
 		// ignore
@@ -83,7 +87,7 @@ function transferHiddenSingle(
 
 function trackedReviewClearedDateKeys(nextFileData: FileIndexData): Set<string> {
 	try {
-		const raw = (nextFileData as any)?.__trackedReviewStateClearedDates;
+		const raw = (nextFileData as FileIndexDataWithReviewClear).__trackedReviewStateClearedDates;
 		if (!Array.isArray(raw)) return new Set<string>();
 		return new Set<string>(
 			raw
@@ -320,13 +324,11 @@ function transferAiSingle(
 ): void {
 	if (!next || !previous) return;
 	if (previous.file !== next.file || previous.source !== next.source) return;
-	const prevAny: any = previous as any;
-	const nextAny: any = next as any;
-	if (typeof prevAny.aiSummary === "string" && prevAny.aiSummary.trim()) {
-		nextAny.aiSummary = prevAny.aiSummary;
+	if (typeof previous.aiSummary === "string" && previous.aiSummary.trim()) {
+		next.aiSummary = previous.aiSummary;
 	}
-	if (typeof prevAny.aiSummaryInputHash === "string" && prevAny.aiSummaryInputHash.trim()) {
-		nextAny.aiSummaryInputHash = prevAny.aiSummaryInputHash;
+	if (typeof previous.aiSummaryInputHash === "string" && previous.aiSummaryInputHash.trim()) {
+		next.aiSummaryInputHash = previous.aiSummaryInputHash;
 	}
 }
 
@@ -339,9 +341,8 @@ function transferAiArray(
 	if (Array.isArray(previous)) {
 		for (const entry of previous) {
 			if (!entry) continue;
-			const anyEntry: any = entry as any;
-			const s = typeof anyEntry.aiSummary === "string" ? anyEntry.aiSummary.trim() : "";
-			const h = typeof anyEntry.aiSummaryInputHash === "string" ? anyEntry.aiSummaryInputHash.trim() : "";
+			const s = typeof entry.aiSummary === "string" ? entry.aiSummary.trim() : "";
+			const h = typeof entry.aiSummaryInputHash === "string" ? entry.aiSummaryInputHash.trim() : "";
 			if (!s && !h) continue;
 			map.set(entrySignature(entry), { s: s || undefined, h: h || undefined });
 		}
@@ -349,9 +350,8 @@ function transferAiArray(
 	for (const entry of next) {
 		const saved = map.get(entrySignature(entry));
 		if (!saved) continue;
-		const anyEntry: any = entry as any;
-		if (saved.s) anyEntry.aiSummary = saved.s;
-		if (saved.h) anyEntry.aiSummaryInputHash = saved.h;
+		if (saved.s) entry.aiSummary = saved.s;
+		if (saved.h) entry.aiSummaryInputHash = saved.h;
 	}
 }
 
@@ -364,9 +364,8 @@ function transferAiTracked(
 		for (const entries of Object.values(previous)) {
 			for (const entry of entries) {
 				if (!entry) continue;
-				const anyEntry: any = entry as any;
-				const s = typeof anyEntry.aiSummary === "string" ? anyEntry.aiSummary.trim() : "";
-				const h = typeof anyEntry.aiSummaryInputHash === "string" ? anyEntry.aiSummaryInputHash.trim() : "";
+				const s = typeof entry.aiSummary === "string" ? entry.aiSummary.trim() : "";
+				const h = typeof entry.aiSummaryInputHash === "string" ? entry.aiSummaryInputHash.trim() : "";
 				if (!s && !h) continue;
 				map.set(trackedEntryKey(entry), { s: s || undefined, h: h || undefined });
 			}
@@ -376,9 +375,8 @@ function transferAiTracked(
 		for (const entry of entries) {
 			const saved = map.get(trackedEntryKey(entry));
 			if (!saved) continue;
-			const anyEntry: any = entry as any;
-			if (saved.s) anyEntry.aiSummary = saved.s;
-			if (saved.h) anyEntry.aiSummaryInputHash = saved.h;
+			if (saved.s) entry.aiSummary = saved.s;
+			if (saved.h) entry.aiSummaryInputHash = saved.h;
 		}
 	}
 }

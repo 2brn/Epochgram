@@ -18,7 +18,7 @@ export function renderNormalColumnsPass(args: {
 	rowHeight: number;
 	iconCache: CanvasIconCache;
 	fontSmallHover: string;
-	wrapFadeCache?: Map<string, any> | null;
+	wrapFadeCache?: Map<string, unknown> | null;
 	textModeEnabled: boolean;
 	detailHoverScale: number;
 	hoveredColIdx: number;
@@ -71,7 +71,8 @@ export function renderNormalColumnsPass(args: {
 		const ranges: RowYRange[] = [];
 		let y = dayCenterY - col.columnHeight / 2;
 		for (let row = 0; row < col.rowsThisCol; row++) {
-			const r = col.rows[row]!;
+			const r = col.rows[row];
+			if (!r) continue;
 			const yTop = y;
 			const yBottom = yTop + r.height;
 			ranges.push({ yTop, yBottom });
@@ -92,7 +93,8 @@ export function renderNormalColumnsPass(args: {
 			if (!ranges) continue;
 			for (let rj = 0; rj < ranges.length; rj++) {
 				if (cj === colIdx && rj === rowIdx) continue;
-				const other = ranges[rj]!;
+				const other = ranges[rj];
+				if (!other) continue;
 				const overlapsY = !(targetBottom <= other.yTop || targetTop >= other.yBottom);
 				if (overlapsY) {
 					return false;
@@ -103,7 +105,8 @@ export function renderNormalColumnsPass(args: {
 	};
 
 	for (let colIdx = 0; colIdx < columns.length; colIdx++) {
-		const col = columns[colIdx]!;
+		const col = columns[colIdx];
+		if (!col) continue;
 		const { x, maxWidth, rowsThisCol, rows } = col;
 		const rightEdge = xStart + rightWidth;
 		const baseX = x;
@@ -123,7 +126,8 @@ export function renderNormalColumnsPass(args: {
 				const other = rowLayoutByCol[cj];
 				if (!other) continue;
 				for (let rj = 0; rj < other.length; rj++) {
-					const o = other[rj]!;
+					const o = other[rj];
+					if (!o) continue;
 					if (yBottom <= o.yTop || yTop >= o.yBottom) continue;
 					return o.rowX - recordSafeGap;
 				}
@@ -136,9 +140,13 @@ export function renderNormalColumnsPass(args: {
 				const other = baseRowRangesByCol[cj];
 				if (!other) continue;
 				for (let rj = 0; rj < other.length; rj++) {
-					const o = other[rj]!;
+					const o = other[rj];
+					if (!o) continue;
+					if (!o) continue;
 					if (yBottom <= o.yTop || yTop >= o.yBottom) continue;
-					return columns[cj]!.x - recordSafeGap;
+					const nextCol = columns[cj];
+					if (!nextCol) continue;
+					return nextCol.x - recordSafeGap;
 				}
 			}
 			return rightEdge;
@@ -149,9 +157,11 @@ export function renderNormalColumnsPass(args: {
 				const other = rowLayoutByCol[cj];
 				if (!other) continue;
 				for (let rj = 0; rj < other.length; rj++) {
-					const o = other[rj]!;
+					const o = other[rj];
+					if (!o) continue;
 					for (let bi = 0; bi < bands.length; bi++) {
-						const b = bands[bi]!;
+						const b = bands[bi];
+						if (!b) continue;
 						if (b.yBottom <= o.yTop || b.yTop >= o.yBottom) continue;
 						return o.rowX - recordSafeGap;
 					}
@@ -163,7 +173,8 @@ export function renderNormalColumnsPass(args: {
 		let yCursorBase = dayCenterY - col.columnHeight / 2;
 
 		for (let row = 0; row < rowsThisCol; row++) {
-			const r = rows[row]!;
+			const r = rows[row];
+			if (!r) continue;
 			const rowIsSingleInRow = isSingleInRow(colIdx, row);
 			const rowT = Math.max(0, Math.min(1, r.summaryHoverT)) * detailHoverScale;
 			const yRectTopBase = yCursorBase;
@@ -318,7 +329,7 @@ export function renderNormalColumnsPass(args: {
 				entry: r.entry,
 				// Metadata for click handling: when text mode is disabled, rows render as placeholder strokes.
 				isPlaceholder: !textModeEnabled
-			} as any);
+			});
 
 			summaryHoverRects.push({
 				x1: Math.min(baseX, rowX) - HOVER_HIT_PAD,
@@ -331,7 +342,7 @@ export function renderNormalColumnsPass(args: {
 				itemIndex: r.entryIndex,
 				entry: r.entry,
 				isPlaceholder: !textModeEnabled
-			} as any);
+			});
 
 			yCursorBase = yRectBottomBase;
 		}

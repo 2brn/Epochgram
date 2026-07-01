@@ -1,13 +1,33 @@
 import type { EpochCanvas } from "../epoch-canvas";
 import { resetScrollNavTargetState } from "../epoch-canvas/scroll-nav-reset";
 import { getEventState, isViewMotionActive, isWheelInteractionSuppressed, stopViewMotion } from "./state";
+import type { CanvasEventInternals } from "./state";
 import { beginAnchorEntryDrag, commitAnchorEntryDrag, resolveDraggableAnchorEntry, updateAnchorEntryDrag } from "./anchor-dnd";
 import { setCssStyles } from "../../dom";
 import { clampTimelineOffsetToBounds, resolveViewportHeight } from "../epoch-canvas/viewport-limits";
+import type { DateEntry } from "../../indexer/types";
 
-function resolveToday(state: any): Date {
+type MouseEventState = CanvasEventInternals & {
+	animatingWheelZoom?: boolean;
+	entryDragCandidateEntry?: DateEntry | null;
+	entryDragCandidateGhostEntry?: DateEntry | null;
+	entryDragCandidateStartX?: number;
+	entryDragCandidateStartY?: number;
+	mousePanButton?: number | null;
+	__lastKnownCanvasCssHeight?: number;
+	__ignoreHoverUntil?: number;
+	__ignoreNextHoverMove?: boolean;
+	__suppressHoverPointerX?: number;
+	__suppressHoverPointerY?: number;
+};
+
+function getMouseState(canvas: EpochCanvas): MouseEventState {
+	return getEventState(canvas);
+}
+
+function resolveToday(state: { getToday?: () => Date }): Date {
 	try {
-		if (typeof state?.getToday === "function") return state.getToday();
+		if (typeof state.getToday === "function") return state.getToday();
 	} catch {
 		// ignore
 	}
@@ -15,14 +35,14 @@ function resolveToday(state: any): Date {
 }
 
 export function handleMouseDown(canvas: EpochCanvas, event: MouseEvent): void {
-	const s = getEventState(canvas);
+	const s = getMouseState(canvas);
 	const isMiddleButton = event.button === 1;
 	// Mobile: treat touch as the only interaction source.
 	// This prevents synthetic mouse events from driving hover/drag behavior.
 	const hasPointer = typeof s.isPointerDeviceEvent === "function" ? s.isPointerDeviceEvent() : true;
 	if (!hasPointer) return;
 	s.animatingView = false;
-	(s as any).animatingWheelZoom = false;
+	s.animatingWheelZoom = false;
 	if (event.button === 2) {
 		event.preventDefault();
 		try {
@@ -50,7 +70,7 @@ export function handleMouseDown(canvas: EpochCanvas, event: MouseEvent): void {
 		event.preventDefault();
 	}
 	if (event.button !== 0 && !isMiddleButton) return;
-	const now = performance.now();
+	const now = window.performance.now();
 	const motionActive = isViewMotionActive(s);
 	if (motionActive || isWheelInteractionSuppressed(s, now)) {
 		if (motionActive) {
@@ -62,8 +82,8 @@ export function handleMouseDown(canvas: EpochCanvas, event: MouseEvent): void {
 			}
 		}
 		try {
-			const prev = Number((s as any).suppressClickUntil ?? 0);
-			(s as any).suppressClickUntil = Math.max(prev, now + 200);
+			const prev = Number(s.suppressClickUntil ?? 0);
+			s.suppressClickUntil = Math.max(prev, now + 200);
 		} catch {
 			// ignore
 		}
@@ -73,18 +93,18 @@ export function handleMouseDown(canvas: EpochCanvas, event: MouseEvent): void {
 			// ignore
 		}
 		s.lastPointerEvent = event;
-		(s as any).entryDragCandidateEntry = null;
-		(s as any).entryDragCandidateGhostEntry = null;
-		(s as any).entryDragCandidateStartX = 0;
-		(s as any).entryDragCandidateStartY = 0;
+		s.entryDragCandidateEntry = null;
+		s.entryDragCandidateGhostEntry = null;
+		s.entryDragCandidateStartX = 0;
+		s.entryDragCandidateStartY = 0;
 		return;
 	}
 
 	s.pendingScrollNavHighlight = null;
 
 	if (isMiddleButton) {
-		(s as any).entryDragCandidateEntry = null;
-		(s as any).entryDragCandidateGhostEntry = null;
+		s.entryDragCandidateEntry = null;
+		s.entryDragCandidateGhostEntry = null;
 	} else {
 		try {
 			const rect = s.canvas.getBoundingClientRect();
@@ -93,31 +113,31 @@ export function handleMouseDown(canvas: EpochCanvas, event: MouseEvent): void {
 			const entry = s.findSummaryEntryAtPoint(x, y);
 			const dragEntry = resolveDraggableAnchorEntry(canvas, entry);
 			if (dragEntry) {
-				(s as any).entryDragCandidateEntry = dragEntry;
-				(s as any).entryDragCandidateGhostEntry = entry;
-				(s as any).entryDragCandidateStartX = event.clientX;
-				(s as any).entryDragCandidateStartY = event.clientY;
+				s.entryDragCandidateEntry = dragEntry;
+				s.entryDragCandidateGhostEntry = entry;
+				s.entryDragCandidateStartX = event.clientX;
+				s.entryDragCandidateStartY = event.clientY;
 			} else {
-				(s as any).entryDragCandidateEntry = null;
-				(s as any).entryDragCandidateGhostEntry = null;
+				s.entryDragCandidateEntry = null;
+				s.entryDragCandidateGhostEntry = null;
 			}
 		} catch {
-			(s as any).entryDragCandidateEntry = null;
-			(s as any).entryDragCandidateGhostEntry = null;
+			s.entryDragCandidateEntry = null;
+			s.entryDragCandidateGhostEntry = null;
 		}
 	}
 
-	const hasEntryCandidate = !!(s as any).entryDragCandidateEntry;
+	const hasEntryCandidate = !!s.entryDragCandidateEntry;
 	if (!hasEntryCandidate) {
-		(s as any).animatingWheelPan = false;
-		(s as any).animatingWheelZoom = false;
+		s.animatingWheelPan = false;
+		s.animatingWheelZoom = false;
 		try {
 			s.targetOffsetY = s.offsetY;
 			s.targetScale = s.scale;
 		} catch { void 0; }
 		s.isDragging = true;
 		s.dragSource = "mouse";
-		(s as any).mousePanButton = isMiddleButton ? 1 : 0;
+		s.mousePanButton = isMiddleButton ? 1 : 0;
 		s.dragStartY = event.clientY;
 		s.dragStartOffsetY = s.offsetY;
 	}
@@ -136,25 +156,24 @@ export function handleMouseDown(canvas: EpochCanvas, event: MouseEvent): void {
 }
 
 export function handleMouseMove(canvas: EpochCanvas, event: MouseEvent): void {
-	const s = getEventState(canvas);
+	const s = getMouseState(canvas);
 	const hasPointer = typeof s.isPointerDeviceEvent === "function" ? s.isPointerDeviceEvent() : true;
 	if (!hasPointer) return;
-	const anyS: any = s as any;
-	if (anyS.entryDragActive) {
+	if (s.entryDragActive) {
 		updateAnchorEntryDrag(canvas, event.clientX, event.clientY);
 		return;
 	}
-	const candidate = anyS.entryDragCandidateEntry as any;
+	const candidate = s.entryDragCandidateEntry;
 	if (candidate && (event.buttons & 1)) {
-		const sx = Number(anyS.entryDragCandidateStartX) || s.mouseDownX;
-		const sy = Number(anyS.entryDragCandidateStartY) || s.mouseDownY;
+		const sx = Number(s.entryDragCandidateStartX) || s.mouseDownX;
+		const sy = Number(s.entryDragCandidateStartY) || s.mouseDownY;
 		const distVal = Math.hypot(event.clientX - sx, event.clientY - sy);
 		if (distVal > 6) {
-			const ghost = anyS.entryDragCandidateGhostEntry as any;
-			anyS.entryDragCandidateEntry = null;
-			anyS.entryDragCandidateGhostEntry = null;
-			anyS.entryDragCandidateStartX = 0;
-			anyS.entryDragCandidateStartY = 0;
+			const ghost = s.entryDragCandidateGhostEntry ?? null;
+			s.entryDragCandidateEntry = null;
+			s.entryDragCandidateGhostEntry = null;
+			s.entryDragCandidateStartX = 0;
+			s.entryDragCandidateStartY = 0;
 			resetScrollNavTargetState(canvas);
 			s.mouseMoved = true;
 			beginAnchorEntryDrag(canvas, candidate, "mouse", sx, sy, ghost);
@@ -165,11 +184,11 @@ export function handleMouseMove(canvas: EpochCanvas, event: MouseEvent): void {
 
 	if (!s.isDragging) return;
 	// Treat active drag as an "animating" period for perf gating.
-	s.viewInteractionUntil = performance.now() + 140;
-	const now = performance.now();
+	s.viewInteractionUntil = window.performance.now() + 140;
+	const now = window.performance.now();
 	const dy = event.clientY - s.dragStartY;
 	s.offsetY = s.dragStartOffsetY + dy;
-	const viewportHeight = resolveViewportHeight(s.root, Number((s as any).__lastKnownCanvasCssHeight ?? 0));
+	const viewportHeight = resolveViewportHeight(s.root, Number(s.__lastKnownCanvasCssHeight ?? 0));
 	if (viewportHeight > 0) {
 		s.offsetY = clampTimelineOffsetToBounds({
 			offsetY: s.offsetY,
@@ -214,23 +233,22 @@ export function handleMouseMove(canvas: EpochCanvas, event: MouseEvent): void {
 }
 
 export function handleMouseUp(canvas: EpochCanvas): void {
-	const s = getEventState(canvas);
+	const s = getMouseState(canvas);
 	const hasPointer = typeof s.isPointerDeviceEvent === "function" ? s.isPointerDeviceEvent() : true;
 	if (!hasPointer) return;
-	const anyS: any = s as any;
-	if (anyS.entryDragActive) {
+	if (s.entryDragActive) {
 		void commitAnchorEntryDrag(canvas);
 		return;
 	}
-	anyS.entryDragCandidateEntry = null;
-	anyS.entryDragCandidateGhostEntry = null;
-	anyS.entryDragCandidateStartX = 0;
-	anyS.entryDragCandidateStartY = 0;
+	s.entryDragCandidateEntry = null;
+	s.entryDragCandidateGhostEntry = null;
+	s.entryDragCandidateStartX = 0;
+	s.entryDragCandidateStartY = 0;
 	if (!s.isDragging) return;
 	s.isDragging = false;
 	s.dragSource = null;
 	s.velocityY = 0;
-	(s as any).mousePanButton = null;
+	s.mousePanButton = null;
 	try {
 		setCssStyles(s.canvas, { cursor: "" });
 	} catch {
@@ -240,12 +258,12 @@ export function handleMouseUp(canvas: EpochCanvas): void {
 	// hover briefly so leaving the canvas doesn't flicker hover on/off.
 	if (s.mouseMoved) {
 		s.clearHover();
-		s.suppressHoverUntil = performance.now() + 120;
+		s.suppressHoverUntil = window.performance.now() + 120;
 	}
 }
 
 export function handleHoverMouse(canvas: EpochCanvas, event: MouseEvent): void {
-	const s = getEventState(canvas);
+	const s = getMouseState(canvas);
 	// Mobile: no hover driven by mousemove; touchstart is the only hover entry.
 	const hasPointer = typeof s.isPointerDeviceEvent === "function" ? s.isPointerDeviceEvent() : true;
 	if (!hasPointer) return;
@@ -258,24 +276,29 @@ export function handleHoverMouse(canvas: EpochCanvas, event: MouseEvent): void {
 	// Some platforms emit synthetic mouse events after touch interactions.
 	// Do not let those events drive hover state; touch hover is handled in touchstart.
 	try {
-		if ((event as any)?.sourceCapabilities?.firesTouchEvents) {
+		const sourceCapsUnknown: unknown = (event as MouseEvent & { sourceCapabilities?: unknown }).sourceCapabilities;
+		const firesTouchEvents =
+			!!sourceCapsUnknown &&
+			typeof sourceCapsUnknown === "object" &&
+			(sourceCapsUnknown as { firesTouchEvents?: unknown }).firesTouchEvents === true;
+		if (firesTouchEvents) {
 			s.lastPointerEvent = event;
 			return;
 		}
 	} catch {
 		// ignore
 	}
-	const now = performance.now();
+	const now = window.performance.now();
 	// After touch/two-finger scroll-nav, some platforms emit a stray mousemove that would
 	// otherwise clear/reposition the programmatic hover, causing a visible "jump".
 	try {
-		const ignoreUntil = Number((s as any).__ignoreHoverUntil ?? 0);
+		const ignoreUntil = Number(s.__ignoreHoverUntil ?? 0);
 		if (Number.isFinite(ignoreUntil) && ignoreUntil > 0 && now < ignoreUntil) {
 			s.lastPointerEvent = event;
 			return;
 		}
-		if ((s as any).__ignoreNextHoverMove) {
-			(s as any).__ignoreNextHoverMove = false;
+		if (s.__ignoreNextHoverMove) {
+			s.__ignoreNextHoverMove = false;
 			s.lastPointerEvent = event;
 			return;
 		}
@@ -285,7 +308,7 @@ export function handleHoverMouse(canvas: EpochCanvas, event: MouseEvent): void {
 	// During Alt+wheel / Alt+arrow scroll navigation, some platforms emit incidental mousemove
 	// events while the view is animating. Do not let those pointer updates clear the
 	// programmatic scroll-nav hover.
-	if ((s as any).previewLockedUntilAltRelease) {
+	if (s.previewLockedUntilAltRelease) {
 		s.lastPointerEvent = event;
 		return;
 	}
@@ -297,13 +320,13 @@ export function handleHoverMouse(canvas: EpochCanvas, event: MouseEvent): void {
 		// Only re-enable hover once the user has actually moved the pointer.
 		// Some platforms emit stray mousemove events after touch/two-finger gestures.
 		try {
-			const sxRaw = (s as any).__suppressHoverPointerX;
-			const syRaw = (s as any).__suppressHoverPointerY;
+			const sxRaw = s.__suppressHoverPointerX;
+			const syRaw = s.__suppressHoverPointerY;
 			const sx = Number(sxRaw);
 			const sy = Number(syRaw);
 			if (!Number.isFinite(sx) || !Number.isFinite(sy)) {
-				(s as any).__suppressHoverPointerX = event.clientX;
-				(s as any).__suppressHoverPointerY = event.clientY;
+				s.__suppressHoverPointerX = event.clientX;
+				s.__suppressHoverPointerY = event.clientY;
 				s.lastPointerEvent = event;
 				return;
 			}
@@ -317,8 +340,8 @@ export function handleHoverMouse(canvas: EpochCanvas, event: MouseEvent): void {
 		}
 		s.suppressHoverUntilPointerMove = false;
 		try {
-			(s as any).__suppressHoverPointerX = event.clientX;
-			(s as any).__suppressHoverPointerY = event.clientY;
+			s.__suppressHoverPointerX = event.clientX;
+			s.__suppressHoverPointerY = event.clientY;
 		} catch {
 			// ignore
 		}

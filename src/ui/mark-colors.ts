@@ -18,6 +18,10 @@ type MarkColorGroupDef = {
 	subitems: Array<{ name: string; rgb: RgbSource }>;
 };
 
+type MarkColorFileData = {
+	markColor?: unknown;
+};
+
 export type EpochMarkColorOption = {
 	name: string;
 	css: string;
@@ -56,7 +60,8 @@ function isCssVarRgbSource(v: RgbSource): v is CssVarRgbSource {
 
 function isThemeDark(root: unknown): boolean {
 	try {
-		const doc = (root as any)?.ownerDocument;
+		if (!(root instanceof Element)) return false;
+		const doc = root.ownerDocument;
 		return Boolean(doc?.body?.classList?.contains?.("theme-dark"));
 	} catch {
 		return false;
@@ -66,9 +71,10 @@ function isThemeDark(root: unknown): boolean {
 function resolveRgbTriplet(root: unknown, src: RgbSource): RgbTriplet {
 	if (!isCssVarRgbSource(src)) return src;
 	try {
-		const doc = (root as any)?.ownerDocument;
+		if (!(root instanceof Element)) return isThemeDark(root) ? src.fallback.dark : src.fallback.light;
+		const doc = root.ownerDocument;
 		const win = doc?.defaultView;
-		const el = root as any;
+		const el = root;
 		if (win?.getComputedStyle && el) {
 			const style = win.getComputedStyle(el);
 			const raw = style?.getPropertyValue?.(src.cssVar)?.trim?.() ?? "";
@@ -354,11 +360,13 @@ let cache: MarkColorCache | null = null;
 function computeCacheKey(root: unknown): string {
 	let varsPart = "";
 	try {
-		const doc = (root as any)?.ownerDocument;
-		const win = doc?.defaultView;
-		if (win?.getComputedStyle && root) {
-			const style = win.getComputedStyle(root as any);
-			varsPart = MARK_COLOR_VAR_NAMES.map((n) => style.getPropertyValue(n).trim()).join("|");
+		const rootEl = root instanceof Element ? root : null;
+		const doc = rootEl?.ownerDocument ?? null;
+		const win = doc?.defaultView ?? null;
+		if (win?.getComputedStyle && rootEl) {
+			const style = win.getComputedStyle(rootEl);
+			const parts: string[] = MARK_COLOR_VAR_NAMES.map((n) => String(style.getPropertyValue(n)).trim());
+			varsPart = parts.join("|");
 		}
 	} catch {
 		// ignore
@@ -409,7 +417,7 @@ export function pickDefaultMarkColorIndex(used: Set<MarkColorIndex>, current: un
 export function normalizeMarkColorIndex(n: unknown): MarkColorIndex | null {
 	if (typeof n !== "number" || !Number.isFinite(n)) return null;
 	const v = Math.floor(n);
-	if (v >= 1 && v <= MAX_MARK_COLORS) return v as MarkColorIndex;
+	if (v >= 1 && v <= MAX_MARK_COLORS) return v;
 	return null;
 }
 
@@ -420,10 +428,9 @@ export function getUsedMarkColorIndexSet(
 	const used = new Set<MarkColorIndex>();
 	try {
 		if (!filesObj || typeof filesObj !== "object") return used;
-		for (const [p, data] of Object.entries(filesObj as any)) {
+		for (const [p, data] of Object.entries(filesObj as Record<string, MarkColorFileData | undefined>)) {
 			if (excludePath && p === excludePath) continue;
-			const anyD: any = data as any;
-			const rawIdx: unknown = typeof anyD?.markColor === "number" ? anyD.markColor : null;
+			const rawIdx: unknown = typeof data?.markColor === "number" ? data.markColor : null;
 			const idx = normalizeMarkColorIndex(rawIdx);
 			if (idx) used.add(idx);
 		}

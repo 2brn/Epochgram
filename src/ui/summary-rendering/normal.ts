@@ -78,7 +78,7 @@ export interface NormalSummaryRenderArgs {
 	pathsWithEmbeddingTerm?: Set<string> | null;
 	pathsWithClassifiedTerm?: Set<string> | null;
 	termSimilarPaths?: Set<string> | null;
-	wrapFadeCache?: Map<string, any> | null;
+	wrapFadeCache?: Map<string, unknown> | null;
 	getEntryTitle: (entry: DateEntry) => string | null;
 }
 
@@ -202,7 +202,8 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 			let hasSemantic = false;
 			if (activeFilePath) {
 				for (let i = 0; i < hiddenEntries.length; i++) {
-					const e = hiddenEntries[i]!;
+					const e = hiddenEntries[i];
+					if (!e) continue;
 					if (e.file === activeFilePath) {
 						activeHidden = e;
 						break;
@@ -210,7 +211,8 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 				}
 			}
 			for (let i = 0; i < hiddenEntries.length; i++) {
-				const e = hiddenEntries[i]!;
+				const e = hiddenEntries[i];
+				if (!e) continue;
 				if (!anyMark) {
 					const c = getEntryMarkColor(e, markColors, colHighlight);
 					if (c) anyMark = c;
@@ -278,7 +280,8 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 				let outgoingT = 0;
 				if (Array.isArray(outgoingSummaries) && outgoingSummaries.length) {
 					for (let i = 0; i < outgoingSummaries.length; i++) {
-						const o = outgoingSummaries[i]!;
+						const o = outgoingSummaries[i];
+						if (!o) continue;
 						if (o.dayIndex !== dayIndex) continue;
 						const t = clamp01(Number(o.t));
 						if (t > outgoingT + 1e-6) {
@@ -301,26 +304,28 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 				let hoveredGapBelow = 0;
 				if (allowPartialReflow && hoverTForVisible > 0.001 && hoveredEntryIndex >= 0 && hoveredEntryIndex < totalRows) {
 					// Mirror normal hover height logic for a single-line row.
-					let font = args.fontSmall;
-					const hoveredEntry = visibleEntries[hoveredEntryIndex]!;
-					const isActiveEntry = !!(activeFilePath && hoveredEntry.file === activeFilePath);
-					const isDraft = hoveredEntry.reviewState === "draft";
-					if (isActiveEntry) font = withFontWeight(font, "700");
-					if (isDraft && !disableDraftItalics) font = withFontStyle(font, "italic");
-					const baseFont = font;
-					const needsBoldFont = isActiveEntry;
-					const hoverFontStr = getHoverFontStrForRow(
-						{ summaryFont: baseFont, needsBoldFont, isDraft: isDraft && !disableDraftItalics },
-						args.fontSmallHover
-					);
-					const hoverLineHeight = Math.max(12, Math.round(parseFontPx(hoverFontStr) * 1.25));
-					const padY = 4;
-					hoveredHoverHeight = Math.max(rowH, hoverLineHeight + padY * 2);
-					const deltaH = (hoveredHoverHeight - rowH) * hoverTForVisible;
-					const gh = (recordSafeGap / 2) * hoverTForVisible;
-					hoveredGapAbove = hoveredEntryIndex > 0 ? gh : 0;
-					hoveredGapBelow = hoveredEntryIndex < totalRows - 1 ? gh : 0;
-					effectiveColumnHeight += deltaH + hoveredGapAbove + hoveredGapBelow;
+					const hoveredEntry = visibleEntries[hoveredEntryIndex];
+					if (hoveredEntry) {
+						let font = args.fontSmall;
+						const isActiveEntry = !!(activeFilePath && hoveredEntry.file === activeFilePath);
+						const isDraft = hoveredEntry.reviewState === "draft";
+						if (isActiveEntry) font = withFontWeight(font, "700");
+						if (isDraft && !disableDraftItalics) font = withFontStyle(font, "italic");
+						const baseFont = font;
+						const needsBoldFont = isActiveEntry;
+						const hoverFontStr = getHoverFontStrForRow(
+							{ summaryFont: baseFont, needsBoldFont, isDraft: isDraft && !disableDraftItalics },
+							args.fontSmallHover
+						);
+						const hoverLineHeight = Math.max(12, Math.round(parseFontPx(hoverFontStr) * 1.25));
+						const padY = 4;
+						hoveredHoverHeight = Math.max(rowH, hoverLineHeight + padY * 2);
+						const deltaH = (hoveredHoverHeight - rowH) * hoverTForVisible;
+						const gh = (recordSafeGap / 2) * hoverTForVisible;
+						hoveredGapAbove = hoveredEntryIndex > 0 ? gh : 0;
+						hoveredGapBelow = hoveredEntryIndex < totalRows - 1 ? gh : 0;
+						effectiveColumnHeight += deltaH + hoveredGapAbove + hoveredGapBelow;
+					}
 				}
 				// Intentionally avoid outgoing hover-out reflow in compact virtualization.
 				// Outgoing animations are rendered without layout changes to prevent visible
@@ -339,7 +344,8 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 				const maxTextW = Math.max(0, rightEdge - xStart - 4);
 				let yCursor = (allowPartialReflow ? yEffectiveStart : yBaseStart) + start * rowH;
 				for (let row = start; row <= end; row++) {
-					const entry = visibleEntries[row]!;
+					const entry = visibleEntries[row];
+					if (!entry) continue;
 					const rowT = row === hoveredEntryIndex ? hoverTForVisible : (row === outgoingEntryIndex ? outgoingTForVisible : 0);
 					const baseYRectTop = yBaseStart + row * rowH;
 					const baseYRectBottom = baseYRectTop + rowH;
@@ -537,14 +543,14 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 		if (hiddenCount > 0 && lastVisibleIndex >= 0) {
 			for (const rect of rendered.summaryRects) {
 				if (rect.itemIndex !== lastVisibleIndex) continue;
-				(rect as any).compactTotalCount = entries.length;
-				(rect as any).compactHiddenCount = hiddenCount;
+				rect.compactTotalCount = entries.length;
+				rect.compactHiddenCount = hiddenCount;
 				break;
 			}
 			for (const rect of rendered.summaryHoverRects) {
 				if (rect.itemIndex !== lastVisibleIndex) continue;
-				(rect as any).compactTotalCount = entries.length;
-				(rect as any).compactHiddenCount = hiddenCount;
+				rect.compactTotalCount = entries.length;
+				rect.compactHiddenCount = hiddenCount;
 				break;
 			}
 		}

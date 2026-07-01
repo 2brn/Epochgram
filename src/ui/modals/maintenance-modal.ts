@@ -1,6 +1,20 @@
 import { App, Modal, Setting } from "obsidian";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = typeof window !== "undefined" ? window.document : ({} as Document);
+
+type FocusableElement = HTMLElement & {
+	focus(options?: FocusOptions): void;
+};
+
+type ToggleLike = {
+	setValue(value: boolean): ToggleLike;
+	setDisabled(disabled: boolean): ToggleLike;
+	onChange(handler: (value: boolean) => void): ToggleLike;
+};
+
+function toFocusableElement(value: Element | null): FocusableElement | null {
+	return value instanceof HTMLElement ? value : null;
+}
 
 
 export type MaintenanceChoice = {
@@ -58,7 +72,9 @@ class MaintenanceModal extends Modal {
 		resolve: (value: Record<string, boolean> | null) => void
 	) {
 		super(app);
-		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = typeof activeDocument !== "undefined"
+			? toFocusableElement(activeDocument.activeElement)
+			: null;
 		this.titleText = options.title;
 		this.descriptionText = options.description ?? "";
 		this.confirmText = options.confirmText;
@@ -163,7 +179,7 @@ class MaintenanceModal extends Modal {
 				new Setting(listEl)
 					.setName(c.label)
 					.setDesc(desc)
-					.addToggle((toggle: any) => {
+					.addToggle((toggle: ToggleLike) => {
 						toggle.setValue(c.checked);
 						if (c.required || c.disabled) {
 							toggle.setDisabled(true);
@@ -239,7 +255,7 @@ class MaintenanceModal extends Modal {
 		if (el && typeof el.focus === "function") {
 			window.requestAnimationFrame(() => {
 				try {
-					(el as any).focus?.({ preventScroll: true });
+					(el as FocusableElement).focus({ preventScroll: true });
 				} catch {
 					try {
 						el.focus();

@@ -16,6 +16,19 @@ import {
 	state
 } from "./shared";
 
+type EntryWithEpochExtras = DateEntry & {
+	recurring?: boolean;
+	namedDateRange?: boolean;
+};
+
+type EpochsViewCanvasState = {
+	__indexVersion?: number;
+	__epochsViewChildVisibleSig?: string;
+	__epochsViewChildVisibleByDateKey?: Map<string, boolean>;
+	__epochsViewChildMarkedVisibleSig?: string;
+	__epochsViewChildMarkedVisibleByDateKey?: Map<string, boolean>;
+};
+
 function computeHasVisibleChildEntryForDate(
 	rawEntries: DateEntry[],
 	filters: {
@@ -54,8 +67,8 @@ function computeHasVisibleChildEntryForDate(
 		}
 		if (filters.hiddenOnly && entry.reviewState !== "hidden") continue;
 		if (!filters.hiddenOnly && !filters.showHidden && !shouldRenderEntry(entry)) continue;
-		const isRecurring = (entry as any)?.recurring === true;
-		const isNamedDateRange = entry.source === "namedate" && (entry as any)?.namedDateRange === true;
+		const isRecurring = entry.recurring === true;
+		const isNamedDateRange = entry.source === "namedate" && (entry as EntryWithEpochExtras).namedDateRange === true;
 		if (isNamedDateRange && !filters.showContentDates && !filters.showPropDates) continue;
 		if (!filters.showContentDates && entry.source === "content") continue;
 		if (!filters.showPropDates && entry.source === "content" && isPropDateEntry(entry) && !isRecurring) continue;
@@ -99,8 +112,8 @@ function computeHasVisibleMarkedChildEntryForDate(
 
 		if (filters.showDraftOnly && !filters.hiddenOnly && entry.reviewState !== "draft") continue;
 		if (!filters.showAttachments && isAttachmentEntry(entry)) continue;
-		const isRecurring = (entry as any)?.recurring === true;
-		const isNamedDateRange = entry.source === "namedate" && (entry as any)?.namedDateRange === true;
+		const isRecurring = entry.recurring === true;
+		const isNamedDateRange = entry.source === "namedate" && (entry as EntryWithEpochExtras).namedDateRange === true;
 		if (isNamedDateRange && !filters.showContentDates && !filters.showPropDates) continue;
 		if (!filters.showContentDates && entry.source === "content") continue;
 		if (!filters.showPropDates && entry.source === "content" && isPropDateEntry(entry) && !isRecurring) continue;
@@ -118,7 +131,7 @@ function computeHasVisibleMarkedChildEntryForDate(
 }
 
 export function getEpochsViewChildVisibilityByDateKey(canvas: EpochCanvas): Map<string, boolean> {
-	const cAny: any = canvas as any;
+	const cAny = canvas as unknown as EpochsViewCanvasState;
 	const s = state(canvas);
 	const parsed = getParsedTimelineQuery(canvas);
 	const effective = computeEffectiveFilters(canvas, s, parsed);
@@ -142,8 +155,8 @@ export function getEpochsViewChildVisibilityByDateKey(canvas: EpochCanvas): Map<
 	].join("|");
 
 	const prevSig = String(cAny.__epochsViewChildVisibleSig ?? "");
-	const prevMap = cAny.__epochsViewChildVisibleByDateKey as Map<string, boolean> | null | undefined;
-	if (prevSig === sig && prevMap && typeof (prevMap as any).get === "function") {
+	const prevMap = cAny.__epochsViewChildVisibleByDateKey;
+	if (prevSig === sig && prevMap && typeof prevMap.get === "function") {
 		return prevMap;
 	}
 
@@ -166,7 +179,7 @@ export function getEpochsViewChildVisibilityByDateKey(canvas: EpochCanvas): Map<
 			out.set(key, false);
 			continue;
 		}
-		const raw = Array.isArray(list) ? (list as DateEntry[]) : [];
+		const raw = Array.isArray(list) ? list : [];
 		if (raw.length === 0) {
 			out.set(key, false);
 			continue;
@@ -180,7 +193,7 @@ export function getEpochsViewChildVisibilityByDateKey(canvas: EpochCanvas): Map<
 }
 
 export function getEpochsViewMarkedChildVisibilityByDateKey(canvas: EpochCanvas): Map<string, boolean> {
-	const cAny: any = canvas as any;
+	const cAny = canvas as unknown as EpochsViewCanvasState;
 	const s = state(canvas);
 	const parsed = getParsedTimelineQuery(canvas);
 	const effective = computeEffectiveFilters(canvas, s, parsed);
@@ -205,8 +218,8 @@ export function getEpochsViewMarkedChildVisibilityByDateKey(canvas: EpochCanvas)
 	].join("|");
 
 	const prevSig = String(cAny.__epochsViewChildMarkedVisibleSig ?? "");
-	const prevMap = cAny.__epochsViewChildMarkedVisibleByDateKey as Map<string, boolean> | null | undefined;
-	if (prevSig === sig && prevMap && typeof (prevMap as any).get === "function") {
+	const prevMap = cAny.__epochsViewChildMarkedVisibleByDateKey;
+	if (prevSig === sig && prevMap && typeof prevMap.get === "function") {
 		return prevMap;
 	}
 
@@ -228,7 +241,7 @@ export function getEpochsViewMarkedChildVisibilityByDateKey(canvas: EpochCanvas)
 			out.set(key, false);
 			continue;
 		}
-		const raw = Array.isArray(list) ? (list as DateEntry[]) : [];
+		const raw = Array.isArray(list) ? list : [];
 		if (raw.length === 0) {
 			out.set(key, false);
 			continue;

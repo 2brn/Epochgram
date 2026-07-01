@@ -1,5 +1,21 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { Platform, TFile } from "obsidian";
 import { withTrustedPro } from "./helpers/trusted-pro";
+
+// Create a fake TFile class that can be used for instanceof checks
+class FakeTFile {
+	path: string;
+	stat: any;
+	extension?: string;
+	constructor(path: string, stat: any) {
+		this.path = path;
+		this.stat = stat;
+		const lastDot = path.lastIndexOf(".");
+		this.extension = lastDot > -1 ? path.slice(lastDot + 1) : "";
+	}
+}
+// Make instanceof work by setting the prototype
+Object.setPrototypeOf(FakeTFile.prototype, TFile.prototype);
 
 vi.mock("../src/plugin/similarity/store", () => {
 	return {
@@ -18,6 +34,8 @@ import { runSimilarityStartupMaintenance } from "../src/plugin/similarity/startu
 describe("similarity: startup maintenance (small vault)", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
+		Platform.isDesktopApp = true;
+		Platform.isMobileApp = false;
 	});
 
 	afterEach(() => {
@@ -28,18 +46,20 @@ describe("similarity: startup maintenance (small vault)", () => {
 		const queuedVectors: string[] = [];
 		const queuedTopics: string[] = [];
 
-		const mdFiles = Array.from({ length: 1201 }, (_, i) => ({ path: `f${i}.md`, stat: { mtime: i } }));
+		const mdFiles = Array.from({ length: 1201 }, (_, i) => new FakeTFile(`f${i}.md`, { mtime: i }));
 		const files = [
 			...mdFiles,
-			{ path: "notes/readme.txt", stat: { mtime: -1 } },
-			{ path: "data/stuff.json", stat: { mtime: -2 } }
+			new FakeTFile("notes/readme.txt", { mtime: -1 }),
+			new FakeTFile("data/stuff.json", { mtime: -2 })
 		];
 
 		const plugin: any = {
 			proActive: true,
+			manifest: { id: "epochgram", version: "0.4.3-test" },
 			hasProAccess() {
 				return this.proActive === true;
 			},
+			ensureTermSimilarityStoreLoaded: vi.fn(async () => {}),
 			settings: {
 				similarityThreshold: 0.79,
 				similarityZeroShotMinScore: 0.1
@@ -72,7 +92,7 @@ describe("similarity: startup maintenance (small vault)", () => {
 				queuedTopics.push(path);
 			}
 		};
-		withTrustedPro(plugin, "0.4.3-test", { preserveHasProAccess: true });
+		withTrustedPro(plugin);
 
 		const p = runSimilarityStartupMaintenance(plugin);
 		await vi.runAllTimersAsync();

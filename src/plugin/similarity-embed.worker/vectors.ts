@@ -24,15 +24,20 @@ export function meanPool(vectors: number[][]): number[] {
 		}
 		count++;
 	}
-	if (count <= 1) return normalizeVector(acc);
+	if (count <= 1) return normalizeVector(acc as number[]);
 	for (let i = 0; i < dim; i++) acc[i] /= count;
-	return normalizeVector(acc);
+	return normalizeVector(acc as number[]);
 }
 
-export function coerceVector(raw: any): number[] {
-	const data = raw?.data ?? raw;
-	if (Array.isArray(data)) return normalizeVector(data.slice());
+export function coerceVector(raw: unknown): number[] {
+	const data =
+		typeof raw === "object" && raw !== null && "data" in raw
+			? (raw as { data?: unknown }).data ?? raw
+			: raw;
+	if (Array.isArray(data)) return normalizeVector(data.slice() as number[]);
 	if (data && (data instanceof Float32Array || data instanceof Float64Array)) return normalizeVector(Array.from(data));
-	if (data && typeof data.length === "number") return normalizeVector(Array.from(data as any));
+	if (data && typeof data === "object" && "length" in data && typeof (data as { length?: unknown }).length === "number") {
+		return normalizeVector(Array.from(data as ArrayLike<number>));
+	}
 	throw new Error("Unexpected vector output");
 }

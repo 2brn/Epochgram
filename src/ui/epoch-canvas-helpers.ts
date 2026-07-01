@@ -6,11 +6,24 @@ import type { EpochCanvas } from "./epoch-canvas";
 
 interface CanvasHelperInternals {
 	cssCache: Record<string, string>;
-	plugin: any;
+	plugin: {
+		app?: {
+			vault?: {
+				getAbstractFileByPath?: (path: string) => unknown;
+				getFiles?: () => TFile[];
+			};
+		};
+		getDateFormat?: (date: Date) => string;
+		getDailyNoteFolder?: () => string;
+	};
 	canvas: HTMLCanvasElement;
 	root: HTMLElement;
 	triggerMissingFileRebuild(): Promise<void> | void;
 }
+
+type LeafWithParent = WorkspaceLeaf & {
+	parent?: unknown;
+};
 
 function helperState(canvas: EpochCanvas): CanvasHelperInternals {
 	return canvas as unknown as CanvasHelperInternals;
@@ -60,7 +73,7 @@ export function getEntryTitle(canvas: EpochCanvas, entry: DateEntry): string {
 export function getNoteNameForDate(canvas: EpochCanvas, date: Date): string {
 	const state = helperState(canvas);
 	if (state.plugin && typeof state.plugin.getDateFormat === "function") {
-		return state.plugin.getDateFormat(date);
+		return String(state.plugin.getDateFormat(date) || "");
 	}
 	return formatDate(date);
 }
@@ -71,8 +84,8 @@ export function getNotePathParts(
 ): { folder: string; baseName: string } {
 	const baseName = getNoteNameForDate(canvas, date) || formatDate(date);
 	const state = helperState(canvas);
-	const rawFolder = state.plugin && typeof (state.plugin as any).getDailyNoteFolder === "function"
-		? String((state.plugin as any).getDailyNoteFolder() || "")
+	const rawFolder = state.plugin && typeof state.plugin.getDailyNoteFolder === "function"
+		? String(state.plugin.getDailyNoteFolder() || "")
 		: "/";
 	const folder = rawFolder
 		.trim()
@@ -104,11 +117,13 @@ export function buildNotePath(folder: string, baseName: string, suffix: string =
 function findFirstDailyNoteFile(canvas: EpochCanvas, date: Date): TFile | null {
 	const state = helperState(canvas);
 	const app = state.plugin?.app;
-	if (!app) return null;
+	if (!app || !app.vault) return null;
+	const vault = app.vault;
 	const { folder, baseName } = getNotePathParts(canvas, date);
 
 	const findByDirectPath = (path: string): TFile | null => {
-		const direct = app.vault.getAbstractFileByPath(path);
+		if (typeof vault.getAbstractFileByPath !== "function") return null;
+		const direct = vault.getAbstractFileByPath(path);
 		return direct instanceof TFile ? direct : null;
 	};
 
@@ -139,7 +154,7 @@ function findFirstDailyNoteFile(canvas: EpochCanvas, date: Date): TFile | null {
 	const reParen = new RegExp(`^${stemEsc} \\((\\d+)\\)\\.md$`, "i");
 
 
-	const files = typeof app.vault.getFiles === "function" ? app.vault.getFiles() : [];
+	const files: TFile[] = typeof app.vault.getFiles === "function" ? app.vault.getFiles() : [];
 	let bestParen: { n: number; file: TFile } | null = null;
 	for (const file of files) {
 		const lowerPath = file.path.toLowerCase();
@@ -147,7 +162,9 @@ function findFirstDailyNoteFile(canvas: EpochCanvas, date: Date): TFile | null {
 			continue;
 		}
 		const leaf = file.name.toLowerCase();
-		if (leaf === targetBaseLeaf) return file;
+		if (leaf === targetBaseLeaf) {
+			return file;
+		}
 		// Track the lowest numbered variant, preferring paren style.
 		const mp = leaf.match(reParen);
 		if (mp) {
@@ -171,11 +188,13 @@ export function getNextDailyNoteCreatePath(
 	const { folder, baseName } = getNotePathParts(canvas, date);
 	const basePath = buildNotePath(folder, baseName);
 	const fileNameFromPath = (p: string) => (String(p).split("/").pop() || p);
-	if (!app) {
+	if (!app || !app.vault) {
 		return { path: basePath, fileName: fileNameFromPath(basePath) };
 	}
+	const vault = app.vault;
 	const exists = (p: string): boolean => {
-		const af = app.vault.getAbstractFileByPath(p);
+		if (typeof vault.getAbstractFileByPath !== "function") return false;
+		const af = vault.getAbstractFileByPath(p);
 		return af instanceof TFile;
 	};
 
@@ -202,7 +221,7 @@ export function getUsableLeaf(
 	candidate: WorkspaceLeaf | null | undefined
 ): WorkspaceLeaf | null {
 	if (!candidate) return null;
-	const parent = (candidate as any)?.parent;
+	const parent = (candidate as LeafWithParent).parent;
 	if (!parent) return null;
 	const viewType = candidate.view?.getViewType?.();
 	if (viewType === VIEW_TYPE_EPOCH) return null;

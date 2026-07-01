@@ -1,3 +1,4 @@
+import type { EpochPlugin } from "../main";
 import { TFile } from "obsidian";
 import type { ProcessOptions } from "./indexer-class";
 import type { EpochIndex, FileIndexData } from "./types";
@@ -6,16 +7,39 @@ import { resolveSummaryForFile } from "./summary-helpers";
 import { SUMMARY_ENTRY_SEPARATOR } from "../ui/epoch-canvas-constants";
 import { markTimelineSearchIndexDirty, scheduleTimelineSearchCacheSave } from "../plugin/timeline-search-cache";
 
+type SummaryPluginLike = {
+	settings?: {
+		summaryWordsCount?: number;
+	};
+};
+
+type FileIndexDataLike = FileIndexData & {
+	trackedDates: Record<string, Array<{ file: string; source: string; summary: string } & { date?: string }>>;
+};
+
+type FileOpsPluginLike = SummaryPluginLike & {
+	app: {
+		vault: {
+			getAbstractFileByPath(path: string): unknown;
+		};
+	};
+	timelineSearchIndex?: {
+		removeById?: (path: string) => boolean;
+	};
+	enqueueEpochsForDateKeys?: (dates: string[], options: { force: boolean; showNotice: boolean }) => Promise<void> | void;
+	enqueueAiSummariesForFile?: (path: string, options: { force: boolean }) => Promise<void> | void;
+};
+
 interface FileOpsState {
 	files: Record<string, FileIndexData>;
 	latestLines: Record<string, string[]>;
 	index: EpochIndex;
-	plugin: any;
+	plugin: EpochPlugin & FileOpsPluginLike;
 	processFile(file: TFile, options?: ProcessOptions): Promise<void>;
 	updateAggregatedEntries(filePath: string, options?: { skipSort?: boolean }): void;
 }
 
-function state(indexer: any): FileOpsState {
+function state(indexer: unknown): FileOpsState {
 	return indexer as FileOpsState;
 }
 
@@ -23,10 +47,10 @@ function isDateKey(value: string): boolean {
 	return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
 }
 
-function collectDates(data: any): string[] {
+function collectDates(data: FileIndexDataLike | null | undefined): string[] {
 	const out = new Set<string>();
 	if (!data) return [];
-	const add = (d: any) => {
+	const add = (d: unknown) => {
 		const v = typeof d === "string" ? d : "";
 		if (isDateKey(v)) out.add(v);
 	};
@@ -38,7 +62,7 @@ function collectDates(data: any): string[] {
 	return Array.from(out);
 }
 
-function updateFileIndexPath(plugin: any, data: FileIndexData, newPath: string): void {
+function updateFileIndexPath(plugin: SummaryPluginLike, data: FileIndexDataLike, newPath: string): void {
 	if (data.cdate) data.cdate.file = newPath;
 	if (data.namedDate) data.namedDate.file = newPath;
 	if (data.dateProp) data.dateProp.file = newPath;
@@ -57,11 +81,11 @@ function updateFileIndexPath(plugin: any, data: FileIndexData, newPath: string):
 	}
 }
 
-export function removeFile(indexer: any, path: string): void {
+export function removeFile(indexer: unknown, path: string): void {
 	const s = state(indexer);
 	let timelineMutated = false;
 	try {
-		timelineMutated = (s.plugin as any)?.timelineSearchIndex?.removeById?.(path) === true;
+		timelineMutated = s.plugin.timelineSearchIndex?.removeById?.(path) === true;
 	} catch {
 		// ignore
 	}
@@ -93,12 +117,12 @@ export function removeFile(indexer: any, path: string): void {
 	}
 }
 
-export async function renameFile(indexer: any, oldPath: string, newPath: string): Promise<void> {
+export async function renameFile(indexer: unknown, oldPath: string, newPath: string): Promise<void> {
 	const s = state(indexer);
 	if (oldPath === newPath) return;
 	let timelineMutated = false;
 	try {
-		timelineMutated = (s.plugin as any)?.timelineSearchIndex?.removeById?.(oldPath) === true;
+		timelineMutated = s.plugin.timelineSearchIndex?.removeById?.(oldPath) === true;
 	} catch {
 		// ignore
 	}
@@ -115,7 +139,7 @@ export async function renameFile(indexer: any, oldPath: string, newPath: string)
 		}
 	}
 
-	const previous = s.files[oldPath];
+	const previous = s.files[oldPath] as FileIndexDataLike | undefined;
 	const previousDates = collectDates(previous);
 	if (previous) {
 		updateFileIndexPath(s.plugin, previous, newPath);

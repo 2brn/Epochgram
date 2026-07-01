@@ -7,6 +7,32 @@ import { clearEpochProgress, consumeCancelRequested, setEpochProgress } from './
 import { isUserEditingMarkdown } from './notice-utils'
 import { isTopicSimilarityEnabled } from './similarity/config'
 
+type SearchPluginState = {
+	timelineSearchRebuildStartedAt?: number
+	lastTimelineSearchProgressNoticeAt?: number
+	__epochTimelineSearchFocusToken?: number
+	__timelineSearchIndexVersion?: number
+	__epochCancelRequestedAt?: { search?: unknown }
+	termSimilarityLoaded?: boolean
+	termSimilarityIndex?: { files?: Record<string, { term?: string; score?: number }> }
+	settings?: { similarityZeroShotMinScore?: number }
+}
+
+type ErrorLike = { code?: unknown; message?: unknown }
+
+type IndexFileDataLike = {
+	reviewState?: unknown
+	markColor?: unknown
+	pinnedFile?: unknown
+}
+
+type FileCacheTagLike = { tag?: unknown }
+type FileCacheLike = {
+	tags?: FileCacheTagLike[]
+	frontmatter?: { aliases?: unknown; [key: string]: unknown }
+}
+type IndexerWithFiles = { files?: Record<string, unknown> }
+
 export interface SearchMethods {
 	rebuildTimelineSearchIndex(): Promise<void>
 	resetTimelineSearchIndex(): void
@@ -14,10 +40,10 @@ export interface SearchMethods {
 
 export const searchMethods: SearchMethods = {
 	async rebuildTimelineSearchIndex(this: EpochPlugin): Promise<void> {
-			const anyThis: any = this as any
 			try {
-				if (typeof anyThis.timelineSearchRebuildStartedAt !== 'number' || !(anyThis.timelineSearchRebuildStartedAt > 0)) {
-					anyThis.timelineSearchRebuildStartedAt = Date.now()
+				const state = this as EpochPlugin & SearchPluginState
+				if (typeof state.timelineSearchRebuildStartedAt !== 'number' || !(state.timelineSearchRebuildStartedAt > 0)) {
+					state.timelineSearchRebuildStartedAt = Date.now()
 				}
 			} catch {
 				// ignore
@@ -25,10 +51,11 @@ export const searchMethods: SearchMethods = {
 
 			const shouldShowSearchProgressNotice = (): boolean => {
 				try {
-					const last = typeof anyThis.lastTimelineSearchProgressNoticeAt === 'number' ? anyThis.lastTimelineSearchProgressNoticeAt : 0
+					const state = this as EpochPlugin & SearchPluginState
+					const last = typeof state.lastTimelineSearchProgressNoticeAt === 'number' ? state.lastTimelineSearchProgressNoticeAt : 0
 					const minMs = Platform.isMobileApp ? 10000 : 1000
 					if (Date.now() - last < minMs) return false
-					anyThis.lastTimelineSearchProgressNoticeAt = Date.now()
+					state.lastTimelineSearchProgressNoticeAt = Date.now()
 					return true
 				} catch {
 					return true
@@ -37,7 +64,8 @@ export const searchMethods: SearchMethods = {
 
 			const shouldAllowSearchProgressNotice = (): boolean => {
 				try {
-					const startedAt = Number(anyThis?.timelineSearchRebuildStartedAt ?? 0)
+					const state = this as EpochPlugin & SearchPluginState
+					const startedAt = Number(state.timelineSearchRebuildStartedAt ?? 0)
 					if (!(Number.isFinite(startedAt) && startedAt > 0)) return true
 					const graceMs = Platform.isMobileApp ? 10000 : 1000
 					return Date.now() - startedAt >= graceMs
@@ -62,9 +90,12 @@ export const searchMethods: SearchMethods = {
 				}
 			}
 
-			const isCancelledError = (e: any): boolean => {
+			const isCancelledError = (e: unknown): boolean => {
 				try {
-					return String(e?.code || '') === 'EPOCH_CANCELLED' || String(e?.message || '') === 'EPOCH_CANCELLED'
+					const err = e as ErrorLike
+					const code = typeof err.code === 'string' ? err.code : ''
+					const message = typeof err.message === 'string' ? err.message : ''
+					return code === 'EPOCH_CANCELLED' || message === 'EPOCH_CANCELLED'
 				} catch {
 					return false
 				}
@@ -94,7 +125,7 @@ export const searchMethods: SearchMethods = {
 				// ignore
 			}
 			try {
-				const filesAny: any = (this.indexer as any)?.files
+				const filesAny = (this.indexer as unknown as IndexerWithFiles)?.files
 				if (filesAny && typeof filesAny === 'object') return Object.keys(filesAny)
 			} catch {
 				// ignore
@@ -102,10 +133,13 @@ export const searchMethods: SearchMethods = {
 			return []
 		})()
 
-		const coerceStringArray = (v: any): string[] => {
+		const coerceStringArray = (v: unknown): string[] => {
 			if (!v) return []
 			if (Array.isArray(v)) return v.map((x) => String(x ?? '').trim()).filter(Boolean)
-			return [String(v).trim()].filter(Boolean)
+			if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+				return [String(v).trim()].filter(Boolean)
+			}
+			return []
 		}
 
 			let scanned = 0
@@ -117,8 +151,8 @@ export const searchMethods: SearchMethods = {
 						if (consumeCancelRequested(this, 'search')) {
 							throw Object.assign(new Error('EPOCH_CANCELLED'), { code: 'EPOCH_CANCELLED' })
 						}
-					} catch (e: any) {
-						const msg = String(e?.message || '')
+					} catch (e: unknown) {
+						const msg = typeof (e as { message?: unknown }).message === 'string' ? (e as { message: string }).message : ''
 						if (msg === 'EPOCH_CANCELLED') throw e
 					}
 				}
@@ -155,8 +189,11 @@ export const searchMethods: SearchMethods = {
 			const metaParts: string[] = []
 			metaParts.push(`ext:${String(abs.extension || '')}`)
 			try {
-				const d: any = typeof this.indexer?.getFileIndexData === 'function' ? this.indexer.getFileIndexData(p) : null
-				const reviewState = String(d?.reviewState ?? '').trim()
+				const d: IndexFileDataLike | null =
+					typeof this.indexer?.getFileIndexData === 'function'
+						? this.indexer.getFileIndexData(p)
+						: null
+				const reviewState = typeof d?.reviewState === 'string' ? d.reviewState.trim() : ''
 				if (reviewState) metaParts.push(`review:${reviewState}`)
 				const markColor = d?.markColor
 				if (typeof markColor === 'number' && Number.isFinite(markColor)) metaParts.push(`mark:${markColor}`)
@@ -173,14 +210,17 @@ export const searchMethods: SearchMethods = {
 				// ignore
 			}
 			try {
-				const pluginAny: any = this as any
-				if (isTopicSimilarityEnabled(pluginAny)) {
-					const zeroShotMinRaw = Number(pluginAny?.settings?.similarityZeroShotMinScore ?? 0)
+				const state = this as EpochPlugin & SearchPluginState
+				if (isTopicSimilarityEnabled(this)) {
+					const zeroShotMinRaw = Number(state.settings?.similarityZeroShotMinScore ?? 0)
 					const zeroShotMin = Number.isFinite(zeroShotMinRaw) ? Math.max(0, Math.min(1, zeroShotMinRaw)) : 0
-					const storeLoaded = pluginAny?.termSimilarityLoaded === true && !!pluginAny?.termSimilarityIndex && typeof pluginAny.termSimilarityIndex === 'object'
+					const storeLoaded =
+						state.termSimilarityLoaded === true &&
+						!!state.termSimilarityIndex &&
+						typeof state.termSimilarityIndex === 'object'
 					if (storeLoaded && zeroShotMin > 0 && zeroShotMin < 1) {
-						const rec: any = pluginAny?.termSimilarityIndex?.files?.[p]
-						const inferred = typeof rec?.term === 'string' ? String(rec.term).trim() : ''
+						const rec = state.termSimilarityIndex?.files?.[p]
+						const inferred = typeof rec?.term === 'string' ? rec.term.trim() : ''
 						const score = Number(rec?.score ?? 0)
 						if (inferred && Number.isFinite(score) && score >= zeroShotMin) {
 							metaParts.push(inferred)
@@ -191,13 +231,13 @@ export const searchMethods: SearchMethods = {
 				// ignore
 			}
 			try {
-				const cache: any = this.app.metadataCache.getFileCache(abs)
-				const tagsRaw: any[] = Array.isArray(cache?.tags) ? cache.tags : []
+				const cache = this.app.metadataCache.getFileCache(abs) as FileCacheLike | null
+				const tagsRaw: FileCacheTagLike[] = Array.isArray(cache?.tags) ? cache.tags : []
 				for (const t of tagsRaw) {
-					const tag = String((t as any)?.tag ?? '').trim()
+					const tag = typeof t?.tag === 'string' ? t.tag.trim() : ''
 					if (tag) metaParts.push(tag)
 				}
-				const fm: any = cache?.frontmatter
+				const fm = cache?.frontmatter
 				for (const a of coerceStringArray(fm?.aliases)) {
 					metaParts.push(`alias:${a}`)
 				}
@@ -235,8 +275,8 @@ export const searchMethods: SearchMethods = {
 		try {
 			// If a timeline search query is active, request the view to refocus the first matching
 			// record after rebuild (same behavior as pressing Enter in the search modal).
-			const anyThis: any = this as any
-			anyThis.__epochTimelineSearchFocusToken = Number(anyThis.__epochTimelineSearchFocusToken ?? 0) + 1
+			const state = this as EpochPlugin & SearchPluginState
+			state.__epochTimelineSearchFocusToken = Number(state.__epochTimelineSearchFocusToken ?? 0) + 1
 		} catch {
 			// ignore
 		}
@@ -270,12 +310,12 @@ export const searchMethods: SearchMethods = {
 				// ignore
 			}
 			try {
-				delete (this as any)?.timelineSearchRebuildStartedAt
+				delete (this as EpochPlugin & SearchPluginState).timelineSearchRebuildStartedAt
 			} catch {
 				// ignore
 			}
 			try {
-				delete (this as any)?.__epochCancelRequestedAt?.search
+				delete (this as EpochPlugin & SearchPluginState).__epochCancelRequestedAt?.search
 			} catch {
 				// ignore
 			}
@@ -295,8 +335,8 @@ export const searchMethods: SearchMethods = {
 		}
 
 		try {
-			const anyThis: any = this as any
-			anyThis.__timelineSearchIndexVersion = Number(anyThis.__timelineSearchIndexVersion ?? 0) + 1
+			const state = this as EpochPlugin & SearchPluginState
+			state.__timelineSearchIndexVersion = Number(state.__timelineSearchIndexVersion ?? 0) + 1
 		} catch {
 			// ignore
 		}

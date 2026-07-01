@@ -10,6 +10,39 @@ import { getSimilarityWorker } from "./worker-factory";
 import { canonicalizeTopicTerm, parseTopicTerm } from "utils";
 import { hasSimilarityAccess } from "../pro-feature-state";
 
+type TermStoreRecord = {
+	term?: string;
+	score: number;
+	h?: string;
+	vocabularySig?: string;
+	updatedAt?: number;
+};
+
+type TermStoreLike = { files: Record<string, TermStoreRecord> };
+
+type TopicMethodsRuntime = {
+	__epochTopicClassificationSweepTimer?: number | null;
+	termSimilarityPendingFiles?: Set<string>;
+	termSimilarityQueueTotal?: number;
+	termSimilarityQueueProcessed?: number;
+	similarityRebuildStartedAt?: number;
+	termSimilarityLoaded?: boolean;
+	termSimilarityIndex?: unknown;
+	updateTermSimilarityFileStat?: () => Promise<void>;
+	scheduleInheritedMarkRecompute?: (reason?: string) => void;
+	queueTermSimilarityUpdate?: (path: string) => void;
+	queueVectorUpdate?: (path: string) => void;
+	persistIndex?: (options?: { skipEnsure?: boolean }) => Promise<void>;
+	scheduleMissingTopicClassificationSweep?: (reason?: string) => void;
+	termSimilarityStoreRev?: number;
+};
+
+type TopicIndexerLike = {
+	getIndexedPaths: () => string[];
+	getFileEmbeddingTerm: (path: string) => string;
+	setFileEmbeddingTerm: (path: string, term: string) => void;
+};
+
 export const methodsTopic: Pick<
 	SimilarityMethods,
 	| "scheduleMissingTopicClassificationSweep"
@@ -26,19 +59,19 @@ export const methodsTopic: Pick<
 		} catch {
 			// ignore
 		}
-		const anyPlugin: any = this as any;
 		try {
 			void reason;
-			if (anyPlugin.__epochTopicClassificationSweepTimer != null) return;
-			anyPlugin.__epochTopicClassificationSweepTimer = window.setTimeout(() => {
-				anyPlugin.__epochTopicClassificationSweepTimer = null;
+			const runtime = this as unknown as TopicMethodsRuntime;
+			if (runtime.__epochTopicClassificationSweepTimer != null) return;
+			runtime.__epochTopicClassificationSweepTimer = window.setTimeout(() => {
+				runtime.__epochTopicClassificationSweepTimer = null;
 				void (async () => {
 					try {
 						if (!isTopicSimilarityEnabled(this)) {
 							try {
-								anyPlugin.termSimilarityPendingFiles = new Set<string>();
-								anyPlugin.termSimilarityQueueTotal = 0;
-								anyPlugin.termSimilarityQueueProcessed = 0;
+								runtime.termSimilarityPendingFiles = new Set<string>();
+								runtime.termSimilarityQueueTotal = 0;
+								runtime.termSimilarityQueueProcessed = 0;
 							} catch {
 								// ignore
 							}
@@ -48,7 +81,7 @@ export const methodsTopic: Pick<
 						const vocab = getTermVocabulary(this);
 						if (!vocab.terms || vocab.terms.length === 0) return;
 
-						let store;
+						let store: TermStoreLike;
 						try {
 							store = await readTermStore(this);
 						} catch {
@@ -56,7 +89,7 @@ export const methodsTopic: Pick<
 						}
 
 						try {
-							anyPlugin.similarityRebuildStartedAt = now();
+							runtime.similarityRebuildStartedAt = now();
 						} catch {
 							// ignore
 						}
@@ -74,18 +107,18 @@ export const methodsTopic: Pick<
 							} catch {
 								// ignore
 							}
-							const rec: any = (store.files as any)?.[f.path];
+							const rec = store.files[f.path];
 							const termOk = typeof rec?.term === "string" && rec.term.trim().length > 0;
 							const hashOk = typeof rec?.h === "string" && rec.h.trim().length > 0;
 							const vocabOk = typeof rec?.vocabularySig === "string" && rec.vocabularySig === vocab.sig;
 							if (termOk && hashOk && vocabOk) continue;
 							try {
 								const pending: Set<string> =
-									anyPlugin.termSimilarityPendingFiles instanceof Set
-										? anyPlugin.termSimilarityPendingFiles
-										: (anyPlugin.termSimilarityPendingFiles = new Set<string>());
+									runtime.termSimilarityPendingFiles instanceof Set
+										? runtime.termSimilarityPendingFiles
+										: (runtime.termSimilarityPendingFiles = new Set<string>());
 								if (!pending.has(f.path)) {
-									(this as any).queueTermSimilarityUpdate?.(f.path);
+									runtime.queueTermSimilarityUpdate?.(f.path);
 									enq++;
 								}
 							} catch {
@@ -117,11 +150,11 @@ export const methodsTopic: Pick<
 		if (!p) return;
 		if (p.startsWith("epoch://")) return;
 		if (!/\.md$/i.test(p)) return;
-		const anyPlugin: any = this as any;
+		const runtime = this as unknown as TopicMethodsRuntime;
 		const pending: Set<string> =
-			anyPlugin.termSimilarityPendingFiles instanceof Set
-				? anyPlugin.termSimilarityPendingFiles
-				: (anyPlugin.termSimilarityPendingFiles = new Set<string>());
+			runtime.termSimilarityPendingFiles instanceof Set
+				? runtime.termSimilarityPendingFiles
+				: (runtime.termSimilarityPendingFiles = new Set<string>());
 		if (pending.has(p)) return;
 		pending.add(p);
 		ensureTermStoreExistsSoon(this);
@@ -155,16 +188,16 @@ export const methodsTopic: Pick<
 
 	async reloadTermSimilaritiesFromDisk(this: EpochPlugin): Promise<void> {
 		try {
-			const anyPlugin: any = this as any;
-			anyPlugin.termSimilarityLoaded = false;
-			anyPlugin.termSimilarityIndex = null;
+			const runtime = this as unknown as TopicMethodsRuntime;
+			runtime.termSimilarityLoaded = false;
+			runtime.termSimilarityIndex = null;
 			try {
-				await (this as any).updateTermSimilarityFileStat?.();
+				await runtime.updateTermSimilarityFileStat?.();
 			} catch {
 				// ignore
 			}
 			try {
-				(this as any).scheduleInheritedMarkRecompute?.("term-sim-sync");
+				runtime.scheduleInheritedMarkRecompute?.("term-sim-sync");
 			} catch {
 				// ignore
 			}
@@ -186,7 +219,7 @@ export const methodsTopic: Pick<
 			// ignore
 		}
 
-		const anyPlugin: any = this as any;
+		const runtime = this as unknown as TopicMethodsRuntime;
 		try {
 			await readTermStore(this);
 		} catch {
@@ -198,9 +231,9 @@ export const methodsTopic: Pick<
 		const explicitPaths = new Set<string>();
 		if (includeClassifiedPaths) {
 			try {
-				for (const [p, rec] of Object.entries(store.files ?? {})) {
+				for (const [p, rec] of Object.entries<TermStoreRecord>(store.files ?? {})) {
 					if (!p || typeof p !== "string") continue;
-					const t0 = typeof (rec as any)?.term === "string" ? String((rec as any).term).trim() : "";
+					const t0 = typeof rec?.term === "string" ? String(rec.term).trim() : "";
 					const t = canonicalizeTopicTerm(t0);
 					if (t && t === oldTerm) classifiedPaths.add(p);
 				}
@@ -209,14 +242,12 @@ export const methodsTopic: Pick<
 			}
 		}
 		try {
-			const idxAny: any = this.indexer as any;
-			const indexed: unknown = idxAny.getIndexedPaths();
-			const paths: string[] = Array.isArray(indexed) ? indexed : [];
+			const idxAny = this.indexer as unknown as TopicIndexerLike;
+			const paths: string[] = idxAny.getIndexedPaths();
 			for (const p of paths) {
 				if (!p || typeof p !== "string") continue;
 				if (p.startsWith("epoch://")) continue;
-				const t0 =
-					String(idxAny.getFileEmbeddingTerm(p) || "").trim();
+				const t0 = String(idxAny.getFileEmbeddingTerm(p) || "").trim();
 				const t = canonicalizeTopicTerm(t0);
 				if (t && t === oldTerm) explicitPaths.add(p);
 			}
@@ -228,7 +259,7 @@ export const methodsTopic: Pick<
 		if (groupPaths.size === 0) return;
 
 		try {
-			const idxAny: any = this.indexer as any;
+			const idxAny = this.indexer as unknown as TopicIndexerLike;
 			for (const p of explicitPaths) {
 				try {
 					idxAny.setFileEmbeddingTerm(p, nextTerm);
@@ -242,17 +273,17 @@ export const methodsTopic: Pick<
 
 		if (includeClassifiedPaths) {
 			try {
-				for (const [p, rec] of Object.entries(store.files ?? {})) {
+				for (const [p, rec] of Object.entries<TermStoreRecord>(store.files ?? {})) {
 					if (!p || !rec) continue;
-					const t0 = typeof (rec as any)?.term === "string" ? String((rec as any).term).trim() : "";
+					const t0 = typeof rec?.term === "string" ? String(rec.term).trim() : "";
 					const t = canonicalizeTopicTerm(t0);
 					if (!t || t !== oldTerm) continue;
 					if (!nextTerm) {
-						delete (store.files as any)[p];
+						delete store.files[p];
 						continue;
 					}
-					(rec as any).term = nextTerm;
-					(rec as any).updatedAt = now();
+					rec.term = nextTerm;
+					rec.updatedAt = now();
 				}
 			} catch {
 				// ignore
@@ -264,12 +295,12 @@ export const methodsTopic: Pick<
 		try {
 			for (const p of groupPaths) {
 				try {
-					(this as any).queueVectorUpdate?.(p);
+					runtime.queueVectorUpdate?.(p);
 				} catch {
 					// ignore
 				}
 				try {
-					(this as any).queueTermSimilarityUpdate?.(p);
+					runtime.queueTermSimilarityUpdate?.(p);
 				} catch {
 					// ignore
 				}
@@ -279,26 +310,26 @@ export const methodsTopic: Pick<
 		}
 
 		try {
-			await (this as any).persistIndex?.({ skipEnsure: true });
+			await runtime.persistIndex?.({ skipEnsure: true });
 		} catch {
 			// ignore
 		}
 
 		try {
-			(this as any)?.scheduleMissingTopicClassificationSweep?.("topic-rename");
+			runtime.scheduleMissingTopicClassificationSweep?.("topic-rename");
 		} catch {
 			// ignore
 		}
 		try {
-			anyPlugin.termSimilarityStoreRev =
-				(typeof anyPlugin.termSimilarityStoreRev === "number" ? anyPlugin.termSimilarityStoreRev : 0) + 1;
+			runtime.termSimilarityStoreRev =
+				(typeof runtime.termSimilarityStoreRev === "number" ? runtime.termSimilarityStoreRev : 0) + 1;
 		} catch {
 			// ignore
 		}
 
 		// Topic group changes affect inherited mark propagation.
 		try {
-			(this as any).scheduleInheritedMarkRecompute?.(nextTerm ? "topic-rename" : "topic-remove");
+			runtime.scheduleInheritedMarkRecompute?.(nextTerm ? "topic-rename" : "topic-remove");
 		} catch {
 			// ignore
 		}

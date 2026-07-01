@@ -6,16 +6,15 @@ import { buildEpochJobs } from "./epochs-build";
 
 export function countMissingEpochsFast(plugin: EpochPlugin): number {
 	try {
-		const indexerAny: any = plugin.indexer as any;
-		const index: Record<string, DateEntry[]> = indexerAny?.index ?? {};
+		const index = (plugin.indexer as { index?: Record<string, DateEntry[]> }).index ?? {};
 		const dateKeys = Object.keys(index).filter(isDateKey);
 		if (dateKeys.length === 0) return 0;
 
 		const requiredPeriods = new Set<string>();
 		for (const key of dateKeys) {
-			const entries = Array.isArray(index[key]) ? index[key]! : [];
+			const entries = Array.isArray(index[key]) ? index[key] : [];
 			if (entries.length === 0) continue;
-			const hasNonEpoch = entries.some((e) => e && !String((e as any)?.file ?? "").startsWith("epoch://"));
+			const hasNonEpoch = entries.some((entry) => entry && !String(entry.file ?? "").startsWith("epoch://"));
 			if (!hasNonEpoch) continue;
 			const d = parseDateKey(key);
 			if (!d) continue;
@@ -29,13 +28,13 @@ export function countMissingEpochsFast(plugin: EpochPlugin): number {
 
 		const present = new Set<string>();
 		for (const key of dateKeys) {
-			const entries = Array.isArray(index[key]) ? index[key]! : [];
-			for (const e of entries) {
-				if (!e || !String((e as any)?.file ?? "").startsWith("epoch://")) continue;
-				const bucket = String((e as any).epochBucket || "");
-				const start = String((e as any).epochStart || "");
+			const entries = Array.isArray(index[key]) ? index[key] : [];
+			for (const entry of entries) {
+				if (!entry || !String(entry.file ?? "").startsWith("epoch://")) continue;
+				const bucket = String(entry.epochBucket || "");
+				const start = String(entry.epochStart || "");
 				if (!bucket || !isDateKey(start)) continue;
-				const auto = String((e as any).aiSummary || (e as any).summary || "").trim();
+				const auto = String(entry.aiSummary || entry.summary || "").trim();
 				const s = auto;
 				if (!s) continue;
 				present.add(`${bucket}|${start}`);

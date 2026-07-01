@@ -143,6 +143,7 @@ Defaults (first load; verified in `plugin/lifecycle.ts`):
 Settings interface starts in `settings.ts` (`export interface EpochSettings`). Verified fields include:
 - `openEpochViewOnStartup: boolean` (default `true`)
 - `enableAnimation: boolean` (default `true`; when `false`, disables UI animations and snaps transitions immediately)
+- `searchResultsLimit: number` (default `7`; controls max record suggestions shown in timeline search modal)
 - `parseDatesInFrontmatter: boolean` (default `false`; controls whether YAML frontmatter contributes parsed/content date entries)
 - `simpleMode: boolean` (default `false`; “Simple mode” toggle in General settings)
   - Intended scope: simplifies timeline UI only (see usages in `ui/epoch-view/*`, `ui/menus/*`, `ui/summary-rendering/*`, `ui/epoch-canvas-draw/*`).
@@ -162,6 +163,7 @@ Daily notes source-of-truth (Verified)
 Similarity settings (Partially Verified)
 - Similarity behavior is controlled by settings in `settings.ts` (thresholds and per-signal toggles).
 - Title matching uses Jaro–Winkler with a configurable threshold (Pro-only).
+  - Special value: `similarityTitleJwThreshold = 1.0` switches title matching to same-folder matching (file name similarity is ignored).
 - Advanced model overrides (Pro-only; Verified in settings + similarity config):
   - `settings.similarityEmbeddingModelId?: string` overrides the embeddings (semantics) model ID (default: `Xenova/all-MiniLM-L6-v2`).
   - `settings.similarityZeroShotModelId?: string` overrides the zero-shot (topics) model ID (default: `MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33`).

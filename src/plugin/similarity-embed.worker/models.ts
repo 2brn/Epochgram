@@ -4,7 +4,48 @@ import { assertOrtAvailable, getOrt, getTransformers } from "./runtime";
 import { getOrtWasmCdnBase, getWorkerLocationDebug } from "./wasm";
 import { coerceVector, meanPool } from "./vectors";
 
-const workerGlobal: any = typeof self !== "undefined" ? (self as any) : (typeof global !== "undefined" ? (global as any) : {});
+declare const self: unknown;
+
+type WorkerGlobalLike = {
+	postMessage?: (msg: unknown) => void;
+	navigator?: { gpu?: unknown };
+	ort?: unknown;
+	onnxruntime?: unknown;
+};
+
+type ProgressInput = {
+	progress?: number;
+	loaded?: number;
+	total?: number;
+	name?: string;
+};
+
+type EmbedderLike = {
+	model?: { config?: Record<string, unknown> };
+	tokenizer?: Record<string, unknown>;
+};
+
+type OrtLike = {
+	env?: { wasm?: Record<string, unknown> };
+	InferenceSession?: unknown;
+	Tensor?: unknown;
+};
+
+type TransformersEnvLike = {
+	useFS?: boolean;
+	useFSCache?: boolean;
+	allowLocalModels?: boolean;
+	useBrowserCache?: boolean;
+	allowRemoteModels?: boolean;
+	backends?: { onnx?: { wasm?: Record<string, unknown> } };
+};
+
+type WorkerRuntimeLike = Record<string, unknown>;
+type PipelineFn = (task: string, modelId: string, options?: Record<string, unknown>) => Promise<WorkerRuntimeLike>;
+type ZeroShotFn = (sequence: string, labels: string[], options?: Record<string, unknown>) => Promise<{ labels?: unknown; scores?: unknown }>;
+type EmbedFn = (text: string, options?: Record<string, unknown>) => Promise<unknown>;
+
+const workerGlobal = self as WorkerGlobalLike;
 
 // Zero-shot classification (term similarity)
 const DEFAULT_ZERO_SHOT_MODEL_ID = "MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33";
@@ -28,19 +69,20 @@ function postProgress(msg: WorkerProgressMsg): void {
 	}
 }
 
-function makeProgressCallback(kind: "semantic" | "topics", modelId: string): (p: any) => void {
+function makeProgressCallback(kind: "semantic" | "topics", modelId: string): (p: unknown) => void {
 	let lastPct = -1;
 	let lastAt = 0;
-	return (p: any) => {
+	return (p: unknown) => {
 		try {
+			const prog = (p ?? {}) as ProgressInput;
 			const now = Date.now();
 			let pct = Number.NaN;
-			const progress = Number(p?.progress);
+			const progress = Number(prog.progress);
 			if (Number.isFinite(progress)) {
 				pct = progress <= 1 ? progress * 100 : progress;
 			}
-			const loaded = Number(p?.loaded);
-			const total = Number(p?.total);
+			const loaded = Number(prog.loaded);
+			const total = Number(prog.total);
 			if (!Number.isFinite(pct) && Number.isFinite(loaded) && Number.isFinite(total) && total > 0) {
 				pct = (loaded / total) * 100;
 			}
@@ -56,7 +98,7 @@ function makeProgressCallback(kind: "semantic" | "topics", modelId: string): (p:
 				stage: "download",
 				status: "progress",
 				modelId,
-				file: typeof p?.name === "string" ? p.name : undefined,
+				file: typeof prog.name === "string" ? prog.name : undefined,
 				pct: nextPct
 			});
 		} catch {
@@ -65,9 +107,10 @@ function makeProgressCallback(kind: "semantic" | "topics", modelId: string): (p:
 	};
 }
 
-function getEmbedderMaxLength(embedderInst: any): number {
+function getEmbedderMaxLength(embedderInst: unknown): number {
 	try {
-		const cfg = embedderInst?.model?.config;
+		const inst = (embedderInst ?? {}) as EmbedderLike;
+		const cfg = inst.model?.config;
 		const candidates = [
 			cfg?.max_position_embeddings,
 			cfg?.max_positions,
@@ -83,7 +126,7 @@ function getEmbedderMaxLength(embedderInst: any): number {
 		// ignore
 	}
 	try {
-		const tok = embedderInst?.tokenizer;
+		const tok = ((embedderInst ?? {}) as EmbedderLike).tokenizer;
 		const v = tok?.model_max_length ?? tok?.modelMaxLength ?? tok?.max_length ?? tok?.maxLength ?? tok?.maxLen;
 		const n = Number(v);
 		if (Number.isFinite(n) && n > 0) return Math.max(64, Math.min(2048, Math.floor(n)));
@@ -93,10 +136,10 @@ function getEmbedderMaxLength(embedderInst: any): number {
 	return 512;
 }
 
-function forceTokenizerMaxLength(embedderInst: any): void {
+function forceTokenizerMaxLength(embedderInst: unknown): void {
 	try {
 		const maxLen = getEmbedderMaxLength(embedderInst);
-		const tok: any = embedderInst?.tokenizer;
+		const tok = ((embedderInst ?? {}) as EmbedderLike).tokenizer;
 		if (!tok) return;
 		tok.model_max_length = maxLen;
 		tok.max_length = maxLen;
@@ -106,14 +149,14 @@ function forceTokenizerMaxLength(embedderInst: any): void {
 	}
 }
 
-function configureOrtAndTransformersWasm({ ort, env }: { ort: any; env: any }): void {
+function configureOrtAndTransformersWasm({ ort, env }: { ort: unknown; env: unknown }): void {
 	const hasBlobOverride = !!(workerState.ortWasmBlobUrls && Object.keys(workerState.ortWasmBlobUrls).length > 0);
 	const loc = getWorkerLocationDebug();
 	void loc;
 
-	const getPaths = async (): Promise<any> => {
+	const getPaths = async (): Promise<unknown> => {
 		return hasBlobOverride
-			? (workerState.ortWasmBlobUrls as any)
+			? (workerState.ortWasmBlobUrls)
 			: getOrtWasmCdnBase();
 	};
 
@@ -121,7 +164,7 @@ function configureOrtAndTransformersWasm({ ort, env }: { ort: any; env: any }): 
 	const configureAsync = async () => {
 		const wasmPaths = await getPaths();
 		try {
-			const ortEnv: any = (ort as any)?.env;
+			const ortEnv = (ort as OrtLike)?.env;
 			if (ortEnv?.wasm) {
 				ortEnv.wasm.numThreads = 1;
 				ortEnv.wasm.simd = false;
@@ -132,7 +175,7 @@ function configureOrtAndTransformersWasm({ ort, env }: { ort: any; env: any }): 
 			// ignore
 		}
 
-		const onnxEnv: any = (env as any)?.backends?.onnx;
+		const onnxEnv = (env as TransformersEnvLike)?.backends?.onnx;
 		if (onnxEnv?.wasm) {
 			try {
 				onnxEnv.wasm.numThreads = 1;
@@ -154,11 +197,11 @@ function configureOrtAndTransformersWasm({ ort, env }: { ort: any; env: any }): 
 	};
 
 	// Fire-and-wait: callers await this.
-	(workerState as any).__configureOrtPromise = configureAsync();
+	(workerState as unknown as { __configureOrtPromise?: Promise<void> }).__configureOrtPromise = configureAsync();
 }
 
 async function ensureOrtConfigured(): Promise<void> {
-	const p: Promise<void> | undefined = (workerState as any).__configureOrtPromise;
+	const p = (workerState as unknown as { __configureOrtPromise?: Promise<void> }).__configureOrtPromise;
 	if (p) await p;
 }
 
@@ -172,47 +215,57 @@ function supportsWebGpu(): boolean {
 }
 
 async function createPipelineWithDeviceFallback(
-	pipeline: any,
+	pipeline: PipelineFn,
 	task: string,
 	modelId: string,
 	kind: "semantic" | "topics",
-	options: any
-): Promise<any> {
+	options: Record<string, unknown>
+): Promise<WorkerRuntimeLike> {
 	const devices = supportsWebGpu() ? ["webgpu", "wasm"] : ["wasm"];
-	let lastError: any = null;
+	let lastError: unknown = null;
 	for (const device of devices) {
 		try {
-			return await pipeline(task, modelId, { ...(options || {}), device } as any);
+			return await pipeline(task, modelId, { ...(options || {}), device });
 		} catch (e) {
 			lastError = e;
 		}
 	}
-	throw lastError ?? new Error("Failed to create pipeline backend");
+	if (lastError instanceof Error) throw lastError;
+	const message = typeof lastError === "string"
+		? lastError
+		: (() => {
+			try {
+				return JSON.stringify(lastError);
+			} catch {
+				return "Failed to create pipeline backend";
+			}
+		})();
+	throw new Error(message || "Failed to create pipeline backend");
 }
 
-export async function ensureEmbedder(modelId: string): Promise<any> {
+export async function ensureEmbedder(modelId: string): Promise<unknown> {
 	const normalized = String(modelId || "").trim();
 	if (workerState.embedder && workerState.embedderModelId === normalized) return workerState.embedder;
 
 	return await withProcessMasked(async () => {
 		const tf = await getTransformers();
-		const env: any = tf?.env;
-		const pipeline: any = tf?.pipeline;
+		const env = tf?.env as TransformersEnvLike | undefined;
+		const pipeline = tf?.pipeline as PipelineFn;
 		if (!env || typeof pipeline !== "function") {
 			throw new Error("@huggingface/transformers failed to load in worker");
 		}
 
-		const ort: any = await getOrt();
+		const ort = (await getOrt()) as OrtLike;
 		try {
-			void (ort as any).InferenceSession;
-			void (ort as any).Tensor;
+			void ort.InferenceSession;
+			void ort.Tensor;
 		} catch {
 			// ignore
 		}
 
 		try {
-			workerGlobal.ort = ort as any;
-			workerGlobal.onnxruntime = ort as any;
+			workerGlobal.ort = ort;
+			workerGlobal.onnxruntime = ort;
 		} catch {
 			// ignore
 		}
@@ -247,7 +300,7 @@ export async function ensureEmbedder(modelId: string): Promise<any> {
 	});
 }
 
-export async function ensureZeroShotClassifier(modelId?: string): Promise<any> {
+export async function ensureZeroShotClassifier(modelId?: string): Promise<unknown> {
 	if (!modelId) {
 		if (workerState.zeroShot) return workerState.zeroShot;
 	}
@@ -256,23 +309,22 @@ export async function ensureZeroShotClassifier(modelId?: string): Promise<any> {
 
 	return await withProcessMasked(async () => {
 		const tf = await getTransformers();
-		const env: any = tf?.env;
-		type PipelineFn = (task: string, model: string, options?: any) => Promise<any>;
-		const pipeline: PipelineFn = tf?.pipeline as any;
+		const env = tf?.env as TransformersEnvLike | undefined;
+		const pipeline = tf?.pipeline as PipelineFn;
 		if (!env || typeof pipeline !== "function") {
 			throw new Error("@huggingface/transformers failed to load in worker");
 		}
 
-		const ort: any = await getOrt();
+		const ort = (await getOrt()) as OrtLike;
 		try {
-			void (ort as any).InferenceSession;
-			void (ort as any).Tensor;
+			void ort.InferenceSession;
+			void ort.Tensor;
 		} catch {
 			// ignore
 		}
 		try {
-			workerGlobal.ort = ort as any;
-			workerGlobal.onnxruntime = ort as any;
+			workerGlobal.ort = ort;
+			workerGlobal.onnxruntime = ort;
 		} catch {
 			// ignore
 		}
@@ -306,16 +358,16 @@ export async function ensureZeroShotClassifier(modelId?: string): Promise<any> {
 }
 
 export async function zeroShotScoreSingle(label: string, sequence: string): Promise<number> {
-	const clf = await ensureZeroShotClassifier();
+	const clf = (await ensureZeroShotClassifier()) as ZeroShotFn;
 	const lab = String(label || "").trim();
 	if (!lab) return 0;
 	const seq = String(sequence || "");
 	if (!seq) return 0;
-	const out: any = await clf(seq, [lab], {
+	const out = await clf(seq, [lab], {
 		hypothesis_template: "This text is about {}.",
 		multi_label: true
 	});
-	const scores: any = out?.scores;
+	const scores: unknown = out?.scores;
 	const v = Array.isArray(scores) ? Number(scores[0]) : Number.NaN;
 	return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
 }
@@ -332,17 +384,17 @@ export async function zeroShotScoreLabels(
 	labels: string[],
 	sequence: string
 ): Promise<{ labels: string[]; scores: number[] }> {
-	const clf = await ensureZeroShotClassifier();
+	const clf = (await ensureZeroShotClassifier()) as ZeroShotFn;
 	const seq = String(sequence || "");
 	if (!seq) return { labels: [], scores: [] };
 	const labs = (labels || []).map(l => String(l || "").trim()).filter(Boolean);
 	if (labs.length === 0) return { labels: [], scores: [] };
-	const out: any = await clf(seq, labs, {
+	const out = await clf(seq, labs, {
 		hypothesis_template: "This text is about {}.",
 		multi_label: true
 	});
-	const outLabels: any = out?.labels;
-	const outScores: any = out?.scores;
+	const outLabels: unknown = out?.labels;
+	const outScores: unknown = out?.scores;
 	const map = new Map<string, number>();
 	if (Array.isArray(outLabels) && Array.isArray(outScores)) {
 		for (let i = 0; i < outLabels.length; i++) {
@@ -357,9 +409,9 @@ export async function zeroShotScoreLabels(
 }
 
 async function embedChunk(modelId: string, text: string): Promise<number[]> {
-	const emb = await ensureEmbedder(modelId);
+	const emb = (await ensureEmbedder(modelId)) as EmbedFn;
 	forceTokenizerMaxLength(emb);
-	const out: any = await emb(text, { pooling: "mean", normalize: true });
+	const out: unknown = await emb(text, { pooling: "mean", normalize: true });
 	return coerceVector(out);
 }
 

@@ -9,23 +9,39 @@ import { getAiSummaryTuning } from "../plugin/ai-summaries/bridge-settings";
 import { getYamlDescriptionPropertyKey, readFrontmatterProperty } from "../plugin/frontmatter-keys";
 import type {
 	DateEntry,
-	FileDateEntry
+	FileDateEntry,
+	ReviewState,
+	RecurrenceIndexData
 } from "./types";
 import type { IndexerPipeline } from "./pipeline";
 import { hasRecurringAccess, isTrackChangesConfigured } from "../plugin/pro-feature-state";
 
-function canExpandRecurringEntries(plugin: any): boolean {
+type ProMethods = {
+	hasRecurringAccess?: () => boolean;
+	hasProAccess?: () => boolean;
+	settings?: { summarizeAI?: boolean };
+	app?: {
+		vault?: { getAbstractFileByPath?: (path: string) => unknown };
+		metadataCache?: { getFileCache?: (file: unknown) => { frontmatter?: unknown } | null };
+	};
+};
+
+type PluginSettings = {
+	summarizeAI?: boolean;
+};
+
+function canExpandRecurringEntries(plugin: ProMethods): boolean {
 	try {
-		if (typeof plugin?.hasRecurringAccess === "function") {
+		if (typeof plugin.hasRecurringAccess === "function") {
 			return plugin.hasRecurringAccess() === true;
 		}
 	} catch {
 		// ignore
 	}
 	try {
-		return hasRecurringAccess(plugin);
+		return hasRecurringAccess(plugin as unknown as Parameters<typeof hasRecurringAccess>[0]);
 	} catch {
-		return plugin?.hasProAccess?.() === true;
+		return plugin.hasProAccess?.() === true;
 	}
 }
 
@@ -44,7 +60,7 @@ export function updateAggregatedEntriesInternal(
 		return;
 	}
 
-	const normalizeReviewState = (entryState: any): "draft" | "reviewed" | "hidden" => {
+	const normalizeReviewState = (entryState: unknown): "draft" | "reviewed" | "hidden" => {
 		if (entryState === "hidden") return "hidden";
 		if (entryState === "reviewed") return "reviewed";
 		return "draft";
@@ -64,13 +80,13 @@ export function updateAggregatedEntriesInternal(
 	const shouldUseAiSummaryForEntry = (entry: FileDateEntry): boolean => {
 		if (!canUseAiSummary) return false;
 		try {
-			if ((s.plugin as any)?.settings?.summarizeAI === true) return true;
+			if ((s.plugin.settings as PluginSettings | undefined)?.summarizeAI === true) return true;
 		} catch {
 			// ignore
 		}
-		return (entry as any)?.aiSummaryVisible === true;
+		return entry.aiSummaryVisible === true;
 	};
-	const tuning = getAiSummaryTuning(s.plugin as any);
+	const tuning = getAiSummaryTuning(s.plugin);
 	const maxInputChars = tuning.recordsMaxInputChars;
 	const joinLinesUpToChars = (ls: string[], maxChars: number): string => {
 		if (!ls || ls.length === 0) return "";
@@ -93,12 +109,17 @@ export function updateAggregatedEntriesInternal(
 		// When later re-aggregation occurs without cached file text, still prefer
 		// YAML frontmatter `description` via the Obsidian metadata cache.
 		try {
-			const pluginAny: any = s.plugin as any;
-			const file = pluginAny?.app?.vault?.getAbstractFileByPath?.(filePath);
-			const cache = pluginAny?.app?.metadataCache?.getFileCache?.(file);
-			const fm: any = cache?.frontmatter ?? null;
+			const pluginState = s.plugin as ProMethods;
+			const file = pluginState.app?.vault?.getAbstractFileByPath?.(filePath);
+			const cache = pluginState.app?.metadataCache?.getFileCache?.(file);
+			const fm: unknown = cache?.frontmatter ?? null;
 			const raw = readFrontmatterProperty(fm, descriptionKey);
-			const value = typeof raw === "string" ? raw : raw != null ? String(raw) : "";
+			const value =
+				typeof raw === "string"
+					? raw
+					: typeof raw === "number" || typeof raw === "boolean"
+						? String(raw)
+						: "";
 			return value.trim();
 		} catch {
 			return "";
@@ -115,7 +136,7 @@ export function updateAggregatedEntriesInternal(
 			return String(fullText ?? "").trim();
 		}
 		if (gt === "tracked") {
-			const list = Array.isArray(data.trackedDates?.[entry.date]) ? data.trackedDates![entry.date]! : [];
+			const list = Array.isArray(data.trackedDates?.[entry.date]) ? data.trackedDates[entry.date] : [];
 			return list.map(e => String(e.summary ?? "").trim()).filter(Boolean).join("\n");
 		}
 		// content
@@ -199,7 +220,7 @@ export function updateAggregatedEntriesInternal(
 			}
 			return base;
 		}
-		const useBodySummary = entry.source === "content" && (entry as any)?.fromFrontmatter === true;
+		const useBodySummary = entry.source === "content" && entry.fromFrontmatter === true;
 		const rawText = useBodySummary ? fullText : extractText(lines, entry.blockStart, entry.blockEnd);
 		const text = entry.source === "content"
 			? (stripDatesFromContentSummaryText(rawText) || rawText.trim())
@@ -209,7 +230,7 @@ export function updateAggregatedEntriesInternal(
 	};
 
 	const resolvedContent = (data.contentDates ?? [])
-		.filter(e => !(suppression.noparsed && String((e as any)?.source ?? "") === "content"))
+		.filter(e => !(suppression.noparsed && String(e.source ?? "") === "content"))
 		.map(summarizeRange);
 	let resolvedTracked: FileDateEntry[] = [];
 	if (isTrackChangesConfigured(s.plugin) && !suppression.notracked) {
@@ -233,7 +254,12 @@ export function updateAggregatedEntriesInternal(
 	const anchorSource = data.namedDate ? "namedDate" : data.dateProp ? "dateProp" : data.cdate ? "cdate" : null;
 	let anchorEntry: FileDateEntry | null = null;
 	if (anchorSource) {
-		const sourceEntry = data[anchorSource as "namedDate" | "dateProp" | "cdate"] ?? null;
+		const sourceEntry =
+			anchorSource === "namedDate"
+				? data.namedDate
+				: anchorSource === "dateProp"
+					? data.dateProp
+					: data.cdate;
 		if (sourceEntry) {
 			const entryReviewState = normalizeReviewState(sourceEntry.reviewState);
 			let summary = sourceEntry.summary;
@@ -265,7 +291,7 @@ export function updateAggregatedEntriesInternal(
 			// anchor summary back into the stored anchor entry to keep behavior stable.
 			if (!usedAiSummary && lines.length > 0) {
 				try {
-					(sourceEntry as any).summary = summary;
+					sourceEntry.summary = summary;
 				} catch {
 					// ignore
 				}
@@ -302,16 +328,16 @@ export function updateAggregatedEntriesInternal(
 	// These entries are treated like parsed+YAML content dates (fromFrontmatter: true),
 	// but should remain virtual (not persisted to disk).
 	const recurringEntries: DateEntry[] = (() => {
-		if (!canExpandRecurringEntries(s.plugin)) return [];
-		const rec: any = (data as any)?.recur;
+		if (!canExpandRecurringEntries(s.plugin as ProMethods)) return [];
+		const rec: RecurrenceIndexData | null | undefined = data.recur;
 		if (!rec || typeof rec !== "object") return [];
 		const rule = String(rec.rrule ?? "").trim();
 		const raw = String(rec.raw ?? "").trim();
 		if (!rule || !raw) return [];
 		const anchorKey = (() => {
-			const nd = (data as any)?.namedDate?.date;
-			const dp = (data as any)?.dateProp?.date;
-			const cd = (data as any)?.cdate?.date;
+			const nd = data.namedDate?.date;
+			const dp = data.dateProp?.date;
+			const cd = data.cdate?.date;
 			return typeof nd === "string" && nd
 				? nd
 				: typeof dp === "string" && dp
@@ -329,12 +355,12 @@ export function updateAggregatedEntriesInternal(
 			const idx = Math.max(0, Math.min(lines.length - 1, line));
 			return String(lines[idx] ?? "");
 		})();
-			const anchorSummary = typeof (anchorEntry as any)?.summary === "string" ? String((anchorEntry as any).summary).trim() : "";
-			const summaryText = described || (fullText.trim() ? fullText : "") || anchorSummary || (lineText.trim() ? lineText : `repeat: ${raw}`);
+		const anchorSummary = typeof anchorEntry?.summary === "string" ? anchorEntry.summary.trim() : "";
+		const summaryText = described || (fullText.trim() ? fullText : "") || anchorSummary || (lineText.trim() ? lineText : `repeat: ${raw}`);
 		const summary = resolveSummaryForFile(s.plugin, filePath, summaryText, { includeFileName: false });
 		const hiddenSet = (() => {
 			try {
-				const raw = (data as any)?.recurHiddenDates;
+				const raw = data.recurHiddenDates;
 				if (!Array.isArray(raw) || raw.length === 0) return new Set<string>();
 				const out = new Set<string>();
 				for (const v of raw) {
@@ -348,7 +374,7 @@ export function updateAggregatedEntriesInternal(
 		})();
 		const reviewedSet = (() => {
 			try {
-				const raw = (data as any)?.recurReviewedDates;
+				const raw = data.recurReviewedDates;
 				if (!Array.isArray(raw) || raw.length === 0) return new Set<string>();
 				const out = new Set<string>();
 				for (const v of raw) {
@@ -360,7 +386,7 @@ export function updateAggregatedEntriesInternal(
 				return new Set<string>();
 			}
 		})();
-		const markColor = typeof (data as any)?.markColor === "number" ? (data as any).markColor : undefined;
+		const markColor = typeof data.markColor === "number" ? data.markColor : undefined;
 		const out: DateEntry[] = [];
 		const seen = new Set<string>();
 		for (const key of keys) {
@@ -368,7 +394,7 @@ export function updateAggregatedEntriesInternal(
 			if (!dk) continue;
 			if (seen.has(dk)) continue;
 			seen.add(dk);
-			const entryReviewState: any = hiddenSet.has(dk) ? "hidden" : reviewedSet.has(dk) ? "reviewed" : "draft";
+			const entryReviewState: ReviewState = hiddenSet.has(dk) ? "hidden" : reviewedSet.has(dk) ? "reviewed" : "draft";
 			out.push({
 				date: dk,
 				file: filePath,
@@ -403,6 +429,14 @@ export function updateAggregatedEntriesInternal(
 		pinnedTodayEntry.markColor = anchorEntry?.markColor;
 		pinnedTodayEntry.reviewState = anchorEntry?.reviewState ?? "draft";
 		entries.push(pinnedTodayEntry);
+	}
+
+	const fileMtimeMs = Number(data.indexedMtimeMs ?? 0);
+	if (Number.isFinite(fileMtimeMs) && fileMtimeMs > 0) {
+		for (const entry of entries) {
+			if (!entry || typeof entry !== "object") continue;
+			entry.fileMtimeMs = fileMtimeMs;
+		}
 	}
 
 	addEntries(s.index, entries);

@@ -1,4 +1,5 @@
 import { setIcon } from "obsidian";
+import type { EpochPlugin } from "../../main";
 
 import { setButtonState } from "./filter-ui";
 import { isTrackChangesConfigured } from "../../plugin/pro-feature-state";
@@ -11,19 +12,75 @@ export type EpochViewPreferences = {
 	showEpochsView?: boolean;
 };
 
-function persistTimelineFilterPatch(view: any, patch: Record<string, any>): void {
-	const plugin: any = view?.plugin;
-	const settings: any = plugin?.settings;
+type TimelineFiltersPatch = {
+	showAttachments?: boolean;
+	showTrackedChanges?: boolean;
+	showParsed?: boolean;
+};
+
+type TimelineFiltersLike = {
+	showAttachments?: boolean;
+	showTrackedChanges?: boolean;
+	showParsed?: boolean;
+};
+
+type EpochViewPluginLike = {
+	settings?: {
+		[key: string]: unknown;
+		parseDatesInFrontmatter?: boolean;
+		timelineFilters?: TimelineFiltersLike;
+	};
+	viewPreferences?: EpochViewPreferences;
+	notifyProFeature?: (feature: string) => void;
+	saveSettings?: () => Promise<void> | void;
+};
+
+type EpochViewLike = {
+	plugin?: EpochViewPluginLike;
+	canvas?: {
+		setShowContentDates?: (value: boolean) => void;
+		setShowPropDates?: (value: boolean) => void;
+		setShowTrackedChanges?: (value: boolean) => void;
+		setShowAttachments?: (value: boolean) => void;
+		setReviewFilterMode?: (mode: "reviewed+draft" | "draft") => void;
+		setEpochsView?: (value: boolean) => void;
+	};
+	buttonReview?: HTMLElement | null;
+	buttonAttachments?: HTMLElement | null;
+	buttonEdits?: HTMLElement | null;
+	buttonParsed?: HTMLElement | null;
+	buttonEpochs?: HTMLElement | null;
+	showDraftsOnly?: boolean;
+	showAttachments: boolean;
+	showTrackedChanges?: boolean;
+	showContentDates?: boolean;
+	showPropDates?: boolean;
+	showEpochsView?: boolean;
+	hasSyncedEpochEntries?: boolean;
+	reviewFilterMode?: "reviewed+draft" | "draft";
+	refreshSyncedEpochAvailability: () => void;
+	isPro: () => boolean;
+	isEpochsEnabled: () => boolean;
+	scheduleSearchControlRefresh?: () => void;
+};
+
+function asView(view: unknown): EpochViewLike {
+	return view as EpochViewLike;
+}
+
+function persistTimelineFilterPatch(view: EpochViewLike, patch: TimelineFiltersPatch): void {
+	const plugin = view.plugin;
+	const settings = plugin?.settings;
 	if (!plugin || !settings) return;
 	try {
-		const current: any = settings?.timelineFilters;
+		const current = settings.timelineFilters;
 		const baseRaw = current && typeof current === "object" ? current : {};
-		const base: any = {
+		const base: TimelineFiltersLike = {
 			showAttachments: baseRaw.showAttachments === true,
 			showTrackedChanges: baseRaw.showTrackedChanges !== false,
 			showParsed: baseRaw.showParsed !== false
 		};
-		const allowed: any = {};
+		const allowed: TimelineFiltersPatch = {};
 		if (Object.prototype.hasOwnProperty.call(patch, "showAttachments")) allowed.showAttachments = patch.showAttachments;
 		if (Object.prototype.hasOwnProperty.call(patch, "showTrackedChanges")) allowed.showTrackedChanges = patch.showTrackedChanges;
 		if (Object.prototype.hasOwnProperty.call(patch, "showParsed")) allowed.showParsed = patch.showParsed;
@@ -38,11 +95,11 @@ function persistTimelineFilterPatch(view: any, patch: Record<string, any>): void
 	}
 }
 
-function getShowParsedFromView(view: any): boolean {
+function getShowParsedFromView(view: EpochViewLike): boolean {
 	return !!view?.showContentDates;
 }
 
-function applyShowParsedToView(view: any, showParsed: boolean): void {
+function applyShowParsedToView(view: EpochViewLike, showParsed: boolean): void {
 	const nextShowParsed = !!showParsed;
 	view.showContentDates = nextShowParsed;
 	view.showPropDates = nextShowParsed && view?.plugin?.settings?.parseDatesInFrontmatter === true;
@@ -65,88 +122,92 @@ function applyShowParsedToView(view: any, showParsed: boolean): void {
 	}
 }
 
-export function epochViewUpdateProUiState(view: any): void {
-	const pro = view.isPro();
+export function epochViewUpdateProUiState(view: unknown): void {
+	const v = asView(view);
+	const pro = v.isPro();
 	const forceRuntimeTrackedOff = () => {
-		if (!view.showTrackedChanges) return;
-		view.showTrackedChanges = false;
+		if (!v.showTrackedChanges) return;
+		v.showTrackedChanges = false;
 		try {
-			view.canvas?.setShowTrackedChanges(false);
+			v.canvas?.setShowTrackedChanges?.(false);
 		} catch {
 			// ignore
 		}
 		try {
-			if (view.plugin?.viewPreferences) {
-				view.plugin.viewPreferences.showTrackedChanges = false;
+			if (v.plugin?.viewPreferences) {
+				v.plugin.viewPreferences.showTrackedChanges = false;
 			}
 		} catch {
 			// ignore
 		}
 	};
 	if (!pro) {
-		if (view.showTrackedChanges) {
+		if (v.showTrackedChanges) {
 			forceRuntimeTrackedOff();
 		}
-		if (view.showEpochsView) {
-			epochViewSetShowEpochsView(view, false);
+		if (v.showEpochsView) {
+			epochViewSetShowEpochsView(v, false);
 		}
 	} else {
-		const epochsAvailable = view.isEpochsEnabled() && view.hasSyncedEpochEntries;
-		if (!epochsAvailable && view.showEpochsView) {
-			epochViewSetShowEpochsView(view, false);
+		const epochsAvailable = v.isEpochsEnabled() && v.hasSyncedEpochEntries;
+		if (!epochsAvailable && v.showEpochsView) {
+			epochViewSetShowEpochsView(v, false);
 		}
 	}
-	epochViewUpdateFilterButtons(view);
+	epochViewUpdateFilterButtons(v);
 }
 
-export function epochViewSyncPreferencesFromPlugin(view: any, preferences: EpochViewPreferences): void {
+export function epochViewSyncPreferencesFromPlugin(view: unknown, preferences: EpochViewPreferences): void {
+	const v = asView(view);
 	const nextMode: "reviewed+draft" | "draft" = preferences.showDraftsOnly === true ? "draft" : "reviewed+draft";
 	const nextAttachments = !!preferences.showAttachments;
 	const nextTracked = preferences.showTrackedChanges !== false;
 	const nextShowParsed = preferences.showParsed !== false;
 	const nextEpochsView = preferences.showEpochsView === true;
 
-	epochViewSetReviewFilterMode(view, nextMode);
-	epochViewSetShowAttachments(view, nextAttachments);
-	epochViewSetShowTrackedChanges(view, nextTracked);
-	applyShowParsedToView(view, nextShowParsed);
-	epochViewSetShowEpochsView(view, nextEpochsView);
-	epochViewUpdateProUiState(view);
+	epochViewSetReviewFilterMode(v, nextMode);
+	epochViewSetShowAttachments(v, nextAttachments);
+	epochViewSetShowTrackedChanges(v, nextTracked);
+	applyShowParsedToView(v, nextShowParsed);
+	epochViewSetShowEpochsView(v, nextEpochsView);
+	epochViewUpdateProUiState(v);
 }
 
-export function epochViewUpdateFilterButtons(view: any): void {
-	view.refreshSyncedEpochAvailability();
+export function epochViewUpdateFilterButtons(view: unknown): void {
+	const v = asView(view);
+	v.refreshSyncedEpochAvailability();
 
-	const reviewMode: "reviewed+draft" | "draft" = String(view.reviewFilterMode || "reviewed+draft") === "draft"
+	const reviewMode: "reviewed+draft" | "draft" = String(v.reviewFilterMode || "reviewed+draft") === "draft"
 		? "draft"
 		: "reviewed+draft";
-	setButtonState(view.buttonReview, reviewMode !== "reviewed+draft");
-	epochViewUpdateReviewFilterButtonUi(view, reviewMode);
-	setButtonState(view.buttonAttachments, !!view.showAttachments);
-	epochViewUpdateAttachmentsFilterButtonUi(view);
-	const pro = view.isPro();
-	const trackChangesConfigured = isTrackChangesConfigured(view.plugin);
+	setButtonState(v.buttonReview ?? null, reviewMode !== "reviewed+draft");
+	epochViewUpdateReviewFilterButtonUi(v, reviewMode);
+	setButtonState(v.buttonAttachments ?? null, !!v.showAttachments);
+	epochViewUpdateAttachmentsFilterButtonUi(v);
+	const pro = v.isPro();
+	const trackChangesConfigured = isTrackChangesConfigured(v.plugin as unknown as EpochPlugin);
 	const editsAvailable = pro && trackChangesConfigured;
-	const editsActive = editsAvailable && !!view.showTrackedChanges;
-	setButtonState(view.buttonEdits, editsActive);
-	try { if (view.buttonEdits) (view.buttonEdits as HTMLElement).style.display = editsAvailable ? "" : "none"; } catch { /* ignore */ }
-	epochViewUpdateTrackedFilterButtonUi(view);
-	setButtonState(view.buttonParsed, !!view.showContentDates);
-	epochViewUpdateParsedFilterButtonUi(view);
+	const editsActive = editsAvailable && !!v.showTrackedChanges;
+	setButtonState(v.buttonEdits ?? null, editsActive);
+	try { if (v.buttonEdits) v.buttonEdits.style.display = editsAvailable ? "" : "none"; } catch { /* ignore */ }
+	epochViewUpdateTrackedFilterButtonUi(v);
+	setButtonState(v.buttonParsed ?? null, !!v.showContentDates);
+	epochViewUpdateParsedFilterButtonUi(v);
 	// Keep button labels/tooltips consistent with the historical filter panel.
-	setButtonState(view.buttonEpochs, view.showEpochsView);
-	epochViewUpdateEpochsFilterButtonUi(view);
-	const epochsAvailable = pro && view.isEpochsEnabled() && view.hasSyncedEpochEntries;
-	if (!epochsAvailable && view.showEpochsView) {
-		epochViewSetShowEpochsView(view, false);
+	setButtonState(v.buttonEpochs ?? null, !!v.showEpochsView);
+	epochViewUpdateEpochsFilterButtonUi(v);
+	const epochsAvailable = pro && v.isEpochsEnabled() && v.hasSyncedEpochEntries;
+	if (!epochsAvailable && v.showEpochsView) {
+		epochViewSetShowEpochsView(v, false);
 	}
-	try { if (view.buttonEpochs) (view.buttonEpochs as HTMLElement).style.display = epochsAvailable ? "" : "none"; } catch { /* ignore */ }
+	try { if (v.buttonEpochs) v.buttonEpochs.style.display = epochsAvailable ? "" : "none"; } catch { /* ignore */ }
 }
 
-export function epochViewUpdateTrackedFilterButtonUi(view: any): void {
-	const button = view.buttonEdits;
+export function epochViewUpdateTrackedFilterButtonUi(view: unknown): void {
+	const v = asView(view);
+	const button = v.buttonEdits;
 	if (!button) return;
-	const showTracked = !!view.showTrackedChanges;
+	const showTracked = !!v.showTrackedChanges;
 	const tooltip = showTracked ? "Tracked changes" : "No tracked changes";
 	try {
 		button.setAttribute("aria-label", tooltip);
@@ -155,10 +216,11 @@ export function epochViewUpdateTrackedFilterButtonUi(view: any): void {
 	}
 }
 
-export function epochViewUpdateAttachmentsFilterButtonUi(view: any): void {
-	const button = view.buttonAttachments;
+export function epochViewUpdateAttachmentsFilterButtonUi(view: unknown): void {
+	const v = asView(view);
+	const button = v.buttonAttachments;
 	if (!button) return;
-	const showAttachments = !!view.showAttachments;
+	const showAttachments = !!v.showAttachments;
 	const tooltip = showAttachments ? "Attachments" : "No attachments";
 	try {
 		button.setAttribute("aria-label", tooltip);
@@ -167,10 +229,11 @@ export function epochViewUpdateAttachmentsFilterButtonUi(view: any): void {
 	}
 }
 
-export function epochViewUpdateReviewFilterButtonUi(view: any, mode: "reviewed+draft" | "draft"): void {
-	const button = view.buttonReview;
+export function epochViewUpdateReviewFilterButtonUi(view: unknown, mode: "reviewed+draft" | "draft"): void {
+	const v = asView(view);
+	const button = v.buttonReview;
 	if (!button) return;
-	const iconEl = button.querySelector(".epoch-filter-button-icon") as HTMLElement | null;
+	const iconEl = button.querySelector<HTMLElement>(".epoch-filter-button-icon");
 	const tooltip = mode === "draft" ? "Drafts" : "Reviewed & Drafts";
 	try {
 		button.setAttribute("aria-label", tooltip);
@@ -186,11 +249,12 @@ export function epochViewUpdateReviewFilterButtonUi(view: any, mode: "reviewed+d
 	}
 }
 
-export function epochViewUpdateParsedFilterButtonUi(view: any): void {
-	const button = view.buttonParsed;
+export function epochViewUpdateParsedFilterButtonUi(view: unknown): void {
+	const v = asView(view);
+	const button = v.buttonParsed;
 	if (!button) return;
-	const iconEl = button.querySelector(".epoch-filter-button-icon") as HTMLElement | null;
-	const showParsed = !!view.showContentDates;
+	const iconEl = button.querySelector<HTMLElement>(".epoch-filter-button-icon");
+	const showParsed = !!v.showContentDates;
 	const tooltip = !showParsed
 		? "No parsed content"
 		: "Parsed content";
@@ -208,143 +272,151 @@ export function epochViewUpdateParsedFilterButtonUi(view: any): void {
 	}
 }
 
-export function epochViewUpdateEpochsFilterButtonUi(view: any): void {
-	const button = view.buttonEpochs;
+export function epochViewUpdateEpochsFilterButtonUi(view: unknown): void {
+	const v = asView(view);
+	const button = v.buttonEpochs;
 	if (!button) return;
 	try {
-		button.setAttribute("aria-label", view.showEpochsView ? "Epochs on" : "Epochs off");
+		button.setAttribute("aria-label", v.showEpochsView ? "Epochs on" : "Epochs off");
 	} catch {
 		// ignore
 	}
 }
 
-export function epochViewSetShowEpochsView(view: any, value: boolean): void {
-	const next = !!value && view.isEpochsEnabled();
-	if (view.showEpochsView === next) {
-		epochViewUpdateFilterButtons(view);
+export function epochViewSetShowEpochsView(view: unknown, value: boolean): void {
+	const v = asView(view);
+	const next = !!value && v.isEpochsEnabled();
+	if (v.showEpochsView === next) {
+		epochViewUpdateFilterButtons(v);
 		return;
 	}
-	view.showEpochsView = next;
-	view.canvas?.setEpochsView(view.showEpochsView);
-	if (view.plugin?.viewPreferences) {
-		view.plugin.viewPreferences.showEpochsView = view.showEpochsView;
+	v.showEpochsView = next;
+	v.canvas?.setEpochsView?.(v.showEpochsView);
+	if (v.plugin?.viewPreferences) {
+		v.plugin.viewPreferences.showEpochsView = v.showEpochsView;
 	}
-	epochViewUpdateFilterButtons(view);
+	epochViewUpdateFilterButtons(v);
 	try {
-		view.scheduleSearchControlRefresh?.();
+		v.scheduleSearchControlRefresh?.();
 	} catch {
 		// ignore
 	}
 }
 
-export function epochViewCycleReviewFilterMode(view: any): void {
-	const current = view.reviewFilterMode;
+export function epochViewCycleReviewFilterMode(view: unknown): void {
+	const v = asView(view);
+	const current = v.reviewFilterMode;
 	const next = current === "reviewed+draft" ? "draft" : "reviewed+draft";
-	epochViewSetReviewFilterMode(view, next);
+	epochViewSetReviewFilterMode(v, next);
 }
 
-export function epochViewSetReviewFilterMode(view: any, mode: "reviewed+draft" | "draft"): void {
+export function epochViewSetReviewFilterMode(view: unknown, mode: "reviewed+draft" | "draft"): void {
+	const v = asView(view);
 	const next = mode === "draft" || mode === "reviewed+draft" ? mode : "reviewed+draft";
-	if (view.reviewFilterMode === next) {
-		epochViewUpdateFilterButtons(view);
+	if (v.reviewFilterMode === next) {
+		epochViewUpdateFilterButtons(v);
 		return;
 	}
-	view.reviewFilterMode = next;
-	view.canvas?.setReviewFilterMode(view.reviewFilterMode);
-	if (view.plugin?.viewPreferences) {
-		view.plugin.viewPreferences.showDraftsOnly = view.reviewFilterMode === "draft";
+	v.reviewFilterMode = next;
+	v.canvas?.setReviewFilterMode?.(v.reviewFilterMode);
+	if (v.plugin?.viewPreferences) {
+		v.plugin.viewPreferences.showDraftsOnly = v.reviewFilterMode === "draft";
 	}
-	epochViewUpdateFilterButtons(view);
+	epochViewUpdateFilterButtons(v);
 }
 
-export function epochViewSetShowTrackedChanges(view: any, value: boolean): void {
-	if (!view.isPro() && value === true) {
-		view.plugin?.notifyProFeature?.("Filtering tracked changes");
+export function epochViewSetShowTrackedChanges(view: unknown, value: boolean): void {
+	const v = asView(view);
+	if (!v.isPro() && value === true) {
+		v.plugin?.notifyProFeature?.("Filtering tracked changes");
 		value = false;
 	}
 	const next = !!value;
-	if (view.showTrackedChanges === next) {
-		epochViewUpdateFilterButtons(view);
+	if (v.showTrackedChanges === next) {
+		epochViewUpdateFilterButtons(v);
 		return;
 	}
-	view.showTrackedChanges = next;
-	view.canvas?.setShowTrackedChanges(view.showTrackedChanges);
-	if (view.plugin?.viewPreferences) {
-		view.plugin.viewPreferences.showTrackedChanges = view.showTrackedChanges;
+	v.showTrackedChanges = next;
+	v.canvas?.setShowTrackedChanges?.(v.showTrackedChanges);
+	if (v.plugin?.viewPreferences) {
+		v.plugin.viewPreferences.showTrackedChanges = v.showTrackedChanges;
 	}
-	persistTimelineFilterPatch(view, { showTrackedChanges: view.showTrackedChanges });
-	epochViewUpdateFilterButtons(view);
+	persistTimelineFilterPatch(v, { showTrackedChanges: v.showTrackedChanges });
+	epochViewUpdateFilterButtons(v);
 }
 
-export function epochViewSetShowContentDates(view: any, value: boolean): void {
+export function epochViewSetShowContentDates(view: unknown, value: boolean): void {
+	const v = asView(view);
 	const next = !!value;
-	if (view.showContentDates === next) {
-		epochViewUpdateFilterButtons(view);
+	if (v.showContentDates === next) {
+		epochViewUpdateFilterButtons(v);
 		return;
 	}
-	view.showContentDates = next;
-	view.canvas?.setShowContentDates(view.showContentDates);
-	const nextShowPropDates = view.showContentDates && view?.plugin?.settings?.parseDatesInFrontmatter === true;
-	if (view.showPropDates !== nextShowPropDates) {
-		view.showPropDates = nextShowPropDates;
+	v.showContentDates = next;
+	v.canvas?.setShowContentDates?.(v.showContentDates);
+	const nextShowPropDates = v.showContentDates && v?.plugin?.settings?.parseDatesInFrontmatter === true;
+	if (v.showPropDates !== nextShowPropDates) {
+		v.showPropDates = nextShowPropDates;
 		try {
-			view.canvas?.setShowPropDates(nextShowPropDates);
+			v.canvas?.setShowPropDates?.(nextShowPropDates);
 		} catch {
 			// ignore
 		}
 	}
-	if (!view.showContentDates && view.showPropDates) {
-		view.showPropDates = false;
+	if (!v.showContentDates && v.showPropDates) {
+		v.showPropDates = false;
 		try {
-			view.canvas?.setShowPropDates(false);
+			v.canvas?.setShowPropDates?.(false);
 		} catch {
 			// ignore
 		}
 	}
-	if (view.plugin?.viewPreferences) {
-		view.plugin.viewPreferences.showParsed = getShowParsedFromView(view);
+	if (v.plugin?.viewPreferences) {
+		v.plugin.viewPreferences.showParsed = getShowParsedFromView(v);
 	}
-	persistTimelineFilterPatch(view, { showParsed: getShowParsedFromView(view) });
-	epochViewUpdateFilterButtons(view);
+	persistTimelineFilterPatch(v, { showParsed: getShowParsedFromView(v) });
+	epochViewUpdateFilterButtons(v);
 }
 
-export function epochViewSetShowPropDates(view: any, value: boolean): void {
-	const next = !!value && view?.plugin?.settings?.parseDatesInFrontmatter === true;
-	if (next && !view.showContentDates) {
-		view.showContentDates = true;
+export function epochViewSetShowPropDates(view: unknown, value: boolean): void {
+	const v = asView(view);
+	const next = !!value && v?.plugin?.settings?.parseDatesInFrontmatter === true;
+	if (next && !v.showContentDates) {
+		v.showContentDates = true;
 		try {
-			view.canvas?.setShowContentDates(true);
+			v.canvas?.setShowContentDates?.(true);
 		} catch {
 			// ignore
 		}
-		if (view.plugin?.viewPreferences) {
-			view.plugin.viewPreferences.showParsed = getShowParsedFromView(view);
+		if (v.plugin?.viewPreferences) {
+			v.plugin.viewPreferences.showParsed = getShowParsedFromView(v);
 		}
 	}
-	if (view.showPropDates === next) {
-		epochViewUpdateFilterButtons(view);
+	if (v.showPropDates === next) {
+		epochViewUpdateFilterButtons(v);
 		return;
 	}
-	view.showPropDates = next;
-	view.canvas?.setShowPropDates(view.showPropDates);
-	if (view.plugin?.viewPreferences) {
-		view.plugin.viewPreferences.showParsed = getShowParsedFromView(view);
+	v.showPropDates = next;
+	v.canvas?.setShowPropDates?.(v.showPropDates);
+	if (v.plugin?.viewPreferences) {
+		v.plugin.viewPreferences.showParsed = getShowParsedFromView(v);
 	}
-	persistTimelineFilterPatch(view, { showParsed: getShowParsedFromView(view) });
-	epochViewUpdateFilterButtons(view);
+	persistTimelineFilterPatch(v, { showParsed: getShowParsedFromView(v) });
+	epochViewUpdateFilterButtons(v);
 }
 
-export function epochViewSetShowAttachments(view: any, value: boolean): void {
+export function epochViewSetShowAttachments(view: unknown, value: boolean): void {
+	const v = asView(view);
 	const next = !!value;
-	if (view.showAttachments === next) {
-		epochViewUpdateFilterButtons(view);
+	if (v.showAttachments === next) {
+		epochViewUpdateFilterButtons(v);
 		return;
 	}
-	view.showAttachments = next;
-	view.canvas?.setShowAttachments(view.showAttachments);
-	if (view.plugin?.viewPreferences) {
-		view.plugin.viewPreferences.showAttachments = view.showAttachments;
+	v.showAttachments = next;
+	v.canvas?.setShowAttachments?.(v.showAttachments);
+	if (v.plugin?.viewPreferences) {
+		v.plugin.viewPreferences.showAttachments = v.showAttachments;
 	}
-	persistTimelineFilterPatch(view, { showAttachments: view.showAttachments });
-	epochViewUpdateFilterButtons(view);
+	persistTimelineFilterPatch(v, { showAttachments: v.showAttachments });
+	epochViewUpdateFilterButtons(v);
 }

@@ -9,9 +9,25 @@ import {
 	updateSemanticRelatedTermPaths
 } from "./semantic";
 
+type CanvasRefreshState = {
+	plugin?: {
+		indexer?: {
+			index?: EpochIndex;
+		};
+	};
+	index?: EpochIndex;
+	__indexVersion?: number;
+	__scrollNavVisibleTargetsSig?: string | null;
+	__scrollNavVisibleTargets?: unknown;
+	semanticRelatedTermLastUpdatedAt?: number | null;
+	scrollNavFile?: string | null;
+	__scrollNavLastModeKey?: string | null;
+	draw?: () => void;
+};
+
 export function refreshIndex(canvas: EpochCanvas): void {
-	const c: any = canvas as any;
-	const index = c?.plugin?.indexer?.index as EpochIndex | undefined;
+	const c = canvas as unknown as CanvasRefreshState;
+	const index = c?.plugin?.indexer?.index;
 	c.index = index ? { ...index } : {};
 	try {
 		c.__indexVersion = (Number(c.__indexVersion) || 0) + 1;
@@ -28,9 +44,9 @@ export function refreshIndex(canvas: EpochCanvas): void {
 	resetScrollNavTargetState(canvas);
 	c.scrollNavFile = null;
 	try {
-		(c as any).__scrollNavLastModeKey = null;
+		c.__scrollNavLastModeKey = null;
 	} catch {
 		// ignore
 	}
-	c.draw();
+	c.draw?.();
 }

@@ -13,7 +13,21 @@ export interface EntryState {
 	showPropDates: boolean;
 	epochsView: boolean;
 	searchQuery: string;
+	semanticRelatedBasePath?: string;
+	activeFilePath?: string | null;
+	semanticRelatedPaths?: Set<string>;
+	semanticRelatedTermPaths?: Set<string>;
+	semanticRelatedRequestId?: number;
+	semanticRelatedTermLastUpdatedAt?: number;
+	plugin?: {
+		__epochInheritedMarkIndexByPath?: Map<string, number>;
+		__epochInheritedMarkComputedAt?: number;
+	};
 }
+
+type DateEntryWithExtras = DateEntry & {
+	fromFrontmatter?: boolean;
+};
 
 export function state(canvas: EpochCanvas): EntryState {
 	return canvas as unknown as EntryState;
@@ -22,17 +36,17 @@ export function state(canvas: EpochCanvas): EntryState {
 const PARSED_TIMELINE_QUERY_BY_CANVAS = new WeakMap<object, { raw: string; parsed: TimelineQuery }>();
 
 export function getParsedTimelineQuery(canvas: EpochCanvas): TimelineQuery {
-	const raw = String((state(canvas) as any)?.searchQuery ?? "");
+	const raw = String(state(canvas).searchQuery ?? "");
 	const key = raw;
 	try {
-		const prev = PARSED_TIMELINE_QUERY_BY_CANVAS.get(canvas as any);
+		const prev = PARSED_TIMELINE_QUERY_BY_CANVAS.get(canvas);
 		if (prev && prev.raw === key) return prev.parsed;
 	} catch {
 		// ignore
 	}
 	const parsed = parseTimelineQuery(key);
 	try {
-		PARSED_TIMELINE_QUERY_BY_CANVAS.set(canvas as any, { raw: key, parsed });
+		PARSED_TIMELINE_QUERY_BY_CANVAS.set(canvas, { raw: key, parsed });
 	} catch {
 		// ignore
 	}
@@ -102,12 +116,12 @@ export function hasHiddenOnlyToken(parsed: TimelineQuery): boolean {
 export function getSimilarScopeSignature(canvas: EpochCanvas, parsed: TimelineQuery): string {
 	if (!hasSimilarOnlyToken(parsed)) return "";
 	try {
-		const c: any = canvas as any;
-		const basePath = String(c?.semanticRelatedBasePath ?? c?.activeFilePath ?? "").trim();
-		const relatedSize = c?.semanticRelatedPaths instanceof Set ? c.semanticRelatedPaths.size : 0;
-		const termRelatedSize = c?.semanticRelatedTermPaths instanceof Set ? c.semanticRelatedTermPaths.size : 0;
-		const semanticReqId = Number(c?.semanticRelatedRequestId ?? 0);
-		const termUpdatedAt = Number(c?.semanticRelatedTermLastUpdatedAt ?? 0);
+		const c = state(canvas);
+		const basePath = String(c.semanticRelatedBasePath ?? c.activeFilePath ?? "").trim();
+		const relatedSize = c.semanticRelatedPaths instanceof Set ? c.semanticRelatedPaths.size : 0;
+		const termRelatedSize = c.semanticRelatedTermPaths instanceof Set ? c.semanticRelatedTermPaths.size : 0;
+		const semanticReqId = Number(c.semanticRelatedRequestId ?? 0);
+		const termUpdatedAt = Number(c.semanticRelatedTermLastUpdatedAt ?? 0);
 		return [
 			`SIMP:${basePath}`,
 			`SIMR:${relatedSize}`,
@@ -121,7 +135,7 @@ export function getSimilarScopeSignature(canvas: EpochCanvas, parsed: TimelineQu
 }
 
 export function isPropDateEntry(entry: DateEntry): boolean {
-	return (entry as any)?.fromFrontmatter === true;
+	return (entry as DateEntryWithExtras).fromFrontmatter === true;
 }
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -149,9 +163,9 @@ export function dateKeyToUtcMs(key: string): number {
 
 export function getInheritedMarkIndexByPath(canvas: EpochCanvas): Map<string, number> | null {
 	try {
-		const pluginAny: any = (canvas as any)?.plugin;
-		const map = pluginAny?.__epochInheritedMarkIndexByPath as Map<string, number> | null | undefined;
-		return map && typeof (map as any)?.get === "function" ? map : null;
+		const pluginState = state(canvas).plugin;
+		const map = pluginState?.__epochInheritedMarkIndexByPath;
+		return map && typeof map.get === "function" ? map : null;
 	} catch {
 		return null;
 	}
@@ -159,8 +173,7 @@ export function getInheritedMarkIndexByPath(canvas: EpochCanvas): Map<string, nu
 
 export function getInheritedMarkComputedAt(canvas: EpochCanvas): number {
 	try {
-		const pluginAny: any = (canvas as any)?.plugin;
-		const raw = Number(pluginAny?.__epochInheritedMarkComputedAt ?? 0);
+		const raw = Number(state(canvas).plugin?.__epochInheritedMarkComputedAt ?? 0);
 		return Number.isFinite(raw) ? raw : 0;
 	} catch {
 		return 0;
@@ -168,9 +181,9 @@ export function getInheritedMarkComputedAt(canvas: EpochCanvas): number {
 }
 
 export function isColorMarked(entry: DateEntry, inheritedMarkIndexByPath: Map<string, number> | null): boolean {
-	if (normalizeMarkColorIndex((entry as any)?.markColor)) return true;
+	if (normalizeMarkColorIndex(entry.markColor)) return true;
 	if (inheritedMarkIndexByPath && typeof entry.file === "string" && entry.file) {
-		return normalizeMarkColorIndex(inheritedMarkIndexByPath.get(entry.file) as any) != null;
+		return normalizeMarkColorIndex(inheritedMarkIndexByPath.get(entry.file)) != null;
 	}
 	return false;
 }

@@ -3,9 +3,14 @@ import type { EpochPlugin } from "../../main";
 import { scheduleEpochRegenerationAfterAiIdle } from "./epochs-after-ai";
 import { hasGenerateEpochsAccess, hasSummarizeAIAccess, isGenerateEpochsEffective, isSummarizeAIEffective } from "../pro-feature-state";
 
+type EpochPluginWithAiCancel = EpochPlugin & { __epochAiEnqueueCancelKey?: number };
+type EpochBuildModule = {
+	buildEpochJobs?: (plugin: EpochPlugin, mode: "force" | "missing") => Promise<unknown>;
+};
+
 function getAiEnqueueCancelKey(plugin: EpochPlugin): number {
 	try {
-		return Number((plugin as any)?.__epochAiEnqueueCancelKey) || 0;
+		return Number((plugin as EpochPluginWithAiCancel).__epochAiEnqueueCancelKey) || 0;
 	} catch {
 		return 0;
 	}
@@ -13,10 +18,10 @@ function getAiEnqueueCancelKey(plugin: EpochPlugin): number {
 
 async function getPlannedEpochJobCount(plugin: EpochPlugin, mode: "force" | "missing"): Promise<number> {
 	try {
-		const mod = await import("./epochs-build");
-		const buildEpochJobs: unknown = (mod as any)?.buildEpochJobs;
+		const mod = (await import("./epochs-build")) as EpochBuildModule;
+		const buildEpochJobs: unknown = mod.buildEpochJobs;
 		if (typeof buildEpochJobs !== "function") return 0;
-		const jobs = await (buildEpochJobs as any)(plugin, mode);
+		const jobs = await (buildEpochJobs as (plugin: EpochPlugin, mode: "force" | "missing") => Promise<unknown>)(plugin, mode);
 		return Array.isArray(jobs) ? jobs.length : 0;
 	} catch {
 		return 0;

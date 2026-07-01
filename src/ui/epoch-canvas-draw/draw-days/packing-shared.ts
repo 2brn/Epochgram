@@ -24,7 +24,8 @@ export function packVerticalBlocks(blocks: PackedBlock[], gap: number): void {
 
 	let nextTop = Infinity;
 	for (let idx = blocks.length - 1; idx >= 0; idx--) {
-		const b = blocks[idx]!;
+		const b = blocks[idx];
+		if (!b) continue;
 		const maxBottom = nextTop - gap;
 		if (b.bottom > maxBottom) {
 			const delta = maxBottom - b.bottom;

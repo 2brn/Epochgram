@@ -75,35 +75,34 @@ export function drawVisibleDays(params: {
         recordOpacity: recordOpacityRaw
     } = params;
 
-    const anyS: any = s as any;
-    if (!(anyS.wrapFadeCache instanceof Map)) {
-        anyS.wrapFadeCache = new Map();
+    if (!(s.wrapFadeCache instanceof Map)) {
+        s.wrapFadeCache = new Map();
     }
-    const wrapFadeCache: Map<string, any> = anyS.wrapFadeCache;
-    anyS.packAnimating = false;
+    const wrapFadeCache: Map<string, unknown> = s.wrapFadeCache;
+    s.packAnimating = false;
 
-    const pluginAny: any = (canvas as any)?.plugin;
-    const animationsEnabled = pluginAny?.settings?.enableAnimation !== false;
+    const plugin = s.plugin;
+    const animationsEnabled = plugin?.settings?.enableAnimation !== false;
 
-    const frameNow = performance.now();
+    const frameNow = window.performance.now();
     const ellipsisAnimMs = animationsEnabled ? Math.max(1, Math.min(260, Number(HOVER_ANIM_TIME_MS) || 160)) : 0;
-    const lastEllipsisNow = Number(anyS.__ellipsisNowLast);
+    const lastEllipsisNow = Number(s.__ellipsisNowLast);
     const ellipsisDt = (Number.isFinite(lastEllipsisNow) && lastEllipsisNow > 0)
         ? Math.max(0, frameNow - lastEllipsisNow)
         : 0;
-    anyS.__ellipsisNowLast = frameNow;
+    s.__ellipsisNowLast = frameNow;
 
-    const wasViewAnimating = (anyS.__ellipsisPrevAnimatingView === true);
-    const viewInteractionUntil = Number((s as any).viewInteractionUntil);
+    const wasViewAnimating = (s.__ellipsisPrevAnimatingView === true);
+    const viewInteractionUntil = Number(s.viewInteractionUntil);
     const isViewInteracting = Number.isFinite(viewInteractionUntil) && frameNow < viewInteractionUntil;
-    const velocityY = Number((s as any).velocityY);
+    const velocityY = Number(s.velocityY);
     const hasInertia = Number.isFinite(velocityY) && Math.abs(velocityY) > 0.01;
-    const isViewAnimating = animationsEnabled && (((s as any).animatingView === true) || isViewInteracting || hasInertia);
-    anyS.__ellipsisPrevAnimatingView = isViewAnimating;
+    const isViewAnimating = animationsEnabled && ((s.animatingView === true) || isViewInteracting || hasInertia);
+    s.__ellipsisPrevAnimatingView = isViewAnimating;
     if (isViewAnimating || (wasViewAnimating && !isViewAnimating)) {
-        anyS.__ellipsisSettleUntil = frameNow + ellipsisAnimMs;
+        s.__ellipsisSettleUntil = frameNow + ellipsisAnimMs;
     }
-    const settleUntil = Number(anyS.__ellipsisSettleUntil);
+    const settleUntil = Number(s.__ellipsisSettleUntil);
 
     wrapFadeCache.set("__ellipsisAnimating", false);
     wrapFadeCache.set("__ellipsisNow", frameNow);
@@ -120,18 +119,18 @@ export function drawVisibleDays(params: {
     // During active user pan/zoom (and inertia), avoid expensive hover/padding work.
     // However, touch long-press/menu flows rely on stable hover rendering; do not
     // suppress hover work while hover is explicitly pinned or while a menu is open.
-    const keepHoverAfterMenu = ((s as any).keepHoverAfterMenu === true);
-    const touchPinnedUntil = Number((s as any).__touchHoverPinnedUntil ?? 0);
+    const keepHoverAfterMenu = (s.keepHoverAfterMenu === true);
+    const touchPinnedUntil = Number(s.__touchHoverPinnedUntil ?? 0);
     const touchHoverPinned = Number.isFinite(touchPinnedUntil) && touchPinnedUntil > 0 && frameNow < touchPinnedUntil;
     const suppressHoverWork = (isViewInteracting || hasInertia) && !keepHoverAfterMenu && !touchHoverPinned;
-	const hoverTargetRaw = Number((s as any).hoverTarget);
+	const hoverTargetRaw = Number(s.hoverTarget);
 	const hoverTarget = Number.isFinite(hoverTargetRaw) ? Math.max(0, Math.min(1, hoverTargetRaw)) : 0;
     const hoverAnimEffective = suppressHoverWork
 		? 0
 		: (animationsEnabled ? s.hoverAnim : (hoverTarget > 0.5 ? 1 : 0));
     const animSummaryEffective = suppressHoverWork ? null : s.animSummary;
-    const prevAnimSummaryEffective = (!animationsEnabled || suppressHoverWork) ? null : ((s as any).prevAnimSummary ?? null);
-    const outgoingSummariesEffective = (!animationsEnabled || suppressHoverWork) ? null : ((s as any).outgoingSummaries ?? null);
+    const prevAnimSummaryEffective = (!animationsEnabled || suppressHoverWork) ? null : (s.prevAnimSummary ?? null);
+    const outgoingSummariesEffective = (!animationsEnabled || suppressHoverWork) ? null : (s.outgoingSummaries ?? null);
 
     const rowHeight = (s.scale > 1
         ? SUMMARY_ROW_HEIGHT * Math.min(SUMMARY_FONT_ZOOM_MAX, 1 + (s.scale - 1) * SUMMARY_FONT_ZOOM_RATE)
@@ -151,7 +150,6 @@ export function drawVisibleDays(params: {
 	const { renderIndices, entriesByIndex, prevEntriesByIndex, totalVisibleEntries } = computeRenderIndicesAndEntries({
 		canvas,
 		s,
-		anyS,
 		today,
 		minIndex,
 		maxIndex,
@@ -163,22 +161,20 @@ export function drawVisibleDays(params: {
 
     const inheritedMarkIndexByPath: Map<string, number> | null = (() => {
         try {
-            const pluginAny: any = (canvas as any)?.plugin;
-            return (pluginAny?.__epochInheritedMarkIndexByPath as Map<string, number> | null | undefined) ?? null;
+            return plugin?.__epochInheritedMarkIndexByPath ?? null;
         } catch {
             return null;
         }
     })();
     const inheritedMarkSourceByPath: Map<string, string> | null = (() => {
         try {
-            const pluginAny: any = (canvas as any)?.plugin;
-            return (pluginAny?.__epochInheritedMarkSourceByPath as Map<string, string> | null | undefined) ?? null;
+            return plugin?.__epochInheritedMarkSourceByPath ?? null;
         } catch {
             return null;
         }
     })();
     try {
-        (canvas as any).inheritedMarkSourceByPath = inheritedMarkSourceByPath;
+        s.inheritedMarkSourceByPath = inheritedMarkSourceByPath;
     } catch { void 0; }
 
     const ctx = s.ctx;
@@ -192,25 +188,24 @@ export function drawVisibleDays(params: {
     const activePath = s.activeFilePath;
     const epochsEnabled = (() => {
         try {
-            const pluginAny: any = (canvas as any)?.plugin;
-            return pluginAny?.settings?.generateEpochs === true;
+            return plugin?.settings?.generateEpochs === true;
         } catch {
             return false;
         }
     })();
-    const relatedDateRange = epochsEnabled ? ((s as any).focusedEpochRange ?? null) : null;
+    const relatedDateRange = epochsEnabled ? (s.focusedEpochRange ?? null) : null;
     // If the feature is disabled, clear any lingering epoch range focus so the
     // timeline isn't stuck in an epoch-filtered state.
     if (!epochsEnabled) {
         try {
-            (s as any).focusedEpochRange = null;
+            s.focusedEpochRange = null;
         } catch {
             // ignore
         }
     }
-    const semanticRelatedTermPaths: Set<string> | null = (s as any).semanticRelatedTermPaths ?? null;
-    const semanticRelatedActiveTerm: string | null = (s as any).semanticRelatedActiveTerm ?? null;
-    const semanticRelatedPathsRaw: Set<string> | null = (s as any).semanticRelatedPaths ?? null;
+    const semanticRelatedTermPaths: Set<string> | null = s.semanticRelatedTermPaths ?? null;
+    const semanticRelatedActiveTerm: string | null = s.semanticRelatedActiveTerm ?? null;
+    const semanticRelatedPathsRaw: Set<string> | null = s.semanticRelatedPaths ?? null;
     const semanticRelatedPaths: Set<string> | null = (() => {
         if (!semanticRelatedPathsRaw && !semanticRelatedTermPaths) return null;
         if (!semanticRelatedPathsRaw) return semanticRelatedTermPaths;
@@ -238,13 +233,13 @@ export function drawVisibleDays(params: {
 		rowHeight,
 		fontSmall,
 		activeFilePath: activePath,
-		pathsWithEmbeddingTerm: (s as any)?.pathsWithEmbeddingTerm ?? null,
-		pathsWithClassifiedTerm: (s as any)?.pathsWithClassifiedTerm ?? null,
+        pathsWithEmbeddingTerm: s.pathsWithEmbeddingTerm ?? null,
+        pathsWithClassifiedTerm: s.pathsWithClassifiedTerm ?? null,
 		termSimilarPaths: null
 	});
 
-    anyS.__globalDenseMode = globalDenseMode;
-    (anyS as any).__globalCompactMode = globalCompactMode;
+    s.__globalDenseMode = globalDenseMode;
+    s.__globalCompactMode = globalCompactMode;
 
     let hoverOverlay: HoverOverlay | null = null;
     let layouts: DayLayout[] = [];
@@ -253,7 +248,6 @@ export function drawVisibleDays(params: {
         ? computePackedEpochDayCenterY({
             canvas,
             s,
-            anyS,
             w,
             frameNow,
             epochBucket,
@@ -282,7 +276,7 @@ export function drawVisibleDays(params: {
         : new Map<number, number>();
 
     const epochPackAlphaByIndex: Map<number, number> | null = epochsViewActive
-        ? (((anyS as any).epochPackAlphaByIndex as Map<number, number> | null | undefined) ?? null)
+        ? (s.epochPackAlphaByIndex ?? null)
         : null;
 
     const packedNormalDayCenterY = new Map<number, number>();
@@ -347,7 +341,7 @@ export function drawVisibleDays(params: {
     }
 
     if (wrapFadeCache.get("__ellipsisAnimating") === true) {
-        (canvas as any).requestHoverAnimation?.();
+        s.requestHoverAnimation?.();
     }
 
     return { layouts, hoverOverlay, totalVisibleEntries };

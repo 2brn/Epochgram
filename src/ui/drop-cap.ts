@@ -88,7 +88,8 @@ function findLeadBoundary(
 		if (lineSlice[i - 1] === ".") continue; // avoid ellipsis/stacked dots
 		const next = i + 1 < lineSlice.length ? lineSlice[i + 1] : "";
 		if (next && !/\s/.test(next)) continue;
-		if (!/(?:\p{Ll}|\p{N}|[)\]])/u.test(lineSlice[i - 1]!)) continue;
+		const prev = lineSlice[i - 1];
+		if (!prev || !/(?:\p{Ll}|\p{N}|[)\]])/u.test(prev)) continue;
 		dotPos = i;
 		break;
 	}
@@ -169,7 +170,8 @@ function findLeadBoundary(
 		}
 
 		// If the next char is punctuation, stop here (do NOT include the punctuation).
-		if (end < lineEnd && isPunc(s[end]!)) {
+		const nextChar = s[end];
+		if (end < lineEnd && nextChar && isPunc(nextChar)) {
 			foundBoundary = true;
 			break;
 		}

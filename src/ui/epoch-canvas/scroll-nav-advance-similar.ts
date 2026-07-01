@@ -4,12 +4,30 @@ import type { ScrollNavTarget } from "../epoch-canvas-types";
 import { focusDate as focusDateHelper, getDayIndexForDate as getDayIndexForDateHelper } from "../epoch-canvas-focus";
 import { BASE_SPACING } from "../epoch-canvas-constants";
 
+type PendingHighlightLike = { dayIndex?: number; date?: Date } | null;
+
+type ScrollNavAdvanceState = {
+	scrollNavIndex: number;
+	pendingScrollNavHighlight: PendingHighlightLike;
+	hoverDateIndex?: number | null;
+	animDateIndex?: number | null;
+	scrollNavAnchorDayIndex?: number | null;
+	__scrollNavAnchorMode?: string | null;
+	offsetY: number;
+	scale: number;
+	hoverSummary?: unknown;
+	animSummary?: unknown;
+	hoverTarget?: number;
+	scrollNavAnchorEntry?: unknown;
+	animatingView?: boolean;
+};
+
 export function advanceScrollNavSimilar(params: {
 	canvas: EpochCanvas;
-	c: any;
+	c: ScrollNavAdvanceState;
 	direction: number;
 	wrap: boolean;
-	prevPending: any;
+	prevPending: PendingHighlightLike;
 	rect: DOMRect;
 	targets: Array<Extract<ScrollNavTarget, { kind: "entry" }>>;
 }): boolean {
@@ -76,7 +94,7 @@ export function advanceScrollNavSimilar(params: {
 	if (anchorDayIndex == null) {
 		let anchorScreenY = direction >= 0 ? 0 : rect.height;
 		try {
-			if (String((c as any).__scrollNavAnchorMode || "") === "center") {
+			if (String(c.__scrollNavAnchorMode || "") === "center") {
 				anchorScreenY = rect.height / 2;
 			}
 		} catch {
@@ -84,7 +102,7 @@ export function advanceScrollNavSimilar(params: {
 		}
 		const anchorWorldY = (anchorScreenY - c.offsetY) / c.scale;
 		try {
-			(c as any).__scrollNavAnchorMode = null;
+			c.__scrollNavAnchorMode = null;
 		} catch {
 			// ignore
 		}
@@ -107,7 +125,9 @@ export function advanceScrollNavSimilar(params: {
 	let chosenIndex = -1;
 	let chosenDiff = direction >= 0 ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
 	for (let i = 0; i < dayTargets.length; i++) {
-		const pos = dayTargets[i]!.dayIndex;
+		const targetAtIndex = dayTargets[i];
+		if (!targetAtIndex) continue;
+		const pos = targetAtIndex.dayIndex;
 		const diff = pos - anchorValue;
 		if (direction >= 0) {
 			if ((diff > 0 || (allowEqual && diff === 0)) && diff < chosenDiff) {
@@ -131,7 +151,11 @@ export function advanceScrollNavSimilar(params: {
 					((c.hoverDateIndex == null && c.animDateIndex == null && c.hoverSummary == null && c.animSummary == null) ||
 						Number(c.hoverTarget ?? 0) <= 0);
 				if (c.scrollNavIndex === boundaryIndex && hoverGone) {
-					const boundary = dayTargets[boundaryIndex]!;
+					const boundary = dayTargets[boundaryIndex];
+					if (!boundary) {
+						c.pendingScrollNavHighlight = null;
+						return false;
+					}
 					c.animatingView = true;
 					focusDateHelper(canvas, boundary.date, true, true, true);
 					c.pendingScrollNavHighlight = null;
@@ -144,7 +168,11 @@ export function advanceScrollNavSimilar(params: {
 			return false;
 		}
 		c.scrollNavIndex = direction >= 0 ? 0 : dayTargets.length - 1;
-		const wrapped = dayTargets[c.scrollNavIndex]!;
+		const wrapped = dayTargets[c.scrollNavIndex];
+		if (!wrapped) {
+			c.pendingScrollNavHighlight = null;
+			return false;
+		}
 		try {
 			c.scrollNavAnchorEntry = null;
 			c.scrollNavAnchorDayIndex = wrapped.dayIndex;
@@ -158,7 +186,11 @@ export function advanceScrollNavSimilar(params: {
 	}
 
 	c.scrollNavIndex = chosenIndex;
-	const target = dayTargets[chosenIndex]!;
+	const target = dayTargets[chosenIndex];
+	if (!target) {
+		c.pendingScrollNavHighlight = null;
+		return false;
+	}
 	try {
 		c.scrollNavAnchorEntry = null;
 		c.scrollNavAnchorDayIndex = target.dayIndex;

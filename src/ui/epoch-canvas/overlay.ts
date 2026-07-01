@@ -1,25 +1,53 @@
 import type { EpochCanvas } from "../epoch-canvas";
 import { BASE_SPACING, DATE_OVERLAY_VISIBILITY_MS } from "../epoch-canvas-constants";
 
+type DateOverlaySummary = { dayIndex?: number | null } | null;
+
+type OverlayPluginState = {
+	settings?: {
+		enableAnimation?: boolean;
+	};
+};
+
+type OverlayCanvasState = {
+	plugin?: OverlayPluginState;
+	dateOverlayEl: HTMLElement | null;
+	dateOverlayTimer: number | null;
+	scale: number;
+	offsetY: number;
+	hoverSummary: DateOverlaySummary;
+	hoverDateIndex: number | null;
+	lastDateOverlayHoverKey: string;
+	lastOverlayOffsetY: number;
+	lastOverlayScale: number;
+	lastDateOverlayValue: string;
+	getDateForIndex(dayIndex: number, today: Date): Date;
+	getToday(): Date;
+};
+
+function asOverlayState(canvas: EpochCanvas): OverlayCanvasState {
+	return canvas as unknown as OverlayCanvasState;
+}
+
 function areOverlayAnimationsEnabled(canvas: EpochCanvas): boolean {
 	try {
-		const pluginAny: any = (canvas as any)?.plugin;
-		return pluginAny?.settings?.enableAnimation !== false;
+		const c = asOverlayState(canvas);
+		return c.plugin?.settings?.enableAnimation !== false;
 	} catch {
 		return true;
 	}
 }
 
 function syncDateOverlayMotionStyle(canvas: EpochCanvas): void {
-	const c: any = canvas as any;
-	const el = c.dateOverlayEl as HTMLElement | null;
+	const c = asOverlayState(canvas);
+	const el = c.dateOverlayEl;
 	if (!el) return;
 	const animationsEnabled = areOverlayAnimationsEnabled(canvas);
 	el.style.transition = animationsEnabled ? "" : "none";
 }
 
 export function computeDateOverlayLabel(canvas: EpochCanvas): string | null {
-	const c: any = canvas as any;
+	const c = asOverlayState(canvas);
 	if (!c.dateOverlayEl) return null;
 	if (!Number.isFinite(c.scale) || c.scale === 0) {
 		return null;
@@ -60,8 +88,8 @@ export function computeDateOverlayLabel(canvas: EpochCanvas): string | null {
 }
 
 export function getDateOverlayAnchorScreenY(canvas: EpochCanvas): number {
-	const c: any = canvas as any;
-	const el = c.dateOverlayEl as HTMLElement | null;
+	const c = asOverlayState(canvas);
+	const el = c.dateOverlayEl;
 	if (!el) return 0;
 	const offsetTop = el.offsetTop || 0;
 	const height = el.offsetHeight || 0;
@@ -69,8 +97,8 @@ export function getDateOverlayAnchorScreenY(canvas: EpochCanvas): number {
 }
 
 export function showDateOverlay(canvas: EpochCanvas): void {
-	const c: any = canvas as any;
-	const el = c.dateOverlayEl as HTMLElement | null;
+	const c = asOverlayState(canvas);
+	const el = c.dateOverlayEl;
 	if (!el) return;
 	syncDateOverlayMotionStyle(canvas);
 	if (c.dateOverlayTimer != null) {
@@ -85,8 +113,8 @@ export function showDateOverlay(canvas: EpochCanvas): void {
 }
 
 export function hideDateOverlay(canvas: EpochCanvas, immediate: boolean = false): void {
-	const c: any = canvas as any;
-	const el = c.dateOverlayEl as HTMLElement | null;
+	const c = asOverlayState(canvas);
+	const el = c.dateOverlayEl;
 	if (!el) return;
 	syncDateOverlayMotionStyle(canvas);
 	const animationsEnabled = areOverlayAnimationsEnabled(canvas);
@@ -103,8 +131,8 @@ export function hideDateOverlay(canvas: EpochCanvas, immediate: boolean = false)
 }
 
 export function updateDateOverlay(canvas: EpochCanvas): void {
-	const c: any = canvas as any;
-	const el = c.dateOverlayEl as HTMLElement | null;
+	const c = asOverlayState(canvas);
+	const el = c.dateOverlayEl;
 	if (!el) return;
 	syncDateOverlayMotionStyle(canvas);
 	const hoverKey = (() => {

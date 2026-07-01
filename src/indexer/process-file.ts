@@ -22,17 +22,51 @@ function isDateKey(value: string): boolean {
 	return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
 }
 
+type TimelineSearchRecord = {
+	id: string;
+	kind: string;
+	path: string;
+	basename: string;
+	directory: string;
+	content: string;
+	meta: string;
+};
+
+type TimelineSearchIndexLike = {
+	removeById?: (path: string) => boolean;
+	upsert?: (record: TimelineSearchRecord) => boolean;
+};
+
+type ProcessFilePluginLike = {
+	settings?: { anchorMdate?: boolean; similarityZeroShotMinScore?: number };
+	timelineSearchIndex?: TimelineSearchIndexLike;
+	indexer?: { getFileEmbeddingTerm?: (path: string) => string };
+	termSimilarityLoaded?: boolean;
+	termSimilarityIndex?: { files?: Record<string, { term?: string; score?: number }> };
+	app?: { metadataCache?: { getFileCache?: (file: TFile) => FileCacheLike | null } };
+};
+
+type FileCacheLike = {
+	tags?: Array<{ tag?: string }>;
+	frontmatter?: Record<string, unknown>;
+};
+
 function collectDates(data: FileIndexData | null | undefined): string[] {
 	const out = new Set<string>();
 	if (!data) return [];
-	const add = (d: any) => {
+	const add = (d: unknown) => {
 		const v = typeof d === "string" ? d : "";
 		if (isDateKey(v)) out.add(v);
+	};
+	const getDateValue = (entry: unknown): string | null => {
+		if (!entry || typeof entry !== "object") return null;
+		const date = (entry as { date?: unknown }).date;
+		return typeof date === "string" ? date : null;
 	};
 	add(data.cdate?.date);
 	add(data.namedDate?.date);
 	add(data.dateProp?.date);
-	for (const e of data.contentDates ?? []) add((e as any)?.date);
+	for (const e of data.contentDates ?? []) add(getDateValue(e));
 	for (const k of Object.keys(data.trackedDates ?? {})) add(k);
 	return Array.from(out);
 }
@@ -40,7 +74,8 @@ function collectDates(data: FileIndexData | null | undefined): string[] {
 function removeFileFromIndexingPipeline(s: IndexerPipeline, path: string, previous: FileIndexData | null | undefined): void {
 	let timelineMutated = false;
 	try {
-		timelineMutated = (s.plugin as any)?.timelineSearchIndex?.removeById?.(path) === true;
+		const timelineSearchIndex = (s.plugin as unknown as ProcessFilePluginLike).timelineSearchIndex;
+		timelineMutated = timelineSearchIndex?.removeById?.(path) === true;
 	} catch {
 		// ignore
 	}
@@ -79,9 +114,9 @@ export async function processFileInternal(
 	const isMd = file.extension === "md";
 	const isEpochgramExportHtml = (() => {
 		try {
-			const ext = String((file as any)?.extension || "").toLowerCase();
+			const ext = String(file.extension || "").toLowerCase();
 			if (ext !== "html" && ext !== "htm") return false;
-			const base = String((file as any)?.basename || "").toLowerCase();
+			const base = String(file.basename || "").toLowerCase();
 			return base.startsWith("epochgram-");
 		} catch {
 			return false;
@@ -112,7 +147,7 @@ export async function processFileInternal(
 		contentDates: [],
 		noparsed: suppression.noparsed,
 		recur: null,
-		recurHiddenDates: Array.isArray((previousData as any)?.recurHiddenDates) ? ((previousData as any).recurHiddenDates as any[]).slice() as any : [],
+		recurHiddenDates: Array.isArray(previousData.recurHiddenDates) ? [...previousData.recurHiddenDates] : [],
 		trackedDates: cloneTrackedDates(previousData.trackedDates),
 		notracked: suppression.notracked,
 		trackedSnapshot: previousData.trackedSnapshot ?? null,
@@ -120,24 +155,25 @@ export async function processFileInternal(
 		trackedBaselineSnapshot: previousData.trackedBaselineSnapshot ?? null,
 		trackedBaselineDate: previousData.trackedBaselineDate ?? null,
 		indexedMtimeMs: (() => {
-			const v = Number((file as any)?.stat?.mtime);
+			const v = Number(file.stat?.mtime);
 			return Number.isFinite(v) && v > 0 ? v : undefined;
 		})(),
 		indexedSize: (() => {
-			const v = Number((file as any)?.stat?.size);
+			const v = Number(file.stat?.size);
 			return Number.isFinite(v) && v >= 0 ? v : undefined;
 		})(),
 		contentHash
 	};
-	const useAnchorMdate = (s.plugin as any)?.settings?.anchorMdate === true;
+	const useAnchorMdate = (s.plugin as unknown as ProcessFilePluginLike).settings?.anchorMdate === true;
+	const fileDataRuntime = fileData as FileIndexData & { __pendingTrackedReviewStateClear?: boolean };
 
 	// Reset tracked-entry review state for the tracked bucket day when the file
 	// meaningfully changes. (Hidden stays separate and is preserved.)
 	if (options.reason === "create") {
-		(fileData as any).__pendingTrackedReviewStateClear = true;
+		fileDataRuntime.__pendingTrackedReviewStateClear = true;
 	} else if (options.reason === "modify" || options.reason === "track") {
 		if (!contentUnchanged) {
-			(fileData as any).__pendingTrackedReviewStateClear = true;
+			fileDataRuntime.__pendingTrackedReviewStateClear = true;
 		}
 	}
 
@@ -151,8 +187,8 @@ export async function processFileInternal(
 	} else {
 		delete s.latestLines[file.path];
 	}
-	const ctime = Number((file as any)?.stat?.ctime);
-	const mtime = Number((file as any)?.stat?.mtime);
+	const ctime = Number(file.stat?.ctime);
+	const mtime = Number(file.stat?.mtime);
 	const anchorTimestamp =
 		useAnchorMdate && Number.isFinite(mtime) && mtime > 0
 			? mtime
@@ -211,9 +247,9 @@ export async function processFileInternal(
 	// Parse `repeat:` once anchor candidates are available.
 	try {
 		const fallbackStart = (() => {
-			const nd = (fileData as any)?.namedDate?.date;
-			const dp = (fileData as any)?.dateProp?.date;
-			const cd = (fileData as any)?.cdate?.date;
+			const nd = fileData.namedDate?.date;
+			const dp = fileData.dateProp?.date;
+			const cd = fileData.cdate?.date;
 			return typeof nd === "string" && nd
 				? nd
 				: typeof dp === "string" && dp
@@ -258,7 +294,7 @@ export async function processFileInternal(
 	// file.stat.ctime which is device-specific after sync (mobile gets the sync
 	// timestamp, desktop keeps the original). Re-computing it would cause
 	// cross-device index divergence even when the file hasn't changed.
-	const previousAnchorUsesMdate = (previousData as any)?.anchorUsesMdate === true;
+	const previousAnchorUsesMdate = (previousData as FileIndexData & { anchorUsesMdate?: boolean }).anchorUsesMdate === true;
 	if (
 		previousData.cdate !== null &&
 		previousData.cdate !== undefined &&
@@ -279,21 +315,20 @@ export async function processFileInternal(
 	s.files[file.path] = fileData;
 	// MiniSearch: index file for timeline search.
 	try {
-		const pluginAny: any = s.plugin as any;
-		const timelineSearchIndex: any = pluginAny?.timelineSearchIndex;
+		const pluginRuntime = s.plugin as unknown as ProcessFilePluginLike;
+		const timelineSearchIndex = pluginRuntime.timelineSearchIndex;
 		if (timelineSearchIndex && typeof timelineSearchIndex.upsert === "function") {
 			const directory = (() => {
 				try {
-					const parent: any = (file as any)?.parent;
-					const p = typeof parent?.path === "string" ? String(parent.path) : "";
+					const p = typeof file.parent?.path === "string" ? String(file.parent.path) : "";
 					return p;
 				} catch {
 					return "";
 				}
 			})();
-			const basename = String((file as any)?.basename || "");
+			const basename = String(file.basename || "");
 			const metaParts: string[] = [];
-			metaParts.push(`ext:${String((file as any)?.extension || "")}`);
+			metaParts.push(`ext:${String(file.extension || "")}`);
 			try {
 				const mc = Number(fileData.markColor ?? NaN);
 				if (Number.isFinite(mc)) metaParts.push(`mark:${String(Math.floor(mc))}`);
@@ -306,18 +341,19 @@ export async function processFileInternal(
 				// ignore
 			}
 			try {
-				const term = typeof pluginAny?.indexer?.getFileEmbeddingTerm === "function" ? String(pluginAny.indexer.getFileEmbeddingTerm(file.path) || "") : "";
+				const getFileEmbeddingTerm = pluginRuntime.indexer?.getFileEmbeddingTerm;
+				const term = typeof getFileEmbeddingTerm === "function" ? String(getFileEmbeddingTerm(file.path) || "") : "";
 				if (term) metaParts.push(term);
 			} catch {
 				// ignore
 			}
 			try {
-				if (isTopicSimilarityEnabled(pluginAny)) {
-					const zeroShotMinRaw = Number(pluginAny?.settings?.similarityZeroShotMinScore ?? 0);
+				if (isTopicSimilarityEnabled(s.plugin)) {
+					const zeroShotMinRaw = Number(pluginRuntime.settings?.similarityZeroShotMinScore ?? 0);
 					const zeroShotMin = Number.isFinite(zeroShotMinRaw) ? Math.max(0, Math.min(1, zeroShotMinRaw)) : 0;
-					const storeLoaded = pluginAny?.termSimilarityLoaded === true && !!pluginAny?.termSimilarityIndex && typeof pluginAny.termSimilarityIndex === "object";
+					const storeLoaded = pluginRuntime.termSimilarityLoaded === true && !!pluginRuntime.termSimilarityIndex && typeof pluginRuntime.termSimilarityIndex === "object";
 					if (storeLoaded && zeroShotMin > 0 && zeroShotMin < 1) {
-						const rec: any = pluginAny?.termSimilarityIndex?.files?.[file.path];
+						const rec = pluginRuntime.termSimilarityIndex?.files?.[file.path];
 						const inferred = typeof rec?.term === "string" ? String(rec.term).trim() : "";
 						const score = Number(rec?.score ?? 0);
 						if (inferred && Number.isFinite(score) && score >= zeroShotMin) {
@@ -329,19 +365,19 @@ export async function processFileInternal(
 				// ignore
 			}
 			try {
-				const cache = pluginAny?.app?.metadataCache?.getFileCache?.(file);
+				const cache = pluginRuntime.app?.metadataCache?.getFileCache?.(file);
 				const tags: string[] = [];
 				const aliases: string[] = [];
-				const addTag = (t: any) => {
+				const addTag = (t: unknown) => {
 					const v = typeof t === "string" ? t.trim() : "";
 					if (v) tags.push(v);
 				};
-				const addAlias = (a: any) => {
+				const addAlias = (a: unknown) => {
 					const v = typeof a === "string" ? a.trim() : "";
 					if (v) aliases.push(v);
 				};
-				for (const t of cache?.tags ?? []) addTag((t as any)?.tag);
-				const fm: any = cache?.frontmatter ?? null;
+				for (const t of cache?.tags ?? []) addTag(t?.tag);
+				const fm = cache?.frontmatter ?? null;
 				if (fm) {
 					const fmTags = fm.tags;
 					if (typeof fmTags === "string") {

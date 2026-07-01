@@ -13,6 +13,22 @@ export type TimelineSearchCountCache = {
 	value: number | null;
 };
 
+type SearchCountCanvasLike = {
+	index?: Record<string, unknown>;
+	epochsView?: boolean;
+	epochsViewBucket?: unknown;
+	scale?: number;
+	root?: { getBoundingClientRect?: () => { height?: number } };
+	canvas?: { getBoundingClientRect?: () => { height?: number } };
+	__indexVersion?: number;
+	showAttachments?: boolean;
+	showTrackedChanges?: boolean;
+	showHidden?: boolean;
+	showDraftOnly?: boolean;
+	showContentDates?: boolean;
+	showPropDates?: boolean;
+};
+
 export function computeTimelineSearchResultCountAllDates(
 	canvas: EpochCanvas,
 	qTrim: string,
@@ -20,39 +36,39 @@ export function computeTimelineSearchResultCountAllDates(
 ): number | null {
 	try {
 		if (!canvas) return null;
-		const canvasAny: any = canvas as any;
-		const index: any = canvasAny?.index ?? null;
+		const canvasState = canvas as unknown as SearchCountCanvasLike;
+		const index = canvasState.index ?? null;
 		if (!index || typeof index !== "object") return null;
 
 		const parsed = parseTimelineQuery(qTrim);
 		if (parsed?.invalid === true) return 0;
 
-		const epochsViewActive = canvasAny?.epochsView === true;
+		const epochsViewActive = canvasState.epochsView === true;
 		const currentEpochBucket: EpochBucket | null = (() => {
 			if (!epochsViewActive) return null;
 			try {
-				const rawBucket = String(canvasAny?.epochsViewBucket ?? "");
+				const rawBucket = typeof canvasState.epochsViewBucket === "string" ? canvasState.epochsViewBucket : "";
 				if (rawBucket && isEpochBucket(rawBucket)) return rawBucket;
 			} catch {
 				// ignore
 			}
 			try {
-				const scale = Number(canvasAny?.scale ?? 1);
+				const scale = Number(canvasState.scale ?? 1);
 				let viewportHeight = 0;
 				try {
-					viewportHeight = Number(canvasAny?.root?.getBoundingClientRect?.()?.height ?? 0);
+					viewportHeight = Number(canvasState.root?.getBoundingClientRect?.()?.height ?? 0);
 				} catch {
 					viewportHeight = 0;
 				}
 				if (!(viewportHeight > 0)) {
 					try {
-						viewportHeight = Number(canvasAny?.canvas?.getBoundingClientRect?.()?.height ?? 0);
+						viewportHeight = Number(canvasState.canvas?.getBoundingClientRect?.()?.height ?? 0);
 					} catch {
 						viewportHeight = 0;
 					}
 				}
 				if (!(viewportHeight > 0)) viewportHeight = 800;
-				return pickEpochBucketForViewport(scale, viewportHeight) as any;
+				return pickEpochBucketForViewport(scale, viewportHeight);
 			} catch {
 				return null;
 			}
@@ -60,7 +76,7 @@ export function computeTimelineSearchResultCountAllDates(
 
 		const idxVersion = (() => {
 			try {
-				const n = Number(canvasAny?.__indexVersion ?? 0);
+				const n = Number(canvasState.__indexVersion ?? 0);
 				return Number.isFinite(n) ? n : 0;
 			} catch {
 				return 0;
@@ -68,13 +84,13 @@ export function computeTimelineSearchResultCountAllDates(
 		})();
 		const filterKey = (() => {
 			try {
-				const showAttachments = canvasAny?.showAttachments ? 1 : 0;
-				const showTrackedChanges = canvasAny?.showTrackedChanges ? 1 : 0;
-				const showHidden = canvasAny?.showHidden ? 1 : 0;
+				const showAttachments = canvasState.showAttachments ? 1 : 0;
+				const showTrackedChanges = canvasState.showTrackedChanges ? 1 : 0;
+				const showHidden = canvasState.showHidden ? 1 : 0;
 				const hiddenOnly = /[!$]hidden\b/i.test(String(qTrim || "")) ? 1 : 0;
-				const showDraftOnly = canvasAny?.showDraftOnly ? 1 : 0;
-				const showContentDates = canvasAny?.showContentDates ? 1 : 0;
-				const showPropDates = canvasAny?.showPropDates ? 1 : 0;
+				const showDraftOnly = canvasState.showDraftOnly ? 1 : 0;
+				const showContentDates = canvasState.showContentDates ? 1 : 0;
+				const showPropDates = canvasState.showPropDates ? 1 : 0;
 				return `${showAttachments}${showTrackedChanges}${showHidden}${hiddenOnly}${showDraftOnly}${showContentDates}${showPropDates}`;
 			} catch {
 				return "";

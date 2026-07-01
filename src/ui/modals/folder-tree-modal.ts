@@ -1,6 +1,23 @@
 import { App, SuggestModal, TFolder, normalizePath } from "obsidian";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = typeof window !== "undefined" ? window.document : ({} as Document);
+
+type FocusableElement = HTMLElement & {
+	focus(options?: FocusOptions): void;
+};
+
+type SuggestChooserLike = {
+	selectedItem?: unknown;
+};
+
+function toFocusableElement(value: Element | null): FocusableElement | null {
+	return value instanceof HTMLElement ? value : null;
+}
+
+function getChooser(modal: SuggestModal<TFolder>): SuggestChooserLike | null {
+	const candidate = modal as unknown as { chooser?: SuggestChooserLike };
+	return candidate.chooser ?? null;
+}
 
 
 export class FolderTreeModal extends SuggestModal<TFolder> {
@@ -13,7 +30,9 @@ export class FolderTreeModal extends SuggestModal<TFolder> {
 
 	constructor(app: App, initial: TFolder | null, resolve: (folder: TFolder | null) => void) {
 		super(app);
-		this.priorActiveElement = (typeof activeDocument !== "undefined" ? (activeDocument.activeElement as any) : null) as HTMLElement | null;
+		this.priorActiveElement = typeof activeDocument !== "undefined"
+			? toFocusableElement(activeDocument.activeElement)
+			: null;
 		this.resolveChoice = resolve;
 		this.initialFolder = initial ?? app.vault.getRoot();
 		this.folders = this.collectFolders();
@@ -32,7 +51,7 @@ export class FolderTreeModal extends SuggestModal<TFolder> {
 				void this.createAndSelectFolder(trimmed);
 				return;
 			}
-			const chooser: any = (this as any).chooser;
+			const chooser = getChooser(this);
 			const hasSelection = typeof chooser?.selectedItem === "number" && chooser.selectedItem >= 0;
 			if (hasSelection) return;
 			event.preventDefault();
@@ -75,7 +94,7 @@ export class FolderTreeModal extends SuggestModal<TFolder> {
 		window.requestAnimationFrame(() => {
 			if (el && typeof el.focus === "function") {
 				try {
-					(el as any).focus?.({ preventScroll: true });
+					(el as FocusableElement).focus({ preventScroll: true });
 				} catch {
 					try {
 						el.focus();

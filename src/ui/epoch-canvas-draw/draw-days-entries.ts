@@ -13,7 +13,6 @@ import type { CanvasDrawState } from "./state";
 export function computeRenderIndicesAndEntries(params: {
 	canvas: EpochCanvas;
 	s: CanvasDrawState;
-	anyS: any;
 	today: Date;
 	minIndex: number;
 	maxIndex: number;
@@ -27,7 +26,7 @@ export function computeRenderIndicesAndEntries(params: {
 	prevEntriesByIndex: Map<number, DateEntry[]>;
 	totalVisibleEntries: number;
 } {
-	const { canvas, s, anyS, today, minIndex, maxIndex, epochsViewActive, epochBucket, prevEpochBucket, bucketFadeT } = params;
+	const { canvas, s, today, minIndex, maxIndex, epochsViewActive, epochBucket, prevEpochBucket, bucketFadeT } = params;
 
 	let renderIndices = buildRenderIndices({
 		today,
@@ -40,7 +39,7 @@ export function computeRenderIndicesAndEntries(params: {
 	if (epochsViewActive) {
 		const epochIndices = getEpochEntryIndicesInRange({
 			canvas,
-			anyS,
+			anyS: s,
 			today,
 			epochBucket,
 			minIndex,
@@ -54,7 +53,7 @@ export function computeRenderIndicesAndEntries(params: {
 	if (!epochsViewActive) {
 		const entryIndices = getEntryIndicesWithAnyRecordsInRange({
 			canvas,
-			anyS,
+			anyS: s,
 			today,
 			minIndex,
 			maxIndex
@@ -75,7 +74,7 @@ export function computeRenderIndicesAndEntries(params: {
 		totalVisibleEntries += entries.length;
 
 		if (epochsViewActive && prevEpochBucket && bucketFadeT < 1) {
-			const prevEntries = getEntriesForDateHelper(canvas, date, { epochBucket: prevEpochBucket as any });
+			const prevEntries = getEntriesForDateHelper(canvas, date, { epochBucket: prevEpochBucket });
 			prevEntriesByIndex.set(i, prevEntries);
 		}
 	}

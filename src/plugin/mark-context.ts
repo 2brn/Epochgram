@@ -9,13 +9,37 @@ import {
 	resolveMarkAncestorPath
 } from "../ui/mark-group";
 
+type MarkContextIndexerLike = {
+	isFileKnown(path: string): boolean;
+	getFileMarkColor(path: string): number | null;
+	setFileMarkColor(path: string, color: number | null): boolean;
+};
+
+type MarkContextPluginLike = EpochPlugin & {
+	__epochInheritedMarkSourceByPath?: Map<string, string>;
+	__epochInheritedMarkIndexByPath?: Map<string, number>;
+	ensureIndexLoaded?: () => Promise<void>;
+	waitForExcludedSync?: () => Promise<void>;
+	clearInheritedMarksCache?: () => void;
+	recomputeInheritedMarksNow?: (reason: string) => Promise<void>;
+	scheduleInheritedMarkRecompute?: (reason: string) => void;
+	queueVectorUpdate?: (path: string) => void;
+	persistIndex?: (options?: { skipEnsure?: boolean }) => Promise<void>;
+	persist?: (options?: { skipEnsure?: boolean }) => Promise<void>;
+	refreshEpochViews?: () => void;
+	getSemanticRelatedPathsForFile?: (path: string) => Promise<unknown>;
+	getGraphRelatedPathsForFile?: (path: string) => Promise<unknown>;
+	shouldIndexFile?: (file: unknown) => boolean;
+	indexer: MarkContextIndexerLike;
+};
+
 function normalizeNonEpochPath(value: unknown): string {
 	const p = typeof value === "string" ? String(value || "").trim() : "";
 	if (!p || p.startsWith("epoch://")) return "";
 	return p;
 }
 
-function getCachedInheritedSourcePath(plugin: any, path: string): string | null {
+function getCachedInheritedSourcePath(plugin: MarkContextPluginLike, path: string): string | null {
 	const p = normalizeNonEpochPath(path);
 	if (!p) return null;
 	try {
@@ -28,7 +52,7 @@ function getCachedInheritedSourcePath(plugin: any, path: string): string | null 
 	}
 }
 
-function getCachedInheritedMarkColorIndex(plugin: any, path: string): number | null {
+function getCachedInheritedMarkColorIndex(plugin: MarkContextPluginLike, path: string): number | null {
 	const p = normalizeNonEpochPath(path);
 	if (!p) return null;
 	try {
@@ -40,7 +64,7 @@ function getCachedInheritedMarkColorIndex(plugin: any, path: string): number | n
 	}
 }
 
-function getActiveFilePathForMarking(plugin: any): string {
+function getActiveFilePathForMarking(plugin: MarkContextPluginLike): string {
 	try {
 		const af = plugin?.app?.workspace?.getActiveFile?.();
 		const p = normalizeNonEpochPath(af?.path);
@@ -53,7 +77,7 @@ function getActiveFilePathForMarking(plugin: any): string {
 	}
 }
 
-async function isEntrySimilarToActiveFile(plugin: any, activeFilePath: string, entryPath: string): Promise<boolean> {
+async function isEntrySimilarToActiveFile(plugin: MarkContextPluginLike, activeFilePath: string, entryPath: string): Promise<boolean> {
 	const active = normalizeNonEpochPath(activeFilePath);
 	const entry = normalizeNonEpochPath(entryPath);
 	if (!active || !entry) return false;
@@ -95,21 +119,22 @@ export async function applyMarkColorWithContext(plugin: EpochPlugin, args: {
 	const entry = normalizeNonEpochPath(args.entryPath);
 	if (!entry) return false;
 	const next = normalizeMarkColorIndex(args.nextColorIndex);
+	const state = plugin as MarkContextPluginLike;
 
 	try {
-		await (plugin as any).ensureIndexLoaded?.();
+		await state.ensureIndexLoaded?.();
 	} catch {
 		// ignore
 	}
 	try {
-		await (plugin as any).waitForExcludedSync?.();
+		await state.waitForExcludedSync?.();
 	} catch {
 		// ignore
 	}
 
-	const indexer = plugin.indexer;
+	const indexer = state.indexer;
 
-	const inheritedSourcePath = getCachedInheritedSourcePath(plugin as any, entry);
+	const inheritedSourcePath = getCachedInheritedSourcePath(state, entry);
 	const explicit = (() => {
 		try {
 			return normalizeMarkColorIndex(indexer.getFileMarkColor(entry));
@@ -119,19 +144,19 @@ export async function applyMarkColorWithContext(plugin: EpochPlugin, args: {
 	})();
 
 	const current = normalizeMarkColorIndex(
-		typeof args.currentColorIndex === "number" ? args.currentColorIndex : explicit ?? getCachedInheritedMarkColorIndex(plugin as any, entry)
+		typeof args.currentColorIndex === "number" ? args.currentColorIndex : explicit ?? getCachedInheritedMarkColorIndex(state, entry)
 	);
 
-	const activeFilePath = getActiveFilePathForMarking(plugin as any);
-	const isActiveInherited = activeFilePath ? isPathInheritedMarked(plugin as any, indexer, activeFilePath) : false;
+	const activeFilePath = getActiveFilePathForMarking(state);
+	const isActiveInherited = activeFilePath ? isPathInheritedMarked(state, indexer, activeFilePath) : false;
 	const isEntryExplicit = explicit != null;
-	const isEntryInherited = !isEntryExplicit && (!!inheritedSourcePath || isPathInheritedMarked(plugin as any, indexer, entry));
-	const isEntrySimilarToActive = activeFilePath ? await isEntrySimilarToActiveFile(plugin as any, activeFilePath, entry) : false;
+	const isEntryInherited = !isEntryExplicit && (!!inheritedSourcePath || isPathInheritedMarked(state, indexer, entry));
+	const isEntrySimilarToActive = activeFilePath ? await isEntrySimilarToActiveFile(state, activeFilePath, entry) : false;
 
 	const fallbackCenter = getMarkCenterPathForGroupActions(indexer, entry, inheritedSourcePath);
-	const resolvedAncestorPathFinal = await resolveMarkAncestorPath(plugin as any, indexer, fallbackCenter, inheritedSourcePath);
+	const resolvedAncestorPathFinal = await resolveMarkAncestorPath(state, indexer, fallbackCenter, inheritedSourcePath);
 
-	const targets = computeTargetsForMarkMenuAction(plugin as any, {
+	const targets = computeTargetsForMarkMenuAction(state, {
 		entryPath: entry,
 		resolvedAncestorPath: resolvedAncestorPathFinal,
 		isEntryInherited,
@@ -157,26 +182,26 @@ export async function applyMarkColorWithContext(plugin: EpochPlugin, args: {
 
 	if (!changed) return false;
 	try {
-		(plugin as any).clearInheritedMarksCache?.();
+		state.clearInheritedMarksCache?.();
 	} catch {
 		// ignore
 	}
 
 	try {
-		await (plugin as any).recomputeInheritedMarksNow?.("mark-change");
+		await state.recomputeInheritedMarksNow?.("mark-change");
 	} catch {
 		try {
-			(plugin as any).scheduleInheritedMarkRecompute?.("mark-change");
+			state.scheduleInheritedMarkRecompute?.("mark-change");
 		} catch {
 			// ignore
 		}
 	}
 
 	try {
-		if (next != null && hasSimilarityAccess(plugin) && embeddingsSimilarityEnabled(plugin as any)) {
+		if (next != null && hasSimilarityAccess(plugin) && embeddingsSimilarityEnabled(plugin)) {
 			for (const p of finalTargets) {
 				try {
-					(plugin as any).queueVectorUpdate?.(p);
+					state.queueVectorUpdate?.(p);
 				} catch {
 					// ignore
 				}
@@ -187,13 +212,13 @@ export async function applyMarkColorWithContext(plugin: EpochPlugin, args: {
 	}
 
 	try {
-		if (typeof (plugin as any).persistIndex === "function") await (plugin as any).persistIndex({ skipEnsure: true });
-		else await (plugin as any).persist?.({ skipEnsure: true });
+		if (typeof state.persistIndex === "function") await state.persistIndex({ skipEnsure: true });
+		else await state.persist?.({ skipEnsure: true });
 	} catch {
 		// ignore
 	}
 	try {
-		(plugin as any).refreshEpochViews?.();
+		state.refreshEpochViews?.();
 	} catch {
 		// ignore
 	}

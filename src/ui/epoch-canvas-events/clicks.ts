@@ -3,6 +3,14 @@ import { getEventState, isWheelInteractionSuppressed } from "./state";
 import { handleDoublePoint, handlePointClick } from "./interactions";
 import { TAP_MAX_DURATION } from "../epoch-canvas-constants";
 
+type SourceCapabilitiesLike = {
+	firesTouchEvents?: boolean;
+};
+
+function nowMs(): number {
+	return window.performance?.now?.() ?? Date.now();
+}
+
 export async function handleClick(canvas: EpochCanvas, event: MouseEvent): Promise<void> {
 	const s = getEventState(canvas);
 	// Mobile: touch handlers own tap/press; ignore mouse click handlers.
@@ -11,14 +19,15 @@ export async function handleClick(canvas: EpochCanvas, event: MouseEvent): Promi
 	// Many touch devices emit a synthetic click after touchend.
 	// Touch taps are handled in the touch handler; ignore touch-sourced clicks.
 	try {
-		if ((event as any)?.sourceCapabilities?.firesTouchEvents) {
+		const sourceCapabilities = (event as MouseEvent & { sourceCapabilities?: SourceCapabilitiesLike }).sourceCapabilities;
+		if (sourceCapabilities?.firesTouchEvents) {
 			return;
 		}
 	} catch {
 		// ignore
 	}
 	if (isWheelInteractionSuppressed(s)) return;
-	const now = performance.now();
+	const now = nowMs();
 	const dt = now - s.mouseDownTime;
 	const maxDuration = s.isPointerDeviceEvent() ? 600 : TAP_MAX_DURATION;
 
@@ -61,7 +70,7 @@ export async function handleAuxClick(canvas: EpochCanvas, event: MouseEvent): Pr
 	if (!hasPointer) return;
 	if (event.button !== 1) return;
 	if (isWheelInteractionSuppressed(s)) return;
-	const now = performance.now();
+	const now = nowMs();
 	const dt = now - s.mouseDownTime;
 	const maxDuration = s.isPointerDeviceEvent() ? 600 : TAP_MAX_DURATION;
 	if (s.mouseMoved || dt > maxDuration) return;
@@ -88,7 +97,7 @@ export function handleContextMenu(canvas: EpochCanvas, event: MouseEvent): void 
 
 	if (!entry && !day) {
 		try {
-			const hoverSummary = s.hoverSummary as { dayIndex: number; itemIndex: number } | null;
+			const hoverSummary = s.hoverSummary;
 			if (hoverSummary) {
 				for (const layout of s.layouts ?? []) {
 					if (layout.index !== hoverSummary.dayIndex) continue;
@@ -102,7 +111,7 @@ export function handleContextMenu(canvas: EpochCanvas, event: MouseEvent): void 
 				}
 			}
 			if (!entry) {
-				const hoverDateIndex = s.hoverDateIndex as number | null;
+				const hoverDateIndex = s.hoverDateIndex;
 				if (hoverDateIndex != null) {
 					for (const layout of s.layouts ?? []) {
 						if (layout.index === hoverDateIndex) {

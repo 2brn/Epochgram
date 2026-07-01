@@ -1,4 +1,5 @@
 import {
+	getFolderPathFromFilePath,
 	getNoteTitleFromPath,
 	normalizeTitleForSimilarity,
 	jaroWinkler,
@@ -83,6 +84,7 @@ export function computeInheritedMarkData(args: {
 	const titleJwThreshold = Number.isFinite(titleJwRaw)
 		? Math.max(0, Math.min(1, titleJwRaw))
 		: NOTE_TITLE_SIMILARITY_JW_THRESHOLD;
+	const sameFolderTitleMode = titleJwThreshold >= 1;
 	const titleMaxLenDiff = NOTE_TITLE_SIMILARITY_MAX_LEN_DIFF;
 
 	const visible = new Set<string>();
@@ -201,9 +203,12 @@ export function computeInheritedMarkData(args: {
 	// This helps inherit marks even when vectors are missing for some notes.
 	if (titleSeeds.length > 0 && titleJwThreshold > 0) {
 		const visibleTitles = new Map<string, string>();
+		const visibleTitleCandidates: string[] = [];
 		for (const p of visible) {
 			if (p.startsWith("epoch://")) continue;
 			if (ownMarked.has(p)) continue;
+			visibleTitleCandidates.push(p);
+			if (sameFolderTitleMode) continue;
 			try {
 				const t = normalizeTitleForSimilarity(getNoteTitleFromPath(p));
 				if (t) visibleTitles.set(p, t);
@@ -213,6 +218,15 @@ export function computeInheritedMarkData(args: {
 		}
 
 		for (const seed of titleSeeds) {
+			if (sameFolderTitleMode) {
+				const seedFolder = getFolderPathFromFilePath(seed.path);
+				for (const candPath of visibleTitleCandidates) {
+					if (candPath === seed.path) continue;
+					if (getFolderPathFromFilePath(candPath) !== seedFolder) continue;
+					addCandidate(candPath, seed.path, seed.idx, "title", 1);
+				}
+				continue;
+			}
 			for (const [candPath, candTitle] of visibleTitles) {
 				if (candPath === seed.path) continue;
 				if (titleMaxLenDiff >= 0) {

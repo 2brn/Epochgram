@@ -9,7 +9,7 @@ import {
 import { getMenuState } from "./menu-state";
 import { addMenuTitle, formatMenuTitleWithPath } from "./menu-title";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument: Document = typeof window !== "undefined" ? window.document : ({} as Document);
 
 export function showDateMenu(
 	canvas: EpochCanvas,
@@ -52,9 +52,11 @@ export function showDateMenu(
 	// On mobile, tapping outside the menu can dismiss it without reliably triggering
 	// Menu.onHide(). Clear hover/focus on the first outside tap.
 	try {
+		const toElement = (value: EventTarget | null): Element | null => {
+			return value instanceof Element ? value : null;
+		};
 		const onOutside = (ev: Event) => {
-			const target = ev.target as any;
-			const el: HTMLElement | null = target instanceof HTMLElement ? target : null;
+			const el = toElement(ev.target);
 			if (el && el.closest(".menu")) return;
 			state.keepHoverAfterMenu = false;
 			state.clearHover(true);

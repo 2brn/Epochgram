@@ -9,6 +9,16 @@ import {
 } from "../epoch-canvas-constants";
 import type { EpochBucketName } from "../epoch-canvas-constants";
 import { getEntriesCountForDateFast } from "../entry-helpers";
+import type { CanvasDrawState } from "./state";
+
+type EpochEntryLike = {
+	file?: string;
+	epochBucket?: string;
+};
+
+function asEpochEntryLike(entry: unknown): EpochEntryLike | null {
+	return entry && typeof entry === "object" ? entry : null;
+}
 
 function indexFromDate(today: Date, date: Date): number {
 	const toUtcMidnight = (dt: Date): number => Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate());
@@ -102,20 +112,21 @@ export function buildRenderIndices(params: {
 
 export function getEpochEntryIndicesInRange(params: {
 	canvas: EpochCanvas;
-	anyS: any;
+	anyS: CanvasDrawState;
 	today: Date;
 	epochBucket: EpochBucketName | null;
 	minIndex: number;
 	maxIndex: number;
 }): number[] {
 	const { canvas, anyS, today, epochBucket, minIndex, maxIndex } = params;
-	const indexRef: any = (canvas as any)?.index;
+	void canvas;
+	const indexRef = anyS.index;
 	if (!indexRef || typeof indexRef !== "object") return [];
 
 	const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-	const cacheRef = (anyS as any).__epochIndexCacheRef;
-	const cacheTodayKey = (anyS as any).__epochIndexCacheTodayKey;
-	if (cacheRef !== indexRef || cacheTodayKey !== todayKey || !(anyS as any).__epochIndexCacheByBucket) {
+	const cacheRef = anyS.__epochIndexCacheRef;
+	const cacheTodayKey = anyS.__epochIndexCacheTodayKey;
+	if (cacheRef !== indexRef || cacheTodayKey !== todayKey || !anyS.__epochIndexCacheByBucket) {
 		const byBucket = new Map<string, number[]>();
 		const seenByBucket = new Map<string, Set<number>>();
 
@@ -146,11 +157,11 @@ export function getEpochEntryIndicesInRange(params: {
 
 			let hasAnyEpoch = false;
 			for (const e of entries) {
-				if (!e) continue;
-				const anyE: any = e as any;
-				if (!String(anyE?.file || "").startsWith("epoch://")) continue;
+				const row = asEpochEntryLike(e);
+				if (!row) continue;
+				if (!String(row.file || "").startsWith("epoch://")) continue;
 				hasAnyEpoch = true;
-				const b = String(anyE?.epochBucket || "");
+				const b = String(row.epochBucket || "");
 				if (b) add(b, idx);
 			}
 			if (hasAnyEpoch) {
@@ -162,17 +173,19 @@ export function getEpochEntryIndicesInRange(params: {
 			arr.sort((a, b) => a - b);
 			let write = 0;
 			for (let i = 0; i < arr.length; i++) {
-				if (i === 0 || arr[i] !== arr[i - 1]) arr[write++] = arr[i]!;
+				const v = arr[i];
+				if (typeof v !== "number") continue;
+				if (i === 0 || v !== arr[i - 1]) arr[write++] = v;
 			}
 			arr.length = write;
 		}
 
-		(anyS as any).__epochIndexCacheRef = indexRef;
-		(anyS as any).__epochIndexCacheTodayKey = todayKey;
-		(anyS as any).__epochIndexCacheByBucket = byBucket;
+		anyS.__epochIndexCacheRef = indexRef;
+		anyS.__epochIndexCacheTodayKey = todayKey;
+		anyS.__epochIndexCacheByBucket = byBucket;
 	}
 
-	const byBucket: Map<string, number[]> | null = (anyS as any).__epochIndexCacheByBucket ?? null;
+	const byBucket: Map<string, number[]> | null = anyS.__epochIndexCacheByBucket ?? null;
 	if (!byBucket) return [];
 
 	const key = epochBucket ? String(epochBucket) : "__any__";
@@ -183,12 +196,14 @@ export function getEpochEntryIndicesInRange(params: {
 	let hi = arr.length;
 	while (lo < hi) {
 		const mid = (lo + hi) >> 1;
-		if (arr[mid]! < minIndex) lo = mid + 1;
+		const v = arr[mid];
+		if (typeof v === "number" && v < minIndex) lo = mid + 1;
 		else hi = mid;
 	}
 	const out: number[] = [];
 	for (let i = lo; i < arr.length; i++) {
-		const idx = arr[i]!;
+		const idx = arr[i];
+		if (typeof idx !== "number") continue;
 		if (idx > maxIndex) break;
 		out.push(idx);
 	}
@@ -197,36 +212,35 @@ export function getEpochEntryIndicesInRange(params: {
 
 export function getEntryIndicesWithAnyRecordsInRange(params: {
 	canvas: EpochCanvas;
-	anyS: any;
+	anyS: CanvasDrawState;
 	today: Date;
 	minIndex: number;
 	maxIndex: number;
 }): number[] {
 	const { canvas, anyS, today, minIndex, maxIndex } = params;
-	const indexRef: any = (canvas as any)?.index;
+	const indexRef = anyS.index;
 	if (!indexRef || typeof indexRef !== "object") return [];
 
 	const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 	const filterKey = (() => {
 		try {
-			const c: any = canvas as any;
-			const showAttachments = c?.showAttachments ? 1 : 0;
-			const showTrackedChanges = c?.showTrackedChanges ? 1 : 0;
-			const showHidden = c?.showHidden ? 1 : 0;
-			const showDraftOnly = c?.showDraftOnly ? 1 : 0;
-			const showContentDates = c?.showContentDates ? 1 : 0;
-			const showPropDates = c?.showPropDates ? 1 : 0;
-			const epochsView = c?.epochsView ? 1 : 0;
+			const showAttachments = anyS.showAttachments ? 1 : 0;
+			const showTrackedChanges = anyS.showTrackedChanges ? 1 : 0;
+			const showHidden = anyS.showHidden ? 1 : 0;
+			const showDraftOnly = anyS.showDraftOnly ? 1 : 0;
+			const showContentDates = anyS.showContentDates ? 1 : 0;
+			const showPropDates = anyS.showPropDates ? 1 : 0;
+			const epochsView = anyS.epochsView ? 1 : 0;
 			return `${showAttachments}${showTrackedChanges}${showHidden}${showDraftOnly}${showContentDates}${showPropDates}|${epochsView}`;
 		} catch {
 			return "";
 		}
 	})();
 
-	const cacheRef = (anyS as any).__entryIndexCacheRef;
-	const cacheTodayKey = (anyS as any).__entryIndexCacheTodayKey;
-	const cacheFilterKey = (anyS as any).__entryIndexCacheFilterKey;
-	if (cacheRef !== indexRef || cacheTodayKey !== todayKey || cacheFilterKey !== filterKey || !Array.isArray((anyS as any).__entryIndexCacheAll)) {
+	const cacheRef = anyS.__entryIndexCacheRef;
+	const cacheTodayKey = anyS.__entryIndexCacheTodayKey;
+	const cacheFilterKey = anyS.__entryIndexCacheFilterKey;
+	if (cacheRef !== indexRef || cacheTodayKey !== todayKey || cacheFilterKey !== filterKey || !Array.isArray(anyS.__entryIndexCacheAll)) {
 		const indices: number[] = [];
 		for (const dateKey of Object.keys(indexRef)) {
 			const dt = parseDateKey(dateKey);
@@ -238,29 +252,33 @@ export function getEntryIndicesWithAnyRecordsInRange(params: {
 		indices.sort((a, b) => a - b);
 		let write = 0;
 		for (let i = 0; i < indices.length; i++) {
-			if (i === 0 || indices[i] !== indices[i - 1]) indices[write++] = indices[i]!;
+			const v = indices[i];
+			if (typeof v !== "number") continue;
+			if (i === 0 || v !== indices[i - 1]) indices[write++] = v;
 		}
 		indices.length = write;
 
-		(anyS as any).__entryIndexCacheRef = indexRef;
-		(anyS as any).__entryIndexCacheTodayKey = todayKey;
-		(anyS as any).__entryIndexCacheFilterKey = filterKey;
-		(anyS as any).__entryIndexCacheAll = indices;
+		anyS.__entryIndexCacheRef = indexRef;
+		anyS.__entryIndexCacheTodayKey = todayKey;
+		anyS.__entryIndexCacheFilterKey = filterKey;
+		anyS.__entryIndexCacheAll = indices;
 	}
 
-	const indices: number[] = (anyS as any).__entryIndexCacheAll ?? [];
+	const indices: number[] = anyS.__entryIndexCacheAll ?? [];
 	if (!indices.length) return [];
 
 	let lo = 0;
 	let hi = indices.length;
 	while (lo < hi) {
 		const mid = (lo + hi) >> 1;
-		if (indices[mid]! < minIndex) lo = mid + 1;
+		const v = indices[mid];
+		if (typeof v === "number" && v < minIndex) lo = mid + 1;
 		else hi = mid;
 	}
 	const out: number[] = [];
 	for (let i = lo; i < indices.length; i++) {
-		const idx = indices[i]!;
+		const idx = indices[i];
+		if (typeof idx !== "number") continue;
 		if (idx > maxIndex) break;
 		out.push(idx);
 	}
@@ -275,8 +293,10 @@ export function mergeSortedUnique(a: number[], b: number[]): number[] {
 	let j = 0;
 	let last: number | null = null;
 	while (i < a.length || j < b.length) {
-		const av = i < a.length ? a[i]! : Infinity;
-		const bv = j < b.length ? b[j]! : Infinity;
+		const ai = i < a.length ? a[i] : Infinity;
+		const bj = j < b.length ? b[j] : Infinity;
+		const av = typeof ai === "number" ? ai : Infinity;
+		const bv = typeof bj === "number" ? bj : Infinity;
 		const next = av <= bv ? av : bv;
 		if (av <= bv) i++;
 		if (bv <= av) j++;

@@ -2,6 +2,31 @@ import { normalizePath, TFile } from "obsidian";
 import { formatDate, isValidDailyNoteDateFormat, normalizeDailyNoteDateFormatInput } from "../utils";
 import type { EpochPlugin } from "../main";
 
+type MomentLike = (input?: unknown) => { format: (f: string) => string };
+
+type DailyNotesOptionsLike = {
+	folder?: string;
+	format?: string;
+	template?: string;
+	templatePath?: string;
+};
+
+type DailyNotesPluginLike = {
+	enabled?: boolean;
+	instance?: { options?: DailyNotesOptionsLike };
+};
+
+type InternalPluginsLike = {
+	getPluginById?: (id: string) => DailyNotesPluginLike | null;
+	plugins?: Record<string, DailyNotesPluginLike>;
+};
+
+type VaultReaderLike = {
+	getAbstractFileByPath(path: string): unknown;
+	cachedRead?: (file: TFile) => Promise<string>;
+	read?: (file: TFile) => Promise<string>;
+};
+
 export interface DailyNoteMethods {
 	applyDailyNotesDefaults(): void;
 	getDailyNoteFolder(): string;
@@ -35,7 +60,7 @@ function formatWithMomentOrFallback(date: Date, pattern: string): string {
 	const fmt = String(pattern || "").trim();
 	if (!fmt) return formatDate(date);
 	try {
-		const win = window as typeof window & { moment?: ((input?: any) => { format: (f: string) => string }) };
+		const win = window as typeof window & { moment?: MomentLike };
 		if (typeof win?.moment === "function") {
 			return String(win.moment(date).format(fmt) ?? "");
 		}
@@ -71,7 +96,7 @@ function getCoreDailyNotesOptions(plugin: EpochPlugin): { enabled: boolean; fold
 	const defaultFormat = "YYYY-MM-DD";
 	const defaultTemplate = "";
 	try {
-		const internalPlugins = (plugin.app as any)?.internalPlugins;
+		const internalPlugins = (plugin.app as unknown as { internalPlugins?: InternalPluginsLike })?.internalPlugins;
 		if (!internalPlugins) return { enabled: false, folder: defaultFolder, format: defaultFormat, template: defaultTemplate };
 		const dailyNotes = typeof internalPlugins.getPluginById === "function"
 			? internalPlugins.getPluginById("daily-notes")
@@ -100,7 +125,7 @@ function getCoreDailyNotesOptions(plugin: EpochPlugin): { enabled: boolean; fold
 }
 
 function resolveDailyTemplateFile(plugin: EpochPlugin, templatePath: string): TFile | null {
-	const vault: any = plugin?.app?.vault;
+	const vault = plugin?.app?.vault as unknown as VaultReaderLike | undefined;
 	if (!vault || typeof vault.getAbstractFileByPath !== "function") return null;
 	const normalized = normalizePath(String(templatePath || "").trim().replace(/\\/g, "/").replace(/^\/+/, ""));
 	if (!normalized) return null;
@@ -138,10 +163,11 @@ export const dailyNoteMethods: DailyNoteMethods = {
 		const abstract = resolveDailyTemplateFile(this, template);
 		if (!(abstract instanceof TFile)) return null;
 		let text = "";
-		if (typeof (this.app.vault as any).cachedRead === "function") {
-			text = await (this.app.vault as any).cachedRead(abstract);
-		} else if (typeof (this.app.vault as any).read === "function") {
-			text = await (this.app.vault as any).read(abstract);
+		const vault = this.app.vault as unknown as VaultReaderLike;
+		if (typeof vault.cachedRead === "function") {
+			text = await vault.cachedRead(abstract);
+		} else if (typeof vault.read === "function") {
+			text = await vault.read(abstract);
 		} else {
 			return null;
 		}
@@ -152,7 +178,7 @@ export const dailyNoteMethods: DailyNoteMethods = {
 
 	getDateFormat(this: EpochPlugin, date: Date): string {
 		const { format } = getCoreDailyNotesOptions(this);
-		const win = window as typeof window & { moment?: ((input?: any) => { format: (fmt: string) => string }) };
+		const win = window as typeof window & { moment?: MomentLike };
 		try {
 			if (typeof win?.moment === "function") {
 				return win.moment(date).format(format);

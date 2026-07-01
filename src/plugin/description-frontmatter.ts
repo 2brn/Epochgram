@@ -14,6 +14,26 @@ export interface DescriptionFrontmatterMethods {
 	setYamlDescriptionForFile(file: TFile, description: string): Promise<boolean>;
 }
 
+type FrontmatterRecord = Record<string, unknown>;
+
+type MetadataCacheLike = {
+	frontmatter?: unknown;
+};
+
+type DescriptionApiPluginLike = {
+	app?: {
+		fileManager?: {
+			processFrontMatter?: (file: TFile, handler: (frontmatter: FrontmatterRecord) => void) => Promise<void>;
+		};
+		metadataCache?: {
+			getFileCache?: (file: TFile) => MetadataCacheLike | null | undefined;
+		};
+		vault?: {
+			read?: (file: TFile) => Promise<string>;
+		};
+	};
+};
+
 function normalizeDescriptionInput(value: string): string {
 	return String(value ?? "").replace(/\r\n?/g, "\n").trim();
 }
@@ -103,14 +123,14 @@ function upsertYamlDescription(raw: string, propertyKey: string, description: st
 	return nextLines.join(newline);
 }
 
-async function updateFrontmatterDescriptionWithObsidianApi(plugin: any, file: TFile, description: string): Promise<boolean> {
-	const app = plugin?.app;
+async function updateFrontmatterDescriptionWithObsidianApi(plugin: unknown, file: TFile, description: string): Promise<boolean> {
+	const app = (plugin as DescriptionApiPluginLike).app;
 	const fmApi = app?.fileManager?.processFrontMatter;
 	if (typeof fmApi !== "function") return false;
 	let changed = false;
 	const normalized = normalizeDescriptionInput(description);
 	const propertyKey = getYamlDescriptionPropertyKey(plugin);
-	await fmApi.call(app.fileManager, file, (fm: any) => {
+	await fmApi(file, (fm: FrontmatterRecord) => {
 		const prevRaw = readFrontmatterProperty(fm, propertyKey);
 		const prev = typeof prevRaw === "string" ? normalizeDescriptionInput(prevRaw) : "";
 		if (prev === normalized) return;
@@ -121,17 +141,17 @@ async function updateFrontmatterDescriptionWithObsidianApi(plugin: any, file: TF
 	return changed;
 }
 
-async function readCurrentYamlDescription(plugin: any, file: TFile): Promise<string> {
+async function readCurrentYamlDescription(plugin: unknown, file: TFile): Promise<string> {
 	const propertyKey = getYamlDescriptionPropertyKey(plugin);
 	try {
-		const cache: any = plugin?.app?.metadataCache?.getFileCache?.(file);
+		const cache = (plugin as DescriptionApiPluginLike).app?.metadataCache?.getFileCache?.(file);
 		const raw = readFrontmatterProperty(cache?.frontmatter, propertyKey);
 		if (typeof raw === "string") return normalizeDescriptionInput(raw);
 	} catch {
 		// ignore
 	}
 	try {
-		const raw = await plugin?.app?.vault?.read?.(file);
+		const raw = await (plugin as DescriptionApiPluginLike).app?.vault?.read?.(file);
 		return normalizeDescriptionInput(extractFrontmatterDescription(String(raw ?? ""), propertyKey));
 	} catch {
 		return "";

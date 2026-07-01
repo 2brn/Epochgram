@@ -45,7 +45,7 @@ export interface DaySummaryRenderArgs {
 	pathsWithEmbeddingTerm?: Set<string> | null;
 	pathsWithClassifiedTerm?: Set<string> | null;
 	termSimilarPaths?: Set<string> | null;
-	wrapFadeCache?: Map<string, any> | null;
+	wrapFadeCache?: Map<string, unknown> | null;
 	getEntryTitle: (entry: DateEntry) => string | null;
 	denseMode: boolean;
 	epochsView?: boolean;

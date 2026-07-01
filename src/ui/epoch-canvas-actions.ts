@@ -1,4 +1,5 @@
 import {
+	App,
 	MarkdownView,
 	TFile,
 	TFolder,
@@ -20,8 +21,34 @@ import { FolderTreeModal, TextPromptModal, confirmDeleteFileIfNeeded } from "./m
 import { formatDate } from "utils";
 import { getYamlDatePropertyKey } from "../plugin/frontmatter-keys";
 
+type CanvasActionsAppLike = App & {
+	vault: App["vault"] & {
+		getRoot(): TFolder;
+		getFiles(): TFile[];
+	};
+	workspace: App["workspace"] & {
+		rightSplit?: { collapse(): void };
+	};
+	fileManager: {
+		promptRenameFile?(file: TFile): Promise<void>;
+		promptForNewFilePath?(suggested: string): Promise<string | null>;
+		renameFile?(file: TFile, path: string): Promise<void>;
+		promptMoveFile?(file: TFile): Promise<void>;
+		promptForFolderSelection?(folder: TFolder): Promise<TFolder | null>;
+		moveFile?(file: TFile, path: string): Promise<void>;
+	};
+};
+
 interface CanvasActionsInternals {
-	plugin: any;
+	plugin: {
+		app: CanvasActionsAppLike;
+		__timelineSearchLastOpenedFiles?: string[];
+		getDailyNoteFormat?(): string;
+		getDailyNoteTemplateContent?(date: Date, filePath: string): Promise<string | undefined>;
+		refreshIndexSmartWithProgress?(options: { suppressNotices: boolean }): Promise<void>;
+		rebuildIndexWithProgress?(options: { suppressNotices: boolean }): Promise<void>;
+		indexer?: { rebuildAll(files: unknown[]): Promise<void> };
+	};
 	index: EpochIndex;
 	lastFileLeaf: WorkspaceLeaf | null;
 	suppressNextFocusHover: string | null;
@@ -50,9 +77,8 @@ function hasTimeTokens(format: string): boolean {
 
 function getCreatePathDate(canvas: EpochCanvas, date: Date): Date {
 	const state = actionState(canvas);
-	const pluginAny: any = state.plugin as any;
-	const format = typeof pluginAny?.getDailyNoteFormat === "function"
-		? String(pluginAny.getDailyNoteFormat() || "")
+	const format = typeof state.plugin.getDailyNoteFormat === "function"
+		? String(state.plugin.getDailyNoteFormat() || "")
 		: "";
 	if (!hasTimeTokens(format)) {
 		return date;
@@ -94,10 +120,9 @@ export async function createNoteForDate(
 	};
 
 	const buildInitialContent = async (filePath: string): Promise<string> => {
-		const pluginAny: any = state.plugin as any;
-		if (typeof pluginAny?.getDailyNoteTemplateContent === "function") {
+		if (typeof state.plugin.getDailyNoteTemplateContent === "function") {
 			try {
-				const fromTemplate = await pluginAny.getDailyNoteTemplateContent(date, filePath);
+				const fromTemplate = await state.plugin.getDailyNoteTemplateContent(date, filePath);
 				if (typeof fromTemplate === "string") {
 					return fromTemplate;
 				}
@@ -197,8 +222,8 @@ export async function openFileAtLine(
 		return;
 	}
 	try {
-		const pluginAny: any = state.plugin as any;
-		const prev = pluginAny.__timelineSearchLastOpenedFiles as string[] | null | undefined;
+		const pluginState = state.plugin;
+		const prev = pluginState.__timelineSearchLastOpenedFiles;
 		const out: string[] = [];
 		const seen = new Set<string>();
 		const p = String(filePath || "");
@@ -214,7 +239,7 @@ export async function openFileAtLine(
 			out.push(s);
 			if (out.length >= 50) break;
 		}
-		pluginAny.__timelineSearchLastOpenedFiles = out;
+		pluginState.__timelineSearchLastOpenedFiles = out;
 	} catch {
 		// ignore
 	}
@@ -229,7 +254,7 @@ export async function openFileAtLine(
 		leaf = getUsableLeaf(canvas, state.lastFileLeaf);
 		if (!leaf) {
 			const active = workspace.getMostRecentLeaf();
-			leaf = getUsableLeaf(canvas, active as WorkspaceLeaf);
+			leaf = getUsableLeaf(canvas, active);
 		}
 		if (!leaf && isMarkdown) {
 			const mdLeaves = workspace.getLeavesOfType("markdown");
@@ -252,13 +277,13 @@ export async function openFileAtLine(
 		return;
 	}
 
-	workspace.revealLeaf(leaf);
+	await workspace.revealLeaf(leaf);
 	await leaf.openFile(file);
-	workspace.setActiveLeaf(leaf, true);
+	workspace.setActiveLeaf(leaf, { focus: true });
 	state.lastFileLeaf = getUsableLeaf(canvas, leaf);
 
 	if (Platform.isMobileApp) {
-		const ws: any = app.workspace;
+		const ws = app.workspace;
 		if (ws.rightSplit && typeof ws.rightSplit.collapse === "function") {
 			ws.rightSplit.collapse();
 		}
@@ -305,7 +330,7 @@ export async function deleteEntryFile(canvas: EpochCanvas, entry: DateEntry): Pr
 
 export async function promptRenameFile(canvas: EpochCanvas, file: TFile): Promise<boolean> {
 	const state = actionState(canvas);
-	const fm: any = state.plugin.app.fileManager;
+	const fm = state.plugin.app.fileManager;
 	if (!fm) {
 		return false;
 	}
@@ -338,13 +363,16 @@ export async function promptRenameFile(canvas: EpochCanvas, file: TFile): Promis
 	const parentPath = file.parent?.path ?? "";
 	const ext = file.extension ? `.${file.extension}` : "";
 	const newPath = parentPath ? `${parentPath}/${sanitized}${ext}` : `${sanitized}${ext}`;
+	if (typeof fm.renameFile !== "function") {
+		return false;
+	}
 	await fm.renameFile(file, normalizePath(newPath));
 	return true;
 }
 
 export async function promptMoveFile(canvas: EpochCanvas, file: TFile): Promise<boolean> {
 	const state = actionState(canvas);
-	const fm: any = state.plugin.app.fileManager;
+	const fm = state.plugin.app.fileManager;
 	if (!fm) {
 		return false;
 	}

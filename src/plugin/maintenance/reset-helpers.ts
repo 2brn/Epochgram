@@ -1,20 +1,91 @@
 import type { EpochPlugin } from "../../main";
 
-export function clearAllMarks(plugin: EpochPlugin): number {
-	const indexerAny: any = plugin.indexer as any;
-	let paths: string[] = [];
+type ResetEntryRuntime = {
+	aiSummary?: unknown;
+	aiSummaryInputHash?: unknown;
+	file?: unknown;
+	source?: unknown;
+	reviewState?: unknown;
+};
+
+type ResetFileRuntime = {
+	cdate?: ResetEntryRuntime;
+	namedDate?: ResetEntryRuntime;
+	contentDates?: unknown;
+	trackedDates?: unknown;
+	trackedSnapshot?: unknown;
+	trackedSnapshotDate?: unknown;
+	trackedBaselineSnapshot?: unknown;
+	trackedBaselineDate?: unknown;
+};
+
+type ResetIndexerRuntime = {
+	getIndexedPaths?: () => unknown;
+	files?: Record<string, ResetFileRuntime>;
+	index?: Record<string, ResetEntryRuntime[]>;
+	getFileMarkColor?: (path: string) => number | null;
+	setFileMarkColor?: (path: string, color: number | null) => boolean;
+	getFileEmbeddingTerm?: (path: string) => unknown;
+	setFileEmbeddingTerm?: (path: string, term: string) => boolean;
+	clearFileReviewOverrides?: (path: string) => boolean;
+	setFileReviewStateForAllRecordsPreserveHidden?: (path: string, state: string) => boolean;
+	setFileReviewStateForAllRecords?: (path: string, state: string) => boolean;
+	isFilePinned?: (path: string) => boolean;
+	setFilePinned?: (path: string, pinned: boolean) => boolean;
+	updateAggregatedEntries?: (path: string) => void;
+};
+
+type ResetPluginRuntime = {
+	termSimilarityResetKey?: number;
+	__epochTopicClassificationSweepTimer?: number | null;
+	termSimilarityQueueTimer?: number | null;
+	termSimilarityEnsureTimer?: number | null;
+	termSimilarityQueueRunning?: boolean;
+	termSimilarityPendingFiles?: Set<string>;
+	termSimilarityQueueTotal?: number;
+	termSimilarityQueueProcessed?: number;
+	termSimilarityProcessingStartedAt?: number;
+	termSimilarityStartedAt?: number;
+	termSimilarityStoreCache?: unknown;
+	termSimilarityStoreDirtyUpdates?: number;
+	termSimilarityStoreLastWriteAt?: number;
+	similarityResetKey?: number;
+	similarityQueueTimer?: number | null;
+	similarityQueueRunning?: boolean;
+	similarityPendingFiles?: Set<string>;
+	similarityQueueTotal?: number;
+	similarityQueueProcessed?: number;
+	similarityVectorUpdateProcessingStartedAt?: number;
+	similarityVectorUpdateStartedAt?: number;
+	similarityStoreCache?: unknown;
+	similarityStoreDirtyUpdates?: number;
+	similarityStoreLastWriteAt?: number;
+};
+
+function getResetIndexer(plugin: EpochPlugin): ResetIndexerRuntime {
+	return plugin.indexer as unknown as ResetIndexerRuntime;
+}
+
+function getIndexedPaths(indexer: ResetIndexerRuntime): string[] {
 	try {
-		const indexed: unknown = indexerAny.getIndexedPaths();
-		paths = Array.isArray(indexed) ? indexed : [];
+		const indexed = indexer.getIndexedPaths?.();
+		if (Array.isArray(indexed)) return indexed.filter((p): p is string => typeof p === "string");
 	} catch {
-		paths = Object.keys(indexerAny?.files ?? {});
+		// ignore
 	}
+	const files = indexer.files ?? {};
+	return Object.keys(files);
+}
+
+export function clearAllMarks(plugin: EpochPlugin): number {
+	const indexer = getResetIndexer(plugin);
+	const paths = getIndexedPaths(indexer);
 	let cleared = 0;
 	for (const p of paths) {
 		try {
-			const current: number | null = indexerAny.getFileMarkColor(p);
+			const current = indexer.getFileMarkColor?.(p) ?? null;
 			if (current == null) continue;
-			const changed = indexerAny.setFileMarkColor(p, null);
+			const changed = indexer.setFileMarkColor?.(p, null) === true;
 			if (changed) cleared++;
 		} catch {
 			// ignore
@@ -24,20 +95,15 @@ export function clearAllMarks(plugin: EpochPlugin): number {
 }
 
 export function clearAllEmbeddingTerms(plugin: EpochPlugin): number {
-	const indexerAny: any = plugin.indexer as any;
-	let paths: string[] = [];
-	try {
-		const indexed: unknown = indexerAny.getIndexedPaths();
-		paths = Array.isArray(indexed) ? indexed : [];
-	} catch {
-		paths = Object.keys(indexerAny?.files ?? {});
-	}
+	const indexer = getResetIndexer(plugin);
+	const paths = getIndexedPaths(indexer);
 	let cleared = 0;
 	for (const p of paths) {
 		try {
-			const prev = String(indexerAny.getFileEmbeddingTerm(p) || "").trim();
+			const raw = indexer.getFileEmbeddingTerm?.(p);
+			const prev = typeof raw === "string" ? raw.trim() : "";
 			if (!prev) continue;
-			const changed = indexerAny.setFileEmbeddingTerm(p, "");
+			const changed = indexer.setFileEmbeddingTerm?.(p, "") === true;
 			if (changed) cleared++;
 		} catch {
 			// ignore
@@ -47,65 +113,115 @@ export function clearAllEmbeddingTerms(plugin: EpochPlugin): number {
 }
 
 export function resetAllReviewStates(plugin: EpochPlugin): number {
-	const indexerAny: any = plugin.indexer as any;
-	let paths: string[] = [];
-	try {
-		const indexed: unknown = indexerAny.getIndexedPaths();
-		paths = Array.isArray(indexed) ? indexed : [];
-	} catch {
-		paths = Object.keys(indexerAny?.files ?? {});
-	}
+	const indexer = getResetIndexer(plugin);
+	const paths = getIndexedPaths(indexer);
 	let changedCount = 0;
 	for (const p of paths) {
 		try {
-			const changed = indexerAny.clearFileReviewOverrides?.(p) === true;
+			const changed = indexer.clearFileReviewOverrides?.(p) === true;
 			if (changed) changedCount++;
 		} catch {
 			// ignore
+		}
+	}
+	if (changedCount === 0) {
+		const idx = indexer.index;
+		if (idx && typeof idx === "object") {
+			const changedFiles = new Set<string>();
+			for (const list of Object.values(idx)) {
+				if (!Array.isArray(list)) continue;
+				for (const entry of list) {
+					if (!entry || typeof entry !== "object") continue;
+					if (entry.reviewState === "reviewed") {
+						entry.reviewState = "draft";
+						if (typeof entry.file === "string" && entry.file) changedFiles.add(entry.file);
+					}
+				}
+			}
+			changedCount = changedFiles.size;
 		}
 	}
 	return changedCount;
 }
 
 export function reviewAllDraftFiles(plugin: EpochPlugin): number {
-	const indexerAny: any = plugin.indexer as any;
-	let paths: string[] = [];
-	try {
-		const indexed: unknown = indexerAny.getIndexedPaths();
-		paths = Array.isArray(indexed) ? indexed : [];
-	} catch {
-		paths = Object.keys(indexerAny?.files ?? {});
-	}
+	const indexer = getResetIndexer(plugin);
+	const paths = getIndexedPaths(indexer);
 	let changedCount = 0;
 	for (const p of paths) {
 		try {
-			const preserveFn = indexerAny.setFileReviewStateForAllRecordsPreserveHidden;
-			const changed = typeof preserveFn === "function"
-				? preserveFn.call(indexerAny, p, "reviewed") === true
-				: indexerAny.setFileReviewStateForAllRecords?.(p, "reviewed") === true;
+			const preserveFn = indexer.setFileReviewStateForAllRecordsPreserveHidden;
+			const preserveChanged = typeof preserveFn === "function"
+				? preserveFn(p, "reviewed") === true
+				: false;
+			const standardChanged = indexer.setFileReviewStateForAllRecords?.(p, "reviewed") === true;
+			let fallbackChanged = false;
+			const data = indexer.files?.[p];
+			if (data) {
+				const entries: ResetEntryRuntime[] = [];
+				if (data.cdate) entries.push(data.cdate);
+				if (data.namedDate) entries.push(data.namedDate);
+				if (Array.isArray(data.contentDates)) {
+					for (const item of data.contentDates) {
+						if (item && typeof item === "object") entries.push(item as ResetEntryRuntime);
+					}
+				}
+				const tracked = data.trackedDates;
+				if (tracked && typeof tracked === "object") {
+					for (const list of Object.values(tracked as Record<string, unknown>)) {
+						if (!Array.isArray(list)) continue;
+						for (const item of list) {
+							if (item && typeof item === "object") entries.push(item as ResetEntryRuntime);
+						}
+					}
+				}
+				for (const entry of entries) {
+					if (entry.reviewState === "hidden") continue;
+					if (entry.reviewState !== "reviewed") {
+						entry.reviewState = "reviewed";
+						fallbackChanged = true;
+					}
+				}
+				if (fallbackChanged) {
+					indexer.updateAggregatedEntries?.(p);
+				}
+			}
+			const changed = preserveChanged || standardChanged || fallbackChanged;
 			if (changed) changedCount++;
 		} catch {
 			// ignore
+		}
+	}
+	if (changedCount === 0) {
+		const idx = indexer.index;
+		if (idx && typeof idx === "object") {
+			const changedFiles = new Set<string>();
+			for (const list of Object.values(idx)) {
+				if (!Array.isArray(list)) continue;
+				for (const entry of list) {
+					if (!entry || typeof entry !== "object") continue;
+					if (entry.reviewState === "hidden") continue;
+					if (entry.reviewState !== "reviewed") {
+						entry.reviewState = "reviewed";
+						if (typeof entry.file === "string" && entry.file) changedFiles.add(entry.file);
+					}
+				}
+			}
+			changedCount = changedFiles.size;
 		}
 	}
 	return changedCount;
 }
 
 export function clearAllPins(plugin: EpochPlugin): number {
-	const indexerAny: any = plugin.indexer as any;
-	let paths: string[] = [];
-	try {
-		const indexed: unknown = indexerAny.getIndexedPaths();
-		paths = Array.isArray(indexed) ? indexed : [];
-	} catch {
-		paths = Object.keys(indexerAny?.files ?? {});
-	}
+	const indexer = getResetIndexer(plugin);
+	const paths = getIndexedPaths(indexer);
 	let cleared = 0;
 	for (const p of paths) {
 		try {
-			const pinned = indexerAny.isFilePinned(p);
+			const pinned = indexer.isFilePinned?.(p) === true;
 			if (!pinned) continue;
-			const changed = indexerAny.setFilePinned(p, false);
+			const changed = indexer.setFilePinned?.(p, false) === true;
 			if (changed) cleared++;
 		} catch {
 			// ignore
@@ -115,98 +231,98 @@ export function clearAllPins(plugin: EpochPlugin): number {
 }
 
 export function clearTopicRuntimeState(plugin: EpochPlugin): void {
-	const anyPlugin: any = plugin as any;
+	const runtime = plugin as unknown as ResetPluginRuntime;
 	try {
-		anyPlugin.termSimilarityResetKey = (typeof anyPlugin.termSimilarityResetKey === "number" ? anyPlugin.termSimilarityResetKey : 0) + 1;
+		runtime.termSimilarityResetKey = (typeof runtime.termSimilarityResetKey === "number" ? runtime.termSimilarityResetKey : 0) + 1;
 	} catch {
 		// ignore
 	}
 	try {
-		const t = anyPlugin?.__epochTopicClassificationSweepTimer;
-	if (t != null) window.clearTimeout(t);
+		const t = runtime.__epochTopicClassificationSweepTimer;
+		if (typeof t === "number") window.clearTimeout(t);
 	} catch {
 		// ignore
 	}
 	try {
-		anyPlugin.__epochTopicClassificationSweepTimer = null;
+		runtime.__epochTopicClassificationSweepTimer = null;
 	} catch {
 		// ignore
 	}
 	try {
-		const t = anyPlugin?.termSimilarityQueueTimer;
-	if (t) window.clearTimeout(t);
+		const t = runtime.termSimilarityQueueTimer;
+		if (typeof t === "number") window.clearTimeout(t);
 	} catch {
 		// ignore
 	}
 	try {
-		const t = anyPlugin?.termSimilarityEnsureTimer;
-	if (t) window.clearTimeout(t);
+		const t = runtime.termSimilarityEnsureTimer;
+		if (typeof t === "number") window.clearTimeout(t);
 	} catch {
 		// ignore
 	}
 	try {
-		anyPlugin.termSimilarityQueueTimer = null;
-		anyPlugin.termSimilarityEnsureTimer = null;
-		anyPlugin.termSimilarityQueueRunning = false;
-		anyPlugin.termSimilarityPendingFiles = new Set<string>();
-		anyPlugin.termSimilarityQueueTotal = 0;
-		anyPlugin.termSimilarityQueueProcessed = 0;
-		anyPlugin.termSimilarityProcessingStartedAt = 0;
-		anyPlugin.termSimilarityStartedAt = 0;
+		runtime.termSimilarityQueueTimer = null;
+		runtime.termSimilarityEnsureTimer = null;
+		runtime.termSimilarityQueueRunning = false;
+		runtime.termSimilarityPendingFiles = new Set<string>();
+		runtime.termSimilarityQueueTotal = 0;
+		runtime.termSimilarityQueueProcessed = 0;
+		runtime.termSimilarityProcessingStartedAt = 0;
+		runtime.termSimilarityStartedAt = 0;
 	} catch {
 		// ignore
 	}
 	try {
-		anyPlugin.termSimilarityStoreCache = null;
-		anyPlugin.termSimilarityStoreDirtyUpdates = 0;
-		anyPlugin.termSimilarityStoreLastWriteAt = 0;
+		runtime.termSimilarityStoreCache = null;
+		runtime.termSimilarityStoreDirtyUpdates = 0;
+		runtime.termSimilarityStoreLastWriteAt = 0;
 	} catch {
 		// ignore
 	}
 }
 
 export function clearSemanticRuntimeState(plugin: EpochPlugin): void {
-	const anyPlugin: any = plugin as any;
+	const runtime = plugin as unknown as ResetPluginRuntime;
 	try {
-		anyPlugin.similarityResetKey = (typeof anyPlugin.similarityResetKey === "number" ? anyPlugin.similarityResetKey : 0) + 1;
+		runtime.similarityResetKey = (typeof runtime.similarityResetKey === "number" ? runtime.similarityResetKey : 0) + 1;
 	} catch {
 		// ignore
 	}
 	try {
-		const t = anyPlugin?.similarityQueueTimer;
-	if (t) window.clearTimeout(t);
+		const t = runtime.similarityQueueTimer;
+		if (typeof t === "number") window.clearTimeout(t);
 	} catch {
 		// ignore
 	}
 	try {
-		anyPlugin.similarityQueueTimer = null;
-		anyPlugin.similarityQueueRunning = false;
-		anyPlugin.similarityPendingFiles = new Set<string>();
-		anyPlugin.similarityQueueTotal = 0;
-		anyPlugin.similarityQueueProcessed = 0;
-		anyPlugin.similarityVectorUpdateProcessingStartedAt = 0;
-		anyPlugin.similarityVectorUpdateStartedAt = 0;
+		runtime.similarityQueueTimer = null;
+		runtime.similarityQueueRunning = false;
+		runtime.similarityPendingFiles = new Set<string>();
+		runtime.similarityQueueTotal = 0;
+		runtime.similarityQueueProcessed = 0;
+		runtime.similarityVectorUpdateProcessingStartedAt = 0;
+		runtime.similarityVectorUpdateStartedAt = 0;
 	} catch {
 		// ignore
 	}
 	try {
-		anyPlugin.similarityStoreCache = null;
-		anyPlugin.similarityStoreDirtyUpdates = 0;
-		anyPlugin.similarityStoreLastWriteAt = 0;
+		runtime.similarityStoreCache = null;
+		runtime.similarityStoreDirtyUpdates = 0;
+		runtime.similarityStoreLastWriteAt = 0;
 	} catch {
 		// ignore
 	}
 }
 
 export function clearAllAiSummaries(plugin: EpochPlugin): number {
-	const indexerAny: any = plugin.indexer as any;
-	const files: Record<string, any> = indexerAny?.files ?? {};
-	const index: Record<string, any[]> = indexerAny?.index ?? {};
+	const indexer = getResetIndexer(plugin);
+	const files = indexer.files ?? {};
+	const index = indexer.index ?? {};
 	let cleared = 0;
-	const clearEntry = (e: any): boolean => {
+	const clearEntry = (e: ResetEntryRuntime | undefined): boolean => {
 		if (!e) return false;
-		const s = typeof e.aiSummary === "string" ? String(e.aiSummary).trim() : "";
-		const h = typeof e.aiSummaryInputHash === "string" ? String(e.aiSummaryInputHash).trim() : "";
+		const s = typeof e.aiSummary === "string" ? e.aiSummary.trim() : "";
+		const h = typeof e.aiSummaryInputHash === "string" ? e.aiSummaryInputHash.trim() : "";
 		if (!s && !h) return false;
 		try {
 			delete e.aiSummary;
@@ -220,15 +336,16 @@ export function clearAllAiSummaries(plugin: EpochPlugin): number {
 	for (const [path, data] of Object.entries(files)) {
 		let changed = false;
 		try {
-			if (clearEntry((data as any)?.cdate)) changed = true;
-			if (clearEntry((data as any)?.namedDate)) changed = true;
-			for (const e of Array.isArray((data as any)?.contentDates) ? (data as any).contentDates : []) {
-				if (clearEntry(e)) changed = true;
+			if (clearEntry(data.cdate)) changed = true;
+			if (clearEntry(data.namedDate)) changed = true;
+			for (const e of Array.isArray(data.contentDates) ? data.contentDates : []) {
+				if (typeof e === "object" && e !== null && clearEntry(e as ResetEntryRuntime)) changed = true;
 			}
-			const tracked = (data as any)?.trackedDates ?? {};
-			for (const list of Object.values(tracked)) {
+			const tracked = data.trackedDates;
+			const trackedByDate = (typeof tracked === "object" && tracked !== null) ? tracked as Record<string, unknown> : {};
+			for (const list of Object.values(trackedByDate)) {
 				for (const e of Array.isArray(list) ? list : []) {
-					if (clearEntry(e)) changed = true;
+					if (typeof e === "object" && e !== null && clearEntry(e as ResetEntryRuntime)) changed = true;
 				}
 			}
 		} catch {
@@ -236,7 +353,7 @@ export function clearAllAiSummaries(plugin: EpochPlugin): number {
 		}
 		if (changed) {
 			try {
-				indexerAny?.updateAggregatedEntries?.(path);
+				indexer.updateAggregatedEntries?.(path);
 			} catch {
 				// ignore
 			}
@@ -247,10 +364,10 @@ export function clearAllAiSummaries(plugin: EpochPlugin): number {
 		for (const entries of Object.values(index)) {
 			if (!Array.isArray(entries)) continue;
 			for (const e of entries) {
-				const anyE: any = e as any;
-				const isEpoch = String(anyE?.file || "").startsWith("epoch://");
+				const file = typeof e?.file === "string" ? e.file : "";
+				const isEpoch = file.startsWith("epoch://");
 				if (isEpoch) continue;
-				clearEntry(anyE);
+				clearEntry(e);
 			}
 		}
 	} catch {
@@ -260,34 +377,33 @@ export function clearAllAiSummaries(plugin: EpochPlugin): number {
 }
 
 export function hardResetTrackedState(plugin: EpochPlugin): boolean {
-	const indexerAny: any = plugin.indexer as any;
-	const files: Record<string, any> = indexerAny?.files ?? {};
-	const index: Record<string, any[]> = indexerAny?.index ?? {};
+	const indexer = getResetIndexer(plugin);
+	const files = indexer.files ?? {};
+	const index = indexer.index ?? {};
 	let changed = false;
 
 	for (const [path, data] of Object.entries(files)) {
 		let fileChanged = false;
 		try {
-			const anyData: any = data as any;
-			const tracked = anyData?.trackedDates;
+			const tracked = data.trackedDates;
 			if (tracked && typeof tracked === "object" && Object.keys(tracked).length > 0) {
-				anyData.trackedDates = {};
+				data.trackedDates = {};
 				fileChanged = true;
 			}
-			if (anyData?.trackedSnapshot != null) {
-				anyData.trackedSnapshot = null;
+			if (data.trackedSnapshot != null) {
+				data.trackedSnapshot = null;
 				fileChanged = true;
 			}
-			if (anyData?.trackedSnapshotDate != null) {
-				anyData.trackedSnapshotDate = null;
+			if (data.trackedSnapshotDate != null) {
+				data.trackedSnapshotDate = null;
 				fileChanged = true;
 			}
-			if (anyData?.trackedBaselineSnapshot != null) {
-				anyData.trackedBaselineSnapshot = null;
+			if (data.trackedBaselineSnapshot != null) {
+				data.trackedBaselineSnapshot = null;
 				fileChanged = true;
 			}
-			if (anyData?.trackedBaselineDate != null) {
-				anyData.trackedBaselineDate = null;
+			if (data.trackedBaselineDate != null) {
+				data.trackedBaselineDate = null;
 				fileChanged = true;
 			}
 		} catch {
@@ -296,7 +412,7 @@ export function hardResetTrackedState(plugin: EpochPlugin): boolean {
 		if (fileChanged) {
 			changed = true;
 			try {
-				indexerAny?.updateAggregatedEntries?.(path);
+				indexer.updateAggregatedEntries?.(path);
 			} catch {
 				// ignore
 			}
@@ -306,13 +422,13 @@ export function hardResetTrackedState(plugin: EpochPlugin): boolean {
 	try {
 		for (const [date, entries] of Object.entries(index)) {
 			if (!Array.isArray(entries) || entries.length === 0) continue;
-			const kept = entries.filter((e: any) => (e as any)?.source !== "tracked");
+			const kept = entries.filter((e) => e?.source !== "tracked");
 			if (kept.length === entries.length) continue;
 			changed = true;
 			if (kept.length > 0) {
-				(index as any)[date] = kept;
+				index[date] = kept;
 			} else {
-				delete (index as any)[date];
+				delete index[date];
 			}
 		}
 	} catch {
@@ -323,14 +439,14 @@ export function hardResetTrackedState(plugin: EpochPlugin): boolean {
 }
 
 export function clearEpochEntries(plugin: EpochPlugin): number {
-	const indexerAny: any = plugin.indexer as any;
-	const index: Record<string, any[]> = indexerAny?.index ?? {};
+	const indexer = getResetIndexer(plugin);
+	const index = indexer.index ?? {};
 	let removed = 0;
 	for (const [date, entries] of Object.entries(index)) {
 		if (!Array.isArray(entries) || entries.length === 0) continue;
-		const kept = entries.filter((e: any) => {
-			const anyE: any = e as any;
-			const isEpoch = String(anyE?.file || "").startsWith("epoch://");
+		const kept = entries.filter((e) => {
+			const file = typeof e?.file === "string" ? e.file : "";
+			const isEpoch = file.startsWith("epoch://");
 			if (isEpoch) removed++;
 			return !isEpoch;
 		});

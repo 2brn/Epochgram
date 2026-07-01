@@ -4,7 +4,7 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 
 	async function readSummarizerAvailabilitySafe() {
 		try {
-			if (!("Summarizer" in globalThis)) return { ok: false, availability: null };
+			if (!("Summarizer" in window)) return { ok: false, availability: null };
 			const langs = readSelectedBridgeLanguages("summary");
 			const opts = {
 				// Keep this conservative to avoid flakiness across Chrome versions.
@@ -20,7 +20,7 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 	}
 
 	async function detectInner() {
-		if (!("Summarizer" in globalThis)) {
+		if (!("Summarizer" in window)) {
 			setApiNotDetectedStatus();
 			return;
 		}
@@ -64,7 +64,7 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 	if (downloadBtn) {
 		downloadBtn.addEventListener("click", async () => {
 			try {
-				if (!("Summarizer" in globalThis)) {
+				if (!("Summarizer" in window)) {
 					setApiNotDetectedStatus();
 					return;
 				}
@@ -205,7 +205,7 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 	}
 
 	async function createSummarizer(optionsIn) {
-		if (!("Summarizer" in globalThis)) throw new Error("Summarizer API missing");
+		if (!("Summarizer" in window)) throw new Error("Summarizer API missing");
 
 		lastProgress = null;
 		resetDownloadProgressState({ soft: true });

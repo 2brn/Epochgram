@@ -12,6 +12,17 @@ export interface DateFrontmatterMethods {
 	setYamlDateForFile(file: TFile, dateKey: string): Promise<boolean>;
 }
 
+type PluginLikeForDateFrontmatter = EpochPlugin & {
+	app: EpochPlugin["app"] & {
+		fileManager?: {
+			processFrontMatter?: (file: TFile, fn: (fm: Record<string, unknown>) => void) => Promise<void>;
+		};
+		metadataCache: EpochPlugin["app"]["metadataCache"] & {
+			getFileCache(file: TFile): { frontmatter?: Record<string, unknown> } | null;
+		};
+	};
+};
+
 function isDateKey(value: string): boolean {
 	return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
 }
@@ -23,13 +34,13 @@ function normalizeDateKeyInput(value: string): string | null {
 	return k;
 }
 
-async function updateFrontmatterDateWithObsidianApi(plugin: any, file: TFile, dateKey: string): Promise<boolean> {
+async function updateFrontmatterDateWithObsidianApi(plugin: PluginLikeForDateFrontmatter, file: TFile, dateKey: string): Promise<boolean> {
 	const app = plugin?.app;
 	const fmApi = app?.fileManager?.processFrontMatter;
 	if (typeof fmApi !== "function") return false;
 	let changed = false;
 	const propertyKey = getYamlDatePropertyKey(plugin);
-	await fmApi.call(app.fileManager, file, (fm: any) => {
+	await fmApi.call(app.fileManager, file, (fm: Record<string, unknown>) => {
 		const prevRaw = readFrontmatterProperty(fm, propertyKey);
 		const prev = typeof prevRaw === "string" ? String(prevRaw).trim() : "";
 		if (prev === dateKey) return;
@@ -99,7 +110,7 @@ export const dateFrontmatterMethods: DateFrontmatterMethods = {
 		if (!this.shouldIndexFile(file)) return false;
 
 		try {
-			const cache: any = this.app.metadataCache.getFileCache(file);
+			const cache = this.app.metadataCache.getFileCache(file);
 			const prevRaw = readFrontmatterProperty(cache?.frontmatter, propertyKey);
 			const prevFmDate = typeof prevRaw === "string" ? String(prevRaw).trim() : "";
 			if (prevFmDate === dateKey) return false;
@@ -121,7 +132,7 @@ export const dateFrontmatterMethods: DateFrontmatterMethods = {
 			const raw = await this.app.vault.read(file);
 			const currentKey = (() => {
 				try {
-					const cache: any = this.app.metadataCache.getFileCache(file);
+					const cache = this.app.metadataCache.getFileCache(file);
 					const v = readFrontmatterProperty(cache?.frontmatter, propertyKey);
 					if (typeof v === "string" && isDateKey(v)) return String(v).trim();
 				} catch {

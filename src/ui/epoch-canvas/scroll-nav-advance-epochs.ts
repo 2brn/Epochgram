@@ -4,12 +4,30 @@ import { focusDate as focusDateHelper } from "../epoch-canvas-focus";
 import { BASE_SPACING } from "../epoch-canvas-constants";
 import { computeVisibleScrollNavDayTargets } from "./scroll-nav-targets";
 
+type PendingHighlight = { dayIndex?: number | null } | null;
+
+type ScrollNavEpochsState = {
+	scrollNavIndex: number;
+	pendingScrollNavHighlight: PendingHighlight;
+	hoverSummary: { dayIndex?: number | null } | null;
+	animSummary: { dayIndex?: number | null } | null;
+	hoverDateIndex: number | null;
+	animDateIndex: number | null;
+	scrollNavAnchorDayIndex?: number | null;
+	scrollNavAnchorEntry?: unknown;
+	animatingView: boolean;
+	offsetY: number;
+	scale: number;
+	hoverTarget?: number;
+	__scrollNavAnchorMode?: string | null;
+};
+
 export function advanceScrollNavEpochsView(params: {
 	canvas: EpochCanvas;
-	c: any;
+	c: ScrollNavEpochsState;
 	direction: number;
 	wrap: boolean;
-	prevPending: any;
+	prevPending: PendingHighlight;
 	rect: DOMRect;
 }): boolean {
 	const { canvas, c, direction, wrap, prevPending, rect } = params;
@@ -67,7 +85,7 @@ export function advanceScrollNavEpochsView(params: {
 	if (anchorDayIndex == null) {
 		let anchorScreenY = direction >= 0 ? 0 : rect.height;
 		try {
-			if (String((c as any).__scrollNavAnchorMode || "") === "center") {
+			if (String(c.__scrollNavAnchorMode || "") === "center") {
 				anchorScreenY = rect.height / 2;
 			}
 		} catch {
@@ -75,7 +93,7 @@ export function advanceScrollNavEpochsView(params: {
 		}
 		const anchorWorldY = (anchorScreenY - c.offsetY) / c.scale;
 		try {
-			(c as any).__scrollNavAnchorMode = null;
+			c.__scrollNavAnchorMode = null;
 		} catch {
 			// ignore
 		}
@@ -95,7 +113,7 @@ export function advanceScrollNavEpochsView(params: {
 	let chosenIndex = -1;
 	let chosenDiff = direction >= 0 ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
 	for (let i = 0; i < dayTargets.length; i++) {
-		const pos = dayTargets[i]!.dayIndex;
+		const pos = dayTargets[i].dayIndex;
 		const diff = pos - anchorValue;
 		if (direction >= 0) {
 			if ((diff > 0 || (allowEqual && diff === 0)) && diff < chosenDiff) {
@@ -119,7 +137,7 @@ export function advanceScrollNavEpochsView(params: {
 					((c.hoverDateIndex == null && c.animDateIndex == null && c.hoverSummary == null && c.animSummary == null) ||
 						Number(c.hoverTarget ?? 0) <= 0);
 				if (c.scrollNavIndex === boundaryIndex && hoverGone) {
-					const boundary = dayTargets[boundaryIndex]!;
+					const boundary = dayTargets[boundaryIndex];
 					try {
 						c.scrollNavAnchorEntry = null;
 						c.scrollNavAnchorDayIndex = boundary.dayIndex;
@@ -138,7 +156,7 @@ export function advanceScrollNavEpochsView(params: {
 			return false;
 		}
 		c.scrollNavIndex = direction >= 0 ? 0 : dayTargets.length - 1;
-		const wrapped = dayTargets[c.scrollNavIndex]!;
+		const wrapped = dayTargets[c.scrollNavIndex];
 		try {
 			c.scrollNavAnchorEntry = null;
 			c.scrollNavAnchorDayIndex = wrapped.dayIndex;
@@ -152,7 +170,7 @@ export function advanceScrollNavEpochsView(params: {
 	}
 
 	c.scrollNavIndex = chosenIndex;
-	const target = dayTargets[chosenIndex]!;
+	const target = dayTargets[chosenIndex];
 	try {
 		c.scrollNavAnchorEntry = null;
 		c.scrollNavAnchorDayIndex = target.dayIndex;

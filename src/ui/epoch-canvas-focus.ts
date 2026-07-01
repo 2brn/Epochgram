@@ -1,6 +1,6 @@
 import { MS_PER_DAY, BASE_SPACING, FOCUS_ANCHOR_RATIO } from "./epoch-canvas-constants";
 import type { DateEntry, EpochIndex } from "../indexer/types";
-import type { DayLayout } from "./epoch-canvas-types";
+import type { DayLayout, SummaryRect } from "./epoch-canvas-types";
 import { getEntriesForDate, pickEntryForFile } from "./entry-helpers";
 import type { EpochCanvas } from "./epoch-canvas";
 
@@ -31,16 +31,32 @@ interface FocusCanvasInternals {
 	getDateForIndex(index: number, today: Date): Date;
 	clearSummaryHover(force?: boolean): void;
 	keepHoverUntilPointerMove: boolean;
+	__lastKnownCanvasCssHeight?: number;
+	__shiftZoomLastDate?: { dayIndex: number; at: number } | null;
+	__shiftZoomLastSummary?: { dayIndex: number; itemIndex: number; at: number } | null;
+	outgoingDates?: Array<{ index: number; t: number }> | null;
+	outgoingSummaries?: Array<{ dayIndex: number; itemIndex: number; t: number }> | null;
+	prevAnimDateIndex?: number | null;
+	hoverEaseStartAt?: number | null;
+	hoverEaseFrom?: number;
+	hoverEaseTo?: number;
+	scrollNavAnchorEntry?: DateEntry | null;
+	scrollNavAnchorDayIndex?: number | null;
+	isPointerDeviceEvent?: () => boolean;
 }
 
 function getFocusInternals(canvas: EpochCanvas): FocusCanvasInternals {
 	return canvas as unknown as FocusCanvasInternals;
 }
 
+function isRecurringEntry(entry: DateEntry): boolean {
+	return entry.recurring === true;
+}
+
 function scrollScreenRectIntoView(canvas: EpochCanvas, y1: number, y2: number, padding: number): boolean {
 	const state = getFocusInternals(canvas);
 	const rect = state.root.getBoundingClientRect();
-	const cachedHeight0 = Number((state as any)?.__lastKnownCanvasCssHeight ?? 0);
+	const cachedHeight0 = Number(state.__lastKnownCanvasCssHeight ?? 0);
 	const height = rect.height || (Number.isFinite(cachedHeight0) ? cachedHeight0 : 0);
 	if (!height) {
 		state.pendingVisibilityDraw = true;
@@ -131,7 +147,7 @@ export function focusDate(
 			scroll = false;
 		}
 		const rect = state.root.getBoundingClientRect();
-		const cachedHeight0 = Number((state as any)?.__lastKnownCanvasCssHeight ?? 0);
+		const cachedHeight0 = Number(state.__lastKnownCanvasCssHeight ?? 0);
 		const height = rect.height || (Number.isFinite(cachedHeight0) ? cachedHeight0 : 0);
 		if (height) {
 			const worldY = diffDays * BASE_SPACING;
@@ -159,26 +175,26 @@ export function focusDate(
 			state.keepHoverUntilPointerMove = true;
 		}
 		try {
-			(state as any).__shiftZoomLastDate = { dayIndex: diffDays, at: performance.now() };
-			(state as any).__shiftZoomLastSummary = null;
+			state.__shiftZoomLastDate = { dayIndex: diffDays, at: window.performance.now() };
+			state.__shiftZoomLastSummary = null;
 		} catch {
 			// ignore
 		}
 		try {
-			const prevIdx: number | null = (state as any).animDateIndex ?? null;
+			const prevIdx: number | null = state.animDateIndex ?? null;
 			if (prevIdx != null && prevIdx !== diffDays) {
-				let list = (state as any).outgoingDates as Array<{ index: number; t: number }> | null | undefined;
+				let list = state.outgoingDates;
 				if (!Array.isArray(list)) list = [];
-				const t = Math.max(0, Math.min(1, Number((state as any).hoverAnim) || 0));
+				const t = Math.max(0, Math.min(1, Number(state.hoverAnim) || 0));
 				if (t > 0.001) {
 					list.push({ index: prevIdx, t });
 					if (list.length > 8) {
 						list.sort((a, b) => (Number(b.t) || 0) - (Number(a.t) || 0));
 						list.length = 8;
 					}
-					(state as any).outgoingDates = list;
+					state.outgoingDates = list;
 				}
-				(state as any).prevAnimDateIndex = prevIdx;
+				state.prevAnimDateIndex = prevIdx;
 			}
 		} catch {
 			// ignore
@@ -222,8 +238,8 @@ export function focusFile(
 	let bestOldestRecurring: { date: Date; ms: number } | null = null;
 	let bestOldestRecurringEntry: DateEntry | null = null;
 	for (const [dateKey, entries] of Object.entries(state.index)) {
-		const nonRecurring = entries.filter((e) => (e as any)?.recurring !== true);
-		const recurring = entries.filter((e) => (e as any)?.recurring === true);
+		const nonRecurring = entries.filter((e) => !isRecurringEntry(e));
+		const recurring = entries.filter((e) => isRecurringEntry(e));
 		const matchNonRecurring = nonRecurring.length > 0
 			? pickEntryForFile(canvas, nonRecurring, filePath, null, { bypassAttachmentsFilter: true, bypassDateFilters: true })
 			: null;
@@ -279,8 +295,8 @@ export function focusFile(
 		state.clearSummaryHover();
 	}
 	try {
-		(state as any).scrollNavAnchorEntry = bestEntry;
-		(state as any).scrollNavAnchorDayIndex = dayIndex;
+		state.scrollNavAnchorEntry = bestEntry;
+		state.scrollNavAnchorDayIndex = dayIndex;
 	} catch {
 		// ignore
 	}
@@ -306,8 +322,8 @@ export function snapToFile(
 	let bestOldestRecurring: { date: Date; ms: number } | null = null;
 	let bestOldestRecurringEntry: DateEntry | null = null;
 	for (const [dateKey, entries] of Object.entries(state.index)) {
-		const nonRecurring = entries.filter((e) => (e as any)?.recurring !== true);
-		const recurring = entries.filter((e) => (e as any)?.recurring === true);
+		const nonRecurring = entries.filter((e) => !isRecurringEntry(e));
+		const recurring = entries.filter((e) => isRecurringEntry(e));
 		const matchNonRecurring = nonRecurring.length > 0
 			? pickEntryForFile(canvas, nonRecurring, filePath, null)
 			: null;
@@ -359,8 +375,8 @@ export function snapToFile(
 		state.draw();
 	}
 	try {
-		(state as any).scrollNavAnchorEntry = bestEntry;
-		(state as any).scrollNavAnchorDayIndex = dayIndex;
+		state.scrollNavAnchorEntry = bestEntry;
+		state.scrollNavAnchorDayIndex = dayIndex;
 	} catch {
 		// ignore
 	}
@@ -393,7 +409,7 @@ export function focusSummaryForLine(
 			} else {
 				const hasPointer = (() => {
 					try {
-						const fn = (state as any).isPointerDeviceEvent;
+						const fn = state.isPointerDeviceEvent;
 						return typeof fn === "function" ? !!fn.call(state) : true;
 					} catch {
 						return true;
@@ -417,22 +433,22 @@ export function focusSummaryForEntry(
 	persistentHover: boolean = false
 ): boolean {
 	const state = getFocusInternals(canvas);
-	const hoverRects = (layout as any).summaryHoverRects as DayLayout["summaryHoverRects"] | null | undefined;
-	const allRects = (() => {
-		const out: any[] = [];
+	const hoverRects = layout.summaryHoverRects;
+	const allRects = ((): SummaryRect[] => {
+		const out: SummaryRect[] = [];
 		if (Array.isArray(layout.summaryRects) && layout.summaryRects.length > 0) out.push(...layout.summaryRects);
-		if (Array.isArray(hoverRects) && hoverRects.length > 0 && hoverRects !== (layout as any).summaryRects) out.push(...hoverRects);
+		if (Array.isArray(hoverRects) && hoverRects.length > 0 && hoverRects !== layout.summaryRects) out.push(...hoverRects);
 		return out;
 	})();
 	if (!allRects || allRects.length === 0) return false;
-	let summary = allRects.find((rect: any) => rect.entry === entry);
+	let summary: SummaryRect | undefined = allRects.find((rect) => rect.entry === entry);
 	if (!summary) {
-		const file = String((entry as any)?.file ?? "");
-		const source = String((entry as any)?.source ?? "");
-		const bs = Number((entry as any)?.blockStart ?? -1);
-		const be = Number((entry as any)?.blockEnd ?? -1);
-		summary = allRects.find((rect: any) => {
-			const e: any = (rect as any)?.entry;
+		const file = String(entry.file ?? "");
+		const source = String(entry.source ?? "");
+		const bs = Number(entry.blockStart ?? -1);
+		const be = Number(entry.blockEnd ?? -1);
+		summary = allRects.find((rect) => {
+			const e = rect.entry;
 			if (!e) return false;
 			if (String(e.file ?? "") !== file) return false;
 			if (String(e.source ?? "") !== source) return false;
@@ -446,24 +462,24 @@ export function focusSummaryForEntry(
 			const today = state.getToday();
 			const date = state.getDateForIndex(layout.index, today);
 			const entries = getEntriesForDate(canvas, date);
-			const baseRects: any[] =
+			const baseRects: SummaryRect[] =
 				Array.isArray(layout.summaryRects) && layout.summaryRects.length > 0
-					? (layout.summaryRects as any[])
+					? layout.summaryRects
 					: Array.isArray(hoverRects) && hoverRects.length > 0
-						? (hoverRects as any[])
+						? hoverRects
 						: [];
 			let visibleCount = 0;
 			for (const r of baseRects) {
-				const idx = Number((r as any)?.itemIndex);
+				const idx = Number(r.itemIndex);
 				if (!Number.isFinite(idx)) continue;
 				visibleCount = Math.max(visibleCount, Math.floor(idx) + 1);
 			}
 			if (visibleCount > 0 && entries.length > visibleCount) {
-				const file = String((entry as any)?.file ?? "");
-				const source = String((entry as any)?.source ?? "");
-				const bs = Number((entry as any)?.blockStart ?? -1);
-				const be = Number((entry as any)?.blockEnd ?? -1);
-				const entryIndex = entries.findIndex((e: any) => {
+				const file = String(entry.file ?? "");
+				const source = String(entry.source ?? "");
+				const bs = Number(entry.blockStart ?? -1);
+				const be = Number(entry.blockEnd ?? -1);
+				const entryIndex = entries.findIndex((e) => {
 					if (!e) return false;
 					if (String(e.file ?? "") !== file) return false;
 					if (String(e.source ?? "") !== source) return false;
@@ -473,7 +489,7 @@ export function focusSummaryForEntry(
 				});
 				if (entryIndex >= visibleCount) {
 					const lastVisibleItemIndex = visibleCount - 1;
-					summary = allRects.find((rect: any) => Number((rect as any)?.itemIndex) === lastVisibleItemIndex) ?? null;
+					summary = allRects.find((rect) => Number(rect.itemIndex) === lastVisibleItemIndex);
 				}
 			}
 		} catch {
@@ -487,7 +503,7 @@ export function focusSummaryForEntry(
 	} else {
 		const hasPointer = (() => {
 			try {
-				const fn = (state as any).isPointerDeviceEvent;
+				const fn = state.isPointerDeviceEvent;
 				return typeof fn === "function" ? !!fn.call(state) : true;
 			} catch {
 				return true;
@@ -511,26 +527,26 @@ export function setHoverSummary(
 	const prevAnimSummary = state.animSummary;
 	const prevAnimDateIndex = state.animDateIndex;
 	try {
-		(state as any).__shiftZoomLastSummary = { dayIndex, itemIndex, at: performance.now() };
-		(state as any).__shiftZoomLastDate = null;
+		state.__shiftZoomLastSummary = { dayIndex, itemIndex, at: window.performance.now() };
+		state.__shiftZoomLastDate = null;
 	} catch {
 		// ignore
 	}
 	try {
-		const prevIdx: number | null = (state as any).animDateIndex ?? null;
+		const prevIdx: number | null = state.animDateIndex ?? null;
 		if (prevIdx != null) {
-			let list = (state as any).outgoingDates as Array<{ index: number; t: number }> | null | undefined;
+			let list = state.outgoingDates;
 			if (!Array.isArray(list)) list = [];
-			const t = Math.max(0, Math.min(1, Number((state as any).hoverAnim) || 0));
+			const t = Math.max(0, Math.min(1, Number(state.hoverAnim) || 0));
 			if (t > 0.001) {
 				list.push({ index: prevIdx, t });
 				if (list.length > 8) {
 					list.sort((a, b) => (Number(b.t) || 0) - (Number(a.t) || 0));
 					list.length = 8;
 				}
-				(state as any).outgoingDates = list;
+				state.outgoingDates = list;
 			}
-			(state as any).prevAnimDateIndex = prevIdx;
+			state.prevAnimDateIndex = prevIdx;
 		}
 	} catch {
 		// ignore
@@ -539,29 +555,31 @@ export function setHoverSummary(
 		state.animSummary &&
 		(state.animSummary.dayIndex !== dayIndex || state.animSummary.itemIndex !== itemIndex)
 	) {
-		const outgoing = (state as any).outgoingSummaries as Array<{ dayIndex: number; itemIndex: number; t: number }> | null | undefined;
-		const t = Math.max(0, Math.min(1, Number((state as any).hoverAnim) || 0));
+		const currentSummary = state.animSummary;
+		const outgoing = state.outgoingSummaries;
+		const t = Math.max(0, Math.min(1, Number(state.hoverAnim) || 0));
 		if (t > 0.001) {
 			let list = Array.isArray(outgoing) ? outgoing.slice() : [];
 			let merged = false;
 			for (let i = 0; i < list.length; i++) {
-				const o = list[i]!;
-				if (o.dayIndex === state.animSummary!.dayIndex && o.itemIndex === state.animSummary!.itemIndex) {
+				const o = list[i];
+				if (!o) continue;
+				if (o.dayIndex === currentSummary.dayIndex && o.itemIndex === currentSummary.itemIndex) {
 					o.t = Math.max(Math.max(0, Math.min(1, Number(o.t) || 0)), t);
 					merged = true;
 					break;
 				}
 			}
 			if (!merged) {
-				list.push({ dayIndex: state.animSummary.dayIndex, itemIndex: state.animSummary.itemIndex, t });
+				list.push({ dayIndex: currentSummary.dayIndex, itemIndex: currentSummary.itemIndex, t });
 			}
 			if (list.length > 8) {
 				list.sort((a, b) => (Number(b.t) || 0) - (Number(a.t) || 0));
 				list.length = 8;
 			}
-			(state as any).outgoingSummaries = list;
+			state.outgoingSummaries = list;
 		}
-		(state as any).hoverEaseStartAt = null;
+		state.hoverEaseStartAt = null;
 	}
 	// Programmatic navigation (Alt+wheel/Alt+arrow/two-finger tap) reuses the same hover model.
 	// When switching between targets, restart the hover ease from 0 so the new target
@@ -570,10 +588,10 @@ export function setHoverSummary(
 		const switchingSummary = !!prevAnimSummary && (prevAnimSummary.dayIndex !== dayIndex || prevAnimSummary.itemIndex !== itemIndex);
 		const switchingFromDate = prevAnimDateIndex != null;
 		if (switchingSummary || switchingFromDate) {
-			(state as any).hoverAnim = 0;
-			(state as any).hoverEaseStartAt = null;
-			(state as any).hoverEaseFrom = 0;
-			(state as any).hoverEaseTo = 1;
+			state.hoverAnim = 0;
+			state.hoverEaseStartAt = null;
+			state.hoverEaseFrom = 0;
+			state.hoverEaseTo = 1;
 		}
 	} catch {
 		// ignore

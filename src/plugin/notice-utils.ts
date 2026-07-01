@@ -1,6 +1,6 @@
 import { MarkdownView, Notice, type App } from "obsidian";
 
-const activeDocument = (typeof window !== "undefined" ? window.document : ({} as Document)) as Document;
+const activeDocument = typeof window !== "undefined" ? window.document : ({} as Document);
 
 
 function formatErrorForNotice(err: unknown): string {
@@ -36,7 +36,7 @@ export function showPersistentErrorNotice(prefix: string, err: unknown): void {
 	}
 }
 
-export function wrapNoticeError<TArgs extends any[], TResult>(
+export function wrapNoticeError<TArgs extends unknown[], TResult>(
 	label: string,
 	fn: (...args: TArgs) => TResult | Promise<TResult>
 ): (...args: TArgs) => void {
@@ -56,14 +56,16 @@ export function isUserEditingMarkdown(app: App): boolean {
 		if (!view) return false;
 
 		// Prefer the editor focus signal when available.
-		const editor: any = (view as any).editor ?? null;
+		const viewWithEditor = view as MarkdownView & { editor?: { hasFocus?: () => boolean } };
+		const editor = viewWithEditor.editor ?? null;
 		if (editor && typeof editor.hasFocus === "function" && editor.hasFocus()) return true;
 
 		// Fallback: check DOM focus within the markdown editor.
 		if (typeof activeDocument === "undefined") return false;
 		const activeEl = activeDocument.activeElement as HTMLElement | null;
 		if (!activeEl) return false;
-		const contentEl: HTMLElement | null = ((view as any).contentEl as HTMLElement) ?? ((view as any).containerEl as HTMLElement) ?? null;
+		const viewWithElements = view as MarkdownView & { contentEl?: HTMLElement; containerEl?: HTMLElement };
+		const contentEl: HTMLElement | null = viewWithElements.contentEl ?? viewWithElements.containerEl ?? null;
 		if (!contentEl || !contentEl.contains(activeEl)) return false;
 
 		return !!activeEl.closest(".cm-editor, .markdown-source-view, .cm-scroller");

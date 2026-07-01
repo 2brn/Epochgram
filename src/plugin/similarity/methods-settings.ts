@@ -13,19 +13,33 @@ import { isLikelyTextFileExtension } from "../../utils";
 import { sortFilesNewestRecordFirst } from "./files";
 import { getEffectiveZeroShotMinScore, hasSimilarityAccess } from "../pro-feature-state";
 
+type SimilaritySettingsPluginState = {
+	termSimilarityPendingFiles?: Set<string>;
+	termSimilarityQueueTotal?: number;
+	termSimilarityQueueProcessed?: number;
+	scheduleMissingTopicClassificationSweep?: (reason: string) => void;
+	similarityPendingFiles?: Set<string>;
+	similarityQueueTotal?: number;
+	similarityQueueProcessed?: number;
+	similarityLastZeroShotMinScore?: number;
+	similarityLastVectorsEnabled?: boolean;
+	similarityVectorQueueStartedAt?: number;
+	queueVectorUpdate?: (path: string) => void;
+};
+
 export const methodsSettings: Pick<SimilarityMethods, "onSimilaritySettingsChanged"> = {
 	async onSimilaritySettingsChanged(
 		this: EpochPlugin,
 		key: "similarityThreshold" | "similarityZeroShotMinScore"
 	): Promise<void> {
 		if (!hasSimilarityAccess(this)) return;
-		const anyPlugin: any = this as any;
+		const state = this as EpochPlugin & SimilaritySettingsPluginState;
 
 		const clearPendingTopicClassificationQueue = (): void => {
 			try {
-				anyPlugin.termSimilarityPendingFiles = new Set<string>();
-				anyPlugin.termSimilarityQueueTotal = 0;
-				anyPlugin.termSimilarityQueueProcessed = 0;
+				state.termSimilarityPendingFiles = new Set<string>();
+				state.termSimilarityQueueTotal = 0;
+				state.termSimilarityQueueProcessed = 0;
 			} catch {
 				// ignore
 			}
@@ -33,7 +47,7 @@ export const methodsSettings: Pick<SimilarityMethods, "onSimilaritySettingsChang
 
 		const scheduleMissingTopicClassificationSweep = (reason: string): void => {
 			try {
-				(this as any)?.scheduleMissingTopicClassificationSweep?.(reason);
+				state.scheduleMissingTopicClassificationSweep?.(reason);
 			} catch {
 				// ignore
 			}
@@ -41,9 +55,9 @@ export const methodsSettings: Pick<SimilarityMethods, "onSimilaritySettingsChang
 
 		if (!hasSimilarityAccess(this)) {
 			try {
-				anyPlugin.similarityPendingFiles = new Set<string>();
-				anyPlugin.similarityQueueTotal = 0;
-				anyPlugin.similarityQueueProcessed = 0;
+				state.similarityPendingFiles = new Set<string>();
+				state.similarityQueueTotal = 0;
+				state.similarityQueueProcessed = 0;
 			} catch {
 				// ignore
 			}
@@ -54,10 +68,10 @@ export const methodsSettings: Pick<SimilarityMethods, "onSimilaritySettingsChang
 		if (key === "similarityZeroShotMinScore") {
 			const clampedNow = getEffectiveZeroShotMinScore(this);
 			const prev =
-				typeof anyPlugin.similarityLastZeroShotMinScore === "number"
-					? anyPlugin.similarityLastZeroShotMinScore
+				typeof state.similarityLastZeroShotMinScore === "number"
+					? state.similarityLastZeroShotMinScore
 					: clampedNow;
-			anyPlugin.similarityLastZeroShotMinScore = clampedNow;
+			state.similarityLastZeroShotMinScore = clampedNow;
 
 			if (prev !== clampedNow) {
 				if (!isTopicSimilarityEnabled(this)) {
@@ -70,16 +84,16 @@ export const methodsSettings: Pick<SimilarityMethods, "onSimilaritySettingsChang
 		}
 
 		const prevVectorsEnabled =
-			typeof anyPlugin.similarityLastVectorsEnabled === "boolean"
-				? anyPlugin.similarityLastVectorsEnabled
+			typeof state.similarityLastVectorsEnabled === "boolean"
+				? state.similarityLastVectorsEnabled
 				: false;
 		const vectorsEnabledNow = embeddingsSimilarityEnabled(this);
-		anyPlugin.similarityLastVectorsEnabled = vectorsEnabledNow;
+		state.similarityLastVectorsEnabled = vectorsEnabledNow;
 		if (!vectorsEnabledNow) {
 			try {
-				anyPlugin.similarityPendingFiles = new Set<string>();
-				anyPlugin.similarityQueueTotal = 0;
-				anyPlugin.similarityQueueProcessed = 0;
+				state.similarityPendingFiles = new Set<string>();
+				state.similarityQueueTotal = 0;
+				state.similarityQueueProcessed = 0;
 			} catch {
 				// ignore
 			}
@@ -91,7 +105,7 @@ export const methodsSettings: Pick<SimilarityMethods, "onSimilaritySettingsChang
 
 		void loadEmbeddingsModelViaWorker(this, modelId);
 		try {
-			(anyPlugin as any).similarityVectorQueueStartedAt = now();
+			state.similarityVectorQueueStartedAt = now();
 		} catch {
 			// ignore
 		}
@@ -103,12 +117,12 @@ export const methodsSettings: Pick<SimilarityMethods, "onSimilaritySettingsChang
 				for (const f of files) {
 					if (!embeddingsComputeEnabled(this)) break;
 					if (!this.shouldIndexFile(f)) continue;
-					if (!isLikelyTextFileExtension(String((f as any)?.extension ?? ""))) continue;
-					const existing: any = (store.files as any)?.[f.path];
+					if (!isLikelyTextFileExtension(String(f.extension ?? ""))) continue;
+					const existing = store.files[f.path];
 					const hasHash = typeof existing?.h === "string" && existing.h.trim().length > 0;
 					const hasVector = Array.isArray(existing?.v);
 					if (hasHash && hasVector) continue;
-					(this as any).queueVectorUpdate?.(f.path);
+					state.queueVectorUpdate?.(f.path);
 					enq++;
 					if (enq % 50 === 0) {
 						await sleep(0);

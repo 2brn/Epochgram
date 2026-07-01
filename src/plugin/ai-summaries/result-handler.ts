@@ -13,6 +13,10 @@ import { formatAiSummaryOutput } from "../ai-summary-format";
 import { clearEpochInputAiSummaryError, markEpochInputAiSummaryError } from "./epoch-input-ai-fallback";
 import { isGenerateEpochsEffective, isSummarizeAIEffective } from "../pro-feature-state";
 
+type EpochBucket = "day" | "2days" | "4days" | "week" | "2weeks" | "month" | "3months" | "6months" | "year";
+type EpochStart = string;
+type EpochEnd = string;
+
 type ChunkGroupState = {
 	filePath: string;
 	kind: AiSummaryJob["kind"];
@@ -20,7 +24,7 @@ type ChunkGroupState = {
 	blockStart: number;
 	blockEnd: number;
 	source: string;
-	epochBucket?: string;
+	epochBucket?: EpochBucket;
 	epochStart?: string;
 	epochEnd?: string;
 	related?: string;
@@ -36,56 +40,94 @@ type ChunkGroupState = {
 	createdAt: number;
 };
 
+type ResultHandlerRuntime = {
+	aiBridgeChunkGroups?: Map<string, ChunkGroupState>;
+	aiBridgeReduceFallbackByJobId?: Map<string, string>;
+	queueVectorUpdate?: (filePath: string) => void;
+	queueTermSimilarityUpdate?: (filePath: string) => void;
+	enqueueEpochsForDateKeys?: (dateKeys: string[], options?: { force?: boolean; showNotice?: boolean }) => Promise<void>;
+	aiBridge?: AiBridgeServer | null;
+};
+
+type ResultHandlerIndexerRuntime = {
+	updateAggregatedEntries?: (filePath: string) => void;
+};
+
+type MutableSummaryEntry = FileDateEntry & {
+	aiSummary?: string;
+	aiSummaryInputHash?: string;
+	aiSummaryVisible?: boolean;
+};
+
+type ResultJobExtras = {
+	timelineVisible?: boolean;
+	epochBucket?: EpochBucket;
+	epochStart?: EpochStart;
+	epochEnd?: EpochEnd;
+	related?: string;
+};
+
+function getRuntime(plugin: EpochPlugin): ResultHandlerRuntime {
+	return plugin as unknown as ResultHandlerRuntime;
+}
+
+function getJobExtras(job: AiSummaryJob): ResultJobExtras {
+	return job;
+}
+
 function getChunkGroups(plugin: EpochPlugin): Map<string, ChunkGroupState> {
-	const anyPlugin: any = plugin as any;
-	if (!anyPlugin.aiBridgeChunkGroups) {
-		anyPlugin.aiBridgeChunkGroups = new Map<string, ChunkGroupState>();
+	const runtime = getRuntime(plugin);
+	if (!runtime.aiBridgeChunkGroups) {
+		runtime.aiBridgeChunkGroups = new Map<string, ChunkGroupState>();
 	}
-	return anyPlugin.aiBridgeChunkGroups as Map<string, ChunkGroupState>;
+	return runtime.aiBridgeChunkGroups;
 }
 
 function getReduceFallbackByJobId(plugin: EpochPlugin): Map<string, string> {
-	const anyPlugin: any = plugin as any;
-	if (!anyPlugin.aiBridgeReduceFallbackByJobId) {
-		anyPlugin.aiBridgeReduceFallbackByJobId = new Map<string, string>();
+	const runtime = getRuntime(plugin);
+	if (!runtime.aiBridgeReduceFallbackByJobId) {
+		runtime.aiBridgeReduceFallbackByJobId = new Map<string, string>();
 	}
-	return anyPlugin.aiBridgeReduceFallbackByJobId as Map<string, string>;
+	return runtime.aiBridgeReduceFallbackByJobId;
 }
 
 function storeEntrySummaries(plugin: EpochPlugin, job: AiSummaryJob, entries: FileDateEntry[], rawSummary: string): void {
+	const runtime = getRuntime(plugin);
+	const extras = getJobExtras(job);
 	const finalText = formatAiSummaryOutput(rawSummary);
 	if (!finalText) return;
-	clearEpochInputAiSummaryError(plugin as any, entries as any[]);
+	clearEpochInputAiSummaryError(plugin, entries);
 	const explicitVisible = (() => {
 		try {
 			if (isSummarizeAIEffective(plugin)) return true;
 		} catch {
 			// ignore
 		}
-		return (job as any)?.timelineVisible === true;
+		return extras.timelineVisible === true;
 	})();
 
 	for (const entry of entries) {
-		(entry as any).aiSummary = finalText;
-		(entry as any).aiSummaryInputHash = job.inputHash;
-		(entry as any).aiSummaryVisible = explicitVisible;
+		const mutable = entry as MutableSummaryEntry;
+		mutable.aiSummary = finalText;
+		mutable.aiSummaryInputHash = job.inputHash;
+		mutable.aiSummaryVisible = explicitVisible;
 	}
 
-	const indexerAny: any = plugin.indexer as any;
+	const indexer = plugin.indexer as unknown as ResultHandlerIndexerRuntime;
 	try {
-		indexerAny.updateAggregatedEntries(job.filePath);
+		indexer.updateAggregatedEntries?.(job.filePath);
 	} catch {
 		// ignore
 	}
 	schedulePersist(plugin);
 	if (explicitVisible) {
 		try {
-			(plugin as any).queueVectorUpdate?.(job.filePath);
+			runtime.queueVectorUpdate?.(job.filePath);
 		} catch {
 			// ignore
 		}
 		try {
-			(plugin as any).queueTermSimilarityUpdate?.(job.filePath);
+			runtime.queueTermSimilarityUpdate?.(job.filePath);
 		} catch {
 			// ignore
 		}
@@ -93,9 +135,9 @@ function storeEntrySummaries(plugin: EpochPlugin, job: AiSummaryJob, entries: Fi
 
 	try {
 		if (plugin?.hasProAccess?.() && Platform.isDesktopApp && isGenerateEpochsEffective(plugin)) {
-			const dateKeys = Array.from(new Set(entries.map((e) => String((e as any)?.date ?? "")).filter(isDateKey)));
-			if (dateKeys.length > 0 && typeof (plugin as any).enqueueEpochsForDateKeys === "function") {
-				void (plugin as any).enqueueEpochsForDateKeys(dateKeys, { force: false, showNotice: false });
+			const dateKeys = Array.from(new Set(entries.map((e) => e.date).filter(isDateKey)));
+			if (dateKeys.length > 0 && typeof runtime.enqueueEpochsForDateKeys === "function") {
+				void runtime.enqueueEpochsForDateKeys(dateKeys, { force: false, showNotice: false });
 			}
 		}
 	} catch { void 0; }
@@ -166,6 +208,8 @@ function dedupeNonEmptyLines(text: string): string {
 }
 
 export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, result: { summary?: string; error?: string }): void {
+	const runtime = getRuntime(plugin);
+	const extras = getJobExtras(job);
 	const tuning = getAiSummaryTuning(plugin);
 	const hasError = typeof result.error === "string" && result.error.trim().length > 0;
 	const summary = typeof result.summary === "string" ? result.summary : "";
@@ -195,7 +239,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 
 		const groups = getChunkGroups(plugin);
 		const groupIdKey = String(groupId);
-		const chunkCountNum = chunkCount as number;
+		const chunkCountNum = chunkCount ?? 0;
 		let g = groups.get(groupIdKey);
 		if (!g) {
 			g = {
@@ -205,10 +249,10 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 				blockStart: job.blockStart,
 				blockEnd: job.blockEnd,
 				source: job.source,
-				epochBucket: (job as any).epochBucket,
-				epochStart: (job as any).epochStart,
-				epochEnd: (job as any).epochEnd,
-				related: (job as any).related,
+				epochBucket: extras.epochBucket,
+				epochStart: extras.epochStart,
+				epochEnd: extras.epochEnd,
+				related: extras.related,
 				inputHash: job.inputHash,
 				depth: 0,
 				chunkCount: chunkCountNum,
@@ -226,14 +270,14 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 			g.fallbackText = undefined;
 			g.createdAt = Date.now();
 			g.depth = 0;
-			g.epochBucket = (job as any).epochBucket;
-			g.epochStart = (job as any).epochStart;
-			g.epochEnd = (job as any).epochEnd;
-			g.related = (job as any).related;
+			g.epochBucket = extras.epochBucket;
+			g.epochStart = extras.epochStart;
+			g.epochEnd = extras.epochEnd;
+			g.related = extras.related;
 		}
-		g.done.add(chunkIndex!);
+		g.done.add(chunkIndex ?? 0);
 		if (!hasError && hasUsableSummary) {
-			g.summaries.set(chunkIndex!, summary);
+			g.summaries.set(chunkIndex ?? 0, summary);
 		}
 
 		if (g.done.size >= g.chunkCount) {
@@ -260,7 +304,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 			}
 
 			const depth = typeof g.depth === "number" ? g.depth : 0;
-			const bridge: AiBridgeServer | null = (plugin as any).aiBridge ?? null;
+			const bridge: AiBridgeServer | null = runtime.aiBridge ?? null;
 			if (!bridge || depth >= tuning.reduceMaxDepth) {
 				storeEpochSummary(plugin, job, combined);
 				return;
@@ -278,11 +322,11 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 
 			if (reduceChunks.length === 1) {
 				const reduceJobId = mkId();
-					getReduceFallbackByJobId(plugin).set(reduceJobId, combined);
-				const epochBucket = (g.epochBucket ?? (job as any).epochBucket) as any;
-				const epochStart = (g.epochStart ?? (job as any).epochStart ?? job.date) as any;
-				const epochEnd = (g.epochEnd ?? (job as any).epochEnd ?? epochStart) as any;
-				const related = String(g.related ?? (job as any).related ?? "");
+				getReduceFallbackByJobId(plugin).set(reduceJobId, combined);
+				const epochBucket: EpochBucket = g.epochBucket ?? extras.epochBucket ?? "day";
+				const epochStart = g.epochStart ?? extras.epochStart ?? job.date;
+				const epochEnd = g.epochEnd ?? extras.epochEnd ?? epochStart;
+				const related = String(g.related ?? extras.related ?? "");
 				bridge.enqueue([
 					{
 						id: reduceJobId,
@@ -292,8 +336,8 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 						blockStart: job.blockStart,
 						blockEnd: job.blockEnd,
 						source: job.source,
-						input: reduceChunks[0]!,
-						related: related as any,
+						input: reduceChunks[0],
+						related,
 						context: buildEpochReduceContext(epochBucket, epochStart, epochEnd, related),
 						reduce: true,
 						reduceDepth: nextDepth,
@@ -315,22 +359,22 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 				blockStart: job.blockStart,
 				blockEnd: job.blockEnd,
 				source: job.source,
-				epochBucket: g.epochBucket ?? (job as any).epochBucket,
-				epochStart: g.epochStart ?? (job as any).epochStart,
-				epochEnd: g.epochEnd ?? (job as any).epochEnd,
+				epochBucket: g.epochBucket ?? extras.epochBucket,
+				epochStart: g.epochStart ?? extras.epochStart,
+				epochEnd: g.epochEnd ?? extras.epochEnd,
 				inputHash: job.inputHash,
 				depth: nextDepth,
 				chunkCount: reduceChunks.length,
 				done: new Set<number>(),
 				summaries: new Map<number, string>(),
 				fallbackText: combined,
-				related: (g.related ?? (job as any).related) as any,
+				related: g.related ?? extras.related,
 				createdAt: Date.now()
 			});
-			const epochBucket = (g.epochBucket ?? (job as any).epochBucket) as any;
-			const epochStart = (g.epochStart ?? (job as any).epochStart ?? job.date) as any;
-			const epochEnd = (g.epochEnd ?? (job as any).epochEnd ?? epochStart) as any;
-			const related = String(g.related ?? (job as any).related ?? "");
+			const epochBucket: EpochBucket = g.epochBucket ?? extras.epochBucket ?? "day";
+			const epochStart = g.epochStart ?? extras.epochStart ?? job.date;
+			const epochEnd = g.epochEnd ?? extras.epochEnd ?? epochStart;
+			const related = String(g.related ?? extras.related ?? "");
 			const epochReduceContext = buildEpochReduceContext(epochBucket, epochStart, epochEnd, related);
 			const reduceJobs: AiSummaryJob[] = [];
 			for (let i = 0; i < reduceChunks.length; i++) {
@@ -345,8 +389,8 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 					blockStart: job.blockStart,
 					blockEnd: job.blockEnd,
 					source: job.source,
-					input: reduceChunks[i]!,
-					related: related as any,
+					input: reduceChunks[i],
+					related,
 					context: epochReduceContext,
 					reduce: true,
 					reduceDepth: nextDepth,
@@ -368,7 +412,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 	if (!data) return;
 	const entries = resolveTargetEntries(data, job);
 	if (entries.length === 0) return;
-	const representative = entries[0]!;
+	const representative = entries[0];
 
 	if (!isChunked) {
 		const reduceFallbackByJobId = getReduceFallbackByJobId(plugin);
@@ -379,7 +423,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 				storeEntrySummaries(plugin, job, entries, fallback);
 			}
 			else {
-				markEpochInputAiSummaryError(plugin as any, entries as any[], job.inputHash, result.error ?? "(no summary)");
+				markEpochInputAiSummaryError(plugin, entries, job.inputHash, result.error ?? "(no summary)");
 			}
 			return;
 		}
@@ -389,8 +433,8 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 	}
 
 	const groupIdKey = String(groupId);
-	const chunkCountNum = chunkCount as number;
-	const chunkIndexNum = chunkIndex as number;
+	const chunkCountNum = chunkCount ?? 0;
+	const chunkIndexNum = chunkIndex ?? 0;
 
 	const groups = getChunkGroups(plugin);
 	let g = groups.get(groupIdKey);
@@ -402,7 +446,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 			blockStart: job.blockStart,
 			blockEnd: job.blockEnd,
 			source: job.source,
-			related: (job as any).related,
+			related: extras.related,
 			targets: job.targets,
 			groupType: job.groupType,
 			groupDate: job.groupDate,
@@ -426,7 +470,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 		g.targets = job.targets;
 		g.groupType = job.groupType;
 		g.groupDate = job.groupDate;
-		g.related = (job as any).related;
+		g.related = extras.related;
 	}
 	g.done.add(chunkIndexNum);
 	if (!hasError && hasUsableSummary) {
@@ -439,7 +483,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 			groups.delete(groupIdKey);
 			const fb = (g.fallbackText ?? "").trim();
 			if (fb) storeEntrySummaries(plugin, job, entries, fb);
-			else markEpochInputAiSummaryError(plugin as any, entries as any[], g.inputHash, result.error ?? "(no summary)");
+			else markEpochInputAiSummaryError(plugin, entries, g.inputHash, result.error ?? "(no summary)");
 			return;
 		}
 
@@ -454,12 +498,12 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 		if (!combined) {
 			const fb = (g.fallbackText ?? "").trim();
 			if (fb) storeEntrySummaries(plugin, job, entries, fb);
-			else markEpochInputAiSummaryError(plugin as any, entries as any[], g.inputHash, result.error ?? "(no summary)");
+			else markEpochInputAiSummaryError(plugin, entries, g.inputHash, result.error ?? "(no summary)");
 			return;
 		}
 
 		const depth = typeof g.depth === "number" ? g.depth : 0;
-		const bridge: AiBridgeServer | null = (plugin as any).aiBridge ?? null;
+		const bridge: AiBridgeServer | null = runtime.aiBridge ?? null;
 		if (!bridge) {
 			storeEntrySummaries(plugin, job, entries, combined);
 			return;
@@ -492,9 +536,9 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 					blockStart: job.blockStart,
 					blockEnd: job.blockEnd,
 					source: job.source,
-					input: reduceChunks[0]!,
-					related: (g.related ?? (job as any).related) as any,
-					context: buildReduceContext(job.filePath, representative, nextDepth, String(g.related ?? (job as any).related ?? "")),
+					input: reduceChunks[0],
+					related: g.related ?? extras.related,
+					context: buildReduceContext(job.filePath, representative, nextDepth, String(g.related ?? extras.related ?? "")),
 					reduce: true,
 					reduceDepth: nextDepth,
 					inputHash: job.inputHash,
@@ -540,9 +584,9 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 				blockStart: job.blockStart,
 				blockEnd: job.blockEnd,
 				source: job.source,
-				input: reduceChunks[i]!,
-				related: (g.related ?? (job as any).related) as any,
-				context: buildReduceContext(job.filePath, representative, nextDepth, String(g.related ?? (job as any).related ?? "")),
+				input: reduceChunks[i],
+					related: g.related ?? extras.related,
+					context: buildReduceContext(job.filePath, representative, nextDepth, String(g.related ?? extras.related ?? "")),
 				reduce: true,
 				reduceDepth: nextDepth,
 				inputHash: job.inputHash,
@@ -558,8 +602,8 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 
 export function clearResultHandlerState(plugin: EpochPlugin): void {
 	try {
-		const anyPlugin: any = plugin as any;
-		if (anyPlugin.aiBridgeChunkGroups) anyPlugin.aiBridgeChunkGroups.clear();
-		if (anyPlugin.aiBridgeReduceFallbackByJobId) anyPlugin.aiBridgeReduceFallbackByJobId.clear();
+		const runtime = getRuntime(plugin);
+		runtime.aiBridgeChunkGroups?.clear();
+		runtime.aiBridgeReduceFallbackByJobId?.clear();
 	} catch { void 0; }
 }

@@ -1,4 +1,5 @@
 import { MarkdownView, Platform, setIcon, TAbstractFile, TFile, WorkspaceLeaf } from "obsidian";
+import type { EpochPlugin } from "../../main";
 
 import { EpochCanvas } from "../epoch-canvas";
 import {
@@ -7,8 +8,93 @@ import {
 	updateFilterPanelState
 } from "../epoch-view/filter-ui";
 
-export async function epochViewOnOpen(view: any): Promise<void> {
-	view.openedAt = performance.now();
+function nowMs(): number {
+	return window.performance?.now?.() ?? Date.now();
+}
+
+type LifecycleViewLike = {
+	openedAt: number;
+	startupRefocusDone: boolean;
+	container: HTMLElement;
+	contentEl: HTMLElement;
+	rootEl: HTMLElement | null;
+	controlsEl: HTMLElement | null;
+	filtersExpanded: boolean;
+	buttonSettings: HTMLElement | null;
+	filtersPanelEl: HTMLElement | null;
+	buttonReview: HTMLElement | null;
+	buttonEdits: HTMLElement | null;
+	buttonParsed: HTMLElement | null;
+	buttonAttachments: HTMLElement | null;
+	buttonEpochs: HTMLElement | null;
+	reviewFilterMode: "reviewed+draft" | "draft";
+	showAttachments: boolean;
+	showTrackedChanges: boolean;
+	showContentDates: boolean;
+	showPropDates: boolean;
+	showEpochsView: boolean;
+	searchQuery: string;
+	searchControlEl: HTMLElement | null;
+	searchControlIconEl: HTMLElement | null;
+	searchControlTextEl: HTMLElement | null;
+	searchControlResizeObserver: ResizeObserver | null;
+	searchControlLayoutRaf: number | null;
+	searchControlRefreshRaf: number | null;
+	searchPersistTimer?: number | null;
+	startupSnapPath: string | null;
+	startupDeferredSnapPath: string | null;
+	startupDeferredSnapUntil: number;
+	activeFilePath: string | null;
+	leaf: WorkspaceLeaf;
+	plugin: EpochPlugin & {
+		viewPreferences?: {
+			showDraftsOnly?: boolean;
+			showAttachments?: boolean;
+			showTrackedChanges?: boolean;
+			showParsed?: boolean;
+			showEpochsView?: boolean;
+		};
+		notifyProFeature?: (message: string) => void;
+		settings?: { parseDatesInFrontmatter?: boolean };
+	};
+	app: {
+		workspace: {
+			on: (event: string, cb: (...args: unknown[]) => unknown) => unknown;
+			activeLeaf?: WorkspaceLeaf | null;
+			getLeavesOfType?: (type: string) => WorkspaceLeaf[];
+		};
+		vault: {
+			on: (event: string, cb: (...args: unknown[]) => unknown) => unknown;
+			getAbstractFileByPath: (path: string) => TAbstractFile | null;
+		};
+	};
+	canvas: (EpochCanvas & { onAfterDraw?: (() => void) | null }) | null;
+	registerDomEvent: (el: HTMLElement, event: string, callback: (evt: Event) => void, options?: boolean | AddEventListenerOptions) => void;
+	registerEvent: (ref: unknown) => void;
+	setFiltersExpanded: (expanded: boolean) => void;
+	isPro: () => boolean;
+	isEpochsEnabled: () => boolean;
+	cycleReviewFilterMode: () => void;
+	setShowTrackedChanges: (value: boolean) => void;
+	setShowContentDates: (value: boolean) => void;
+	setShowAttachments: (value: boolean) => void;
+	setShowEpochsView: (value: boolean) => void;
+	updateFilterButtons: () => void;
+	scheduleSearchControlRefresh: () => void;
+	scheduleSearchControlLayout: () => void;
+	openSearchModal: () => void;
+	updateSearchControl: () => void;
+	refreshSyncedEpochAvailability: () => void;
+	updateActiveFile: (_leaf?: unknown, options?: { suppressFocus?: boolean }) => void;
+	syncCanvasActiveFile: (file: TFile | null, options?: { suppressFocus?: boolean }) => void;
+	updateProUiState: () => void;
+	startStartupDefaultNoteRefocus: () => void;
+	clearStartupRefocusTimer: () => void;
+};
+
+export async function epochViewOnOpen(_view: unknown): Promise<void> {
+	const view = _view as LifecycleViewLike;
+	view.openedAt = nowMs();
 	view.startupRefocusDone = false;
 	view.container = view.contentEl.createDiv("epoch-container");
 	const root = view.container.createDiv("epoch-root");
@@ -27,8 +113,8 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 	view.buttonSettings = createFilterToggle({
 		container: view.controlsEl,
 		filtersExpanded: view.filtersExpanded,
-		registerDomEvent: (el, event, callback, options) => view.registerDomEvent(el, event as any, callback as any, options),
-		onToggle: () => view.setFiltersExpanded(!view.filtersExpanded)
+		registerDomEvent: (el, event, callback, options) => void view.registerDomEvent(el, event, callback, options),
+		onToggle: () => void view.setFiltersExpanded(!view.filtersExpanded)
 	});
 	view.filtersPanelEl = view.controlsEl.createDiv("epoch-control-panel epoch-filter-buttons");
 	updateFilterPanelState({
@@ -40,9 +126,9 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 
 	view.buttonReview = createFilterButton({
 		container: view.filtersPanelEl,
-		registerDomEvent: (el, event, callback, options) => view.registerDomEvent(el, event as any, callback as any, options),
+		registerDomEvent: (el, event, callback, options) => void view.registerDomEvent(el, event, callback, options),
 		isPro: () => view.isPro(),
-		notifyProFeature: (message) => view.plugin?.notifyProFeature?.(message),
+		notifyProFeature: (message) => void view.plugin?.notifyProFeature?.(message),
 		config: {
 			label: "Review",
 			tooltip: "Reviewed & Drafts",
@@ -58,9 +144,9 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 
 	view.buttonEdits = createFilterButton({
 		container: view.filtersPanelEl,
-		registerDomEvent: (el, event, callback, options) => view.registerDomEvent(el, event as any, callback as any, options),
+		registerDomEvent: (el, event, callback, options) => void view.registerDomEvent(el, event, callback, options),
 		isPro: () => view.isPro(),
-		notifyProFeature: (message) => view.plugin?.notifyProFeature?.(message),
+		notifyProFeature: (message) => void view.plugin?.notifyProFeature?.(message),
 		config: {
 			label: "Edits",
 			tooltip: "Show tracked",
@@ -78,9 +164,9 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 
 	view.buttonParsed = createFilterButton({
 		container: view.filtersPanelEl,
-		registerDomEvent: (el, event, callback, options) => view.registerDomEvent(el, event as any, callback as any, options),
+		registerDomEvent: (el, event, callback, options) => void view.registerDomEvent(el, event, callback, options),
 		isPro: () => view.isPro(),
-		notifyProFeature: (message) => view.plugin?.notifyProFeature?.(message),
+		notifyProFeature: (message) => void view.plugin?.notifyProFeature?.(message),
 		config: {
 			label: "Parsed",
 			tooltip: "Show parsed",
@@ -96,9 +182,9 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 
 	view.buttonAttachments = createFilterButton({
 		container: view.filtersPanelEl,
-		registerDomEvent: (el, event, callback, options) => view.registerDomEvent(el, event as any, callback as any, options),
+		registerDomEvent: (el, event, callback, options) => void view.registerDomEvent(el, event, callback, options),
 		isPro: () => view.isPro(),
-		notifyProFeature: (message) => view.plugin?.notifyProFeature?.(message),
+		notifyProFeature: (message) => void view.plugin?.notifyProFeature?.(message),
 		config: {
 			label: "Attachments",
 			tooltip: "Show attachments",
@@ -114,28 +200,29 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 
 	view.buttonEpochs = createFilterButton({
 		container: view.filtersPanelEl,
-		registerDomEvent: (el, event, callback, options) => view.registerDomEvent(el, event as any, callback as any, options),
+		registerDomEvent: (el, event, callback, options) => void view.registerDomEvent(el, event, callback, options),
 		isPro: () => view.isPro(),
-		notifyProFeature: (message) => view.plugin?.notifyProFeature?.(message),
+		notifyProFeature: (message) => void view.plugin?.notifyProFeature?.(message),
 		config: {
 			label: "Epochs",
 			tooltip: "Show Epochs",
 			icon: "hourglass",
 			requiresPro: true,
 			proMessage: "Epochs",
-			getValue: () => view.showEpochsView,
-			onToggle: () => view.setShowEpochsView(!view.showEpochsView)
+				getValue: () => view.showEpochsView,
+				onToggle: () => void view.setShowEpochsView(!view.showEpochsView)
 		}
 	});
 	view.updateFilterButtons();
-	view.canvas = new EpochCanvas(root, view.plugin, view.leaf);
+		view.canvas = new EpochCanvas(root, view.plugin, view.leaf);
 	try {
-		(view.canvas as any).onAfterDraw = () => {
+		view.canvas.onAfterDraw = () => {
 			view.scheduleSearchControlRefresh();
 		};
 	} catch {
 		// ignore
 	}
+	if (!view.canvas) return;
 	view.canvas.setReviewFilterMode(view.reviewFilterMode);
 	view.canvas.setShowTrackedChanges(view.showTrackedChanges);
 	view.canvas.setShowContentDates(view.showContentDates);
@@ -152,8 +239,9 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 	view.searchControlIconEl = view.searchControlEl.createSpan("epoch-search-control-icon");
 	setIcon(view.searchControlIconEl, view.showEpochsView ? "hourglass" : "search");
 	view.searchControlTextEl = view.searchControlEl.createSpan("epoch-search-control-text");
-	view.registerDomEvent(view.searchControlEl, "click", () => view.openSearchModal());
-	view.registerDomEvent(view.searchControlEl, "keydown", (e: KeyboardEvent) => {
+	view.registerDomEvent(view.searchControlEl, "click", () => void view.openSearchModal());
+	view.registerDomEvent(view.searchControlEl, "keydown", (e: Event) => {
+		if (!(e instanceof KeyboardEvent)) return;
 		if (e.key === "Enter" || e.key === " ") {
 			e.preventDefault();
 			view.openSearchModal();
@@ -175,9 +263,7 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 	view.refreshSyncedEpochAvailability();
 	const resolveFileFromLeafState = (leaf: WorkspaceLeaf | null | undefined): TFile | null => {
 		try {
-			const getViewState = (leaf as any)?.getViewState;
-			if (typeof getViewState !== "function") return null;
-			const vs = getViewState.call(leaf);
+			const vs = leaf?.getViewState?.();
 			const raw = vs?.state?.file ?? vs?.state?.path ?? null;
 			const path = typeof raw === "string" ? raw : "";
 			if (!path) return null;
@@ -193,7 +279,7 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 			let leafFilePath: string | null = null;
 			let shouldForceFocus = false;
 			try {
-				const leaf = (view.app.workspace as any)?.activeLeaf as WorkspaceLeaf | null | undefined;
+				const leaf = view.app.workspace.activeLeaf;
 				const leafView = leaf?.view;
 				if (leafView instanceof MarkdownView) {
 					const f = leafView.file;
@@ -216,18 +302,21 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 	// cheap backstop to keep highlights in sync.
 	view.registerEvent(
 		view.app.workspace.on("layout-change", () => {
-			const now = performance.now();
+			const now = nowMs();
 			const allowStartupFocus = view.openedAt > 0 && now - view.openedAt < 15_000 && !view.startupRefocusDone;
 			view.updateActiveFile(undefined, { suppressFocus: allowStartupFocus ? false : true });
 		})
 	);
 	view.registerEvent(
-		view.app.workspace.on("file-open", (file: TFile | null) => {
+		view.app.workspace.on("file-open", (...args: unknown[]) => {
+			const file = args[0];
 			view.syncCanvasActiveFile(file instanceof TFile ? file : null);
 		})
 	);
 	view.registerEvent(
-		view.app.vault.on("rename", (file: TAbstractFile, oldPath: string) => {
+		view.app.vault.on("rename", (...args: unknown[]) => {
+			const file = args[0];
+			const oldPath = typeof args[1] === "string" ? args[1] : "";
 			if (!(file instanceof TFile)) return;
 			if (!view.activeFilePath) return;
 			if (view.activeFilePath !== oldPath && view.activeFilePath !== file.path) return;
@@ -242,10 +331,12 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 	view.registerEvent(view.app.workspace.on("css-change", refreshStyles));
 
 	window.requestAnimationFrame(() => {
+		const canvas = view.canvas;
+		if (!canvas) return;
 		let snapFile: TFile | null = null;
 		let cursorLine: number | null = null;
 		try {
-			const leaf = (view.app.workspace as any)?.activeLeaf as WorkspaceLeaf | null | undefined;
+			const leaf = view.app.workspace.activeLeaf;
 			const leafView = leaf?.view;
 			if (leafView instanceof MarkdownView) {
 				const f = leafView.file;
@@ -263,7 +354,7 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 		}
 		if (!snapFile) {
 			try {
-				const leaves: any[] = (view.app.workspace as any)?.getLeavesOfType?.("markdown") ?? [];
+				const leaves = view.app.workspace.getLeavesOfType?.("markdown") ?? [];
 				for (const l of leaves) {
 					const v = l?.view;
 					if (!(v instanceof MarkdownView)) continue;
@@ -273,9 +364,7 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 						break;
 					}
 					try {
-						const getViewState = l?.getViewState;
-						if (typeof getViewState !== "function") continue;
-						const vs = getViewState.call(l);
+						const vs = l?.getViewState?.();
 						const raw = vs?.state?.file ?? vs?.state?.path ?? null;
 						const path = typeof raw === "string" ? raw : "";
 						if (!path) continue;
@@ -298,16 +387,16 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 		// Initialize canvas size first so startup snap uses the same geometry as
 		// later manual/ribbon snaps.
 		const hasOpenFile = !!view.startupSnapPath;
-		view.canvas.initSize();
+		canvas.initSize();
 		if (hasOpenFile) {
 			if (Platform.isMobileApp && cursorLine == null) {
 				view.startupDeferredSnapPath = view.startupSnapPath;
-				view.startupDeferredSnapUntil = performance.now() + 12_000;
+				view.startupDeferredSnapUntil = nowMs() + 12_000;
 			} else {
-				view.canvas.snapInitialPosition(view.startupSnapPath, cursorLine, { draw: false });
+				canvas.snapInitialPosition(view.startupSnapPath, cursorLine, { draw: false });
 			}
 		} else {
-			view.canvas.snapInitialPosition(null, null, { draw: false });
+			canvas.snapInitialPosition(null, null, { draw: false });
 		}
 		view.updateActiveFile();
 		// Reconcile one frame later: some startup layouts settle after the first
@@ -331,47 +420,48 @@ export async function epochViewOnOpen(view: any): Promise<void> {
 	});
 }
 
-export async function epochViewOnClose(view: any): Promise<void> {
-	view.clearStartupRefocusTimer();
-	view.startupSnapPath = null;
-	view.startupDeferredSnapPath = null;
-	view.startupDeferredSnapUntil = 0;
+export async function epochViewOnClose(view: unknown): Promise<void> {
+	const state = view as LifecycleViewLike;
+	state.clearStartupRefocusTimer();
+	state.startupSnapPath = null;
+	state.startupDeferredSnapPath = null;
+	state.startupDeferredSnapUntil = 0;
 	try {
-		if (view.searchControlLayoutRaf != null) {
-			window.cancelAnimationFrame(view.searchControlLayoutRaf);
+		if (state.searchControlLayoutRaf != null) {
+			window.cancelAnimationFrame(state.searchControlLayoutRaf);
 		}
 	} catch {
 		// ignore
 	}
-	view.searchControlLayoutRaf = null;
+	state.searchControlLayoutRaf = null;
 	try {
-		if (view.searchControlRefreshRaf != null) {
-			window.cancelAnimationFrame(view.searchControlRefreshRaf);
+		if (state.searchControlRefreshRaf != null) {
+			window.cancelAnimationFrame(state.searchControlRefreshRaf);
 		}
 	} catch {
 		// ignore
 	}
-	view.searchControlRefreshRaf = null;
+	state.searchControlRefreshRaf = null;
 	try {
-		view.searchControlResizeObserver?.disconnect?.();
+		state.searchControlResizeObserver?.disconnect?.();
 	} catch {
 		// ignore
 	}
-	view.searchControlResizeObserver = null;
+	state.searchControlResizeObserver = null;
 	try {
-		if (view.searchPersistTimer != null) {
-			window.clearTimeout(view.searchPersistTimer);
+		if (state.searchPersistTimer != null) {
+			window.clearTimeout(state.searchPersistTimer);
 		}
 	} catch {
 		// ignore
 	}
-	view.searchPersistTimer = null;
+	state.searchPersistTimer = null;
 	try {
-		if (view.canvas) (view.canvas as any).onAfterDraw = null;
+		if (state.canvas) state.canvas.onAfterDraw = null;
 	} catch {
 		// ignore
 	}
-	view.rootEl = null;
-	view.container?.empty();
-	view.canvas?.destroy();
+	state.rootEl = null;
+	state.container?.empty();
+	state.canvas?.destroy();
 }

@@ -1,13 +1,32 @@
 import type { EpochPlugin } from '../main'
 
-type ParsedJsonResult<T = any> = {
+type ParsedJsonResult<T = unknown> = {
 	value: T | null
 	salvaged: boolean
 	prefixLen: number
 }
 
-function parseJsonBestEffort<T = any>(raw: string, maxPrefixLen = 64): ParsedJsonResult<T> {
-	const input = typeof raw === 'string' ? raw : String(raw ?? '')
+type TimelineSearchCacheRuntime = EpochPlugin & {
+	__timelineSearchCacheDiskLoaded?: boolean
+	__timelineSearchCacheDiskPayload?: string
+	__timelineSearchCacheLastPayload?: string
+	__timelineSearchCacheDirty?: boolean
+	__timelineSearchCacheWritePromise?: Promise<void> | null
+	__timelineSearchCacheSaveTimer?: number | null
+	__timelineSearchIndexVersion?: number
+}
+
+function getRuntime(plugin: EpochPlugin): TimelineSearchCacheRuntime {
+	return plugin
+}
+
+function parseJsonBestEffort<T = unknown>(raw: unknown, maxPrefixLen = 64): ParsedJsonResult<T> {
+	const input = (() => {
+		if (typeof raw === 'string') return raw
+		if (raw == null) return ''
+		if (typeof raw === 'number' || typeof raw === 'boolean' || typeof raw === 'bigint') return String(raw)
+		return ''
+	})()
 	if (!input) return { value: null, salvaged: false, prefixLen: 0 }
 
 	let s = input
@@ -47,31 +66,38 @@ function parseJsonBestEffort<T = any>(raw: string, maxPrefixLen = 64): ParsedJso
 
 const CACHE_FILENAME = 'epochgram-search.json'
 
-function normalizeForStableJson(value: any, seen: WeakMap<object, any>): any {
+function asRecord(value: unknown): Record<string, unknown> | null {
+	return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+function normalizeForStableJson(value: unknown, seen: WeakMap<object, unknown>): unknown {
 	if (value == null) return value
 	const t = typeof value
 	if (t === 'string' || t === 'number' || t === 'boolean') return value
 	if (t !== 'object') return null
 
-	if (seen.has(value)) return seen.get(value)
+	const objectValue = value
+	if (seen.has(objectValue)) return seen.get(objectValue) ?? null
 
 	if (Array.isArray(value)) {
-		const arr: any[] = []
+		const arr: unknown[] = []
 		seen.set(value, arr)
 		for (const v of value) arr.push(normalizeForStableJson(v, seen))
 		return arr
 	}
 
-	const out: Record<string, any> = {}
-	seen.set(value, out)
-	const keys = Object.keys(value).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+	const out: Record<string, unknown> = {}
+	seen.set(objectValue, out)
+	const record = asRecord(value)
+	if (!record) return out
+	const keys = Object.keys(record).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
 	for (const k of keys) {
-		out[k] = normalizeForStableJson((value as any)[k], seen)
+		out[k] = normalizeForStableJson(record[k], seen)
 	}
 	return out
 }
 
-function stableJsonStringify(value: any): string {
+function stableJsonStringify(value: unknown): string {
 	try {
 		const normalized = normalizeForStableJson(value, new WeakMap())
 		return JSON.stringify(normalized)
@@ -86,7 +112,7 @@ function stableJsonStringify(value: any): string {
 
 function normalizeCachePayloadString(raw: string): string {
 	try {
-		const parsed = parseJsonBestEffort<any>(raw, 4096)
+		const parsed = parseJsonBestEffort<unknown>(raw, 4096)
 		if (parsed.value != null) return stableJsonStringify(parsed.value)
 	} catch {
 		// ignore
@@ -99,14 +125,14 @@ function normalizeCachePayloadString(raw: string): string {
 }
 
 function getCachePath(plugin: EpochPlugin): string {
-	const dir = String((plugin as any)?.app?.vault?.configDir || '').replace(/\\/g, '/').replace(/\/+$/g, '')
+	const dir = String(plugin.app.vault.configDir || '').replace(/\\/g, '/').replace(/\/+$/g, '')
 	if (!dir) return CACHE_FILENAME
 	return `${dir}/${CACHE_FILENAME}`
 }
 
 export async function loadTimelineSearchCache(plugin: EpochPlugin): Promise<boolean> {
 	try {
-		const anyPlugin: any = plugin as any
+		const runtime = getRuntime(plugin)
 		const adapter = plugin.app.vault.adapter
 		const tryLoad = async (p: string): Promise<boolean> => {
 			if (!p) return false
@@ -114,9 +140,9 @@ export async function loadTimelineSearchCache(plugin: EpochPlugin): Promise<bool
 			if (!exists) return false
 			const raw = await adapter.read(p)
 			if (!raw) return false
-			const parsed = parseJsonBestEffort<any>(raw, 64)
+			const parsed = parseJsonBestEffort<unknown>(raw, 64)
 			if (!parsed.value) return false
-			let payload: any = parsed.value
+			let payload: unknown = parsed.value
 			if (typeof payload === 'string') {
 				try {
 					payload = JSON.parse(payload)
@@ -136,10 +162,10 @@ export async function loadTimelineSearchCache(plugin: EpochPlugin): Promise<bool
 			}
 			try {
 				const normalizedDisk = typeof raw === 'string' ? normalizeCachePayloadString(raw) : ''
-				anyPlugin.__timelineSearchCacheDiskLoaded = true
-				anyPlugin.__timelineSearchCacheDiskPayload = normalizedDisk
-				anyPlugin.__timelineSearchCacheLastPayload = normalizedDisk
-				anyPlugin.__timelineSearchCacheDirty = false
+				runtime.__timelineSearchCacheDiskLoaded = true
+				runtime.__timelineSearchCacheDiskPayload = normalizedDisk
+				runtime.__timelineSearchCacheLastPayload = normalizedDisk
+				runtime.__timelineSearchCacheDirty = false
 			} catch {
 				// ignore
 			}
@@ -153,11 +179,11 @@ export async function loadTimelineSearchCache(plugin: EpochPlugin): Promise<bool
 }
 
 export async function saveTimelineSearchCache(plugin: EpochPlugin): Promise<void> {
-	const anyPlugin: any = plugin as any
+	const runtime = getRuntime(plugin)
 	const run = async () => {
 		try {
 			try {
-				if (anyPlugin.__timelineSearchCacheDirty !== true) return
+				if (runtime.__timelineSearchCacheDirty !== true) return
 			} catch {
 				// ignore
 			}
@@ -166,10 +192,10 @@ export async function saveTimelineSearchCache(plugin: EpochPlugin): Promise<void
 			const serialized = plugin.timelineSearchIndex.serialize()
 			if (!serialized) return
 			const payload = (() => {
-				let value: any = serialized
+				let value: unknown = serialized
 				if (typeof value === 'string') {
 					try {
-						const parsed = parseJsonBestEffort<any>(value, 4096)
+						const parsed = parseJsonBestEffort<unknown>(value, 4096)
 						if (parsed.value != null) value = parsed.value
 					} catch {
 						// ignore
@@ -180,9 +206,9 @@ export async function saveTimelineSearchCache(plugin: EpochPlugin): Promise<void
 			if (!payload) return
 
 			try {
-				const last = String(anyPlugin.__timelineSearchCacheLastPayload ?? '')
+				const last = String(runtime.__timelineSearchCacheLastPayload ?? '')
 				if (last && last === payload) {
-					anyPlugin.__timelineSearchCacheDirty = false
+					runtime.__timelineSearchCacheDirty = false
 					return
 				}
 			} catch {
@@ -192,19 +218,19 @@ export async function saveTimelineSearchCache(plugin: EpochPlugin): Promise<void
 			const adapter = plugin.app.vault.adapter
 			let disk: string | null = null
 			try {
-				const cached = anyPlugin.__timelineSearchCacheDiskPayload
+				const cached = runtime.__timelineSearchCacheDiskPayload
 				if (typeof cached === 'string') {
 					disk = cached
-				} else if (anyPlugin.__timelineSearchCacheDiskLoaded === true) {
+				} else if (runtime.__timelineSearchCacheDiskLoaded === true) {
 					disk = null
 				} else {
-					anyPlugin.__timelineSearchCacheDiskLoaded = true
+					runtime.__timelineSearchCacheDiskLoaded = true
 					if (p) {
 						try {
 							if (await adapter.exists(p)) {
 								const rawDisk = await adapter.read(p)
 								disk = typeof rawDisk === 'string' ? normalizeCachePayloadString(rawDisk) : ''
-								anyPlugin.__timelineSearchCacheDiskPayload = disk
+								runtime.__timelineSearchCacheDiskPayload = disk
 							}
 						} catch {
 							// ignore
@@ -217,8 +243,8 @@ export async function saveTimelineSearchCache(plugin: EpochPlugin): Promise<void
 
 			try {
 				if (typeof disk === 'string' && disk === payload) {
-					anyPlugin.__timelineSearchCacheLastPayload = payload
-					anyPlugin.__timelineSearchCacheDirty = false
+					runtime.__timelineSearchCacheLastPayload = payload
+					runtime.__timelineSearchCacheDirty = false
 					return
 				}
 			} catch {
@@ -227,10 +253,10 @@ export async function saveTimelineSearchCache(plugin: EpochPlugin): Promise<void
 
 			await adapter.write(p, payload)
 			try {
-				anyPlugin.__timelineSearchCacheLastPayload = payload
-				anyPlugin.__timelineSearchCacheDiskPayload = payload
-				anyPlugin.__timelineSearchCacheDiskLoaded = true
-				anyPlugin.__timelineSearchCacheDirty = false
+				runtime.__timelineSearchCacheLastPayload = payload
+				runtime.__timelineSearchCacheDiskPayload = payload
+				runtime.__timelineSearchCacheDiskLoaded = true
+				runtime.__timelineSearchCacheDirty = false
 			} catch {
 				// ignore
 			}
@@ -240,11 +266,11 @@ export async function saveTimelineSearchCache(plugin: EpochPlugin): Promise<void
 	}
 	try {
 		const prior: Promise<void> =
-			anyPlugin.__timelineSearchCacheWritePromise instanceof Promise
-				? anyPlugin.__timelineSearchCacheWritePromise
+			runtime.__timelineSearchCacheWritePromise instanceof Promise
+				? runtime.__timelineSearchCacheWritePromise
 				: Promise.resolve()
 		const next = prior.then(run, run)
-		anyPlugin.__timelineSearchCacheWritePromise = next
+		runtime.__timelineSearchCacheWritePromise = next
 		await next
 	} catch {
 		try {
@@ -256,12 +282,12 @@ export async function saveTimelineSearchCache(plugin: EpochPlugin): Promise<void
 }
 
 export function scheduleTimelineSearchCacheSave(plugin: EpochPlugin, delayMs = 1000): void {
-	const anyPlugin: any = plugin as any
+	const runtime = getRuntime(plugin)
 	try {
-		const prior = anyPlugin.__timelineSearchCacheSaveTimer as any
+		const prior = runtime.__timelineSearchCacheSaveTimer
 		if (prior != null) {
 			try {
-				;(window as any).clearTimeout?.(prior)
+				window.clearTimeout(prior)
 			} catch {
 				// ignore
 			}
@@ -271,14 +297,14 @@ export function scheduleTimelineSearchCacheSave(plugin: EpochPlugin, delayMs = 1
 	}
 	try {
 		try {
-			if (anyPlugin.__timelineSearchCacheDirty !== true) return
+			if (runtime.__timelineSearchCacheDirty !== true) return
 		} catch {
 			// ignore
 		}
 
-		anyPlugin.__timelineSearchCacheSaveTimer = (window as any).setTimeout?.(() => {
+		runtime.__timelineSearchCacheSaveTimer = window.setTimeout(() => {
 			try {
-				anyPlugin.__timelineSearchCacheSaveTimer = null
+				runtime.__timelineSearchCacheSaveTimer = null
 			} catch {
 				// ignore
 			}
@@ -295,8 +321,8 @@ export function scheduleTimelineSearchCacheSave(plugin: EpochPlugin, delayMs = 1
 
 export function bumpTimelineSearchIndexVersion(plugin: EpochPlugin): void {
 	try {
-		const anyPlugin: any = plugin as any
-		anyPlugin.__timelineSearchIndexVersion = Number(anyPlugin.__timelineSearchIndexVersion ?? 0) + 1
+		const runtime = getRuntime(plugin)
+		runtime.__timelineSearchIndexVersion = Number(runtime.__timelineSearchIndexVersion ?? 0) + 1
 	} catch {
 		// ignore
 	}
@@ -304,8 +330,8 @@ export function bumpTimelineSearchIndexVersion(plugin: EpochPlugin): void {
 
 export function markTimelineSearchIndexDirty(plugin: EpochPlugin): void {
 	try {
-		const anyPlugin: any = plugin as any
-		anyPlugin.__timelineSearchCacheDirty = true
+		const runtime = getRuntime(plugin)
+		runtime.__timelineSearchCacheDirty = true
 	} catch {
 		// ignore
 	}
@@ -314,27 +340,26 @@ export function markTimelineSearchIndexDirty(plugin: EpochPlugin): void {
 
 export async function deleteTimelineSearchCache(plugin: EpochPlugin): Promise<void> {
 	try {
+		const runtime = getRuntime(plugin)
 		try {
-			const anyPlugin: any = plugin as any
-			const t: any = anyPlugin.__timelineSearchCacheSaveTimer
+			const t = runtime.__timelineSearchCacheSaveTimer
 			if (t != null) {
 				try {
-					;(window as any).clearTimeout?.(t)
+					window.clearTimeout(t)
 				} catch {
 					// ignore
 				}
 			}
-			anyPlugin.__timelineSearchCacheSaveTimer = null
+			runtime.__timelineSearchCacheSaveTimer = null
 		} catch {
 			// ignore
 		}
 		try {
-			const anyPlugin: any = plugin as any
-			const prior: any = anyPlugin.__timelineSearchCacheWritePromise
+			const prior = runtime.__timelineSearchCacheWritePromise
 			if (prior && typeof prior.then === 'function') {
-				await prior.catch?.(() => {})
+				await prior.catch(() => {})
 			}
-			anyPlugin.__timelineSearchCacheWritePromise = null
+			runtime.__timelineSearchCacheWritePromise = null
 		} catch {
 			// ignore
 		}

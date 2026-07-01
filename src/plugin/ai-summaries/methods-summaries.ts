@@ -1,6 +1,6 @@
 import { Notice, Platform } from "obsidian";
 import type { EpochPlugin } from "../../main";
-import type { FileDateEntry } from "../../indexer/types";
+import type { FileDateEntry, FileIndexData } from "../../indexer/types";
 import type { AiSummaryJob } from "../ai-bridge";
 import type { AiBridgeServer } from "../ai-bridge";
 import { isLikelyTextFilePath } from "../../utils";
@@ -10,6 +10,45 @@ import { ensureAiBridgeServerRunning, maybeNudgeBridgeNotReady } from "./bridge-
 import { enqueueThrottledJobs, isAutoSummarizeEnqueue, shouldApplyEnqueueCooldown } from "./enqueue-throttle";
 import { isDateKey } from "./shared";
 import { hasSummarizeAIAccess, isSummarizeAIEffective } from "../pro-feature-state";
+
+type JobWithVisibility = AiSummaryJob & { timelineVisible: boolean };
+
+type AiSummaryRuntime = {
+	aiBridge?: AiBridgeServer;
+	__epochAiEnqueueCancelKey?: number;
+};
+
+type SummaryEntryLike = {
+	aiSummary?: string;
+	aiSummaryInputHash?: string;
+};
+
+type FileDataLike = {
+	cdate?: SummaryEntryLike;
+	namedDate?: SummaryEntryLike;
+	dateProp?: SummaryEntryLike;
+	contentDates?: SummaryEntryLike[];
+	trackedDates?: Record<string, SummaryEntryLike[] | undefined>;
+};
+
+function nowMs(): number {
+	const perf = window.performance;
+	if (perf && typeof perf.now === "function") return perf.now();
+	return Date.now();
+}
+
+type JobTargetLike = {
+	date?: string;
+	blockStart?: number;
+	blockEnd?: number;
+	source?: string;
+};
+
+function getJobTargets(job: AiSummaryJob): JobTargetLike[] {
+	const raw = (job as { targets?: unknown }).targets;
+	if (!Array.isArray(raw)) return [];
+	return raw as JobTargetLike[];
+}
 
 async function maybeEnableSummarizeAI(plugin: EpochPlugin, enableIfDisabled: boolean | undefined): Promise<boolean> {
 	// Summarize AI checkbox controls only auto-generation.
@@ -33,7 +72,8 @@ export async function enqueueAiSummariesForFile(
 	if (built.jobs.length === 0) {
 		return;
 	}
-	const jobs = sortJobsNewestFirst(built.jobs).map((j) => ({ ...(j as any), timelineVisible: true }));
+	const sortedJobs = sortJobsNewestFirst(built.jobs);
+	const jobs: JobWithVisibility[] = sortedJobs.map(j => ({ ...j, timelineVisible: true }));
 	if (shouldApplyEnqueueCooldown(options)) {
 		await enqueueThrottledJobs(this, filePath, jobs, { showNotice: false, allowWhenSummarizeAIDisabled: false });
 		return;
@@ -64,25 +104,29 @@ export async function enqueueAiSummaryForEntry(
 		entry.source === "tracked" ? "tracked" :
 		(entry.source === "cdate" || entry.source === "namedate" || entry.source === "dateprop") ? "anchor" :
 		"content";
+	const entryWithOptionalFields = entry as FileDateEntry & {
+		originalDate?: string;
+		blockStart?: number;
+		blockEnd?: number;
+	};
 	// Synthetic pinned-today entries are clones of the real anchor entry with
 	// `date` rewritten to today and `originalDate` set to the real date key.
 	// When the user triggers Summarize AI from the pinned-today row, target the
 	// underlying real entry date so we can match the built jobs.
-	const originalDate = String((entry as any)?.originalDate ?? "");
+	const originalDate = String(entryWithOptionalFields.originalDate ?? "");
 	const groupDate =
 		entry.pinned === true && originalDate && originalDate !== entry.date && isDateKey(originalDate)
 			? originalDate
 			: entry.date;
 	const jobsByTarget = (() => {
 		const targetsDate = groupDate;
-		const targetsBlockStart = typeof (entry as any)?.blockStart === "number" ? (entry as any).blockStart : null;
-		const targetsBlockEnd = typeof (entry as any)?.blockEnd === "number" ? (entry as any).blockEnd : null;
+		const targetsBlockStart = typeof entryWithOptionalFields.blockStart === "number" ? entryWithOptionalFields.blockStart : null;
+		const targetsBlockEnd = typeof entryWithOptionalFields.blockEnd === "number" ? entryWithOptionalFields.blockEnd : null;
 		if (targetsBlockStart == null || targetsBlockEnd == null) return [];
 		return built.jobs.filter((j) => {
-			const targets = Array.isArray((j as any).targets) ? (j as any).targets : null;
-			if (!targets || targets.length === 0) return false;
-			return targets.some((t: any) => {
-				if (!t) return false;
+			const targets = getJobTargets(j);
+			if (targets.length === 0) return false;
+			return targets.some((t) => {
 				return (
 					String(t.date ?? "") === String(targetsDate) &&
 					Number(t.blockStart) === Number(targetsBlockStart) &&
@@ -104,7 +148,8 @@ export async function enqueueAiSummaryForEntry(
 		return [];
 	})();
 	if (jobs.length === 0) return;
-	const sorted = sortJobsNewestFirst(jobs).map((j) => ({ ...(j as any), timelineVisible: true }));
+	const sortedJobs2 = sortJobsNewestFirst(jobs);
+	const sorted: JobWithVisibility[] = sortedJobs2.map(j => ({ ...j, timelineVisible: true }));
 	if (shouldApplyEnqueueCooldown(options)) {
 		await enqueueThrottledJobs(this, filePath, sorted, { showNotice: false, allowWhenSummarizeAIDisabled: false });
 		return;
@@ -113,6 +158,7 @@ export async function enqueueAiSummaryForEntry(
 }
 
 export async function generateAiSummariesForAllRecords(this: EpochPlugin): Promise<void> {
+	const runtime = this as unknown as AiSummaryRuntime;
 	if (!hasSummarizeAIAccess(this)) {
 		return;
 	}
@@ -123,15 +169,17 @@ export async function generateAiSummariesForAllRecords(this: EpochPlugin): Promi
 
 	try {
 		await ensureAiBridgeServerRunning(this);
-	} catch (err: any) {
-		new Notice(`AI summaries error: ${err?.message ?? String(err)}`, 5000);
+	} catch (err: unknown) {
+		const message = err instanceof Error ? err.message : String(err);
+		new Notice(`AI summaries error: ${message}`, 5000);
 		return;
 	}
 
-	const bridge: AiBridgeServer = (this as any).aiBridge;
+	const bridge = runtime.aiBridge;
+	if (!bridge) return;
 	void this.openAiBridgeWindow({ silent: true });
-	const cancelKey = Number((this as any).__epochAiEnqueueCancelKey) || 0;
-	const isCanceled = (): boolean => (Number((this as any).__epochAiEnqueueCancelKey) || 0) !== cancelKey;
+	const cancelKey = Number(runtime.__epochAiEnqueueCancelKey) || 0;
+	const isCanceled = (): boolean => (Number(runtime.__epochAiEnqueueCancelKey) || 0) !== cancelKey;
 	let canceled = false;
 	const checkCanceled = (): boolean => {
 		if (!isCanceled()) return false;
@@ -142,12 +190,12 @@ export async function generateAiSummariesForAllRecords(this: EpochPlugin): Promi
 	const paths = internals ? getIndexedPathsNewestFirst(this) : [];
 	let iterated = 0;
 	let totalQueued = 0;
-	let lastYieldAt = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+	let lastYieldAt = nowMs();
 	const maybeYield = async () => {
-		const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+		const now = nowMs();
 		if (now - lastYieldAt >= 12) {
 			await new Promise((r) => window.setTimeout(r, 0));
-			lastYieldAt = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+			lastYieldAt = nowMs();
 		}
 	};
 	for (const p of paths) {
@@ -157,7 +205,8 @@ export async function generateAiSummariesForAllRecords(this: EpochPlugin): Promi
 		if (checkCanceled()) break;
 		const built = await buildJobsForFile(this, p, true);
 		if (checkCanceled()) break;
-		const jobs = sortJobsNewestFirst(built.jobs).map((j) => ({ ...(j as any), timelineVisible: true }));
+		const sortedJobsA = sortJobsNewestFirst(built.jobs);
+		const jobs: JobWithVisibility[] = sortedJobsA.map(j => ({ ...j, timelineVisible: true }));
 		if (jobs.length === 0) continue;
 		if (checkCanceled()) break;
 		bridge.enqueue(jobs);
@@ -178,6 +227,7 @@ export async function generateAiSummariesForAllRecords(this: EpochPlugin): Promi
 }
 
 export async function generateMissingAiSummariesForAllRecords(this: EpochPlugin): Promise<void> {
+	const runtime = this as unknown as AiSummaryRuntime;
 	if (!hasSummarizeAIAccess(this)) {
 		return;
 	}
@@ -188,15 +238,17 @@ export async function generateMissingAiSummariesForAllRecords(this: EpochPlugin)
 
 	try {
 		await ensureAiBridgeServerRunning(this);
-	} catch (err: any) {
-		new Notice(`AI summaries error: ${err?.message ?? String(err)}`, 5000);
+	} catch (err: unknown) {
+		const message = err instanceof Error ? err.message : String(err);
+		new Notice(`AI summaries error: ${message}`, 5000);
 		return;
 	}
 
-	const bridge: AiBridgeServer = (this as any).aiBridge;
+	const bridge = runtime.aiBridge;
+	if (!bridge) return;
 	void this.openAiBridgeWindow({ silent: true });
-	const cancelKey = Number((this as any).__epochAiEnqueueCancelKey) || 0;
-	const isCanceled = (): boolean => (Number((this as any).__epochAiEnqueueCancelKey) || 0) !== cancelKey;
+	const cancelKey = Number(runtime.__epochAiEnqueueCancelKey) || 0;
+	const isCanceled = (): boolean => (Number(runtime.__epochAiEnqueueCancelKey) || 0) !== cancelKey;
 	let canceled = false;
 	const checkCanceled = (): boolean => {
 		if (!isCanceled()) return false;
@@ -207,28 +259,28 @@ export async function generateMissingAiSummariesForAllRecords(this: EpochPlugin)
 	const paths = internals ? getIndexedPathsNewestFirst(this) : [];
 	let iterated = 0;
 	let totalQueued = 0;
-	let lastYieldAt = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+	let lastYieldAt = nowMs();
 	const maybeYield = async () => {
-		const now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+		const now = nowMs();
 		if (now - lastYieldAt >= 12) {
 			await new Promise((r) => window.setTimeout(r, 0));
-			lastYieldAt = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+			lastYieldAt = nowMs();
 		}
 	};
-	const fileHasMissingAi = (data: any): boolean => {
-		const entries: any[] = [];
+	const fileHasMissingAi = (data: FileDataLike): boolean => {
+		const entries: SummaryEntryLike[] = [];
 		if (data?.cdate) entries.push(data.cdate);
 		if (data?.namedDate) entries.push(data.namedDate);
 		if (data?.dateProp) entries.push(data.dateProp);
 		if (Array.isArray(data?.contentDates)) entries.push(...data.contentDates);
 		if (data?.trackedDates && typeof data.trackedDates === "object") {
-			for (const v of Object.values<any>(data.trackedDates)) {
+			for (const v of Object.values(data.trackedDates)) {
 				if (Array.isArray(v)) entries.push(...v);
 			}
 		}
 		for (const e of entries) {
-			const s = typeof e?.aiSummary === "string" ? String(e.aiSummary).trim() : "";
-			const h = typeof e?.aiSummaryInputHash === "string" ? String(e.aiSummaryInputHash).trim() : "";
+			const s = typeof e.aiSummary === "string" ? e.aiSummary.trim() : "";
+			const h = typeof e.aiSummaryInputHash === "string" ? e.aiSummaryInputHash.trim() : "";
 			if (!(s && h)) return true;
 		}
 		return false;
@@ -237,7 +289,7 @@ export async function generateMissingAiSummariesForAllRecords(this: EpochPlugin)
 		if (checkCanceled()) break;
 		iterated++;
 		if (!isLikelyTextFilePath(p)) continue;
-		const data = internals?.files?.[p];
+		const data = internals?.files?.[p] as FileDataLike | undefined;
 		if (data && !fileHasMissingAi(data)) {
 			if (iterated % 50 === 0) await maybeYield();
 			continue;
@@ -247,17 +299,18 @@ export async function generateMissingAiSummariesForAllRecords(this: EpochPlugin)
 		if (checkCanceled()) break;
 		const onlyMissing = data
 			? built.jobs.filter(job => {
-				const entries = resolveTargetEntries(data, job);
+				const entries = resolveTargetEntries(data as unknown as FileIndexData, job);
 				if (entries.length === 0) return true;
 				return entries.some(e => {
-					const anyE: any = e as any;
-					const s = typeof anyE.aiSummary === "string" ? anyE.aiSummary.trim() : "";
-					const h = typeof anyE.aiSummaryInputHash === "string" ? anyE.aiSummaryInputHash.trim() : "";
+					const rec = e as SummaryEntryLike;
+					const s = typeof rec.aiSummary === "string" ? rec.aiSummary.trim() : "";
+					const h = typeof rec.aiSummaryInputHash === "string" ? rec.aiSummaryInputHash.trim() : "";
 					return !(s && h);
 				});
 			})
 			: built.jobs;
-		const jobs = sortJobsNewestFirst(onlyMissing).map((j) => ({ ...(j as any), timelineVisible: true }));
+		const sortedJobsB = sortJobsNewestFirst(onlyMissing);
+		const jobs: JobWithVisibility[] = sortedJobsB.map(j => ({ ...j, timelineVisible: true }));
 		if (jobs.length === 0) continue;
 		if (checkCanceled()) break;
 		bridge.enqueue(jobs);

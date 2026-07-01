@@ -6,6 +6,16 @@ import { getEpochRangeFromEntry } from "../../epoch-canvas-utils";
 import { isGenerateEpochsEffective } from "../../../plugin/pro-feature-state";
 import { addMenuTitle } from "../menu-title";
 
+type EpochPluginLike = CanvasMenuState["plugin"] & {
+	settings?: { generateEpochs?: boolean };
+	enqueueEpochsForDateKeys?: (
+		dateKeys: string[],
+		options: { force?: boolean; showNotice?: boolean; buckets?: EpochBucket[] }
+	) => void;
+};
+
+type EpochEntryLike = DateEntry & { epochBucket?: unknown; date?: unknown };
+
 function parseDateKeyToUtcDate(key: string): Date | null {
 	const [year, month, day] = String(key || "")
 		.split("-")
@@ -24,7 +34,7 @@ export function addEpochMenuIfApplicable(
 	if (!String(entry?.file || "").startsWith("epoch://")) return false;
 	const range = getEpochRangeFromEntry(entry);
 	const title = range ? `Epoch ${range.start} - ${range.end}` : "Epoch";
-	const plugin = (state as any).plugin;
+	const plugin: EpochPluginLike = state.plugin;
 
 	addMenuTitle(menu, title, "hourglass");
 	menu.addSeparator();
@@ -48,17 +58,18 @@ export function addEpochMenuIfApplicable(
 						if (!isGenerateEpochsEffective(plugin)) state.requirePro("Generate Epochs");
 						return;
 					}
-					const bucketRaw2 = String((entry as any).epochBucket || "");
+					const epochEntry = entry as EpochEntryLike;
+					const bucketRaw2 = String(epochEntry.epochBucket || "");
 					if (!bucketRaw2 || !isEpochBucket(bucketRaw2)) return;
 					const bucket: EpochBucket = bucketRaw2;
 					// Regenerate only this epoch (not the full hierarchy). Using the epoch start date key
 					// is usually sufficient because bucket→range mapping is deterministic.
 					// However, in epochs view the clicked epoch may be rendered on a specific day within
 					// its range; prefer that day key when available to avoid targeting an adjacent epoch.
-					const entryDayKey = String((entry as any)?.date ?? "");
+					const entryDayKey = String(epochEntry.date ?? "");
 					const useEntryDay = !!entryDayKey && !!parseDateKeyToUtcDate(entryDayKey) && entryDayKey >= range.start && entryDayKey <= range.end;
 					const regenKey = useEntryDay ? entryDayKey : range.start;
-					plugin.enqueueEpochsForDateKeys([regenKey], { force: true, showNotice: true, buckets: [bucket] });
+					void plugin.enqueueEpochsForDateKeys?.([regenKey], { force: true, showNotice: true, buckets: [bucket] });
 				});
 		});
 	}

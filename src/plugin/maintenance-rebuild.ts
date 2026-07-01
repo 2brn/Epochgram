@@ -5,6 +5,32 @@ import { isDateKey } from "./ai-summaries/shared";
 import { computeRebuildGating } from "./maintenance-gating";
 import type { RebuildSelection } from "./maintenance-types";
 
+type FileDateLike = { date?: string };
+type IndexedFileLike = {
+	cdate?: FileDateLike;
+	namedDate?: FileDateLike;
+	contentDates?: FileDateLike[];
+	trackedDates?: Record<string, FileDateLike[]>;
+};
+
+type RebuildIndexerLike = {
+	index?: Record<string, unknown[]>;
+	files?: Record<string, IndexedFileLike>;
+};
+
+type MaintenancePluginLike = EpochPlugin & {
+	openAiBridgeWindow?: (options: { silent: boolean; source: string; forceOpen: boolean }) => Promise<void>;
+	rebuildSemanticVectorsWithProgress?: () => Promise<void>;
+	rebuildTopicsWithProgress?: () => Promise<void>;
+	generateAiSummariesForAllRecords?: () => Promise<void>;
+	enqueueEpochsForDateKeys?: (
+		dates: string[],
+		options: { force: boolean; showNotice: boolean; buckets: readonly string[] }
+	) => Promise<void>;
+	regenerateEpochsForAllRecords?: () => Promise<void>;
+	indexer?: RebuildIndexerLike;
+};
+
 export async function runRebuild(plugin: EpochPlugin, sel: RebuildSelection): Promise<void> {
 	try {
 		await plugin.ensureIndexLoaded();
@@ -13,7 +39,7 @@ export async function runRebuild(plugin: EpochPlugin, sel: RebuildSelection): Pr
 	}
 
 	const gate = computeRebuildGating(plugin);
-	const anyPlugin: any = plugin as any;
+	const state = plugin as MaintenancePluginLike;
 
 	if (sel.index) {
 		await plugin.rebuildIndexWithProgress();
@@ -27,7 +53,7 @@ export async function runRebuild(plugin: EpochPlugin, sel: RebuildSelection): Pr
 			// the bridge page is opened (non-silent) so work can actually run.
 			if ((sel.aiSummaries && gate.aiEnabled) || (sel.epochs && gate.epochsEnabled)) {
 				try {
-					await anyPlugin.openAiBridgeWindow?.({ silent: false, source: "maintenance", forceOpen: true });
+					await state.openAiBridgeWindow?.({ silent: false, source: "maintenance", forceOpen: true });
 				} catch {
 					// ignore
 				}
@@ -42,32 +68,32 @@ export async function runRebuild(plugin: EpochPlugin, sel: RebuildSelection): Pr
 			}
 			if (sel.semantics && gate.semanticsEnabled) {
 				new Notice("Epochgram: Rebuilding semantics…", 1500);
-				await anyPlugin.rebuildSemanticVectorsWithProgress?.();
+				await state.rebuildSemanticVectorsWithProgress?.();
 			}
 			if (sel.topics && gate.topicsEnabled) {
 				new Notice("Epochgram: Rebuilding topics…", 1500);
-				await anyPlugin.rebuildTopicsWithProgress?.();
+				await state.rebuildTopicsWithProgress?.();
 			}
 			if (sel.aiSummaries && gate.aiEnabled) {
-				await anyPlugin.generateAiSummariesForAllRecords?.();
+				await state.generateAiSummariesForAllRecords?.();
 			}
 			if (sel.epochs && gate.epochsEnabled) {
 				try {
-					await (plugin as any).ensureIndexLoaded?.();
+					await plugin.ensureIndexLoaded();
 				} catch {
 					// ignore
 				}
 				// Epochs are hierarchical (day -> ... -> year). To ensure parent buckets are generated
 				// from freshly-updated child buckets, always cascade regeneration from day upward.
-				const indexerAny: any = (plugin as any)?.indexer as any;
-				const index: Record<string, any[]> = indexerAny?.index ?? {};
-				const files: Record<string, any> = indexerAny?.files ?? {};
+				const indexerState = (plugin as unknown as { indexer?: RebuildIndexerLike }).indexer;
+				const index = indexerState?.index ?? {};
+				const files = indexerState?.files ?? {};
 
 				const keySet = new Set<string>();
 				for (const k of Object.keys(index)) {
 					if (isDateKey(k)) keySet.add(k);
 				}
-				const addEntryDate = (entry: any): void => {
+				const addEntryDate = (entry: FileDateLike | null | undefined): void => {
 					try {
 						const d = String(entry?.date ?? "");
 						if (isDateKey(d)) keySet.add(d);
@@ -77,11 +103,11 @@ export async function runRebuild(plugin: EpochPlugin, sel: RebuildSelection): Pr
 				};
 				for (const data of Object.values(files)) {
 					try {
-						addEntryDate((data as any)?.cdate);
-						addEntryDate((data as any)?.namedDate);
-						for (const e of Array.isArray((data as any)?.contentDates) ? (data as any).contentDates : []) addEntryDate(e);
-						const tracked = (data as any)?.trackedDates ?? {};
-						for (const list of Object.values(tracked)) {
+						addEntryDate(data?.cdate);
+						addEntryDate(data?.namedDate);
+						for (const e of Array.isArray(data?.contentDates) ? data.contentDates : []) addEntryDate(e);
+						const tracked = data?.trackedDates;
+						for (const list of Object.values(tracked ?? {})) {
 							for (const e of Array.isArray(list) ? list : []) addEntryDate(e);
 						}
 					} catch {
@@ -94,14 +120,14 @@ export async function runRebuild(plugin: EpochPlugin, sel: RebuildSelection): Pr
 				if (dateKeys.length === 0) {
 					// no-op
 				}
-				if (typeof anyPlugin.enqueueEpochsForDateKeys === "function") {
-					await anyPlugin.enqueueEpochsForDateKeys(dateKeys, { force: true, showNotice: true, buckets: EPOCH_BUCKETS });
+				if (typeof state.enqueueEpochsForDateKeys === "function") {
+					await state.enqueueEpochsForDateKeys(dateKeys, { force: true, showNotice: true, buckets: EPOCH_BUCKETS });
 				} else {
-					await anyPlugin.regenerateEpochsForAllRecords?.();
+					await state.regenerateEpochsForAllRecords?.();
 				}
 			}
 		} catch (error) {
-			console.error("Epochgram rebuild (background) failed", error);
+			void error;
 			try {
 				new Notice("Epochgram rebuild failed (see console)", 5000);
 			} catch {

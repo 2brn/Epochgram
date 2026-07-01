@@ -1,8 +1,21 @@
-import { RRule, rrulestr } from "rrule";
+import { RRule, rrulestr, type Options } from "rrule";
 import { formatDate } from "utils";
 import type { RecurrenceIndexData } from "./types";
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+type RRuleOptionsLike = Partial<Options> & {
+	bynmonthday?: number[];
+	bymonthday?: number[];
+	count?: number;
+	until?: Date;
+};
+
+type RRuleLike = {
+	options?: RRuleOptionsLike;
+	after?: (date: Date, inc?: boolean) => Date | null;
+	between: (after: Date, before: Date, inc?: boolean) => Date[];
+};
 
 function isDateKey(value: string): boolean {
 	return DATE_KEY_RE.test(String(value || ""));
@@ -272,20 +285,21 @@ export function expandRecurrenceToDateKeys(params: {
 	let rrule: RRule;
 	try {
 		// Parse as string but force DTSTART via options so we can keep it date-only.
-		rrule = rrulestr(ruleStr, { dtstart }) as unknown as RRule;
+		rrule = rrulestr(ruleStr, { dtstart });
 	} catch {
 		try {
 			rrule = RRule.fromString(ruleStr);
 			// If fromString succeeded but DTSTART is missing, it will default to now;
 			// re-create with dtstart by re-parsing through rrulestr.
-			rrule = rrulestr(ruleStr, { dtstart }) as unknown as RRule;
+			rrule = rrulestr(ruleStr, { dtstart });
 		} catch {
 			return [];
 		}
 	}
 
 	// Apply modifiers.
-	const opts: any = (rrule as any)?.options ? { ...(rrule as any).options } : null;
+	const ruleLike = rrule as unknown as RRuleLike;
+	const opts: RRuleOptionsLike | null = ruleLike.options ? { ...ruleLike.options } : null;
 	if (opts) {
 		if (Array.isArray(opts.bynmonthday) && opts.bynmonthday.length > 0) {
 			const base = Array.isArray(opts.bymonthday) ? opts.bymonthday : [];
@@ -335,7 +349,7 @@ export function expandRecurrenceToDateKeys(params: {
 			const seen = new Set<string>();
 			let cursor = new Date(dtstart.getTime() - 1);
 			for (let i = 0; i < cap; i++) {
-				const next = (rrule as any)?.after?.(cursor, false) as Date | null | undefined;
+				const next = ruleLike.after?.(cursor, false);
 				if (!(next instanceof Date) || !Number.isFinite(next.getTime())) break;
 				const key = formatDate(next);
 				if (!isDateKey(key)) {

@@ -45,8 +45,44 @@ interface CanvasAnimateState {
 	draw(): void;
 }
 
-function state(canvas: EpochCanvas): CanvasAnimateState {
-	return canvas as unknown as CanvasAnimateState;
+type CanvasAnimatePluginSettings = {
+	inertiaDecay?: number;
+	inertiaBoost?: number;
+	inertiaMinVelocity?: number;
+	enableAnimation?: boolean;
+};
+
+type CanvasAnimatePluginLike = {
+	settings?: CanvasAnimatePluginSettings;
+};
+
+type CanvasAnimateStateExt = CanvasAnimateState & {
+	prevAnimSummary?: { dayIndex: number; itemIndex: number } | null;
+	prevAnimDateIndex?: number | null;
+	hoverSummary?: unknown;
+	hoverDateIndex?: number | null;
+	__globalDenseMode?: boolean | null;
+	epochsView?: boolean;
+	animatingWheelPan?: boolean;
+	animatingWheelZoom?: boolean;
+	wheelZoomDir?: number;
+	wheelZoomAnchorY?: number;
+	wheelZoomAnchorWorldY?: number;
+	__lastKnownCanvasCssHeight?: number;
+	outgoingSummaries?: Array<{ dayIndex: number; itemIndex: number; t: number; startAt?: number; fromT?: number }> | null;
+	outgoingDates?: Array<{ index: number; t: number; startAt?: number; fromT?: number }> | null;
+	plugin?: CanvasAnimatePluginLike;
+};
+
+function state(canvas: EpochCanvas): CanvasAnimateStateExt {
+	return canvas as unknown as CanvasAnimateStateExt;
+}
+
+function nowMs(): number {
+	if (typeof window !== "undefined") {
+		return window?.performance?.now?.() ?? Date.now();
+	}
+	return Date.now();
 }
 
 function clamp01(n: number): number {
@@ -114,11 +150,10 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 
 	const inertia = (() => {
 		try {
-			const pluginAny: any = (canvas as any)?.plugin;
-			const settingsAny: any = pluginAny?.settings;
-			const decayRaw = Number(settingsAny?.inertiaDecay);
-			const boostRaw = Number(settingsAny?.inertiaBoost);
-			const minVelRaw = Number(settingsAny?.inertiaMinVelocity);
+			const settings = s.plugin?.settings;
+			const decayRaw = Number(settings?.inertiaDecay);
+			const boostRaw = Number(settings?.inertiaBoost);
+			const minVelRaw = Number(settings?.inertiaMinVelocity);
 			const decay = Number.isFinite(decayRaw) && decayRaw > 0 && decayRaw < 1 ? decayRaw : INERTIA_DECAY;
 			const boost = Number.isFinite(boostRaw) && boostRaw > 0 ? boostRaw : INERTIA_BOOST;
 			const minVel = Number.isFinite(minVelRaw) && minVelRaw >= 0 ? minVelRaw : INERTIA_MIN_VELOCITY;
@@ -130,8 +165,7 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 
 	const animationsEnabled = (() => {
 		try {
-			const pluginAny: any = (canvas as any)?.plugin;
-			return pluginAny?.settings?.enableAnimation !== false;
+			return s.plugin?.settings?.enableAnimation !== false;
 		} catch {
 			return true;
 		}
@@ -142,24 +176,24 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 		s.hoverEaseStartAt = null;
 		s.hoverEaseFrom = s.hoverTarget;
 		s.hoverEaseTo = s.hoverTarget;
-		(s as any).outgoingSummaries = [];
-		(s as any).outgoingDates = [];
-		(s as any).prevAnimSummary = null;
-		(s as any).prevAnimDateIndex = null;
+		s.outgoingSummaries = [];
+		s.outgoingDates = [];
+		s.prevAnimSummary = null;
+		s.prevAnimDateIndex = null;
 		if (s.hoverTarget === 0) {
 			s.animDateIndex = null;
 			s.animSummary = null;
-			(s as any).hoverSummary = null;
-			(s as any).hoverDateIndex = null;
+			s.hoverSummary = null;
+			s.hoverDateIndex = null;
 		}
 
 		s.velocityY = 0;
-		if ((s as any).animatingWheelZoom) {
+		if (s.animatingWheelZoom) {
 			const targetScale = Number.isFinite(s.targetScale) ? s.targetScale : s.scale;
 			s.scale = targetScale;
 			try {
-				const anchorY = Number((s as any).wheelZoomAnchorY);
-				const worldY = Number((s as any).wheelZoomAnchorWorldY);
+				const anchorY = Number(s.wheelZoomAnchorY);
+				const worldY = Number(s.wheelZoomAnchorWorldY);
 				if (Number.isFinite(anchorY) && Number.isFinite(worldY) && targetScale > 0) {
 					s.offsetY = anchorY - worldY * targetScale;
 				} else {
@@ -168,17 +202,17 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 			} catch {
 				s.offsetY = s.targetOffsetY;
 			}
-			(s as any).animatingWheelZoom = false;
-			(s as any).wheelZoomDir = 0;
+			s.animatingWheelZoom = false;
+			s.wheelZoomDir = 0;
 		}
 		if (s.animatingView) {
 			s.scale = s.targetScale;
 			s.offsetY = s.targetOffsetY;
 			s.animatingView = false;
 		}
-		if ((s as any).animatingWheelPan) {
+		if (s.animatingWheelPan) {
 			s.offsetY = Number.isFinite(s.targetOffsetY) ? s.targetOffsetY : s.offsetY;
-			(s as any).animatingWheelPan = false;
+			s.animatingWheelPan = false;
 		}
 		if (s.pinFly) {
 			const done = s.pinFlyOnDone;
@@ -198,7 +232,7 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 		return;
 	}
 
-	const now = performance.now();
+	const now = nowMs();
 	let dt = 0;
 	const lastFrameTime = s.lastFrameTime;
 	if (lastFrameTime != null) {
@@ -207,9 +241,9 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 	s.lastFrameTime = now;
 
 	const target = s.hoverTarget;
-	const epochsViewActive = ((s as any).epochsView === true);
+	const epochsViewActive = s.epochsView === true;
 	const globalDenseMode: boolean | null = (() => {
-		const v = (s as any).__globalDenseMode;
+		const v = s.__globalDenseMode;
 		return typeof v === "boolean" ? v : null;
 	})();
 	// Prefer the actual dense-mode decision from the renderer; fallback to a scale heuristic
@@ -218,9 +252,9 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 	// IMPORTANT: date markers (circles/labels) should still use smooth hover animation even
 	// when we're zoomed out into dense mode. Instant hover is only used to avoid expensive
 	// summary reflow/overlay animation.
-	const outgoingDates = (s as any).outgoingDates as Array<{ index: number; t: number }> | null | undefined;
+	const outgoingDates = s.outgoingDates;
 	const hasDateHoverOrOutgoing = (s.animDateIndex != null) || (Array.isArray(outgoingDates) && outgoingDates.length > 0);
-	const outgoingSummaries = (s as any).outgoingSummaries as Array<{ dayIndex: number; itemIndex: number; t: number }> | null | undefined;
+	const outgoingSummaries = s.outgoingSummaries;
 	const hasSummaryHoverOrOutgoing = (s.animSummary != null) || (Array.isArray(outgoingSummaries) && outgoingSummaries.length > 0);
 	const instantHover = !epochsViewActive && !hasDateHoverOrOutgoing && hasSummaryHoverOrOutgoing && (
 		globalDenseMode === true ||
@@ -238,10 +272,10 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 			// matter to avoid visible snap-offs during brief pointer gaps.
 			s.animDateIndex = null;
 			s.animSummary = null;
-			(s as any).prevAnimSummary = null;
-			(s as any).prevAnimDateIndex = null;
-			(s as any).hoverSummary = null;
-			(s as any).hoverDateIndex = null;
+				s.prevAnimSummary = null;
+				s.prevAnimDateIndex = null;
+				s.hoverSummary = null;
+				s.hoverDateIndex = null;
 		}
 	}
 
@@ -269,10 +303,10 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 			if (target === 0) {
 				s.animDateIndex = null;
 				s.animSummary = null;
-				(s as any).prevAnimSummary = null;
+				s.prevAnimSummary = null;
 			} else {
 				// Hover is settled at full strength; no need to keep transition packing state.
-				(s as any).prevAnimSummary = null;
+				s.prevAnimSummary = null;
 			}
 		}
 	}
@@ -280,17 +314,15 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 	// Always decay outgoing items (even in instant-hover mode). This prevents the
 	// previous hover target from collapsing/jumping abruptly when hover snaps.
 	{
-		const outgoing = (s as any).outgoingSummaries as
-			| Array<{ dayIndex: number; itemIndex: number; t: number; startAt?: number; fromT?: number }>
-			| null
-			| undefined;
+		const outgoing = s.outgoingSummaries;
 		if (outgoing && outgoing.length) {
 			const dur = Math.max(1, Number(HOVER_ANIM_TIME_MS) || 1);
 			let anyStill = false;
 			for (let i = 0; i < outgoing.length; i++) {
-				const o = outgoing[i]!;
+				const o = outgoing[i];
+				if (!o) continue;
 				const ot = clamp01(Number(o.t));
-				if (!Number.isFinite(o.startAt as any)) {
+				if (!Number.isFinite(o.startAt ?? NaN)) {
 					o.startAt = now;
 					o.fromT = ot;
 				}
@@ -300,20 +332,18 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 				o.t = fromT * (1 - eased);
 				if (o.t > 0.001) anyStill = true;
 			}
-			(s as any).outgoingSummaries = anyStill ? outgoing.filter((o) => (Number(o.t) || 0) > 0.001) : [];
+			s.outgoingSummaries = anyStill ? outgoing.filter((o) => (Number(o.t) || 0) > 0.001) : [];
 		}
 
-		const outgoingDates = (s as any).outgoingDates as
-			| Array<{ index: number; t: number; startAt?: number; fromT?: number }>
-			| null
-			| undefined;
+		const outgoingDates = s.outgoingDates;
 		if (outgoingDates && outgoingDates.length) {
 			const dur = Math.max(1, Number(HOVER_ANIM_TIME_MS) || 1);
 			let anyStill = false;
 			for (let i = 0; i < outgoingDates.length; i++) {
-				const o = outgoingDates[i]!;
+				const o = outgoingDates[i];
+				if (!o) continue;
 				const ot = clamp01(Number(o.t));
-				if (!Number.isFinite(o.startAt as any)) {
+				if (!Number.isFinite(o.startAt ?? NaN)) {
 					o.startAt = now;
 					o.fromT = ot;
 				}
@@ -323,7 +353,7 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 				o.t = fromT * (1 - eased);
 				if (o.t > 0.001) anyStill = true;
 			}
-			(s as any).outgoingDates = anyStill ? outgoingDates.filter((o) => (Number(o.t) || 0) > 0.001) : [];
+			s.outgoingDates = anyStill ? outgoingDates.filter((o) => (Number(o.t) || 0) > 0.001) : [];
 		}
 	}
 
@@ -337,10 +367,10 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 	}
 
 	try {
-		const anyCanvas: any = canvas as any;
-		const viewportHeight = resolveViewportHeight(anyCanvas?.root, Number(anyCanvas?.__lastKnownCanvasCssHeight ?? 0));
+		const canvasLike = canvas as unknown as { root?: HTMLElement; getToday?: () => Date };
+		const viewportHeight = resolveViewportHeight(canvasLike.root, Number(s.__lastKnownCanvasCssHeight ?? 0));
 		if (viewportHeight > 0) {
-			const today = typeof anyCanvas?.getToday === "function" ? anyCanvas.getToday() : new Date();
+			const today = typeof canvasLike.getToday === "function" ? canvasLike.getToday() : new Date();
 			const prevOffset = s.offsetY;
 			s.offsetY = clampTimelineOffsetToBounds({
 				offsetY: s.offsetY,
@@ -362,18 +392,18 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 		// ignore
 	}
 
-	if (dt > 0 && (s as any).animatingWheelPan) {
+	if (dt > 0 && s.animatingWheelPan) {
 		const remaining = (Number.isFinite(s.targetOffsetY) ? s.targetOffsetY : s.offsetY) - s.offsetY;
 		const step = WHEEL_PAN_SPEED_PX_PER_MS * dt;
 		if (Math.abs(remaining) <= step) {
 			s.offsetY = s.targetOffsetY;
-			(s as any).animatingWheelPan = false;
+			s.animatingWheelPan = false;
 		} else {
 			s.offsetY += Math.sign(remaining) * step;
 		}
 	}
 
-	if (dt > 0 && (s as any).animatingWheelZoom) {
+	if (dt > 0 && s.animatingWheelZoom) {
 		const targetScale = Number(s.targetScale);
 		const curScale = Number(s.scale);
 		if (Number.isFinite(targetScale) && Number.isFinite(curScale) && targetScale > 0 && curScale > 0) {
@@ -383,15 +413,15 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 			const step = WHEEL_ZOOM_LOG_SPEED_PER_MS * dt;
 			if (Math.abs(remaining) <= step) {
 				s.scale = targetScale;
-				(s as any).animatingWheelZoom = false;
-				(s as any).wheelZoomDir = 0;
+				s.animatingWheelZoom = false;
+				s.wheelZoomDir = 0;
 			} else {
 				const dir = remaining > 0 ? 1 : -1;
 				s.scale = Math.exp(curLog + dir * step);
 			}
 			try {
-				const anchorY = Number((s as any).wheelZoomAnchorY);
-				const worldY = Number((s as any).wheelZoomAnchorWorldY);
+				const anchorY = Number(s.wheelZoomAnchorY);
+				const worldY = Number(s.wheelZoomAnchorWorldY);
 				if (Number.isFinite(anchorY) && Number.isFinite(worldY)) {
 					s.offsetY = anchorY - worldY * s.scale;
 				} else {
@@ -401,8 +431,8 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 				// ignore
 			}
 		} else {
-			(s as any).animatingWheelZoom = false;
-			(s as any).wheelZoomDir = 0;
+			s.animatingWheelZoom = false;
+			s.wheelZoomDir = 0;
 		}
 	}
 
@@ -439,17 +469,21 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 	}
 
 	const outgoingStill = (() => {
-		const out = (s as any).outgoingSummaries as Array<{ t: number }> | null | undefined;
+		const out = s.outgoingSummaries;
 		if (out && out.length) {
 			for (let i = 0; i < out.length; i++) {
-				const t = Number(out[i]!.t);
+				const item = out[i];
+				if (!item) continue;
+				const t = Number(item.t);
 				if (Number.isFinite(t) && t > 0.01) return true;
 			}
 		}
-		const outD = (s as any).outgoingDates as Array<{ t: number }> | null | undefined;
+		const outD = s.outgoingDates;
 		if (outD && outD.length) {
 			for (let i = 0; i < outD.length; i++) {
-				const t = Number(outD[i]!.t);
+				const item = outD[i];
+				if (!item) continue;
+				const t = Number(item.t);
 				if (Number.isFinite(t) && t > 0.01) return true;
 			}
 		}
@@ -457,7 +491,7 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 	})();
 	const stillHover = (s.hoverEaseStartAt != null) || Math.abs(target - s.hoverAnim) >= 0.01 || outgoingStill;
 	const stillInertia = Math.abs(s.velocityY) >= 0.01;
-	const stillView = s.animatingView || !!(s as any).animatingWheelPan || !!(s as any).animatingWheelZoom;
+	const stillView = s.animatingView || !!s.animatingWheelPan || !!s.animatingWheelZoom;
 	const stillPinFly = !!s.pinFly;
 
 	if (stillHover || stillInertia || stillView || stillPinFly) {

@@ -14,9 +14,13 @@ import { createSettingGroup } from "./settings-ui/setting-groups";
 
 declare const __EPOCHGRAM_BUILD_TIMESTAMP__: string;
 
+type RuntimeWindowLike = Window & { require?: (id: string) => unknown };
+type ElectronLike = { shell?: { openExternal?: (url: string) => Promise<void> | void } };
+type EpochPluginWithSettingsTab = EpochPlugin & { __epochSettingTab?: EpochSettingTab };
+
 function openExternalUrl(url: string): void {
 	try {
-		const electron = (window as any)?.require?.("electron");
+		const electron = (window as RuntimeWindowLike)?.require?.("electron") as ElectronLike | undefined;
 		if (electron?.shell?.openExternal) {
 			void electron.shell.openExternal(url);
 			return;
@@ -38,7 +42,7 @@ export class EpochSettingTab extends PluginSettingTab {
 		super(app, plugin);
 		this.plugin = plugin;
 		try {
-			(plugin as any).__epochSettingTab = this;
+			(plugin as EpochPluginWithSettingsTab).__epochSettingTab = this;
 		} catch {
 			// ignore
 		}
@@ -68,7 +72,7 @@ export class EpochSettingTab extends PluginSettingTab {
 
 		renderProPanel(containerEl, this.app, this.plugin, () => this.display());
 		try {
-			const proGroup = containerEl.querySelector(":scope > .setting-group.epoch-pro-settings-group") as HTMLElement | null;
+			const proGroup = containerEl.querySelector<HTMLElement>(":scope > .setting-group.epoch-pro-settings-group");
 			if (proGroup && containerEl.firstElementChild !== proGroup) {
 				containerEl.insertBefore(proGroup, containerEl.firstElementChild);
 			}
