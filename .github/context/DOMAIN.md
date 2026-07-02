@@ -57,7 +57,7 @@ Frontmatter recurring schedule `repeat` (Verified)
 - Matching behavior:
   - Patterns are compiled to regex; invalid patterns fall back to an escaped literal-regex.
   - Matching is attempted against both the full path and the leaf filename.
-- File explorer actions are suppressed for excluded paths (see `plugin/view/file-menu.ts`).
+- File explorer actions are suppressed for excluded paths (see `plugin/view/file-menu.ts`). For non-excluded folders, Epochgram adds folder-level Review/Draft/Hide actions that operate on indexed descendant files.
 - Exported HTML files named `epochgram-*.html` are indexed as non-text: they are searchable by filename/path only (export HTML content is ignored).
 
 ### Daily notes (Verified)

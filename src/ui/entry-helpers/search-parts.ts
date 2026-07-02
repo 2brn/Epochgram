@@ -10,7 +10,8 @@ export function buildMiniSearchQueryParts(parsed: TimelineQuery): {
 	const isBehaviorToken = (tokenRaw: string): boolean => {
 		const token = String(tokenRaw || "").trim().toLowerCase();
 		return token === "!marked" || token === "!hidden" || token === "!similar"
-			|| token === "$marked" || token === "$hidden" || token === "$similar";
+			|| token === "!current" || token === "$marked" || token === "$hidden" || token === "$similar"
+			|| token === "$current";
 	};
 	const include: string[] = [];
 	const exclude: string[] = [];

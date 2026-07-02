@@ -238,6 +238,7 @@ A search bar at the bottom lets you search timeline records and shows the number
 | **$marked** | Show only marked records. |
 | **$hidden** | Show only hidden records. |
 | **$similar** | Show only similar records to currently opened file. |
+| **$current** | Show only records from the currently opened file. |
 | **"exact"** | Find exact string. |
 
 > [!TIP]

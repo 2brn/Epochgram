@@ -51,12 +51,13 @@
       - Uses MiniSearch relevance for query-matching results across all indexed files (no timeline-filter gating).
       - No non-query fallback buckets are shown for non-empty input.
       - Falls back to scanning timeline records so record-only fields (summaries/AI summaries/topics/tags/aliases) still produce suggestions.
+      - `$current` limits non-empty suggestions and filtering to the currently open file when one exists; if no file is open, it behaves like `$similar` and does not narrow the result set.
 	  - In Epochs view, suggestions include epoch records in the current zoom bucket, and can also include normal (non-epoch) record matches.
       - Epoch suggestions display as `YYYY-MM-DD - YYYY-MM-DD ⸱ <summary>` when a summary exists.
       - Record suggestions render with a primary title line (note name) and a smaller metadata line (folder path without filename and summary).
       - Selecting a suggestion focuses and opens that specific record.
-      - The suggestions list always ends with a `(Filter <query>)` action for non-empty input, which applies the current query without opening a file.
-    - For empty input, suggestions prefer recently opened files (when available); otherwise suggestions show the most recent records. The list ends with a `(Clear)` item.
+          - The suggestions list always ends with a `(filter <query>)` action for non-empty input, which applies the current query without opening a file.
+        - For empty input, suggestions prefer recently opened files (when available); otherwise suggestions show the most recent records. The list ends with a `(clear)` item.
     - `Enter` selects the highlighted suggestion (opens only; does not apply the query).
     - `Alt+Enter` applies the current query without opening a file (`Option+Enter` on macOS).
     - Selecting a match scrolls the timeline to that match and opens the record.
@@ -70,8 +71,12 @@
     - Shows only the actions that differ from the file’s current effective state (Draft vs Reviewed)
     - When the file is fully hidden, both “Epochgram: Draft” and “Epochgram: Review” are shown
   - Visibility:
-    - Single “Epochgram: Show” / “Epochgram: Hide” toggle (Simple mode on/off)
-    - Toggles file hidden state only (preserves per-date review state)
+    - Single file-level “Epochgram: Hide” action when the file is currently visible
+    - Hiding toggles file hidden state only (preserves per-date review state)
+  - Folder context menu items:
+    - Always shows “Epochgram: Review”, “Epochgram: Draft”, and “Epochgram: Hide” for non-excluded folders
+    - Folder Review/Draft applies to all indexed descendant files; hidden files are unhidden by the chosen review state
+    - Folder Hide hides all indexed descendant files
   - Marking:
     - Normal UI: “Epochgram: Mark” (submenu for mark colors and clear)
     - Simple mode (`settings.simpleMode === true`): “Epochgram: Mark / Unmark” (single toggle)

@@ -99,6 +99,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 			{ command: "$marked", purpose: "" },
 			{ command: "$hidden", purpose: "" },
 			{ command: "$similar", purpose: "" },
+			{ command: "$current", purpose: "" },
 			{ command: "↵", purpose: "to open" },
 			{ command: `${newTabKeyLabel} ↵`, purpose: "to open in new tab" },
 			{ command: `${filterKeyLabel} ↵`, purpose: "to filter" },
@@ -293,9 +294,9 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 		} catch {
 			// ignore
 		}
-		// Always append an explicit "(Filter)" action for non-empty input.
+		// Always append an explicit "(filter)" action for non-empty input.
 		out.push({ kind: "filter", query: qTrim });
-		// Always append an explicit "(Clear)" action at the end.
+		// Always append an explicit "(clear)" action at the end.
 		out.push({ kind: "empty" });
 		toggleHasSuggestions();
 		return out;
@@ -303,11 +304,11 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 
 	renderSuggestion(value: TimelineSearchSuggestion, el: HTMLElement): void {
 		if (!value || typeof value !== "object") {
-			el.setText("(Clear)");
+			el.setText("(clear)");
 			return;
 		}
 		if (value.kind === "empty") {
-			el.setText("(Clear)");
+			el.setText("(clear)");
 			return;
 		}
 		if (value.kind === "record") {
@@ -365,10 +366,10 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 		}
 		if (value.kind === "filter") {
 			const q = String(value.query ?? "").trim();
-			el.setText(q ? `(Filter ${q})` : "(Filter)");
+			el.setText(q ? `(filter ${q})` : "(filter)");
 			return;
 		}
-		el.setText("(Clear)");
+		el.setText("(clear)");
 	}
 
 	onChooseSuggestion(value: TimelineSearchSuggestion, _evt: MouseEvent | KeyboardEvent): void {

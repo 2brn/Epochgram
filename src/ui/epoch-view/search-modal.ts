@@ -11,6 +11,7 @@ import { entryFileName, formatEntrySummary, getEpochRangeFromEntry } from "../ep
 import { buildMiniSearchQueryParts } from "../entry-helpers";
 import { parseTimelineQuery } from "../timeline-search";
 import { matchesSearch } from "../entry-helpers/search";
+import { hasCurrentOnlyToken } from "../entry-helpers/shared";
 
 type SearchWorkspaceLike = {
 	getActiveFile?: () => { path?: string } | null;
@@ -241,6 +242,12 @@ export function openSearchModal(view: SearchViewLike): void {
 
 		const out: Array<{ entry: DateEntry; label?: string }> = [];
 		const excludeFiles = new Set<string>();
+		const currentOnlyActivePath = (() => {
+			if (!hasCurrentOnlyToken(parsed)) return "";
+			const raw = String(view.plugin.app?.workspace?.getActiveFile?.()?.path ?? "").trim();
+			if (!raw || raw.startsWith("epoch://")) return "";
+			return raw;
+		})();
 		const queryCanvas = ({
 			...(canvas as unknown as Record<string, unknown>),
 			searchQuery: q,
@@ -264,6 +271,7 @@ export function openSearchModal(view: SearchViewLike): void {
 			const bestByPath = pickBestByPaths(paths);
 			for (const fp of paths) {
 				if (out.length >= limit) break;
+				if (currentOnlyActivePath && fp !== currentOnlyActivePath) continue;
 				if (excludeFiles.has(fp)) continue;
 				const best = bestByPath.get(fp);
 				if (!best?.entry) continue;

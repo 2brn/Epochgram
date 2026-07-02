@@ -10,6 +10,7 @@ import {
 	getInheritedMarkIndexByPath,
 	getParsedTimelineQuery,
 	getSimilarScopeSignature,
+	hasCurrentOnlyToken,
 	hasHiddenOnlyToken,
 	hasSimilarOnlyToken,
 	isColorMarked
@@ -142,6 +143,7 @@ function hasMarkedOnlyToken(parsed: TimelineQuery): boolean {
 export function matchesEpochEntrySearch(canvas: EpochCanvas, entry: DateEntry, parsed: TimelineQuery): boolean {
 	if (parsed?.invalid === true) return false;
 	if (hasSimilarOnlyToken(parsed)) return false;
+	if (hasCurrentOnlyToken(parsed)) return false;
 	if (hasHiddenOnlyToken(parsed)) return false;
 	const markedOnly = hasMarkedOnlyToken(parsed);
 	if (markedOnly) {
@@ -576,6 +578,27 @@ export function matchesSearch(canvas: EpochCanvas, entry: DateEntry): boolean {
 			// ignore
 		}
 		if (activePath && related.size > 0 && !related.has(filePath)) {
+			try {
+				cache.set(entry, false);
+			} catch {
+				// ignore
+			}
+			return false;
+		}
+	}
+
+	if (hasCurrentOnlyToken(parsed)) {
+		const activePath = (() => {
+			try {
+				const c = canvas as unknown as SearchCanvasRuntime;
+				const raw = String(c.activeFilePath ?? "").trim();
+				if (!raw || raw.startsWith("epoch://")) return "";
+				return raw;
+			} catch {
+				return "";
+			}
+		})();
+		if (activePath && filePath !== activePath) {
 			try {
 				cache.set(entry, false);
 			} catch {

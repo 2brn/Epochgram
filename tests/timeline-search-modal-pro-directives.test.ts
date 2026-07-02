@@ -48,6 +48,6 @@ describe("TimelineSearchModal instructions", () => {
 		const bangCmds = cmds.filter((c: string) => c.startsWith("!"));
 		expect(bangCmds).toEqual([]);
 		const dollarCmds = cmds.filter((c: string) => c.startsWith("$"));
-		expect(dollarCmds).toEqual(["$marked", "$hidden", "$similar"]);
+		expect(dollarCmds).toEqual(["$marked", "$hidden", "$similar", "$current"]);
 	});
 });

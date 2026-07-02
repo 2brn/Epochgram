@@ -101,6 +101,18 @@ export function hasSimilarOnlyToken(parsed: TimelineQuery): boolean {
 	}
 }
 
+export function hasCurrentOnlyToken(parsed: TimelineQuery): boolean {
+	try {
+		const tokens = String(parsed?.fuzzyText || "")
+			.split(/\s+/g)
+			.map((token) => String(token || "").trim().toLowerCase())
+			.filter(Boolean);
+		return tokens.includes("!current") || tokens.includes("$current");
+	} catch {
+		return false;
+	}
+}
+
 export function hasHiddenOnlyToken(parsed: TimelineQuery): boolean {
 	try {
 		const tokens = String(parsed?.fuzzyText || "")
@@ -114,7 +126,7 @@ export function hasHiddenOnlyToken(parsed: TimelineQuery): boolean {
 }
 
 export function getSimilarScopeSignature(canvas: EpochCanvas, parsed: TimelineQuery): string {
-	if (!hasSimilarOnlyToken(parsed)) return "";
+	if (!hasSimilarOnlyToken(parsed) && !hasCurrentOnlyToken(parsed)) return "";
 	try {
 		const c = state(canvas);
 		const basePath = String(c.semanticRelatedBasePath ?? c.activeFilePath ?? "").trim();

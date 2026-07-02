@@ -10,7 +10,7 @@ This is a “what to open first” map of the codebase.
 
 ## plugin/
 - `plugin/lifecycle.ts` — Startup: loads data, sets file paths, registers commands/view/menu, kicks off indexing.
-- `plugin/view.ts` — Opens/reveals Epochgram, refreshes it, registers file-menu items.
+- `plugin/view.ts` — Opens/reveals Epochgram, refreshes it, registers file and folder explorer context-menu items.
 - `plugin/mark-context.ts` — Shared “mark with context” helper: resolves ancestor/seed and applies mark changes so inherited/related marks update consistently across entry menus, file menus, and commands.
 - `plugin/persistence.ts` — Persists plugin payload and writes `epochgram-index.json` (disk-normalized) + `epochgram-summaries.json`; includes `clearEpochJsonFilesAndRebuild()` reset flow.
 - `plugin/local-activation-state.ts` — Splits device-local Pro activation state from sync-safe settings; reads/writes local storage and strips activation fields from synced plugin data.

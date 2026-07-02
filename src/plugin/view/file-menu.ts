@@ -1,5 +1,5 @@
 import type { TAbstractFile } from "obsidian";
-import { Menu, TFile } from "obsidian";
+import { Menu, TFile, TFolder } from "obsidian";
 import { applyMarkColorWithContext } from "../mark-context";
 import { setCssStyles } from "../../dom";
 import { gatherFileEntries } from "../../indexer/entry-state";
@@ -23,6 +23,13 @@ type FileMenuItemLike = {
 	iconEl?: HTMLElement;
 };
 
+type FileMenuHideable = Menu & { onHide?: (callback: () => void) => void; hide?: () => void };
+
+type FileMenuVaultLike = {
+	getConfig?(name: string): unknown;
+	getFiles?(): TFile[];
+};
+
 type FileMenuIndexLike = {
 	isFileKnown?(path: string): boolean;
 	isFilePinned(path: string): boolean;
@@ -44,9 +51,7 @@ type FileMenuPluginLike = EpochPlugin & {
 			on(eventName: string, callback: (menu: Menu, file: TAbstractFile) => void): unknown;
 			getActiveFile?: () => { path?: string } | null;
 		};
-		vault?: {
-			getConfig?(name: string): unknown;
-		};
+		vault?: FileMenuVaultLike;
 	};
 	isExcludedPath?(path: string): boolean;
 	toggleFilePin?(file: TFile, pinned: boolean): Promise<void>;
@@ -57,18 +62,137 @@ type FileMenuPluginLike = EpochPlugin & {
 	__epochInheritedMarkIndexByPath?: Map<string, number | null | undefined>;
 };
 
+function hideContextMenu(menu: FileMenuHideable): void {
+	try {
+		menu.hide?.();
+	} catch { void 0; }
+}
+
+async function persistAndRefresh(pluginState: FileMenuPluginLike): Promise<void> {
+	try {
+		if (typeof pluginState.persistIndex === "function") await pluginState.persistIndex({ skipEnsure: true });
+	} catch {
+		// ignore
+	}
+	try {
+		pluginState.refreshEpochViews?.();
+	} catch {
+		// ignore
+	}
+}
+
+async function ensureReady(pluginState: FileMenuPluginLike): Promise<void> {
+	try {
+		await pluginState.ensureIndexLoaded?.();
+		await pluginState.waitForExcludedSync?.();
+	} catch {
+		// ignore
+	}
+}
+
+function isFileInFolder(folder: TFolder, file: TFile): boolean {
+	const folderPath = String(folder.path ?? "").trim();
+	if (!folderPath) return true;
+	return file.path.startsWith(`${folderPath}/`);
+}
+
+function collectFolderFiles(pluginState: FileMenuPluginLike, folder: TFolder): TFile[] {
+	const files = pluginState.app.vault?.getFiles?.() ?? [];
+	return files.filter((entry) => {
+		if (!(entry instanceof TFile)) return false;
+		if (!isFileInFolder(folder, entry)) return false;
+		if (pluginState.isExcludedPath?.(entry.path)) return false;
+		return pluginState.indexer?.isFileKnown?.(entry.path) === true;
+	});
+}
+
+async function applyFolderReviewState(pluginState: FileMenuPluginLike, files: TFile[], next: "draft" | "reviewed"): Promise<void> {
+	await ensureReady(pluginState);
+	const idxAny = pluginState.indexer;
+	let changedAny = false;
+	for (const file of files) {
+		const path = String(file.path ?? "");
+		if (!path) continue;
+		let changed = false;
+		try {
+			const hidden = idxAny?.isFileHidden?.(path) === true;
+			if (hidden) {
+				changed = idxAny?.setFileReviewStateForAllRecords?.(path, next) === true;
+			} else if (typeof idxAny?.setFileReviewStateForAllRecordsPreserveHidden === "function") {
+				changed = idxAny.setFileReviewStateForAllRecordsPreserveHidden(path, next) === true;
+			} else if (typeof idxAny?.setFileReviewStateForAllRecords === "function") {
+				changed = idxAny.setFileReviewStateForAllRecords(path, next) === true;
+			}
+		} catch {
+			changed = false;
+		}
+		if (changed) changedAny = true;
+	}
+	if (!changedAny) return;
+	await persistAndRefresh(pluginState);
+}
+
+async function applyFolderHidden(pluginState: FileMenuPluginLike, files: TFile[], hidden: boolean): Promise<void> {
+	await ensureReady(pluginState);
+	const idxAny = pluginState.indexer;
+	let changedAny = false;
+	for (const file of files) {
+		const path = String(file.path ?? "");
+		if (!path) continue;
+		let changed = false;
+		try {
+			changed = idxAny?.setFileHidden?.(path, hidden) === true;
+		} catch {
+			changed = false;
+		}
+		if (changed) changedAny = true;
+	}
+	if (!changedAny) return;
+	await persistAndRefresh(pluginState);
+}
+
 
 export function registerFileMenu(plugin: EpochPlugin): void {
 	const pluginState = plugin as FileMenuPluginLike;
 	plugin.registerEvent(
 		pluginState.app.workspace.on("file-menu", (menu: Menu, file: TAbstractFile) => {
-			if (!(file instanceof TFile)) return;
 			if (pluginState.indexReady !== true) return;
+			const menuWithHide = menu as FileMenuHideable;
+
+			if (file instanceof TFolder) {
+				if (pluginState.isExcludedPath?.(file.path)) return;
+				const folderFiles = collectFolderFiles(pluginState, file);
+				const hasFolderFiles = folderFiles.length > 0;
+				menu.addSeparator();
+				menu.addItem((item: FileMenuItemLike) => {
+					item
+						.setTitle("Epochgram: Review")
+						.setIcon("scan-eye")
+						.setDisabled(!hasFolderFiles)
+						.onClick(() => void Promise.resolve(applyFolderReviewState(pluginState, folderFiles, "reviewed")).finally(() => hideContextMenu(menuWithHide)));
+				});
+				menu.addItem((item: FileMenuItemLike) => {
+					item
+						.setTitle("Epochgram: Draft")
+						.setIcon("pencil-ruler")
+						.setDisabled(!hasFolderFiles)
+						.onClick(() => void Promise.resolve(applyFolderReviewState(pluginState, folderFiles, "draft")).finally(() => hideContextMenu(menuWithHide)));
+				});
+				menu.addItem((item: FileMenuItemLike) => {
+					item
+						.setTitle("Epochgram: Hide")
+						.setIcon("eye-off")
+						.setDisabled(!hasFolderFiles)
+						.onClick(() => void Promise.resolve(applyFolderHidden(pluginState, folderFiles, true)).finally(() => hideContextMenu(menuWithHide)));
+				});
+				return;
+			}
+
+			if (!(file instanceof TFile)) return;
 			if (pluginState.isExcludedPath?.(file.path)) return;
 			if (!pluginState.indexer?.isFileKnown?.(file.path)) return;
 
 			menu.addSeparator();
-			const menuWithHide = menu as Menu & { onHide?: (callback: () => void) => void; hide?: () => void };
 
 			const pinned = pluginState.indexer.isFilePinned(file.path);
 			menu.addItem((item) => {
@@ -96,11 +220,6 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 
 				const submenu = item.setSubmenu?.();
 				if (!submenu) return;
-				const hideContextMenu = () => {
-					try {
-						menuWithHide.hide?.();
-					} catch { void 0; }
-				};
 				const rootEl: HTMLElement = pluginState.app.workspace?.containerEl ?? activeDocument.body;
 				const groups = getEpochMarkColorGroups(rootEl);
 				const colors = getEpochMarkColorSet(rootEl);
@@ -142,7 +261,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 									currentColorIndex: explicitMark ?? inheritedMark
 								});
 							} finally {
-								hideContextMenu();
+								hideContextMenu(menuWithHide);
 							}
 						});
 				});
@@ -183,7 +302,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 											nextColorIndex: idx,
 											currentColorIndex: explicitMark ?? inheritedMark
 										})
-									).finally(hideContextMenu);
+									).finally(() => hideContextMenu(menuWithHide));
 								});
 								try {
 										const el = subIt.iconEl;
@@ -213,7 +332,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 										nextColorIndex: group.base.index,
 										currentColorIndex: explicitMark ?? inheritedMark
 									})
-								).finally(hideContextMenu);
+								).finally(() => hideContextMenu(menuWithHide));
 							};
 							for (const t of targets) {
 								t.addEventListener?.("click", handler, { capture: true });
@@ -258,18 +377,8 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 						return "draft";
 					}
 				})();
-				const hideContextMenu = () => {
-					try {
-						menuWithHide.hide?.();
-					} catch { void 0; }
-				};
 				const applyReviewState = async (next: "draft" | "reviewed") => {
-					try {
-						await pluginState.ensureIndexLoaded?.();
-						await pluginState.waitForExcludedSync?.();
-					} catch {
-						// ignore
-					}
+					await ensureReady(pluginState);
 					let changed = false;
 					try {
 						if (fileReviewMode === "hidden") {
@@ -283,16 +392,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 						changed = false;
 					}
 					if (!changed) return;
-					try {
-						if (typeof pluginState.persistIndex === "function") await pluginState.persistIndex({ skipEnsure: true });
-					} catch {
-						// ignore
-					}
-					try {
-						pluginState.refreshEpochViews?.();
-					} catch {
-						// ignore
-					}
+					await persistAndRefresh(pluginState);
 				};
 
 				if (fileReviewMode !== "draft") {
@@ -301,7 +401,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 							.setTitle("Epochgram: Draft")
 							.setIcon("pencil-ruler")
 							.setDisabled(false)
-							.onClick(() => void Promise.resolve(applyReviewState("draft")).finally(hideContextMenu));
+							.onClick(() => void Promise.resolve(applyReviewState("draft")).finally(() => hideContextMenu(menuWithHide)));
 					});
 				}
 				if (fileReviewMode !== "reviewed") {
@@ -310,7 +410,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 							.setTitle("Epochgram: Review")
 							.setIcon("scan-eye")
 							.setDisabled(false)
-							.onClick(() => void Promise.resolve(applyReviewState("reviewed")).finally(hideContextMenu));
+							.onClick(() => void Promise.resolve(applyReviewState("reviewed")).finally(() => hideContextMenu(menuWithHide)));
 					});
 				}
 			}
@@ -324,18 +424,8 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 						return false;
 					}
 				})();
-				const hideContextMenu = () => {
-					try {
-						menuWithHide.hide?.();
-					} catch { void 0; }
-				};
 				const apply = async () => {
-					try {
-						await pluginState.ensureIndexLoaded?.();
-						await pluginState.waitForExcludedSync?.();
-					} catch {
-						// ignore
-					}
+					await ensureReady(pluginState);
 					let changed = false;
 					try {
 						changed = idxAny?.setFileHidden?.(file.path, !hidden) === true;
@@ -343,25 +433,18 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 						changed = false;
 					}
 					if (!changed) return;
-					try {
-						if (typeof pluginState.persistIndex === "function") await pluginState.persistIndex({ skipEnsure: true });
-					} catch {
-						// ignore
-					}
-					try {
-						pluginState.refreshEpochViews?.();
-					} catch {
-						// ignore
-					}
+					await persistAndRefresh(pluginState);
 				};
 
-				menu.addItem((it: FileMenuItemLike) => {
-					it
-						.setTitle(hidden ? "Epochgram: Show" : "Epochgram: Hide")
-						.setIcon(hidden ? "eye" : "eye-off")
-						.setDisabled(false)
-						.onClick(() => void Promise.resolve(apply()).finally(hideContextMenu));
-				});
+				if (!hidden) {
+					menu.addItem((it: FileMenuItemLike) => {
+						it
+							.setTitle("Epochgram: Hide")
+							.setIcon("eye-off")
+							.setDisabled(false)
+							.onClick(() => void Promise.resolve(apply()).finally(() => hideContextMenu(menuWithHide)));
+					});
+				}
 			}
 		})
 	);

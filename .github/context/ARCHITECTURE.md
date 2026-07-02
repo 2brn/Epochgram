@@ -10,7 +10,7 @@
 - View management: `plugin/view.ts`
   - Opens/reveals the `epochgram-view` leaf.
   - Refreshes all open Epochgram panes (preference sync + index refresh).
-  - Registers file context menu entries (Pin/Mark/Review/Draft/Show/Hide).
+  - Registers file explorer context menu entries: file actions (Pin/Mark/Review/Draft/Hide) and folder actions (Review/Draft/Hide).
 - Persistence: `plugin/persistence.ts`
   - Persists sync-safe `settings` via `saveData`.
   - Stores device-bound Pro activation state in local storage per vault/device (not in synced plugin data).
