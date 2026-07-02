@@ -175,7 +175,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 	};
 	let anchorMdateToggle: ToggleComponent | null = null;
 	const anchorMdateSetting = new Setting(containerEl)
-		.setName("Anchor by mdate")
+		.setName("Anchor mdate")
 		.setDesc(getAnchorMdateDesc())
 		.addToggle((toggle) => {
 			anchorMdateToggle = toggle;

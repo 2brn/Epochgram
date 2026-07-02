@@ -106,7 +106,7 @@ The timeline is a scrollable, zoomable surface that collects records from all fi
 | -- Anchors -- | |
 | **Filename date** | Parsed filename date. |
 | **Frontmatter date** | YAML **⛭ Anchor property**. |
-| **File cdate or mdate** | Configurable via **⛭ Anchor by mdate**. |
+| **File cdate or mdate** | Configurable via **⛭ Anchor mdate**. |
 
 Each file has one anchor record that represents its canonical date. All other record types are optional. Drag and drop works only for anchor records, it updates the YAML **⛭ Anchor property**, and the filename for daily notes.
 
@@ -168,7 +168,7 @@ And these Epochgram settings:
 
 | Setting | Value |
 | --- | --- |
-| **⛭ Anchor by mdate** | `off` |
+| **⛭ Anchor mdate** | `off` |
 | **⛭ Anchor property** | `date` |
 | **⛭ Summary property** | `description` |
 | **⛭ Parse all properties** | `on` |

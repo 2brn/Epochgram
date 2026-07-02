@@ -19,7 +19,7 @@ function makeFile(path: string, ctime: number, mtime: number): TFile {
 	});
 }
 
-describe("Anchor by mdate setting", () => {
+describe("Anchor mdate setting", () => {
 	let indexer: Indexer;
 	let pluginStub: any;
 	let contents: Record<string, string>;

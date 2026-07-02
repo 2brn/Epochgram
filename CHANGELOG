@@ -1,5 +1,10 @@
 # Epochgram changelog
 
+## [1.5.1] - 2026-07-02
+- Renamed the **Anchor by mdate** setting label to **Anchor mdate** across UI and docs.
+- Renamed **Search results** setting label to **Search results count** for clarity.
+- Added a total downloads badge to the README release header.
+
 ## [1.5.0] - 2026-07-01
 - Refactored a large number of lint warnings and errors, including UI label casing updates.
 - Fixed two-digit year parsing and date format positioning issues.
