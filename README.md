@@ -8,6 +8,9 @@ A Timemap of Your Mind
   <a href="https://github.com/2brn/Epochgram/releases">
     <img src="https://img.shields.io/github/v/release/2brn/Epochgram?style=for-the-badge&sort=semver" alt="GitHub release (latest SemVer)">
   </a>
+  <a href="https://github.com/2brn/Epochgram/releases">
+    <img src="https://img.shields.io/github/downloads/2brn/Epochgram/total?style=for-the-badge" alt="GitHub total downloads">
+  </a>
 </p>
 
 </br>
