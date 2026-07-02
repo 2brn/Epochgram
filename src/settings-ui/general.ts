@@ -97,7 +97,7 @@ export function renderGeneralViewSettings(containerEl: HTMLElement, plugin: Epoc
 
 	const searchResultsSetting = new Setting(containerEl);
 	const setSearchResultsLabel = (val: number) => {
-		searchResultsSetting.setName(`Search results (${val})`);
+		searchResultsSetting.setName(`Search results count (${val})`);
 	};
 	const currentSearchResults = Number.isFinite(Number(plugin.settings.searchResultsLimit))
 		? Math.max(1, Math.min(50, Math.round(Number(plugin.settings.searchResultsLimit))))

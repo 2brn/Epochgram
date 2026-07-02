@@ -241,7 +241,7 @@ A search bar at the bottom lets you search timeline records and shows the number
 | **"exact"** | Find exact string. |
 
 > [!TIP]
-> Use **⛭ Search results** to control how many suggestions are shown in the search popup.
+> Use **⛭ Search results count** to control how many suggestions are shown in the search popup.
 
 ## Actions
 
