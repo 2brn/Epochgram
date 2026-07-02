@@ -1,5 +1,9 @@
 # Epochgram changelog
 
+## [1.5.2] - 2026-07-02
+- Added `$current` search filtering for the active file and updated search suggestion actions to lowercase.
+- Added folder explorer actions for Review, Draft, and Hide; removed the obsolete file-level Show action.
+
 ## [1.5.1] - 2026-07-02
 - Renamed the **Anchor by mdate** setting label to **Anchor mdate** across UI and docs.
 - Renamed **Search results** setting label to **Search results count** for clarity.
