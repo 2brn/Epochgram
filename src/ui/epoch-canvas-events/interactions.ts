@@ -3,6 +3,7 @@ import type { DateEntry } from "../../indexer/types";
 import { getEventState } from "./state";
 import { getEpochRangeFromEntry } from "../epoch-canvas-utils";
 import { listRelatedEntriesForEpochRange } from "../epoch-canvas/epochs-view";
+import { getEntriesForDate } from "../entry-helpers";
 import { setCssStyles } from "../../dom";
 
 type OpenModifiers = Pick<MouseEvent, "ctrlKey" | "metaKey">;
@@ -14,6 +15,8 @@ function nowMs(): number {
 type CanvasInteractionState = ReturnType<typeof getEventState> & {
 	__suppressExternalAutoScrollUntil?: number;
 	__epochOpenCursor?: EpochOpenCursorState;
+	__compactOpenCursor?: CompactOpenCursorState;
+	activeFilePath?: string | null;
 	scrollNavAnchorEntry?: DateEntry;
 	scrollNavAnchorDayIndex?: number | null;
 	suppressNextFocusScrollForPath?(path: string): void;
@@ -39,7 +42,16 @@ type CanvasInteractionState = ReturnType<typeof getEventState> & {
 		hasVisibleDate: boolean;
 		index: number;
 		dateRect: { x1: number; x2: number; y1: number; y2: number };
-		summaryRects: Array<{ x1: number; x2: number; y1: number; y2: number; itemIndex: number; entry: DateEntry }>;
+		summaryRects: Array<{
+			x1: number;
+			x2: number;
+			y1: number;
+			y2: number;
+			itemIndex: number;
+			entry: DateEntry;
+			compactTotalCount?: number;
+			compactHiddenCount?: number;
+		}>;
 	}>;
 	canvas: HTMLCanvasElement;
 };
@@ -74,6 +86,77 @@ type EpochOpenCursorState = {
 	key: string;
 	index: number;
 };
+
+type CompactOpenCursorState = {
+	key: string;
+	index: number;
+	openedPath: string;
+};
+
+function makeDateKey(date: Date): string {
+	try {
+		return date.toISOString().slice(0, 10);
+	} catch {
+		return "";
+	}
+}
+
+export function pickNextCompactEntryFromDayRange(
+	canvas: EpochCanvas,
+	dayIndex: number,
+	itemIndex: number,
+	compactTotalCount: number,
+	state: CanvasInteractionState & { __compactOpenCursor?: CompactOpenCursorState }
+): DateEntry | null {
+	const today = state.getToday();
+	const date = state.getDateForIndex(dayIndex, today);
+	const dayEntries = getEntriesForDate(canvas, date);
+	if (!Array.isArray(dayEntries) || dayEntries.length === 0) return null;
+
+	const start = Number(itemIndex);
+	const total = Math.min(dayEntries.length, Math.max(0, Number(compactTotalCount)));
+	if (!Number.isFinite(start) || !Number.isFinite(total)) return null;
+	if (start < 0 || start >= total) return null;
+
+	const ordered = dayEntries.slice(start, total);
+	if (ordered.length === 0) return null;
+	const activePath = String(state.activeFilePath ?? "");
+
+	const key = `${dayIndex}|${makeDateKey(date)}|${start}|${total}`;
+	const prev = state.__compactOpenCursor ?? null;
+	let index = 0;
+	const activeMatchesPrevious = !!activePath && !!prev?.openedPath && activePath === prev.openedPath;
+	if (prev && prev.key === key && activeMatchesPrevious) {
+		const lastIndex = Number(prev.index);
+		if (Number.isInteger(lastIndex) && lastIndex >= 0) {
+			index = (lastIndex + 1) % ordered.length;
+		}
+	}
+	const next = ordered[index] ?? null;
+	if (!next) return null;
+	state.__compactOpenCursor = { key, index, openedPath: String(next.file || "") };
+	return next;
+}
+
+async function openCompactCollapsedEntryTarget(
+	canvas: EpochCanvas,
+	dayIndex: number,
+	itemIndex: number,
+	compactTotalCount: number,
+	ev: { ctrlKey: boolean; metaKey: boolean },
+	suppressFocusHover: boolean
+): Promise<boolean> {
+	const s = getEventState(canvas) as CanvasInteractionState;
+	const next = pickNextCompactEntryFromDayRange(canvas, dayIndex, itemIndex, compactTotalCount, s);
+	if (!next) return false;
+	try {
+		s.suppressNextFocusScrollForPath?.(next.file);
+	} catch {
+		// ignore
+	}
+	await s.openEntry(next, ev, suppressFocusHover);
+	return true;
+}
 
 export function pickNextEpochEntryFromRange(canvas: EpochCanvas, start: string, end: string, state: CanvasInteractionState & { __epochOpenCursor?: EpochOpenCursorState }): DateEntry | null {
 	const ordered = listRelatedEntriesForEpochRange(canvas, start, end);
@@ -114,7 +197,14 @@ export async function handlePointClick(
 		}
 	};
 	let best:
-		| { dayIndex: number; itemIndex: number; entry: DateEntry; dist: number }
+		| {
+			dayIndex: number;
+			itemIndex: number;
+			entry: DateEntry;
+			dist: number;
+			compactTotalCount?: number;
+			compactHiddenCount?: number;
+		}
 		| null = null;
 	for (const day of s.layouts) {
 		for (const summary of day.summaryRects) {
@@ -122,7 +212,14 @@ export async function handlePointClick(
 			const cy = (summary.y1 + summary.y2) / 2;
 			const d = Math.abs(y - cy);
 			if (!best || d < best.dist) {
-				best = { dayIndex: day.index, itemIndex: summary.itemIndex, entry: summary.entry, dist: d };
+				best = {
+					dayIndex: day.index,
+					itemIndex: summary.itemIndex,
+					entry: summary.entry,
+					dist: d,
+					compactTotalCount: summary.compactTotalCount,
+					compactHiddenCount: summary.compactHiddenCount
+				};
 			}
 		}
 	}
@@ -137,6 +234,12 @@ export async function handlePointClick(
 		}
 		if (s.epochsView && isEpochEntry(best.entry)) {
 			await openEpochEntryTarget(canvas, best.entry, { ctrlKey, metaKey }, true);
+			try {
+				s.scrollNavAnchorEntry = best.entry;
+				s.scrollNavAnchorDayIndex = best.dayIndex;
+			} catch {
+				// ignore
+			}
 			if (s.isPointerDeviceEvent()) {
 				s.keepHoverUntilPointerMove = true;
 				s.setHoverSummary(best.dayIndex, best.itemIndex, true);
@@ -145,6 +248,42 @@ export async function handlePointClick(
 				s.clearHover();
 			}
 			return;
+		}
+		const compactHiddenCount = Number(best.compactHiddenCount ?? 0);
+		const compactTotalCount = Number(best.compactTotalCount ?? 0);
+		if (!s.epochsView && compactHiddenCount > 0 && compactTotalCount > best.itemIndex + 1) {
+			const opened = await openCompactCollapsedEntryTarget(
+				canvas,
+				best.dayIndex,
+				best.itemIndex,
+				compactTotalCount,
+				{ ctrlKey, metaKey },
+				true
+			);
+			if (opened) {
+				const cursor = interactionState.__compactOpenCursor;
+				const cycleOffset = cursor ? Number(cursor.index) : 0;
+				const anchorIndex = Number.isFinite(cycleOffset) && cycleOffset >= 0
+					? Math.min(Math.max(0, best.itemIndex + cycleOffset), Math.max(best.itemIndex, compactTotalCount - 1))
+					: best.itemIndex;
+				const today = s.getToday();
+				const date = s.getDateForIndex(best.dayIndex, today);
+				const dayEntries = getEntriesForDate(canvas, date);
+				const anchorEntry = dayEntries[anchorIndex] ?? best.entry;
+				try {
+					s.scrollNavAnchorEntry = anchorEntry;
+					s.scrollNavAnchorDayIndex = best.dayIndex;
+				} catch {
+					// ignore
+				}
+				if (s.isPointerDeviceEvent()) {
+					s.keepHoverUntilPointerMove = true;
+					s.setHoverSummary(best.dayIndex, best.itemIndex, true);
+				} else if (!preserveHoverOnNonPointer) {
+					s.clearHover();
+				}
+				return;
+			}
 		}
 		// Clicking a visible record (including dense bars / placeholders) should not
 		// trigger a follow-focus scroll as the file becomes active.
@@ -185,7 +324,14 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 		}
 	};
 	let best:
-		| { dayIndex: number; itemIndex: number; entry: DateEntry; dist: number }
+		| {
+			dayIndex: number;
+			itemIndex: number;
+			entry: DateEntry;
+			dist: number;
+			compactTotalCount?: number;
+			compactHiddenCount?: number;
+		}
 		| null = null;
 	for (const day of s.layouts) {
 		for (const summary of day.summaryRects) {
@@ -193,7 +339,14 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 			const cy = (summary.y1 + summary.y2) / 2;
 			const d = Math.abs(y - cy);
 			if (!best || d < best.dist) {
-				best = { dayIndex: day.index, itemIndex: summary.itemIndex, entry: summary.entry, dist: d };
+				best = {
+					dayIndex: day.index,
+					itemIndex: summary.itemIndex,
+					entry: summary.entry,
+					dist: d,
+					compactTotalCount: summary.compactTotalCount,
+					compactHiddenCount: summary.compactHiddenCount
+				};
 			}
 		}
 	}
@@ -218,6 +371,12 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 		await new Promise(resolve => window.setTimeout(resolve, 120));
 		if (s.epochsView && isEpochEntry(best.entry)) {
 			await openEpochEntryTarget(canvas, best.entry, { ctrlKey: false, metaKey: false }, true);
+			try {
+				s.scrollNavAnchorEntry = best.entry;
+				s.scrollNavAnchorDayIndex = best.dayIndex;
+			} catch {
+				// ignore
+			}
 			if (s.isPointerDeviceEvent()) {
 				s.keepHoverUntilPointerMove = true;
 				s.setHoverSummary(best.dayIndex, best.itemIndex, true);
@@ -226,6 +385,28 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 				s.clearHover();
 			}
 			return;
+		}
+		const compactHiddenCount = Number(best.compactHiddenCount ?? 0);
+		const compactTotalCount = Number(best.compactTotalCount ?? 0);
+		if (!s.epochsView && compactHiddenCount > 0 && compactTotalCount > best.itemIndex + 1) {
+			const opened = await openCompactCollapsedEntryTarget(
+				canvas,
+				best.dayIndex,
+				best.itemIndex,
+				compactTotalCount,
+				{ ctrlKey: false, metaKey: false },
+				true
+			);
+			if (opened) {
+				if (s.isPointerDeviceEvent()) {
+					s.keepHoverUntilPointerMove = true;
+					s.setHoverSummary(best.dayIndex, best.itemIndex, true);
+					setCssStyles(s.canvas, { cursor: "pointer" });
+				} else {
+					s.clearHover();
+				}
+				return;
+			}
 		}
 		interactionState.suppressNextFocusScrollForPath?.(best.entry.file);
 		await interactionState.openEntry(best.entry, { ctrlKey: false, metaKey: false }, true);

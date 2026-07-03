@@ -130,6 +130,7 @@ Each record appears as `file ⸱ summary`. You can control the length of each pa
 Timeline draws today as <img src="images/circle-today.svg" width="18" height="18" alt="">, weekdays as <img src="images/circle.svg" width="18" height="18" alt=""> and weekends as <img src="images/circle-filled.svg" width="18" height="18" alt="">. Entries are shown stacked or side by side when space allows, long entries are truncated with `…`. When records no longer fit within the **⛭ Record width limit**, the rest collapse into `(+n)`. When zoomed out, records collapse into placeholder bars <img src="images/rectangle-horizontal.svg" width="18" height="18" alt="">, with height based on record count.
 
 > [!TIP]
+> Clicking a `(+n)` collapsed record or Epoch cycles through the grouped files.</br>
 > A top label shows the current date, and a vertical red line marks the distance from Today — at the default zoom, each day of redshift represents one month.
 
 ## Examples
