@@ -1,4 +1,4 @@
-import { Notice, Platform } from "obsidian";
+import { Notice, Platform, requestUrl } from "obsidian";
 import type { EpochPlugin } from "../main";
 import { writeTermStore } from "./similarity-term-store";
 import { getSimilarityModelId } from "./similarity/config";
@@ -99,13 +99,6 @@ type EpochViewRuntime = {
 	updateFilterButtons?: () => void;
 };
 
-async function importHttpModule(): Promise<typeof import("http")> {
-	if (Platform.isDesktop) {
-		return await import("http");
-	}
-	throw new Error("http import is desktop-only");
-}
-
 function getRuntime(plugin: EpochPlugin): MaintenanceRuntime {
 	return plugin as unknown as MaintenanceRuntime;
 }
@@ -199,7 +192,6 @@ async function clearBridgeQueueBestEffort(plugin: EpochPlugin): Promise<void> {
 			const raw = bridge.getUrl();
 			return typeof raw === "string" ? raw : "";
 		})();
-		const runtime = getRuntime(plugin);
 		const settingsState = plugin.settings.aiBridgeServer;
 		const settingsUrl = (() => {
 			const token = typeof settingsState?.token === "string" ? settingsState.token : "";
@@ -210,66 +202,31 @@ async function clearBridgeQueueBestEffort(plugin: EpochPlugin): Promise<void> {
 		})();
 		const url = bridgeUrl || settingsUrl;
 		if (url) {
-			await postBridgeClearQueue(url, runtime.__epochNodeHttpModule);
+			await postBridgeClearQueue(url);
 		}
 	} catch {
 		// ignore
 	}
 }
 
-async function postBridgeClearQueue(url: string, httpModuleOverride?: string): Promise<void> {
+async function postBridgeClearQueue(url: string): Promise<void> {
 	if (Platform.isMobile) return;
 	if (!url) return;
 	const u = new URL(url);
 	u.pathname = "/api/clearQueue";
 	// Keep existing token query string.
 	const body = "{}";
-	await new Promise<void>((resolve) => {
-		try {
-			if (!Platform.isDesktop) {
-				resolve();
-				return;
-			}
-			const moduleNameRaw = typeof httpModuleOverride === "string" && httpModuleOverride.trim()
-				? httpModuleOverride
-				: "http";
-			const moduleName = moduleNameRaw === "node:http" ? "http" : moduleNameRaw;
-			const moduleRequire = (window as unknown as { require?: (name: string) => unknown }).require;
-			const loadModule = typeof moduleRequire === "function"
-				? Promise.resolve(moduleRequire(moduleName))
-				: importHttpModule();
-			void loadModule
-				.then((httpUnknown) => {
-					const http = httpUnknown as typeof import("http");
-					const contentLength = new TextEncoder().encode(body).length;
-					const req = http.request(
-						{
-							method: "POST",
-							hostname: u.hostname,
-							port: Number(u.port || 80),
-							path: u.pathname + (u.search || ""),
-							headers: {
-								"content-type": "application/json",
-								"content-length": contentLength
-							}
-						},
-						(res) => {
-							try {
-								res.resume();
-							} catch { void 0; }
-							res.on("end", () => resolve());
-							res.on("close", () => resolve());
-						}
-					);
-					req.on("error", () => resolve());
-					req.write(body);
-					req.end();
-				})
-				.catch(() => resolve());
-		} catch {
-			resolve();
-		}
-	});
+	try {
+		await requestUrl({
+			url: String(u),
+			method: "POST",
+			contentType: "application/json",
+			body,
+			throw: false
+		});
+	} catch {
+		// ignore
+	}
 }
 
 export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options: { keepLicense: boolean } = { keepLicense: true }): Promise<void> {

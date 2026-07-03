@@ -78,14 +78,5 @@ export default defineConfig([
       ],
       "epochgram-internal/ui-prefix-case": "error",
     },
-  },
-  {
-    files: [
-      "src/plugin/ai-bridge/server.ts",
-      "src/plugin/maintenance-reset.ts",
-    ],
-    rules: {
-      "import/no-nodejs-modules": "off",
-    },
-  },
+  }
 ]);
