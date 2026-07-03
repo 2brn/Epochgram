@@ -11,7 +11,7 @@ export function computeRebuildGating(plugin: EpochPlugin): {
 } {
 	const vectorsEnabled = embeddingsSimilarityEnabled(plugin);
 	const topicsEnabled = isTopicSimilarityEnabled(plugin);
-	const aiEnabled = Platform.isDesktopApp && hasAiBridgeAccess(plugin);
+	const aiEnabled = Platform.isDesktop && hasAiBridgeAccess(plugin);
 	const epochsEnabled = isGenerateEpochsEffective(plugin);
 	return { semanticsEnabled: vectorsEnabled, topicsEnabled, aiEnabled, epochsEnabled };
 }

@@ -18,9 +18,9 @@ type RuntimeWindowLike = Window & {
 const runtimeGlobal: RuntimeWindowLike = window;
 
 function canLoadNodeBuiltinsForAiBridge(): boolean {
-	// Treat mobile emulation as mobile: Obsidian may set both isDesktopApp and isMobileApp.
-	if (!Platform.isDesktopApp) return false;
-	if (Platform.isMobileApp) return false;
+	// Treat mobile emulation as mobile: Obsidian may set both isDesktop and isMobile.
+	if (!Platform.isDesktop) return false;
+	if (Platform.isMobile) return false;
 	const platformWithMobile = Platform as typeof Platform & { isMobile?: boolean };
 	if (platformWithMobile.isMobile === true) return false;
 

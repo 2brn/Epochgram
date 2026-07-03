@@ -223,7 +223,7 @@ async function postBridgeClearQueue(url: string, httpModuleOverride?: string): P
 	const body = "{}";
 	await new Promise<void>((resolve) => {
 		try {
-			if (!Platform.isDesktopApp) {
+			if (!Platform.isDesktop) {
 				resolve();
 				return;
 			}

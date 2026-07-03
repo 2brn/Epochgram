@@ -1,6 +1,6 @@
 import type { CanvasIconCache } from "../../canvas-icon-cache";
 import type { RenderRow } from "../normal-measure";
-import { mixFont } from "../../epoch-canvas-utils";
+import { mixFont, withFontWeight } from "../../epoch-canvas-utils";
 import { HOVER_BG_PAD, SUMMARY_PLACEHOLDER_STROKE_WIDTH } from "../../epoch-canvas-constants";
 import { drawSummaryIcons } from "../../summary-rendering-icons";
 import { parseFontPx } from "../text";
@@ -12,6 +12,10 @@ type TextMetricsWithBoxes = TextMetrics & {
 	actualBoundingBoxAscent?: number;
 	actualBoundingBoxDescent?: number;
 };
+
+export function getPlusNBadgeFont(font: string, badgeBold: boolean): string {
+	return withFontWeight(font, badgeBold ? "700" : "400");
+}
 
 function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
 	const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
@@ -33,6 +37,7 @@ function fillTextWithPlusNBadge(
 	lineHeight: number,
 	textColor: string,
 	badgeColor: string | null = null,
+	badgeBold: boolean = false,
 	badgeStrokeNudgeY: number = 0
 ): void {
 	const prevBaseline = ctx.textBaseline;
@@ -62,8 +67,12 @@ function fillTextWithPlusNBadge(
 	const badgeText = split.prefix;
 	const rest = String(split.rest ?? "");
 	const badgeTextColor = badgeColor || textColor;
+	const prevFont = ctx.font;
+	const badgeFont = getPlusNBadgeFont(prevFont, badgeBold);
 
 	const padX = Math.max(3, basePx * 0.5);
+	ctx.save();
+	ctx.font = badgeFont;
 	const badgeTextW = ctx.measureText(badgeText).width;
 	const badgeW = badgeTextW + padX * 2;
 	let ascent = basePx * 0.8;
@@ -86,7 +95,6 @@ function fillTextWithPlusNBadge(
 	const restMaxW = Math.max(0, maxW - badgeW - gap);
 	const restLabel = ellipsizeToWidth(ctx, rest.trimStart(), restMaxW);
 
-	ctx.save();
 	const strokeW = Math.max(1, basePx * 0.1);
 	const halfStroke = strokeW / 2;
 	const badgeWClamped = Math.max(0, Math.min(badgeW, maxW));
@@ -101,6 +109,7 @@ function fillTextWithPlusNBadge(
 	ctx.fillStyle = badgeTextColor;
 	ctx.fillText(badgeText, x + (badgeWClamped - badgeTextW) / 2, baselineY);
 	ctx.restore();
+	ctx.font = prevFont;
 
 	ctx.fillStyle = textColor;
 	if (typeof restLabel === "string") ctx.fillText(restLabel, x + badgeW + gap, baselineY);
@@ -116,6 +125,7 @@ function fillTextWithPlusNBadgeSmoothEllipsis(
 	lineHeight: number,
 	textColor: string,
 	badgeColor: string | null = null,
+	badgeBold: boolean = false,
 	badgeStrokeNudgeY: number = 0
 ): void {
 	const wMax = Math.max(0, Number(maxW) || 0);
@@ -174,8 +184,12 @@ function fillTextWithPlusNBadgeSmoothEllipsis(
 	const badgeText = split.prefix;
 	const rest = String(split.rest ?? "");
 	const badgeTextColor = badgeColor || textColor;
+	const prevFont = ctx.font;
+	const badgeFont = getPlusNBadgeFont(prevFont, badgeBold);
 
 	const padX = Math.max(3, basePx * 0.5);
+	ctx.save();
+	ctx.font = badgeFont;
 	const badgeTextW = ctx.measureText(badgeText).width;
 	const badgeW = badgeTextW + padX * 2;
 	let ascent = basePx * 0.8;
@@ -197,7 +211,6 @@ function fillTextWithPlusNBadgeSmoothEllipsis(
 	const gap = Math.max(2, basePx * 0.2);
 	const badgeWClamped = Math.max(0, Math.min(badgeW, wMax));
 
-	ctx.save();
 	const strokeW = Math.max(1, basePx * 0.1);
 	const halfStroke = strokeW / 2;
 	const innerW = Math.max(0, badgeWClamped - strokeW);
@@ -211,6 +224,7 @@ function fillTextWithPlusNBadgeSmoothEllipsis(
 	ctx.fillStyle = badgeTextColor;
 	ctx.fillText(badgeText, x + (badgeWClamped - badgeTextW) / 2, baselineY);
 	ctx.restore();
+	ctx.font = prevFont;
 
 	const restX = x + badgeWClamped + gap;
 	const restMaxW = Math.max(0, wMax - badgeWClamped - gap);
@@ -415,9 +429,9 @@ export function renderNormalRow(args: {
 				const maxTextW = Math.max(0, textClipRight - textStartX);
 				const raw = String(r.textToWrap ?? linesToRender[0] ?? "");
 				if (!useSmoothEllipsis) {
-					fillTextWithPlusNBadge(ctx, raw, xLine, yTextTop, maxTextW, rowLineHeight, textColor, r.plusNBadgeColor ?? null, hoverBadgeStrokeNudgeY);
+					fillTextWithPlusNBadge(ctx, raw, xLine, yTextTop, maxTextW, rowLineHeight, textColor, r.plusNBadgeColor ?? null, r.plusNBadgeBold === true, hoverBadgeStrokeNudgeY);
 				} else {
-					fillTextWithPlusNBadgeSmoothEllipsis(ctx, raw, xLine, yTextTop, maxTextW, rowLineHeight, textColor, r.plusNBadgeColor ?? null, 0);
+					fillTextWithPlusNBadgeSmoothEllipsis(ctx, raw, xLine, yTextTop, maxTextW, rowLineHeight, textColor, r.plusNBadgeColor ?? null, r.plusNBadgeBold === true, 0);
 				}
 			} else {
 				for (let li = 0; li < linesToRender.length; li++) {
@@ -426,14 +440,14 @@ export function renderNormalRow(args: {
 					const text = String(linesToRender[li] ?? "").trimEnd();
 					if (!useSmoothEllipsis) {
 						if (li === 0) {
-							fillTextWithPlusNBadge(ctx, text, xLine, yTextTop + li * rowLineHeight, maxTextW, rowLineHeight, textColor, r.plusNBadgeColor ?? null, hoverBadgeStrokeNudgeY);
+							fillTextWithPlusNBadge(ctx, text, xLine, yTextTop + li * rowLineHeight, maxTextW, rowLineHeight, textColor, r.plusNBadgeColor ?? null, r.plusNBadgeBold === true, hoverBadgeStrokeNudgeY);
 						} else {
 							const label = ellipsizeToWidth(ctx, text, maxTextW);
 							ctx.fillStyle = textColor;
 							ctx.fillText(label, xLine, yTextTop + li * rowLineHeight);
 						}
 					} else {
-						fillTextWithPlusNBadgeSmoothEllipsis(ctx, text, xLine, yTextTop + li * rowLineHeight, maxTextW, rowLineHeight, textColor, r.plusNBadgeColor ?? null, 0);
+						fillTextWithPlusNBadgeSmoothEllipsis(ctx, text, xLine, yTextTop + li * rowLineHeight, maxTextW, rowLineHeight, textColor, r.plusNBadgeColor ?? null, r.plusNBadgeBold === true, 0);
 					}
 				}
 			}

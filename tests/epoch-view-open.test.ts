@@ -5,13 +5,13 @@ import { viewMethods } from "../src/plugin/view";
 
 describe("epoch view open", () => {
 	afterEach(() => {
-		Platform.isMobileApp = false;
-		Platform.isDesktopApp = true;
+		Platform.isMobile = false;
+		Platform.isDesktop = true;
 	});
 
 	it("opens in a right leaf on desktop", async () => {
-		Platform.isMobileApp = false;
-		Platform.isDesktopApp = true;
+		Platform.isMobile = false;
+		Platform.isDesktop = true;
 
 		const setViewState = vi.fn().mockResolvedValue(undefined);
 		const plugin: any = {
@@ -34,8 +34,8 @@ describe("epoch view open", () => {
 	});
 
 	it("prefers right leaf on mobile", async () => {
-		Platform.isMobileApp = true;
-		Platform.isDesktopApp = false;
+		Platform.isMobile = true;
+		Platform.isDesktop = false;
 
 		const setViewState = vi.fn().mockResolvedValue(undefined);
 		const plugin: any = {
@@ -60,8 +60,8 @@ describe("epoch view open", () => {
 	});
 
 	it("falls back to getLeaf(true) on mobile when right leaf is unavailable", async () => {
-		Platform.isMobileApp = true;
-		Platform.isDesktopApp = false;
+		Platform.isMobile = true;
+		Platform.isDesktop = false;
 
 		const setViewState = vi.fn().mockResolvedValue(undefined);
 		const plugin: any = {
@@ -85,8 +85,8 @@ describe("epoch view open", () => {
 	});
 
 	it("activates epoch view when openEpochView is called with activate option", async () => {
-		Platform.isMobileApp = false;
-		Platform.isDesktopApp = true;
+		Platform.isMobile = false;
+		Platform.isDesktop = true;
 
 		const setViewState = vi.fn().mockResolvedValue(undefined);
 		const plugin: any = {

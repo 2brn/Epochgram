@@ -59,6 +59,7 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 		decorateTitle,
 		decorateTextToWrap,
 		decoratePlusNBadgeColor,
+		decoratePlusNBadgeBold,
 		visibleRowIndexRange
 	} = args;
 
@@ -276,6 +277,11 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 				if (!splitPlusNPrefix(textToWrap) && !splitPlusNPrefix(title)) return null;
 				return decoratePlusNBadgeColor({ entryIndex, entry, textToWrap, title });
 			})();
+			const plusNBadgeBold = (() => {
+				if (!decoratePlusNBadgeBold) return null;
+				if (!splitPlusNPrefix(textToWrap) && !splitPlusNPrefix(title)) return null;
+				return decoratePlusNBadgeBold({ entryIndex, entry, textToWrap, title });
+			})();
 			const linesRaw = wrapText(ctx, textToWrap, maxTextWidth);
 			let maxLineWidth = 0;
 			for (const line of linesRaw) {
@@ -312,6 +318,7 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 				baseColor: summaryColor,
 				hoverSummaryColor,
 				plusNBadgeColor,
+				plusNBadgeBold,
 				hiddenAlpha,
 				leadingIconIds,
 				tagTint,

@@ -300,7 +300,7 @@ export const lifecycleMethods: LifecycleMethods = {
 				try {
 					if (!hasAiBridgeAccess(this)) return false;
 					if (checking) return true;
-					if (!Platform.isDesktopApp) {
+					if (!Platform.isDesktop) {
 						new Notice("AI bridge is available only on desktop.", 2500);
 						return true;
 					}
@@ -321,7 +321,7 @@ export const lifecycleMethods: LifecycleMethods = {
 				try {
 					if (!hasAiBridgeAccess(this)) return false;
 					if (checking) return true;
-					if (!Platform.isDesktopApp) {
+					if (!Platform.isDesktop) {
 						new Notice("AI summaries are available only on desktop.", 2500);
 						return true;
 					}
@@ -346,7 +346,7 @@ export const lifecycleMethods: LifecycleMethods = {
 					if (!this.shouldIndexFile(file)) return false;
 					if (!this.indexer.isFileKnown(file.path)) return false;
 					if (checking) return true;
-					if (!Platform.isDesktopApp) {
+					if (!Platform.isDesktop) {
 						new Notice("AI summaries are available only on desktop.", 2500);
 						return true;
 					}

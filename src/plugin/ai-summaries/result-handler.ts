@@ -134,7 +134,7 @@ function storeEntrySummaries(plugin: EpochPlugin, job: AiSummaryJob, entries: Fi
 	}
 
 	try {
-		if (plugin?.hasProAccess?.() && Platform.isDesktopApp && isGenerateEpochsEffective(plugin)) {
+		if (plugin?.hasProAccess?.() && Platform.isDesktop && isGenerateEpochsEffective(plugin)) {
 			const dateKeys = Array.from(new Set(entries.map((e) => e.date).filter(isDateKey)));
 			if (dateKeys.length > 0 && typeof runtime.enqueueEpochsForDateKeys === "function") {
 				void runtime.enqueueEpochsForDateKeys(dateKeys, { force: false, showNotice: false });

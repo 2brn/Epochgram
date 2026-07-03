@@ -58,7 +58,7 @@ function asStoreFileRecord(value: unknown): SimilarityStoreFileRecordLike {
 
 async function preflightFullRebuild(plugin: EpochPlugin): Promise<void> {
 	const state = plugin as SimilarityRebuildPluginState;
-	if (Platform.isDesktopApp) {
+	if (Platform.isDesktop) {
 		announceEpochDesktopTaskAfter(plugin, "semanticBuild:started", "Building semantics started", {
 			graceMs: 1000,
 			still: () => {
@@ -111,7 +111,7 @@ function finishFullRebuild(plugin: EpochPlugin): void {
 		// ignore
 	}
 	try {
-		if (Platform.isDesktopApp) {
+		if (Platform.isDesktop) {
 			cancelEpochDesktopTaskAnnouncement(plugin, "semanticBuild:started");
 		}
 	} catch {
@@ -192,7 +192,7 @@ async function rebuildSemanticVectorsWithProgress(plugin: EpochPlugin): Promise<
 	let lastWriteAt = now();
 	for (const f of files) {
 		try {
-			if (Platform.isDesktopApp && consumeCancelRequested(plugin, "semanticBuild")) {
+			if (Platform.isDesktop && consumeCancelRequested(plugin, "semanticBuild")) {
 				break;
 			}
 		} catch {
@@ -213,7 +213,7 @@ async function rebuildSemanticVectorsWithProgress(plugin: EpochPlugin): Promise<
 			!isUserEditingMarkdown(plugin.app) &&
 			shouldAllowSimilarityProgressNotice(plugin, "similarityRebuildStartedAt")
 		) {
-			if (Platform.isDesktopApp) {
+			if (Platform.isDesktop) {
 				setEpochProgress(plugin, "semanticBuild", `Semantics… ${processed}/${total}`);
 			} else {
 				new Notice(`Semantics… ${processed}/${total}`, 900);
@@ -234,7 +234,7 @@ async function rebuildSemanticVectorsWithProgress(plugin: EpochPlugin): Promise<
 		2000
 	);
 	try {
-		if (Platform.isDesktopApp) {
+		if (Platform.isDesktop) {
 			clearEpochProgress(plugin, "semanticBuild", 1500);
 		}
 	} catch {

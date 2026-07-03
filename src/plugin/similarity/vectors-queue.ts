@@ -53,7 +53,7 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 		}
 	})();
 	try {
-		if (Platform.isDesktopApp && consumeCancelRequested(plugin, "semantic")) {
+		if (Platform.isDesktop && consumeCancelRequested(plugin, "semantic")) {
 			pluginState.similarityPendingFiles = new Set<string>();
 			pluginState.similarityQueueTotal = 0;
 			pluginState.similarityQueueProcessed = 0;
@@ -87,7 +87,7 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 			} catch {
 				// ignore
 			}
-			if (Platform.isDesktopApp) {
+			if (Platform.isDesktop) {
 				announceEpochDesktopTaskAfter(plugin, "semantic:queued", "Semantics queued", {
 					graceMs: 1000,
 					minIntervalMs: 1000,
@@ -194,7 +194,7 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 
 		while (pluginState.similarityPendingFiles instanceof Set && pluginState.similarityPendingFiles.size > 0) {
 			try {
-				if (Platform.isDesktopApp && consumeCancelRequested(plugin, "semantic")) {
+				if (Platform.isDesktop && consumeCancelRequested(plugin, "semantic")) {
 					try {
 						pluginState.similarityPendingFiles = new Set<string>();
 						pluginState.similarityQueueTotal = 0;
@@ -270,7 +270,7 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 				const done = typeof pluginState.similarityQueueProcessed === "number" ? pluginState.similarityQueueProcessed : 0;
 				const tot = typeof pluginState.similarityQueueTotal === "number" ? pluginState.similarityQueueTotal : 0;
 				if (shouldAllowSimilarityProgressNotice(plugin, "similarityVectorUpdateProcessingStartedAt")) {
-					if (Platform.isDesktopApp) {
+					if (Platform.isDesktop) {
 						setEpochProgress(plugin, "semantic", `Semantics… ${done}/${Math.max(done, tot)}`);
 					} else {
 						new Notice(`Semantics… ${done}/${Math.max(done, tot)}`, 900);
@@ -295,7 +295,7 @@ export async function processPendingQueue(plugin: EpochPlugin): Promise<void> {
 				// ignore
 			}
 			try {
-				if (Platform.isDesktopApp) {
+				if (Platform.isDesktop) {
 					cancelEpochDesktopTaskAnnouncement(plugin, "semantic:queued");
 					clearEpochProgress(plugin, "semantic", 1500);
 				}

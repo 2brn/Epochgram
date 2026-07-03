@@ -8,7 +8,7 @@ vi.mock("obsidian", () => ({
 		noticeCalls.push(String(message ?? ""));
 		return {} as any;
 	}),
-	Platform: { isDesktopApp: true },
+	Platform: { isDesktop: true },
 }));
 
 vi.mock("../src/plugin/notice-utils", () => ({

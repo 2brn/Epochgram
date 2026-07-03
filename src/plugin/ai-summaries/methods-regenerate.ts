@@ -36,7 +36,7 @@ export async function regenerateAiSummariesAndEpochsForAllRecords(this: EpochPlu
 		new Notice(`Epochgram ${"Pro"} required: AI summaries / ${"Generate Epochs"}`, 5000);
 		return;
 	}
-	if (!Platform.isDesktopApp) {
+	if (!Platform.isDesktop) {
 		return;
 	}
 	try {
@@ -67,7 +67,7 @@ export async function regenerateMissingAiSummariesAndEpochsForAllRecords(this: E
 		new Notice(`Epochgram ${"Pro"} required: AI summaries / ${"Generate Epochs"}`, 5000);
 		return;
 	}
-	if (!Platform.isDesktopApp) {
+	if (!Platform.isDesktop) {
 		return;
 	}
 	try {

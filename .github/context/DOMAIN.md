@@ -302,7 +302,7 @@ Epoch (period) generation input (Verified)
 
 AI bridge startup behavior (Verified)
 - On desktop with Pro + AI enabled (`summarizeAI === true` or `generateEpochs === true`), Epochgram tries to start the local AI bridge server during plugin load.
-- If `Platform.isMobileApp` (including mobile emulation) or Node is unavailable, AI bridge startup is skipped.
+- If `Platform.isMobile` (including mobile emulation) or Node is unavailable, AI bridge startup is skipped.
 - During plugin hot reload/unload, the AI bridge server is stopped and then restarted on the next load; an already-open Chrome bridge page can typically reconnect by continuing to poll `/api/status`.
 - If an existing Chrome bridge page reconnects quickly (e.g. after plugin reload), Epochgram does not open a new tab.
 - Chrome auto-open is controlled by `openAiBridgeOnStartup` (Pro + Desktop). When OFF, Epochgram never opens Chrome automatically (only the explicit command/status bar click can open the AI Bridge page).

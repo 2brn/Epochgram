@@ -194,8 +194,8 @@ beforeEach(() => {
 
 afterEach(() => {
 	setRequestUrlHandler(null);
-	Platform.isDesktopApp = true;
-	Platform.isMobileApp = false;
+	Platform.isDesktop = true;
+	Platform.isMobile = false;
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
 	try {

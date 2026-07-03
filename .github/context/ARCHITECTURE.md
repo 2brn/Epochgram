@@ -203,6 +203,7 @@ Timeline zoom-in sampling (Verified)
     - The prefix count includes the last visible record.
     - The prefix is applied to both the title and the wrapped text so it stays visible under wrapping/truncation.
     - If any hidden records (entries with `reviewState: "hidden"`) under `+n` are marked / inherited-marked / semantic-related (or the active file), the `+n` badge uses that same accent color.
+    - If the hidden portion contains the currently opened file, the `+n` badge prefix is rendered in bold as well.
     - Clicking the `+n`-prefixed record does not auto-zoom.
   - Additionally, at zoom-in, if a day is too narrow to render even an ellipsis (`needsDenseByWidth`), it falls back to compact mode rather than rendering placeholder strokes.
 

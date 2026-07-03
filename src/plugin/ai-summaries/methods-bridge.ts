@@ -94,7 +94,7 @@ export async function openAiBridgeWindow(
 	if (!hasAiBridgeAccess(this)) {
 		return;
 	}
-	if (!Platform.isDesktopApp || Platform.isMobileApp) {
+	if (!Platform.isDesktop || Platform.isMobile) {
 		return;
 	}
 
@@ -197,7 +197,7 @@ export async function maybeOpenAiBridgeOnStartup(this: EpochPlugin): Promise<voi
 	let aiEnabled = false;
 	try {
 		if (!hasAiBridgeAccess(this)) return;
-		if (!Platform.isDesktopApp || Platform.isMobileApp) return;
+		if (!Platform.isDesktop || Platform.isMobile) return;
 		shouldAutoOpenPage = isOpenAiBridgeOnStartupEffective(this);
 		aiEnabled = isSummarizeAIEffective(this) || isGenerateEpochsEffective(this);
 		if (!aiEnabled) return;

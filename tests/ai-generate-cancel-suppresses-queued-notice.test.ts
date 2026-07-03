@@ -5,7 +5,7 @@ vi.mock("obsidian", () => {
 		Notice: vi.fn(function Notice(this: any, _message: string, _timeout?: number) {
 			// constructor side-effect only
 		}),
-		Platform: { isDesktopApp: true }
+		Platform: { isDesktop: true }
 	};
 });
 

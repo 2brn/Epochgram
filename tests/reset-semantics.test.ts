@@ -23,8 +23,8 @@ Object.setPrototypeOf(FakeTFile.prototype, TFile.prototype);
 
 describe("Reset semantics", () => {
 	it("clears the vectors store and resets in-memory similarity state", async () => {
-		Platform.isDesktopApp = true;
-		Platform.isMobileApp = false;
+		Platform.isDesktop = true;
+		Platform.isMobile = false;
 		const fileStore = new Map<string, string>();
 		const adapter = {
 			write: vi.fn(async (p: string, data: string) => {

@@ -129,7 +129,7 @@ function normalizeText(value: unknown): string {
 
 function getPlatformLabel(): string {
 	const win = window as LicenseWindowLike;
-	if (Platform.isMobileApp) {
+	if (Platform.isMobile) {
 		const mobileOs = String(win.process?.platform ?? "").trim().toLowerCase();
 		if (mobileOs === "darwin") return "iOS";
 		if (mobileOs === "android") return "Android";
@@ -147,7 +147,7 @@ function getPlatformLabel(): string {
 }
 
 function getHumanDeviceName(): string {
-	const kind = Platform.isMobileApp ? "Obsidian Mobile" : "Obsidian Desktop";
+	const kind = Platform.isMobile ? "Obsidian Mobile" : "Obsidian Desktop";
 	return `${kind} (${getPlatformLabel()})`;
 }
 

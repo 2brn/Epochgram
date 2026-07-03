@@ -34,8 +34,8 @@ import { runSimilarityStartupMaintenance } from "../src/plugin/similarity/startu
 describe("similarity: huge vault startup maintenance", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
-		Platform.isDesktopApp = true;
-		Platform.isMobileApp = false;
+		Platform.isDesktop = true;
+		Platform.isMobile = false;
 	});
 
 	afterEach(() => {

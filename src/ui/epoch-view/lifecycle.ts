@@ -389,7 +389,7 @@ export async function epochViewOnOpen(_view: unknown): Promise<void> {
 		const hasOpenFile = !!view.startupSnapPath;
 		canvas.initSize();
 		if (hasOpenFile) {
-			if (Platform.isMobileApp && cursorLine == null) {
+			if (Platform.isMobile && cursorLine == null) {
 				view.startupDeferredSnapPath = view.startupSnapPath;
 				view.startupDeferredSnapUntil = nowMs() + 12_000;
 			} else {
@@ -404,7 +404,7 @@ export async function epochViewOnOpen(_view: unknown): Promise<void> {
 		window.requestAnimationFrame(() => {
 			try {
 				if (!view.canvas) return;
-				if (Platform.isMobileApp && view.startupDeferredSnapPath) return;
+				if (Platform.isMobile && view.startupDeferredSnapPath) return;
 				if (view.startupSnapPath) {
 					view.canvas.snapInitialPosition(view.startupSnapPath, cursorLine, { draw: false });
 				} else {
@@ -414,7 +414,7 @@ export async function epochViewOnOpen(_view: unknown): Promise<void> {
 				// ignore
 			}
 		});
-		if (!Platform.isMobileApp) {
+		if (!Platform.isMobile) {
 			view.startStartupDefaultNoteRefocus();
 		}
 	});

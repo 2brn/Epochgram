@@ -36,9 +36,92 @@ type PlusNBadgeCache = {
 	colHighlight: string;
 	colRelated: string;
 	color: string | null;
+	bold: boolean;
 };
 
 const plusNBadgeCacheByDay = new Map<number, PlusNBadgeCache>();
+
+export function getCompactPlusNBadgeDecoration(args: {
+	dayIndex: number;
+	entries: DateEntry[];
+	visibleCount: number;
+	activeFilePath: string | null;
+	semanticRelatedPaths: Set<string> | null | undefined;
+	markColors: string[] | undefined;
+	inheritedMarkIndexByPath: Map<string, number> | null | undefined;
+	colHighlight: string;
+	colRelated: string;
+}): { color: string | null; bold: boolean } {
+	const hiddenEntries = args.entries.slice(args.visibleCount);
+	if (hiddenEntries.length === 0) return { color: null, bold: false };
+
+	const cached = plusNBadgeCacheByDay.get(args.dayIndex);
+	if (
+		cached &&
+		cached.entries === args.entries &&
+		cached.visibleCount === args.visibleCount &&
+		cached.activeFilePath === args.activeFilePath &&
+		cached.semanticRelatedPaths === args.semanticRelatedPaths &&
+		cached.markColors === args.markColors &&
+		cached.inheritedMarkIndexByPath === args.inheritedMarkIndexByPath &&
+		cached.colHighlight === args.colHighlight &&
+		cached.colRelated === args.colRelated
+	) {
+		return { color: cached.color, bold: cached.bold };
+	}
+
+	let activeHidden: DateEntry | null = null;
+	let anyMark: string | null = null;
+	let anyInherited: string | null = null;
+	let hasSemantic = false;
+	if (args.activeFilePath) {
+		for (let i = 0; i < hiddenEntries.length; i++) {
+			const e = hiddenEntries[i];
+			if (!e) continue;
+			if (e.file === args.activeFilePath) {
+				activeHidden = e;
+				break;
+			}
+		}
+	}
+	for (let i = 0; i < hiddenEntries.length; i++) {
+		const e = hiddenEntries[i];
+		if (!e) continue;
+		if (!anyMark) {
+			const c = getEntryMarkColor(e, args.markColors, args.colHighlight);
+			if (c) anyMark = c;
+		}
+		if (!anyInherited) {
+			const c = getInheritedMarkColor(e, args.markColors, args.colHighlight, args.inheritedMarkIndexByPath);
+			if (c) anyInherited = c;
+		}
+		if (!hasSemantic && args.semanticRelatedPaths && args.semanticRelatedPaths.has(e.file)) {
+			hasSemantic = true;
+		}
+		if (anyMark && anyInherited && hasSemantic) break;
+	}
+	const activeMark = activeHidden ? getEntryMarkColor(activeHidden, args.markColors, args.colHighlight) : null;
+	const activeInherited = activeHidden
+		? getInheritedMarkColor(activeHidden, args.markColors, args.colHighlight, args.inheritedMarkIndexByPath)
+		: null;
+	const color = activeMark || activeInherited || anyMark || anyInherited || (activeHidden || hasSemantic ? args.colRelated : null);
+	const bold = activeHidden != null;
+
+	plusNBadgeCacheByDay.set(args.dayIndex, {
+		entries: args.entries,
+		visibleCount: args.visibleCount,
+		activeFilePath: args.activeFilePath,
+		semanticRelatedPaths: args.semanticRelatedPaths,
+		markColors: args.markColors,
+		inheritedMarkIndexByPath: args.inheritedMarkIndexByPath,
+		colHighlight: args.colHighlight,
+		colRelated: args.colRelated,
+		color,
+		bold
+	});
+	if (plusNBadgeCacheByDay.size > 5000) plusNBadgeCacheByDay.clear();
+	return { color, bold };
+}
 
 export interface NormalSummaryRenderArgs {
 	ctx: CanvasRenderingContext2D;
@@ -176,68 +259,9 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 		const hiddenCount = Math.max(0, entries.length - visibleCount);
 		const lastVisibleIndex = visibleCount > 0 ? visibleCount - 1 : -1;
 		const plusN = hiddenCount > 0 ? formatPlusNPrefix(hiddenCount + 1) : "";
-		const plusNBadgeColor = (() => {
-			if (!plusN || lastVisibleIndex < 0 || hiddenCount <= 0) return null;
-			const cached = plusNBadgeCacheByDay.get(dayIndex);
-			if (
-				cached &&
-				cached.entries === entries &&
-				cached.visibleCount === visibleCount &&
-				cached.activeFilePath === activeFilePath &&
-				cached.semanticRelatedPaths === semanticRelatedPaths &&
-				cached.markColors === markColors &&
-				cached.inheritedMarkIndexByPath === inheritedMarkIndexByPath &&
-				cached.colHighlight === colHighlight &&
-				cached.colRelated === colRelated
-			) {
-				return cached.color;
-			}
-
-			const hiddenEntries = entries.slice(visibleCount);
-			if (hiddenEntries.length === 0) return null;
-
-			let activeHidden: DateEntry | null = null;
-			let anyMark: string | null = null;
-			let anyInherited: string | null = null;
-			let hasSemantic = false;
-			if (activeFilePath) {
-				for (let i = 0; i < hiddenEntries.length; i++) {
-					const e = hiddenEntries[i];
-					if (!e) continue;
-					if (e.file === activeFilePath) {
-						activeHidden = e;
-						break;
-					}
-				}
-			}
-			for (let i = 0; i < hiddenEntries.length; i++) {
-				const e = hiddenEntries[i];
-				if (!e) continue;
-				if (!anyMark) {
-					const c = getEntryMarkColor(e, markColors, colHighlight);
-					if (c) anyMark = c;
-				}
-				if (!anyInherited) {
-					const c = getInheritedMarkColor(e, markColors, colHighlight, inheritedMarkIndexByPath);
-					if (c) anyInherited = c;
-				}
-				if (!hasSemantic && semanticRelatedPaths && semanticRelatedPaths.has(e.file)) {
-					hasSemantic = true;
-				}
-				if (anyMark && anyInherited && hasSemantic) break;
-			}
-			const activeMark = activeHidden ? getEntryMarkColor(activeHidden, markColors, colHighlight) : null;
-			const activeInherited = activeHidden
-				? getInheritedMarkColor(activeHidden, markColors, colHighlight, inheritedMarkIndexByPath)
-				: null;
-			const color =
-				activeMark ||
-				activeInherited ||
-				anyMark ||
-				anyInherited ||
-				(activeHidden || hasSemantic ? colRelated : null);
-
-			plusNBadgeCacheByDay.set(dayIndex, {
+		const plusNBadgeDecoration = plusN && lastVisibleIndex >= 0 && hiddenCount > 0
+			? getCompactPlusNBadgeDecoration({
+				dayIndex,
 				entries,
 				visibleCount,
 				activeFilePath,
@@ -245,12 +269,9 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 				markColors,
 				inheritedMarkIndexByPath,
 				colHighlight,
-				colRelated,
-				color
-			});
-			if (plusNBadgeCacheByDay.size > 5000) plusNBadgeCacheByDay.clear();
-			return color;
-		})();
+				colRelated
+			})
+			: { color: null, bold: false };
 
 		if (visibleEntries.length === 0) {
 			return { summaryRects: [], summaryHoverRects: [], hoverOverlay: null };
@@ -488,8 +509,12 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 					? ({ entryIndex, textToWrap }) => (entryIndex === lastVisibleIndex ? `${plusN}${textToWrap}` : textToWrap)
 					: undefined,
 			decoratePlusNBadgeColor:
-				plusNBadgeColor && lastVisibleIndex >= 0
-					? ({ entryIndex }) => (entryIndex === lastVisibleIndex ? plusNBadgeColor : null)
+				plusNBadgeDecoration.color && lastVisibleIndex >= 0
+					? ({ entryIndex }) => (entryIndex === lastVisibleIndex ? plusNBadgeDecoration.color : null)
+					: undefined,
+			decoratePlusNBadgeBold:
+				plusNBadgeDecoration.bold && lastVisibleIndex >= 0
+					? ({ entryIndex }) => (entryIndex === lastVisibleIndex ? plusNBadgeDecoration.bold : null)
 					: undefined
 		});
 		const { columns, anyRenderableText, needsDenseByWidth } = measured;

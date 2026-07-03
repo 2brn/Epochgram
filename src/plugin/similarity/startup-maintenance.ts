@@ -200,7 +200,7 @@ async function runHugeVaultSimilarityBackfillTick(plugin: EpochPlugin): Promise<
 		}
 
 		const isTestEnv = isVitestEnv();
-		scheduleHugeVaultSimilarityBackfill(plugin, isTestEnv ? 0 : Platform.isMobileApp ? 2000 : 250);
+		scheduleHugeVaultSimilarityBackfill(plugin, isTestEnv ? 0 : Platform.isMobile ? 2000 : 250);
 	} finally {
 		try {
 			runtime.__epochHugeSimilarityBackfillRunning = false;
@@ -227,7 +227,7 @@ export async function runSimilarityStartupMaintenance(plugin: EpochPlugin): Prom
 	// Give Obsidian time to settle; avoid doing vault-wide scans during startup.
 	// In tests, do not delay.
 	const isTestEnv = isVitestEnv();
-	await sleep(isTestEnv ? 0 : Platform.isMobileApp ? 30000 : 15000);
+	await sleep(isTestEnv ? 0 : Platform.isMobile ? 30000 : 15000);
 
 	const vectorsEnabled = embeddingsSimilarityEnabled(plugin);
 	const topicsEnabled = isTopicSimilarityEnabled(plugin);
@@ -288,7 +288,7 @@ export async function runSimilarityStartupMaintenance(plugin: EpochPlugin): Prom
 		}
 	}
 	try {
-		if (Platform.isDesktopApp) {
+		if (Platform.isDesktop) {
 			void runtime.ensureTermSimilarityStoreLoaded?.();
 		}
 	} catch { void 0; }
@@ -303,5 +303,5 @@ export async function runSimilarityStartupMaintenance(plugin: EpochPlugin): Prom
 		} catch { void 0; }
 		return;
 	}
-	scheduleHugeVaultSimilarityBackfill(plugin, isTestEnv ? 0 : Platform.isMobileApp ? 2000 : 0);
+	scheduleHugeVaultSimilarityBackfill(plugin, isTestEnv ? 0 : Platform.isMobile ? 2000 : 0);
 }

@@ -540,7 +540,7 @@ export class EpochCanvas {
 	private findDayLayoutAtPoint(x: number, y: number): DayLayout | null { return findDayLayoutAtPointHelper(this, x, y); }
 
 	private isPointerDeviceEvent(): boolean {
-		return !Platform.isMobileApp;
+		return !Platform.isMobile;
 	}
 
 	private getToday(): Date {

@@ -44,11 +44,11 @@ describe("setActiveFile initial semantic refresh", () => {
 	});
 
 	it("uses immediate snap on mobile when opening a different file", () => {
-		const originalMobile = Platform.isMobileApp;
+		const originalMobile = Platform.isMobile;
 		const snapInitialPosition = vi.fn();
 		const focusFile = vi.fn(() => true);
 		try {
-			Platform.isMobileApp = true;
+			Platform.isMobile = true;
 			const canvas: any = {
 				activeFilePath: "A.md",
 				pendingActiveFileFocus: { path: "A.md", line: 1 },
@@ -67,7 +67,7 @@ describe("setActiveFile initial semantic refresh", () => {
 			expect(focusFile).not.toHaveBeenCalled();
 			expect(canvas.pendingActiveFileFocus).toBeNull();
 		} finally {
-			Platform.isMobileApp = originalMobile;
+			Platform.isMobile = originalMobile;
 		}
 	});
 

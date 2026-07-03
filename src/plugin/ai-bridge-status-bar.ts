@@ -20,7 +20,7 @@ type WindowWithHTMLElement = Window & {
 };
 
 function getEl(plugin: EpochPlugin): HTMLElement | null {
-	if (!Platform.isDesktopApp || Platform.isMobileApp) return null;
+	if (!Platform.isDesktop || Platform.isMobile) return null;
 	const state = plugin as StatusBarBridgePlugin;
 	const cached = state.__epochStatusBarAiBridgeEl;
 	try {

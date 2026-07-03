@@ -583,7 +583,7 @@ export function handleTouchMove(canvas: EpochCanvas, event: TouchEvent): void {
 	const touch = event.touches[0];
 
 	try {
-		const isMobileSurface = Platform.isMobileApp || Platform.isMobile === true;
+		const isMobileSurface = Platform.isMobile;
 		const plugin = s.plugin;
 		if (plugin && typeof plugin === "object" && plugin.app?.workspace && isMobileSurface && s.__touchGestureStartedDuringMotion !== true) {
 			const dx = touch.clientX - s.touchStartX;

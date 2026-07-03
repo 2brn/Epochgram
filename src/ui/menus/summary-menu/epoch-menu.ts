@@ -39,7 +39,7 @@ export function addEpochMenuIfApplicable(
 	addMenuTitle(menu, title, "hourglass");
 	menu.addSeparator();
 
-	if (Platform.isDesktopApp) {
+	if (Platform.isDesktop) {
 		const enabled =
 			isGenerateEpochsEffective(plugin) &&
 			plugin?.settings?.generateEpochs === true &&

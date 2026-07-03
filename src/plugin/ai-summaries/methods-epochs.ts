@@ -241,7 +241,7 @@ export async function enqueueEpochsForDateKeys(
 	const startCancelKey = getAiEnqueueCancelKey(this);
 	const runtime = this as unknown as MethodsEpochRuntime;
 	if (!hasGenerateEpochsAccess(this)) return;
-	if (!Platform.isDesktopApp) return;
+	if (!Platform.isDesktop) return;
 	if (!isGenerateEpochsEffective(this)) return;
 	await this.ensureIndexLoaded();
 	const normalizedDateKeys = Array.from(
@@ -392,7 +392,7 @@ export async function generateEpochsForAllRecords(this: EpochPlugin): Promise<vo
 	const startCancelKey = getAiEnqueueCancelKey(this);
 	const runtime = this as unknown as MethodsEpochRuntime;
 	if (!hasGenerateEpochsAccess(this)) return;
-	if (!Platform.isDesktopApp) return;
+	if (!Platform.isDesktop) return;
 	if (!isGenerateEpochsEffective(this)) return;
 	await this.ensureIndexLoaded();
 	if (wasAiEnqueueCanceled(this, startCancelKey)) return;
@@ -465,7 +465,7 @@ export async function regenerateEpochsForAllRecords(this: EpochPlugin): Promise<
 		new Notice(`Epochgram ${"Pro"} required: ${"Generate Epochs"}`, 5000);
 		return;
 	}
-	if (!Platform.isDesktopApp) {
+	if (!Platform.isDesktop) {
 		new Notice(`Generate ${"Epochs"} is desktop-only`, 5000);
 		return;
 	}
@@ -554,7 +554,7 @@ export async function regenerateMissingEpochsForAllRecords(this: EpochPlugin): P
 		new Notice(`Epochgram ${"Pro"} required: ${"Generate Epochs"}`, 5000);
 		return;
 	}
-	if (!Platform.isDesktopApp) {
+	if (!Platform.isDesktop) {
 		new Notice(`Generate ${"Epochs"} is desktop-only`, 5000);
 		return;
 	}

@@ -103,7 +103,7 @@ function formatProgress(label: string, done: number, total: number): string {
 }
 
 export function refreshAiBridgeProgress(plugin: EpochPlugin): void {
-	if (!Platform.isDesktopApp) return;
+	if (!Platform.isDesktop) return;
 
 	let hasPro = false;
 	try {

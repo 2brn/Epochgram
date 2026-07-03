@@ -7,7 +7,7 @@ vi.mock("obsidian", () => ({
 	Notice: class Notice {
 		constructor(_message: string, _timeout?: number) {}
 	},
-	Platform: { isDesktopApp: true },
+	Platform: { isDesktop: true },
 }));
 
 import { runRebuild } from "../src/plugin/maintenance";

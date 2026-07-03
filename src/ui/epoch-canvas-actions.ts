@@ -282,7 +282,7 @@ export async function openFileAtLine(
 	workspace.setActiveLeaf(leaf, { focus: true });
 	state.lastFileLeaf = getUsableLeaf(canvas, leaf);
 
-	if (Platform.isMobileApp) {
+	if (Platform.isMobile) {
 		const ws = app.workspace;
 		if (ws.rightSplit && typeof ws.rightSplit.collapse === "function") {
 			ws.rightSplit.collapse();

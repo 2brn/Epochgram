@@ -82,7 +82,7 @@ export function addEditTopic(menu: Menu, state: CanvasMenuState, entry: DateEntr
 		const isPro = hasSimilarityAccess(plugin);
 		const enabled = isPro && topicsEnabled;
 		if (!enabled) return;
-		if (!Platform.isMobileApp) menu.addSeparator();
+		if (!Platform.isMobile) menu.addSeparator();
 		menu.addItem((item) => {
 			item
 				.setTitle("Set topic…")

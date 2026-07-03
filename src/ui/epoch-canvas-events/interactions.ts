@@ -288,6 +288,7 @@ export async function handlePointClick(
 				if (s.isPointerDeviceEvent()) {
 					s.keepHoverUntilPointerMove = true;
 					s.setHoverSummary(best.dayIndex, best.itemIndex, true);
+					setCssStyles(s.canvas, { cursor: "pointer" });
 				} else if (!preserveHoverOnNonPointer) {
 					s.clearHover();
 				}
@@ -301,6 +302,7 @@ export async function handlePointClick(
 		if (s.isPointerDeviceEvent()) {
 			s.keepHoverUntilPointerMove = true;
 			s.setHoverSummary(best.dayIndex, best.itemIndex, true);
+				setCssStyles(s.canvas, { cursor: "pointer" });
 		} else if (!preserveHoverOnNonPointer) {
 			s.clearHover();
 		}
@@ -481,6 +483,8 @@ export async function handleDoublePoint(canvas: EpochCanvas, x: number, y: numbe
 		await s.openEntry(summaryEntry, undefined, true);
 		if (s.isPointerDeviceEvent()) {
 			s.keepHoverUntilPointerMove = true;
+			setCssStyles(s.canvas, { cursor: "pointer" });
+			setCssStyles(s.canvas, { cursor: "pointer" });
 		} else {
 			s.clearHover();
 		}

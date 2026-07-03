@@ -255,7 +255,7 @@ export function scheduleEpochRegenerationAfterAiIdleForDateKeys(
 			const pendingKeys: Set<string> | null = anyPlugin.epochRegenAfterAiDateKeys ?? null;
 			anyPlugin.epochRegenAfterAiDateKeys = null;
 			const pendingKeysArr = Array.from(pendingKeys ?? []);
-			if (!Platform.isDesktopApp) return;
+			if (!Platform.isDesktop) return;
 			if (!isGenerateEpochsEffective(plugin)) return;
 			await plugin.ensureIndexLoaded();
 			await ensureAiBridgeServerRunning(plugin);

@@ -5,14 +5,14 @@ import { loadAiBridgeServer } from "../src/plugin/ai-bridge";
 
 describe("AI bridge environment guard", () => {
 	it("does not call require() when mobile emulation is active", async () => {
-		const originalDesktop = Platform.isDesktopApp;
-		const originalMobile = Platform.isMobileApp;
+		const originalDesktop = Platform.isDesktop;
+		const originalMobile = Platform.isMobile;
 		const originalRequire = (globalThis as any).require;
 		const originalProcess = (globalThis as any).process;
 		let requireCalls = 0;
 		try {
-			Platform.isDesktopApp = true;
-			Platform.isMobileApp = true;
+			Platform.isDesktop = true;
+			Platform.isMobile = true;
 			(globalThis as any).process = { versions: { node: "20.0.0" } };
 			(globalThis as any).require = () => {
 				requireCalls++;
@@ -22,8 +22,8 @@ describe("AI bridge environment guard", () => {
 			await expect(loadAiBridgeServer()).rejects.toThrow(/AI bridge is not available/i);
 			expect(requireCalls).toBe(0);
 		} finally {
-			Platform.isDesktopApp = originalDesktop;
-			Platform.isMobileApp = originalMobile;
+			Platform.isDesktop = originalDesktop;
+			Platform.isMobile = originalMobile;
 			(globalThis as any).require = originalRequire;
 			(globalThis as any).process = originalProcess;
 		}

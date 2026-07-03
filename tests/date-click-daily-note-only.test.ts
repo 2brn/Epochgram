@@ -53,6 +53,39 @@ describe("TC-025/TC-026 date click behavior", () => {
 		);
 	});
 
+	test("single click on visible record keeps pointer cursor after open", async () => {
+		const day = {
+			index: 0,
+			summaryRects: [
+				{
+					x1: 0,
+					y1: 0,
+					x2: 100,
+					y2: 20,
+					itemIndex: 0,
+					entry: { file: "visible.md" },
+					compactTotalCount: 1,
+					compactHiddenCount: 0
+				}
+			],
+			hasVisibleDate: false,
+			dateRect: { x1: 0, y1: 0, x2: 100, y2: 20 }
+		} as any;
+		const state = makeBaseState({
+			layouts: [day],
+			openEntry: vi.fn(async () => {
+				state.canvas.style.cursor = "";
+				return undefined;
+			})
+		});
+
+		state.canvas.style.cursor = "pointer";
+		await handlePointClick(state as any, 10, 10, false, false);
+
+		expect(state.openEntry).toHaveBeenCalledTimes(1);
+		expect(state.canvas.style.cursor).toBe("pointer");
+	});
+
 	test("single tap on date opens daily note only (no fallback)", async () => {
 		vi.useFakeTimers();
 		const day = {

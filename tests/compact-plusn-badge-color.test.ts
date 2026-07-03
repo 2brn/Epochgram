@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { buildNormalColumns } from "../src/ui/summary-rendering/normal-measure";
-import { renderNormalRow } from "../src/ui/summary-rendering/normal/render-row";
+import { getCompactPlusNBadgeDecoration } from "../src/ui/summary-rendering/normal";
+import { getPlusNBadgeFont, renderNormalRow } from "../src/ui/summary-rendering/normal/render-row";
 import type { DateEntry } from "../src/indexer/types";
 
 function mockCtx(track: { strokeStyles: string[] }): CanvasRenderingContext2D {
@@ -19,6 +20,80 @@ function mockCtx(track: { strokeStyles: string[] }): CanvasRenderingContext2D {
 		},
 		set font(v: string) {
 			fontValue = String(v);
+		},
+		get strokeStyle() {
+			return strokeStyleValue;
+		},
+		set strokeStyle(v: any) {
+			strokeStyleValue = v;
+			track.strokeStyles.push(String(v));
+		},
+		get fillStyle() {
+			return fillStyleValue;
+		},
+		set fillStyle(v: any) {
+			fillStyleValue = v;
+		},
+		get globalAlpha() {
+			return globalAlphaValue;
+		},
+		set globalAlpha(v: number) {
+			globalAlphaValue = Number(v);
+		},
+		get textAlign() {
+			return textAlignValue;
+		},
+		set textAlign(v: any) {
+			textAlignValue = v;
+		},
+		get textBaseline() {
+			return textBaselineValue;
+		},
+		set textBaseline(v: any) {
+			textBaselineValue = v;
+		},
+		get lineWidth() {
+			return lineWidthValue;
+		},
+		set lineWidth(v: number) {
+			lineWidthValue = Number(v);
+		},
+		save: () => void 0,
+		restore: () => void 0,
+		beginPath: () => void 0,
+		rect: () => void 0,
+		clip: () => void 0,
+		moveTo: () => void 0,
+		arcTo: () => void 0,
+		closePath: () => void 0,
+		stroke: () => void 0,
+		fill: () => void 0,
+		fillText: () => void 0,
+		measureText: (value: string) =>
+			({
+				width: String(value ?? "").length,
+				actualBoundingBoxAscent: 8,
+				actualBoundingBoxDescent: 2
+			} as any)
+	} as any;
+}
+
+function mockFontCtx(track: { fonts: string[]; strokeStyles: string[] }): CanvasRenderingContext2D {
+	let fontValue = "12px system-ui";
+	let strokeStyleValue: any = "";
+	let fillStyleValue: any = "";
+	let globalAlphaValue = 1;
+	let textAlignValue: any = "left";
+	let textBaselineValue: any = "top";
+	let lineWidthValue = 1;
+
+	return {
+		get font() {
+			return fontValue;
+		},
+		set font(v: string) {
+			fontValue = String(v);
+			track.fonts.push(String(v));
 		},
 		get strokeStyle() {
 			return strokeStyleValue;
@@ -152,7 +227,7 @@ describe("compact-mode +n badge accent color", () => {
 				isHoverTarget: false,
 				isHoverIncoming: false,
 				isActiveEntry: false,
-				summaryFont: "12px system-ui",
+				summaryFont: "700 12px system-ui",
 				needsBoldFont: false,
 				isDraft: false,
 				padY: 4,
@@ -180,5 +255,83 @@ describe("compact-mode +n badge accent color", () => {
 		});
 
 		expect(track.strokeStyles).toContain("#f00");
+	});
+
+	it("marks the +n badge bold when the hidden range contains the active file", () => {
+		const entries: DateEntry[] = [
+			makeEntry({ file: "a.md", summary: "first" }),
+			makeEntry({ file: "b.md", summary: "second" }),
+			makeEntry({ file: "c.md", summary: "third" })
+		];
+
+		const decoration = getCompactPlusNBadgeDecoration({
+			dayIndex: 0,
+			entries,
+			visibleCount: 2,
+			activeFilePath: "c.md",
+			semanticRelatedPaths: null,
+			markColors: undefined,
+			inheritedMarkIndexByPath: null,
+			colHighlight: "#f00",
+			colRelated: "#00f"
+		});
+
+		expect(decoration.bold).toBe(true);
+		expect(decoration.color).toBe("#00f");
+	});
+
+	it("uses a bold font for the +n badge prefix when requested", () => {
+		const track = { strokeStyles: [] as string[], fonts: [] as string[] };
+		const ctx = mockFontCtx(track);
+
+		renderNormalRow({
+			ctx,
+			r: {
+				entryIndex: 0,
+				entry: makeEntry({ file: "a.md" }),
+				height: 18,
+				lines: ["hello"],
+				lineHeight: 14,
+				maxLineWidth: 10,
+				textToWrap: "+3 hello world",
+				maxTextWidth: 200,
+				summaryHoverT: 0,
+				isHoverTarget: false,
+				isHoverIncoming: false,
+				isActiveEntry: false,
+				summaryFont: "12px system-ui",
+				needsBoldFont: false,
+				isDraft: false,
+				padY: 4,
+				baseColor: "#000",
+				hoverSummaryColor: "#000",
+				plusNBadgeColor: "#f00",
+				plusNBadgeBold: true,
+				hiddenAlpha: 1,
+				leadingIconIds: [],
+				hasTagIcon: false,
+				leadingIconMetrics: { iconsWidth: 0, totalWidth: 0, textGap: 0, iconSize: 0, pad: 0, baseStroke: 0 } as any,
+				tagIconMetrics: { iconsWidth: 0, totalWidth: 0, textGap: 0, iconSize: 0, pad: 0, baseStroke: 0 } as any,
+				title: ""
+			},
+			iconCache: {} as any,
+			fontSmallHover: "13px system-ui",
+			textModeEnabled: true,
+			xStart: 0,
+			rowX: 0,
+			yItemCenter: 20,
+			yRectTop: 10,
+			yRectBottom: 30,
+			maxWidth: 200,
+			clipRight: 200,
+			rowT: 0
+		});
+
+		expect(track.fonts.some((font) => /700/.test(font))).toBe(true);
+	});
+
+	it("keeps the +n prefix regular when the visible record is active", () => {
+		expect(getPlusNBadgeFont("700 12px system-ui", false)).toContain("400");
+		expect(getPlusNBadgeFont("700 12px system-ui", false)).not.toContain("700");
 	});
 });

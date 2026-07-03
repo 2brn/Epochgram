@@ -45,7 +45,7 @@ export function addSummarizeAi(menu: Menu, state: CanvasMenuState, entry: DateEn
 	const plugin: EntryActionsPluginLike = state.plugin;
 	const isPro = hasSummarizeAIAccess(plugin);
 	if (!String(entry.file ?? "").toLowerCase().endsWith(".md")) return;
-	if (!Platform.isDesktopApp) return;
+	if (!Platform.isDesktop) return;
 	const enabled = isPro && typeof plugin?.enqueueAiSummaryForEntry === "function";
 
 	menu.addItem((item) => {

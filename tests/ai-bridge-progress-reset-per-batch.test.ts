@@ -18,8 +18,8 @@ import { refreshAiBridgeProgress } from "../src/plugin/ai-bridge-progress";
 describe("ai bridge progress resets per batch", () => {
 	beforeEach(() => {
 		progressTexts.length = 0;
-		Platform.isDesktopApp = true;
-		Platform.isMobileApp = false;
+		Platform.isDesktop = true;
+		Platform.isMobile = false;
 	});
 
 	it("starts each new batch from zero processed", () => {

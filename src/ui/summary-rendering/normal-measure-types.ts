@@ -45,6 +45,7 @@ export interface NormalMeasureArgs {
 		textToWrap: string;
 	}) => string;
 	decoratePlusNBadgeColor?: (args: { entryIndex: number; entry: DateEntry; textToWrap: string; title: string }) => string | null;
+	decoratePlusNBadgeBold?: (args: { entryIndex: number; entry: DateEntry; textToWrap: string; title: string }) => boolean | null;
 }
 
 export type RenderRow = {
@@ -67,6 +68,7 @@ export type RenderRow = {
 	baseColor: string;
 	hoverSummaryColor: string;
 	plusNBadgeColor?: string | null;
+	plusNBadgeBold?: boolean | null;
 	hiddenAlpha: number;
 	leadingIconIds: string[];
 	tagTint: boolean;

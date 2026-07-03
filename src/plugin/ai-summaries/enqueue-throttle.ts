@@ -94,7 +94,7 @@ export async function enqueueThrottledJobs(
 				queuedState.pendingJobs = null;
 				if (!pending || pending.length === 0) return;
 				try {
-					if (!Platform.isDesktopApp) return;
+					if (!Platform.isDesktop) return;
 					if (!options?.allowWhenSummarizeAIDisabled && !isSummarizeAIEffective(plugin)) return;
 					await enqueueNow(pending);
 				} catch { void 0; }

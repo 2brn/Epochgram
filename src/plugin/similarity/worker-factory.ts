@@ -132,7 +132,7 @@ function handleSimilarityWorkerProgress(plugin: EpochPlugin, msg: SimilarityWork
 			// ignore
 		}
 		if (shouldAllowSimilarityProgressNotice(plugin, startedAtKey)) {
-			if (Platform.isDesktopApp) {
+			if (Platform.isDesktop) {
 				setEpochProgress(plugin, kind, `${label}… ${pct}%`);
 			} else if (shouldShowSimilarityProgressNotice(plugin)) {
 				new Notice(`${label}… ${pct}%`, 900);

@@ -73,7 +73,7 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 	let bumpDirty: () => void = () => {};
 	let maybeFlushStore: (force: boolean) => Promise<void> = async () => {};
 	try {
-		if (Platform.isDesktopApp && consumeCancelRequested(plugin, "topics")) {
+		if (Platform.isDesktop && consumeCancelRequested(plugin, "topics")) {
 			anyPlugin.termSimilarityPendingFiles = new Set<string>();
 			anyPlugin.termSimilarityQueueTotal = 0;
 			anyPlugin.termSimilarityQueueProcessed = 0;
@@ -96,7 +96,7 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 			} catch {
 				// ignore
 			}
-			if (Platform.isDesktopApp) {
+			if (Platform.isDesktop) {
 				announceEpochDesktopTaskAfter(plugin, "topics:queued", "Topics queued", {
 					graceMs: 1000,
 					minIntervalMs: 1000,
@@ -215,7 +215,7 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 			}
 		}
 		try {
-			if (Platform.isDesktopApp && consumeCancelRequested(plugin, "topics")) {
+			if (Platform.isDesktop && consumeCancelRequested(plugin, "topics")) {
 				anyPlugin.termSimilarityPendingFiles = new Set<string>();
 				anyPlugin.termSimilarityQueueTotal = 0;
 				anyPlugin.termSimilarityQueueProcessed = 0;
@@ -334,7 +334,7 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 					const done = typeof anyPlugin.termSimilarityQueueProcessed === "number" ? anyPlugin.termSimilarityQueueProcessed : 0;
 					const tot = typeof anyPlugin.termSimilarityQueueTotal === "number" ? anyPlugin.termSimilarityQueueTotal : 0;
 					if (vocab.terms.length > 0 && shouldAllowSimilarityProgressNotice(plugin, "termSimilarityProcessingStartedAt")) {
-						if (Platform.isDesktopApp) {
+						if (Platform.isDesktop) {
 							setEpochProgress(plugin, "topics", `Topics… ${done}/${Math.max(done, tot)}`);
 						} else {
 							new Notice(`Topics… ${done}/${Math.max(done, tot)}`, 900);
@@ -374,7 +374,7 @@ export async function processPendingTermSimilarityQueue(plugin: EpochPlugin): Pr
 				// ignore
 			}
 			try {
-				if (Platform.isDesktopApp) {
+				if (Platform.isDesktop) {
 					cancelEpochDesktopTaskAnnouncement(plugin, "topics:queued");
 					clearEpochProgress(plugin, "topics", 1500);
 				}

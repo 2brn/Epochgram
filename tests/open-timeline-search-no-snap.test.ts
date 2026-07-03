@@ -5,8 +5,8 @@ import { viewMethods } from "../src/plugin/view";
 
 describe("openTimelineSearch does not snap timeline", () => {
 	it("does not call snapInitialPosition when an epoch leaf already exists", async () => {
-		Platform.isMobileApp = false;
-		Platform.isDesktopApp = true;
+		Platform.isMobile = false;
+		Platform.isDesktop = true;
 
 		const snapInitialPosition = vi.fn();
 		const plugin: any = {

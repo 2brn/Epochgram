@@ -6,7 +6,7 @@ import { openEpochView } from "../src/plugin/view/leaf-actions";
 
 describe("Open timeline command", () => {
 	it("snaps to today when no open markdown file", async () => {
-		(Platform as any).isMobileApp = false;
+		(Platform as any).isMobile = false;
 
 		const snapInitial = vi.fn(() => true);
 
@@ -37,7 +37,7 @@ describe("Open timeline command", () => {
 	});
 
 	it("snaps to opened non-md file when active leaf is non-markdown", async () => {
-		(Platform as any).isMobileApp = false;
+		(Platform as any).isMobile = false;
 
 		const snapInitial = vi.fn(() => true);
 		const imageFile = { path: "images/photo.png", extension: "png" };

@@ -204,7 +204,7 @@ export function renderProPanel(
 		if (hasStoredClaimKeyPreview) {
 			licenseSetting.settingEl?.classList?.add("epoch-license-active-preview");
 		}
-		const isMobile = Platform.isMobileApp || Platform.isMobile;
+		const isMobile = Platform.isMobile || Platform.isMobile;
 		if (isMobile) {
 			try {
 				licenseSetting.settingEl?.classList?.add("epoch-license-mobile-stack");
@@ -569,7 +569,7 @@ export function renderProPanel(
 		});
 	}
 
-	if (Platform.isDesktopApp) {
+	if (Platform.isDesktop) {
 		const runtime = plugin as ProPanelRuntime;
 		const aiGroup = createSettingGroup(advancedGroupsParentEl, "Generative AI");
 		markLockedHeading(aiGroup.groupEl);

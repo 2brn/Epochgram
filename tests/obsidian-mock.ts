@@ -236,8 +236,8 @@ export class Notice {
 }
 
 export const Platform = {
-	isDesktopApp: true,
-	isMobileApp: false
+	isDesktop: true,
+	isMobile: false
 };
 
 let requestUrlHandler: ((request: any) => unknown) | null = null;

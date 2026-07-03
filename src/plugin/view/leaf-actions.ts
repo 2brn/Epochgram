@@ -185,7 +185,7 @@ export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: b
 		const leaf = leaves[0];
 		void plugin.app.workspace.revealLeaf(leaf);
 		try {
-			if (Platform.isMobileApp || shouldActivate) {
+			if (Platform.isMobile || shouldActivate) {
 				plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
 			}
 		} catch {
@@ -223,7 +223,7 @@ export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: b
 
 	void plugin.app.workspace.revealLeaf(leaf);
 	try {
-		if (Platform.isMobileApp || shouldActivate) {
+		if (Platform.isMobile || shouldActivate) {
 			plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
 		}
 	} catch {

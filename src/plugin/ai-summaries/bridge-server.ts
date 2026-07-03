@@ -15,7 +15,7 @@ type BridgePluginState = {
 };
 
 export async function ensureAiBridgeServerRunning(plugin: EpochPlugin): Promise<void> {
-	if (!Platform.isDesktopApp || Platform.isMobileApp) {
+	if (!Platform.isDesktop || Platform.isMobile) {
 		throw new Error("AI bridge is desktop-only");
 	}
 	// Hot reload / plugin reload safety: reuse a single bridge server instance across reloads.

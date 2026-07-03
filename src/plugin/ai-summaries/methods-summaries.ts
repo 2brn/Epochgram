@@ -64,7 +64,7 @@ export async function enqueueAiSummariesForFile(
 	options: { force?: boolean; showNotice?: boolean; enableIfDisabled?: boolean } = {}
 ): Promise<void> {
 	if (!hasSummarizeAIAccess(this)) return;
-	if (!Platform.isDesktopApp) return;
+	if (!Platform.isDesktop) return;
 	if (isAutoSummarizeEnqueue(options) && !isSummarizeAIEffective(this)) return;
 	await maybeEnableSummarizeAI(this, options.enableIfDisabled);
 	if (!isLikelyTextFilePath(filePath)) return;
@@ -87,7 +87,7 @@ export async function enqueueAiSummaryForEntry(
 	options: { force?: boolean; showNotice?: boolean; enableIfDisabled?: boolean } = {}
 ): Promise<void> {
 	if (!hasSummarizeAIAccess(this)) return;
-	if (!Platform.isDesktopApp) return;
+	if (!Platform.isDesktop) return;
 	if (isAutoSummarizeEnqueue(options) && !isSummarizeAIEffective(this)) return;
 	await maybeEnableSummarizeAI(this, options.enableIfDisabled);
 
@@ -162,7 +162,7 @@ export async function generateAiSummariesForAllRecords(this: EpochPlugin): Promi
 	if (!hasSummarizeAIAccess(this)) {
 		return;
 	}
-	if (!Platform.isDesktopApp) {
+	if (!Platform.isDesktop) {
 		return;
 	}
 	// Manual command: allowed regardless of the Summarize AI checkbox.
@@ -231,7 +231,7 @@ export async function generateMissingAiSummariesForAllRecords(this: EpochPlugin)
 	if (!hasSummarizeAIAccess(this)) {
 		return;
 	}
-	if (!Platform.isDesktopApp) {
+	if (!Platform.isDesktop) {
 		return;
 	}
 	// Manual command: allowed regardless of the Summarize AI checkbox.

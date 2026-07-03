@@ -12,7 +12,7 @@ type SimilarityNoticeState = {
 export function shouldShowSimilarityProgressNotice(plugin: EpochPlugin): boolean {
 	const state = plugin as EpochPlugin & SimilarityNoticeState;
 	const last = typeof state.lastSimilarityProgressNoticeAt === "number" ? state.lastSimilarityProgressNoticeAt : 0;
-	const minMs = Platform.isMobileApp ? 10000 : 1000;
+	const minMs = Platform.isMobile ? 10000 : 1000;
 	if (now() - last < minMs) return false;
 	state.lastSimilarityProgressNoticeAt = now();
 	return true;
@@ -24,7 +24,7 @@ export function shouldAllowSimilarityProgressNotice(plugin: EpochPlugin, started
 		const startedAt = Number(state[startedAtKey] ?? 0);
 		if (!(Number.isFinite(startedAt) && startedAt > 0)) return true;
 		// Grace period: avoid progress notices for very fast operations.
-		const graceMs = Platform.isMobileApp ? 10000 : 1000;
+		const graceMs = Platform.isMobile ? 10000 : 1000;
 		return now() - startedAt >= graceMs;
 	} catch {
 		return true;
@@ -46,7 +46,7 @@ export function scheduleSimilarityNoticeAfterGrace(
 			return;
 		}
 		const elapsed = now() - startedAt;
-		const graceMs = Platform.isMobileApp ? 10000 : 1000;
+		const graceMs = Platform.isMobile ? 10000 : 1000;
 		const remaining = graceMs - elapsed;
 		// If the operation finished quickly (<grace), do not show any progress notice.
 		if (remaining > 0) return;
@@ -63,7 +63,7 @@ export function scheduleSimilarityNoticeAfterGrace(
 export function shouldShowVectorUpdateNotice(plugin: EpochPlugin): boolean {
 	const state = plugin as EpochPlugin & SimilarityNoticeState;
 	const last = typeof state.lastSimilarityVectorNoticeAt === "number" ? state.lastSimilarityVectorNoticeAt : 0;
-	const minMs = Platform.isMobileApp ? 10000 : 1000;
+	const minMs = Platform.isMobile ? 10000 : 1000;
 	if (now() - last < minMs) return false;
 	state.lastSimilarityVectorNoticeAt = now();
 	return true;
@@ -72,7 +72,7 @@ export function shouldShowVectorUpdateNotice(plugin: EpochPlugin): boolean {
 export function shouldShowTermSimilarityUpdateNotice(plugin: EpochPlugin): boolean {
 	const state = plugin as EpochPlugin & SimilarityNoticeState;
 	const last = typeof state.lastTermSimilarityNoticeAt === "number" ? state.lastTermSimilarityNoticeAt : 0;
-	const minMs = Platform.isMobileApp ? 10000 : 1000;
+	const minMs = Platform.isMobile ? 10000 : 1000;
 	if (now() - last < minMs) return false;
 	state.lastTermSimilarityNoticeAt = now();
 	return true;

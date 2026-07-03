@@ -138,7 +138,7 @@ export function setActiveFile(
 		}
 		let focused = false;
 		if (!suppressFocus) {
-			if (Platform.isMobileApp) {
+			if (Platform.isMobile) {
 				try {
 					c.pendingActiveFileFocus = null;
 					c.snapInitialPosition(path, line, { draw: true });

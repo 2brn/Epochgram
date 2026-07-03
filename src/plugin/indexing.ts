@@ -130,7 +130,7 @@ export const indexingMethods: IndexingMethods = {
 		const files = this.getIndexableFiles();
 		const progressLabel = mode === "rebuild" ? "Indexing…" : "Indexing…";
 		const successLabel = mode === "rebuild" ? "Epochgram index rebuilt" : "Epochgram index refreshed";
-		if (!suppressNotices && Platform.isDesktopApp) {
+		if (!suppressNotices && Platform.isDesktop) {
 			announceEpochDesktopTaskAfter(this, `index:${mode}:start`, mode === "rebuild" ? "Epochgram indexing started" : "Epochgram refresh started", {
 				graceMs: 1000,
 				still: () => {
@@ -157,12 +157,12 @@ export const indexingMethods: IndexingMethods = {
 					}
 				})();
 				// Avoid showing progress for very fast operations.
-				const graceMs = Platform.isMobileApp ? 10000 : 1000;
+				const graceMs = Platform.isMobile ? 10000 : 1000;
 				if (startedAt > 0 && now - startedAt < graceMs) return;
-				const minMs = Platform.isMobileApp ? 10000 : 1000;
+				const minMs = Platform.isMobile ? 10000 : 1000;
 				if (now - this.lastRebuildNoticeAt > minMs) {
 					this.lastRebuildNoticeAt = now;
-					if (Platform.isDesktopApp) {
+					if (Platform.isDesktop) {
 						setEpochProgress(this, "index", `${progressLabel} ${processed}/${total}`);
 					} else {
 						new Notice(`${progressLabel} ${processed}/${total}`);
@@ -225,13 +225,13 @@ export const indexingMethods: IndexingMethods = {
 				// ignore
 			}
 			try {
-				if (Platform.isDesktopApp) {
+				if (Platform.isDesktop) {
 					cancelEpochDesktopTaskAnnouncement(this, `index:${mode}:start`);
 				}
 			} catch {
 				// ignore
 			}
-			if (!suppressNotices && Platform.isDesktopApp) {
+			if (!suppressNotices && Platform.isDesktop) {
 				clearEpochProgress(this, "index", 1500);
 			}
 		}
@@ -321,7 +321,7 @@ export const indexingMethods: IndexingMethods = {
 
 			try {
 				// Give Obsidian a moment to finish writing the file on startup/mobile.
-				const delayMs = Platform.isMobileApp ? 350 : 75;
+				const delayMs = Platform.isMobile ? 350 : 75;
 				await new Promise<void>((resolve) => window.setTimeout(resolve, delayMs));
 
 				await this.ensureIndexLoaded();
@@ -375,7 +375,7 @@ export const indexingMethods: IndexingMethods = {
 						// "deep" search is restored automatically.
 						try {
 							const state = this as IndexingPluginState;
-							if (state.__timelineSearchAutoRebuildScheduled !== true && Platform.isDesktopApp) {
+							if (state.__timelineSearchAutoRebuildScheduled !== true && Platform.isDesktop) {
 								state.__timelineSearchAutoRebuildScheduled = true;
 								window.setTimeout(() => {
 									try {

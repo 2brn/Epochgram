@@ -234,7 +234,7 @@ export class EpochView extends ItemView {
 
 		// Mobile: if startup deferred an initial snap, apply it once the file is known.
 		try {
-			if (Platform.isMobileApp && this.startupDeferredSnapPath && this.canvas) {
+			if (Platform.isMobile && this.startupDeferredSnapPath && this.canvas) {
 				const now = nowMs();
 				if (now > (this.startupDeferredSnapUntil ?? 0)) {
 					this.startupDeferredSnapPath = null;

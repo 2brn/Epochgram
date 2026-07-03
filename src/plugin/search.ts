@@ -53,7 +53,7 @@ export const searchMethods: SearchMethods = {
 				try {
 					const state = this as EpochPlugin & SearchPluginState
 					const last = typeof state.lastTimelineSearchProgressNoticeAt === 'number' ? state.lastTimelineSearchProgressNoticeAt : 0
-					const minMs = Platform.isMobileApp ? 10000 : 1000
+					const minMs = Platform.isMobile ? 10000 : 1000
 					if (Date.now() - last < minMs) return false
 					state.lastTimelineSearchProgressNoticeAt = Date.now()
 					return true
@@ -67,7 +67,7 @@ export const searchMethods: SearchMethods = {
 					const state = this as EpochPlugin & SearchPluginState
 					const startedAt = Number(state.timelineSearchRebuildStartedAt ?? 0)
 					if (!(Number.isFinite(startedAt) && startedAt > 0)) return true
-					const graceMs = Platform.isMobileApp ? 10000 : 1000
+					const graceMs = Platform.isMobile ? 10000 : 1000
 					return Date.now() - startedAt >= graceMs
 				} catch {
 					return true
@@ -80,7 +80,7 @@ export const searchMethods: SearchMethods = {
 					if (!shouldAllowSearchProgressNotice()) return
 					if (isUserEditingMarkdown(this.app)) return
 						const msgDesktop = `Search… ${scanned}/${Math.max(scanned, total)}`
-					if (Platform.isDesktopApp) {
+					if (Platform.isDesktop) {
 						setEpochProgress(this, 'search', msgDesktop)
 					} else {
 							new Notice(`Search… ${scanned}/${Math.max(scanned, total)}`, 900)
@@ -146,7 +146,7 @@ export const searchMethods: SearchMethods = {
 			const total = paths.length
 			for (const path of paths) {
 				scanned++
-				if (Platform.isDesktopApp) {
+				if (Platform.isDesktop) {
 					try {
 						if (consumeCancelRequested(this, 'search')) {
 							throw Object.assign(new Error('EPOCH_CANCELLED'), { code: 'EPOCH_CANCELLED' })
@@ -303,7 +303,7 @@ export const searchMethods: SearchMethods = {
 			throw e
 		} finally {
 			try {
-				if (Platform.isDesktopApp) {
+				if (Platform.isDesktop) {
 					clearEpochProgress(this, 'search', 1500)
 				}
 			} catch {

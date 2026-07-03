@@ -21,7 +21,7 @@ export function hasRecurringAccess(plugin: EpochPlugin): boolean {
 }
 
 export function hasAiBridgeAccess(plugin: EpochPlugin): boolean {
-	return Platform.isDesktopApp && hasVerifiedEntitlement(plugin) && hasVerifiedFeatureAccess(plugin, "aiBridge");
+	return Platform.isDesktop && hasVerifiedEntitlement(plugin) && hasVerifiedFeatureAccess(plugin, "aiBridge");
 }
 
 export function hasSummarizeAIAccess(plugin: EpochPlugin): boolean {

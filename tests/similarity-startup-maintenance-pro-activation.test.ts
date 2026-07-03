@@ -28,8 +28,8 @@ import { runSimilarityStartupMaintenance } from "../src/plugin/similarity/startu
 describe("similarity: startup maintenance after Pro activation", () => {
 	it("does not consume the guard while Free, and enqueues vectors after Pro becomes active", async () => {
 		vi.useFakeTimers();
-		Platform.isDesktopApp = true;
-		Platform.isMobileApp = false;
+		Platform.isDesktop = true;
+		Platform.isMobile = false;
 		const queued: string[] = [];
 		const mdFiles = [new FakeTFile("a.md"), new FakeTFile("b.md")];
 

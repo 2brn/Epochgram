@@ -231,7 +231,7 @@ export function consumeCancelRequested(plugin: EpochPlugin, kind: EpochProgressK
 }
 
 export function requestCancelEpochTask(plugin: EpochPlugin, kind: EpochProgressKind): void {
-	if (!Platform.isDesktopApp) return;
+	if (!Platform.isDesktop) return;
 	try {
 		const runtime = getRuntime(plugin);
 		const map = ensureCancelMap(runtime);
@@ -345,7 +345,7 @@ export function requestCancelEpochTask(plugin: EpochPlugin, kind: EpochProgressK
 }
 
 function getProgressEl(plugin: EpochPlugin): HTMLElement | null {
-	if (!Platform.isDesktopApp) return null;
+	if (!Platform.isDesktop) return null;
 	const runtime = getRuntime(plugin);
 	if (runtime.__epochStatusBarProgressEl instanceof HTMLElement) return runtime.__epochStatusBarProgressEl;
 	try {
@@ -452,7 +452,7 @@ export function setEpochProgress(plugin: EpochPlugin, kind: EpochProgressKind, t
 }
 
 export function cancelEpochDesktopTaskAnnouncement(plugin: EpochPlugin, key: string): void {
-	if (!Platform.isDesktopApp) return;
+	if (!Platform.isDesktop) return;
 	try {
 		const runtime = getRuntime(plugin);
 		const timers = ensureNoticeTimers(runtime);
@@ -485,7 +485,7 @@ export function announceEpochDesktopTaskAfter(
 	void options;
 	return;
 	/*
-	if (!Platform.isDesktopApp) return;
+	if (!Platform.isDesktop) return;
 	const msg = String(message || "").trim();
 	if (!msg) return;
 
@@ -527,7 +527,7 @@ export function announceEpochDesktopTaskAfter(
 }
 
 export function clearEpochProgress(plugin: EpochPlugin, kind: EpochProgressKind, delayMs: number = 1500): void {
-	if (!Platform.isDesktopApp) return;
+	if (!Platform.isDesktop) return;
 	const runtime = getRuntime(plugin);
 	const map = ensureProgressMap(runtime);
 	map[kind] = "";

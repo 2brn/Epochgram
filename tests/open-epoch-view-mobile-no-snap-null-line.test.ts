@@ -5,8 +5,8 @@ import { viewMethods } from "../src/plugin/view";
 
 describe("openEpochView mobile snap even when cursor line unknown", () => {
 	it("calls snapInitialPosition when open markdown line is null", async () => {
-		Platform.isMobileApp = true;
-		Platform.isDesktopApp = false;
+		Platform.isMobile = true;
+		Platform.isDesktop = false;
 
 		const snapInitialPosition = vi.fn();
 		const plugin: any = {

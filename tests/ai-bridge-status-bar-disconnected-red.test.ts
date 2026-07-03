@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { withTrustedPro } from "./helpers/trusted-pro";
 
 vi.mock("obsidian", () => ({
-	Platform: { isDesktopApp: true, isMobileApp: false },
+	Platform: { isDesktop: true, isMobile: false },
 }));
 
 import { refreshAiBridgeStatusBar } from "../src/plugin/ai-bridge-status-bar";

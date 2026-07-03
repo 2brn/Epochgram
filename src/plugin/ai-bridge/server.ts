@@ -537,7 +537,7 @@ export class AiBridgeServer {
 
 	async start(): Promise<void> {
 		if (this.server) return;
-		if (!Platform.isDesktopApp) {
+		if (!Platform.isDesktop) {
 			throw new Error("AI Bridge server is only available on desktop");
 		}
 		const httpModule = normalizeHttpModuleName(runtimeGlobal.__epochNodeHttpModule ?? "http");

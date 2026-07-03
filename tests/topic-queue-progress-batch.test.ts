@@ -94,8 +94,8 @@ describe("topics progress batching", () => {
 	beforeEach(() => {
 		progressTexts.length = 0;
 		injected = false;
-		Platform.isDesktopApp = true;
-		Platform.isMobileApp = false;
+		Platform.isDesktop = true;
+		Platform.isMobile = false;
 		vi.useFakeTimers();
 		(globalThis as any).window = globalThis as any;
 	});
