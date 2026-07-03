@@ -57,7 +57,7 @@ describe("AI bridge clearQueue clears planned work", () => {
 
 			// Simulate per-file throttled enqueue (future planned queue).
 			let throttleFired = false;
-			const throttleTimer = setTimeout(() => {
+			const throttleTimer = window.setTimeout(() => {
 				throttleFired = true;
 			}, 200);
 			pluginStub.aiSummaryPendingFiles = new Set(["foo.md"]);

@@ -101,6 +101,15 @@ function makeDateKey(date: Date): string {
 	}
 }
 
+function getEntriesForDateSafe(canvas: EpochCanvas, date: Date): DateEntry[] {
+	try {
+		const entries = getEntriesForDate(canvas, date);
+		return Array.isArray(entries) ? entries : [];
+	} catch {
+		return [];
+	}
+}
+
 export function pickNextCompactEntryFromDayRange(
 	canvas: EpochCanvas,
 	dayIndex: number,
@@ -110,7 +119,7 @@ export function pickNextCompactEntryFromDayRange(
 ): DateEntry | null {
 	const today = state.getToday();
 	const date = state.getDateForIndex(dayIndex, today);
-	const dayEntries = getEntriesForDate(canvas, date);
+	const dayEntries = getEntriesForDateSafe(canvas, date);
 	if (!Array.isArray(dayEntries) || dayEntries.length === 0) return null;
 
 	const start = Number(itemIndex);
@@ -268,7 +277,7 @@ export async function handlePointClick(
 					: best.itemIndex;
 				const today = s.getToday();
 				const date = s.getDateForIndex(best.dayIndex, today);
-				const dayEntries = getEntriesForDate(canvas, date);
+				const dayEntries = getEntriesForDateSafe(canvas, date);
 				const anchorEntry = dayEntries[anchorIndex] ?? best.entry;
 				try {
 					s.scrollNavAnchorEntry = anchorEntry;
