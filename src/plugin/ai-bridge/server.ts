@@ -111,6 +111,9 @@ function normalizeHttpModuleName(moduleName: string): string {
 }
 
 async function importHttpModule(): Promise<HttpModuleLike> {
+	if (!Platform.isDesktop) {
+		throw new Error("http import is desktop-only");
+	}
 	return (await import("http")) as unknown as HttpModuleLike;
 }
 
