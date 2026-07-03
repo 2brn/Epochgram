@@ -100,10 +100,10 @@ type EpochViewRuntime = {
 };
 
 async function importHttpModule(): Promise<typeof import("http")> {
-	if (!Platform.isDesktop) {
-		throw new Error("http import is desktop-only");
+	if (Platform.isDesktop) {
+		return await import("http");
 	}
-	return await import("http");
+	throw new Error("http import is desktop-only");
 }
 
 function getRuntime(plugin: EpochPlugin): MaintenanceRuntime {

@@ -111,10 +111,10 @@ function normalizeHttpModuleName(moduleName: string): string {
 }
 
 async function importHttpModule(): Promise<HttpModuleLike> {
-	if (!Platform.isDesktop) {
-		throw new Error("http import is desktop-only");
+	if (Platform.isDesktop) {
+		return (await import("http")) as unknown as HttpModuleLike;
 	}
-	return (await import("http")) as unknown as HttpModuleLike;
+	throw new Error("http import is desktop-only");
 }
 
 function clearIntervalHandle(handle: unknown): void {
