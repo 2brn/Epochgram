@@ -2,8 +2,6 @@ import { Notice, Platform } from "obsidian";
 import type { EpochPlugin } from "../main";
 import { setCssStyles } from "../dom";
 
-const activeDocument = typeof window !== "undefined" ? window.document : ({} as Document);
-
 export type EpochProgressKind = "index" | "search" | "semantic" | "topics" | "semanticBuild" | "ai";
 
 const KIND_PRIORITY: EpochProgressKind[] = ["ai", "topics", "semantic", "semanticBuild", "index", "search"];
@@ -189,8 +187,7 @@ function getProgressParts(plugin: EpochPlugin): { root: HTMLElement; text: HTMLE
 
 	try {
 		root.textContent = "";
-		const text = activeDocument.createElement("span");
-		text.addClass?.("epoch-status-progress-text");
+		const text = root.createSpan({ cls: "epoch-status-progress-text" });
 		try {
 			if (!runtime.__epochStatusBarProgressClickBound) {
 				runtime.__epochStatusBarProgressClickBound = true;

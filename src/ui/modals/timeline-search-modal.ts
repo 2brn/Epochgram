@@ -304,11 +304,11 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 
 	renderSuggestion(value: TimelineSearchSuggestion, el: HTMLElement): void {
 		if (!value || typeof value !== "object") {
-			el.setText("(clear)");
+			el.setText("(Clear)");
 			return;
 		}
 		if (value.kind === "empty") {
-			el.setText("(clear)");
+			el.setText("(Clear)");
 			return;
 		}
 		if (value.kind === "record") {
@@ -369,7 +369,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 			el.setText(q ? `(filter ${q})` : "(filter)");
 			return;
 		}
-		el.setText("(clear)");
+		el.setText("(Clear)");
 	}
 
 	onChooseSuggestion(value: TimelineSearchSuggestion, _evt: MouseEvent | KeyboardEvent): void {

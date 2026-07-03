@@ -219,7 +219,7 @@ export class SimilarityModelSuggestModal extends SuggestModal<ModelSuggestItem> 
 
 	renderSuggestion(item: ModelSuggestItem, el: HTMLElement) {
 		if (item.kind === "none") {
-			el.setText("(no model)");
+			el.setText("(No model)");
 			return;
 		}
 		if (item.kind === "default") {

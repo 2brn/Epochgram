@@ -125,13 +125,14 @@ export function renderProPanel(
 		if (activationStatus === "inactive") return "mod-warning";
 		return "mod-warning";
 	})();
-	const statusFragment = activeDocument.createDocumentFragment();
-	const statusWrapper = activeDocument.createElement("span");
-	statusWrapper.classList.add("epoch-license-status", statusClass);
-	const statusStrong = activeDocument.createElement("strong");
-	statusStrong.textContent = statusText;
-	statusWrapper.append(statusStrong);
-	statusFragment.append(statusWrapper);
+	const createStatusDescription = (): HTMLSpanElement => {
+		const statusWrapper = activeDocument.createSpan();
+		statusWrapper.classList.add("epoch-license-status", statusClass);
+		const statusStrong = activeDocument.createEl("strong");
+		statusStrong.textContent = statusText;
+		statusWrapper.append(statusStrong);
+		return statusWrapper;
+	};
 	const licensePlaceholder = "EPO-XXXX-XXXX-XXXX-XXXX-XXXX";
 	const visibleLicenseValue = pendingKey || claimKeyPreview;
 	const triggerActivation = async () => {
@@ -178,7 +179,9 @@ export function renderProPanel(
 		headingEl?.classList?.add("epoch-pro-locked-row");
 	};
 	const renderLicenseSetting = (parentEl: HTMLElement): Setting => {
-		const licenseSetting = new Setting(parentEl).setName("License key").setDesc(statusFragment.cloneNode(true) as DocumentFragment);
+		const licenseSetting = new Setting(parentEl).setName("License key").setDesc("");
+		licenseSetting.descEl.empty();
+		licenseSetting.descEl.appendChild(createStatusDescription());
 		let licenseLayoutFrame = 0;
 		const updateLicenseLayout = (): void => {
 			if (!licenseSetting.settingEl?.isConnected) return;
@@ -285,8 +288,7 @@ export function renderProPanel(
 	};
 
 	if (!isPro) {
-		const upsellDesc = activeDocument.createDocumentFragment();
-		const upsellList = activeDocument.createElement("ul");
+		const upsellList = activeDocument.createEl("ul");
 		for (const item of [
 			"Summarize records on-device via Google Chrome AI",
 			"Generate multi-day Epochs for broader time retrospectives",
@@ -295,10 +297,11 @@ export function renderProPanel(
 		]) {
 			upsellList.createEl("li", { text: item });
 		}
-		upsellDesc.append(upsellList);
 		const upsellSetting = new Setting(proItems)
 			.setName("Unlock the full Epochgram Pro experience")
-			.setDesc(upsellDesc);
+			.setDesc("");
+		upsellSetting.descEl.empty();
+		upsellSetting.descEl.appendChild(upsellList);
 		upsellSetting.settingEl?.classList?.add("epoch-pro-upsell-row");
 		upsellSetting.addButton((button) => {
 			button

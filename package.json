@@ -25,7 +25,7 @@
 		"esbuild": "^0.28.0",
 		"esbuild-plugin-inline-worker": "^0.1.1",
 		"eslint": "^9.39.4",
-		"eslint-plugin-obsidianmd": "^0.1.9",
+		"eslint-plugin-obsidianmd": "^0.4.1",
 		"obsidian": "^1.8.7",
 		"tslib": "2.4.0",
 		"typescript": "^5.9.3",

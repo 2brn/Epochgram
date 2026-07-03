@@ -117,8 +117,9 @@ export function startPinFlyToToday(canvas: EpochCanvas, entry: DateEntry, onDone
 			imgData = null;
 		}
 		if (!imgData) return false;
+		if (!activeDocument) return false;
 
-		const off = activeDocument.createElement("canvas");
+		const off = activeDocument.createEl("canvas");
 		off.width = sw;
 		off.height = sh;
 		const offCtx = off.getContext("2d");

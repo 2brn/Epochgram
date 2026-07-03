@@ -189,7 +189,7 @@ class TopicSuggestModal extends SuggestModal<TopicSuggestItem> {
 			return;
 		}
 		if (item.kind === "clear") {
-			el.setText("(no topic)");
+			el.setText("(No topic)");
 			return;
 		}
 		if (item.kind === "remove") {

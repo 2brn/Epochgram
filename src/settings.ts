@@ -48,6 +48,10 @@ export class EpochSettingTab extends PluginSettingTab {
 		}
 	}
 
+	getSettingDefinitions() {
+		return [];
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();

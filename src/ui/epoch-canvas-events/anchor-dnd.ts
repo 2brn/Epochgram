@@ -512,7 +512,7 @@ function captureEntryRowSnapshot(canvas: EpochCanvas, entry: DateEntry): {
 		if (!imgData) return null;
 
 		if (!activeDocument) return null;
-		const off = activeDocument.createElement("canvas");
+		const off = activeDocument.createEl("canvas");
 		off.width = sw;
 		off.height = sh;
 		const offCtx = off.getContext("2d");
