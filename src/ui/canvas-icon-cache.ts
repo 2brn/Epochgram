@@ -78,7 +78,7 @@ function parsePoints(points: string): Array<{ x: number; y: number }> {
 function ensureMeasureRoot(): SVGSVGElement {
 	let root = activeDocument.querySelector<SVGSVGElement>("svg[data-epoch-measure-root]");
 	if (root) return root;
-	root = activeDocument.createSvg("svg");
+	root = activeDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
 	root.setAttribute("data-epoch-measure-root", "true");
 	root.setAttribute("width", "0");
 	root.setAttribute("height", "0");
