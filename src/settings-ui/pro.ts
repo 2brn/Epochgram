@@ -125,13 +125,9 @@ export function renderProPanel(
 		if (activationStatus === "inactive") return "mod-warning";
 		return "mod-warning";
 	})();
-	const createStatusDescription = (): HTMLSpanElement => {
-		const statusWrapper = activeDocument.createSpan();
-		statusWrapper.classList.add("epoch-license-status", statusClass);
-		const statusStrong = activeDocument.createEl("strong");
-		statusStrong.textContent = statusText;
-		statusWrapper.append(statusStrong);
-		return statusWrapper;
+	const appendStatusDescription = (parentEl: HTMLElement): void => {
+		const statusWrapper = parentEl.createSpan({ cls: `epoch-license-status ${statusClass}` });
+		statusWrapper.createEl("strong", { text: statusText });
 	};
 	const licensePlaceholder = "EPO-XXXX-XXXX-XXXX-XXXX-XXXX";
 	const visibleLicenseValue = pendingKey || claimKeyPreview;
@@ -181,7 +177,7 @@ export function renderProPanel(
 	const renderLicenseSetting = (parentEl: HTMLElement): Setting => {
 		const licenseSetting = new Setting(parentEl).setName("License key").setDesc("");
 		licenseSetting.descEl.empty();
-		licenseSetting.descEl.appendChild(createStatusDescription());
+		appendStatusDescription(licenseSetting.descEl);
 		let licenseLayoutFrame = 0;
 		const updateLicenseLayout = (): void => {
 			if (!licenseSetting.settingEl?.isConnected) return;
@@ -288,20 +284,20 @@ export function renderProPanel(
 	};
 
 	if (!isPro) {
-		const upsellList = activeDocument.createEl("ul");
-		for (const item of [
+		const upsellItems = [
 			"Summarize records on-device via Google Chrome AI",
 			"Generate multi-day Epochs for broader time retrospectives",
 			"Find similar records across links, tags, semantics, and topics",
 			"Track edits and create recurring events on the timeline"
-		]) {
-			upsellList.createEl("li", { text: item });
-		}
+		];
 		const upsellSetting = new Setting(proItems)
 			.setName("Unlock the full Epochgram Pro experience")
 			.setDesc("");
 		upsellSetting.descEl.empty();
-		upsellSetting.descEl.appendChild(upsellList);
+		const upsellList = upsellSetting.descEl.createEl("ul");
+		for (const item of upsellItems) {
+			upsellList.createEl("li", { text: item });
+		}
 		upsellSetting.settingEl?.classList?.add("epoch-pro-upsell-row");
 		upsellSetting.addButton((button) => {
 			button

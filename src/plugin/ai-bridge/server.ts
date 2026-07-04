@@ -104,12 +104,6 @@ type ServerPluginRuntime = {
 
 const runtimeGlobal = window as RuntimeGlobalLike;
 
-function normalizeHttpModuleName(moduleName: string): string {
-	const value = String(moduleName || "").trim();
-	if (!value) return "http";
-	return value === "node:http" ? "http" : value;
-}
-
 async function importHttpModule(): Promise<HttpModuleLike> {
 	if (Platform.isDesktop) {
 		return import("http") as unknown as Promise<HttpModuleLike>;
@@ -543,10 +537,9 @@ export class AiBridgeServer {
 		if (!Platform.isDesktop) {
 			throw new Error("AI Bridge server is only available on desktop");
 		}
-		const httpModule = normalizeHttpModuleName(runtimeGlobal.__epochNodeHttpModule ?? "http");
 		const moduleRequire = runtimeGlobal.require;
 		const http = typeof moduleRequire === "function"
-			? (moduleRequire(httpModule) as HttpModuleLike)
+			? (moduleRequire("http") as HttpModuleLike)
 			: (await importHttpModule());
 
 		this.server = http.createServer((req: RequestLike, res: ResponseLike) => {
