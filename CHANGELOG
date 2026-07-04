@@ -1,5 +1,12 @@
 # Epochgram changelog
 
+## [1.5.4] - 2026-07-04
+- Fixed AI Bridge startup fallback and improved settings DOM element creation stability.
+- Cleaned up AI Bridge module loading and removed obsolete module-name normalization.
+- Improved AI bridge startup state handling to avoid stale bridge references on startup failures.
+- Fixed multiple lint warning issues across the codebase.
+- Improved N+ badge rendering and platform detection behavior.
+
 ## [1.5.3] - 2026-07-03
 - Added compact (+n) record click/tap cycling behavior and reset logic when active file changes.
 

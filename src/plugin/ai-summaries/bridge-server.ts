@@ -50,8 +50,8 @@ export async function ensureAiBridgeServerRunning(plugin: EpochPlugin): Promise<
 		const bridge = new AiBridgeServer(plugin, (job, result) => {
 			try { handleBridgeResult(plugin, job, result); } catch { void 0; }
 		});
-		await bridge.start();
 		state.aiBridge = bridge;
+		await bridge.start();
 		try {
 			const g = window as BridgeWindowState;
 			g.__epochAiBridgeServer = bridge;
