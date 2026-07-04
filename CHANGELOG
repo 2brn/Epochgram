@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.5.5] - 2026-07-04
+- Fixed icon sizing.
+
 ## [1.5.4] - 2026-07-04
 - Fixed AI Bridge startup fallback and improved settings DOM element creation stability.
 - Cleaned up AI Bridge module loading and removed obsolete module-name normalization.
