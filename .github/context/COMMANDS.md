@@ -44,7 +44,8 @@ Commands are registered in `plugin/lifecycle.ts` (export command via `plugin/exp
 
 - `review-all` — “Review all”
   - Always available.
-  - Marks all non-hidden records as Reviewed across all indexed files.
+  - Marks all non-hidden records as Reviewed across all indexed files and index-only records present in date buckets.
+  - Also marks recurring synthetic occurrences from affected files as Reviewed (preserving recurring hidden overrides).
   - Does not unhide hidden records.
 
 Maintenance rebuild/reset flows are available in Settings → Indexer (`Index`).
@@ -64,6 +65,12 @@ These operate on the active file and are only available when a file is active, i
   - Toggles file-wide hidden state.
   - If the file is currently visible, it hides all records from the file.
   - If the file is currently hidden, it unhides the file (review state is unchanged).
+  - Recurring synthetic occurrences for that file follow the same hide/show transition.
+
+- File tree context menu (`file-menu`) actions:
+  - Folder actions (`Epochgram: Review`, `Epochgram: Draft`, `Epochgram: Hide`) apply to all known files in the folder.
+  - File actions (`Epochgram: Review`, `Epochgram: Draft`, `Epochgram: Hide`) apply to the selected file.
+  - Review/Draft/Hide in file/folder menus also updates recurring synthetic occurrences for those files.
 
 ## Current File Actions
 These operate on the active file and are only available when a file is active, index-ready, and the file is indexable/known.

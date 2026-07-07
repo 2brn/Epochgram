@@ -348,6 +348,74 @@ describe("Frontmatter repeat", () => {
 		expect(recurringAfterReprocess?.reviewState).toBe("hidden");
 	});
 
+	it("file-level review/draft updates all recurring occurrences", async () => {
+		const ctime = Date.UTC(2026, 2, 1);
+		const file = makeFile("folder/repeat-file-review.md", ctime);
+
+		contents[file.path] = [
+			"---",
+			"date: 2026-03-01",
+			"repeat: every day until 2026-03-03",
+			"---",
+			"Body"
+		].join("\n");
+
+		(pluginStub.app.metadataCache.getFileCache as any).mockImplementation(() => ({
+			frontmatter: { date: "2026-03-01", repeat: "every day until 2026-03-03" },
+			tags: []
+		}));
+
+		await indexer.processFile(file, { reason: "modify" });
+		expect(indexer.setFileReviewStateForAllRecordsPreserveHidden(file.path, "reviewed")).toBe(true);
+
+		for (const day of ["2026-03-01", "2026-03-02", "2026-03-03"]) {
+			const list: any[] = ((indexer as any).index[day] ?? []) as any[];
+			const recurring = list.find((e) => e && e.file === file.path && e.recurring === true);
+			expect(recurring?.reviewState).toBe("reviewed");
+		}
+		const reviewedData: any = (indexer as any).files[file.path];
+		expect(new Set(reviewedData.recurReviewedDates ?? [])).toEqual(new Set(["2026-03-01", "2026-03-02", "2026-03-03"]));
+
+		expect(indexer.setFileReviewStateForAllRecordsPreserveHidden(file.path, "draft")).toBe(true);
+		for (const day of ["2026-03-01", "2026-03-02", "2026-03-03"]) {
+			const list: any[] = ((indexer as any).index[day] ?? []) as any[];
+			const recurring = list.find((e) => e && e.file === file.path && e.recurring === true);
+			expect(recurring?.reviewState).toBe("draft");
+		}
+		const draftData: any = (indexer as any).files[file.path];
+		expect(Array.isArray(draftData.recurReviewedDates)).toBe(true);
+		expect(draftData.recurReviewedDates.length).toBe(0);
+	});
+
+	it("file-level hide updates all recurring occurrences", async () => {
+		const ctime = Date.UTC(2026, 2, 1);
+		const file = makeFile("folder/repeat-file-hide.md", ctime);
+
+		contents[file.path] = [
+			"---",
+			"date: 2026-03-01",
+			"repeat: every day until 2026-03-03",
+			"---",
+			"Body"
+		].join("\n");
+
+		(pluginStub.app.metadataCache.getFileCache as any).mockImplementation(() => ({
+			frontmatter: { date: "2026-03-01", repeat: "every day until 2026-03-03" },
+			tags: []
+		}));
+
+		await indexer.processFile(file, { reason: "modify" });
+		expect(indexer.setFileHidden(file.path, true)).toBe(true);
+
+		for (const day of ["2026-03-01", "2026-03-02", "2026-03-03"]) {
+			const list: any[] = ((indexer as any).index[day] ?? []) as any[];
+			const recurring = list.find((e) => e && e.file === file.path && e.recurring === true);
+			expect(recurring?.reviewState).toBe("hidden");
+		}
+		const hiddenData: any = (indexer as any).files[file.path];
+		expect(new Set(hiddenData.recurHiddenDates ?? [])).toEqual(new Set(["2026-03-01", "2026-03-02", "2026-03-03"]));
+	});
+
 	it("expands a friendly rule (daily until) into per-day recurring entries", async () => {
 		const ctime = Date.UTC(2026, 2, 1);
 		const file = makeFile("folder/repeat.md", ctime);

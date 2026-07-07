@@ -106,6 +106,9 @@ export const indexingMethods: IndexingMethods = {
 	): Promise<void> {
 		const state = this as IndexingPluginState;
 		const { skipEnsure = false, suppressNotices = false, baseline = false } = options;
+		if (mode === "refresh" && suppressNotices) {
+			return;
+		}
 		// Track operation start so progress notices don't fire immediately.
 		try {
 			state.indexOperationStartedAt = Date.now();

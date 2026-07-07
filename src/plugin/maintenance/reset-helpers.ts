@@ -5,14 +5,23 @@ type ResetEntryRuntime = {
 	aiSummaryInputHash?: unknown;
 	file?: unknown;
 	source?: unknown;
+	date?: unknown;
+	originalDate?: unknown;
+	blockStart?: unknown;
+	blockEnd?: unknown;
+	trackedChange?: unknown;
+	trackedHash?: unknown;
 	reviewState?: unknown;
 };
 
 type ResetFileRuntime = {
 	cdate?: ResetEntryRuntime;
 	namedDate?: ResetEntryRuntime;
+	dateProp?: ResetEntryRuntime;
 	contentDates?: unknown;
 	trackedDates?: unknown;
+	recurHiddenDates?: unknown;
+	recurReviewedDates?: unknown;
 	trackedSnapshot?: unknown;
 	trackedSnapshotDate?: unknown;
 	trackedBaselineSnapshot?: unknown;
@@ -75,6 +84,146 @@ function getIndexedPaths(indexer: ResetIndexerRuntime): string[] {
 	}
 	const files = indexer.files ?? {};
 	return Object.keys(files);
+}
+
+function reviewCarryKey(entry: ResetEntryRuntime | null | undefined): string {
+	if (!entry) return "";
+	const date = typeof entry.date === "string" ? entry.date : "";
+	const originalDate = typeof entry.originalDate === "string" ? entry.originalDate : "";
+	const effectiveDate = originalDate || date;
+	const source = typeof entry.source === "string" ? entry.source : "";
+	const blockStart = Number(entry.blockStart);
+	const blockEnd = Number(entry.blockEnd);
+	const parts = [
+		source,
+		effectiveDate,
+		Number.isFinite(blockStart) ? String(blockStart) : "",
+		Number.isFinite(blockEnd) ? String(blockEnd) : ""
+	];
+	if (source === "tracked") {
+		parts.push(
+			typeof entry.trackedChange === "string" ? entry.trackedChange : "",
+			typeof entry.trackedHash === "string" ? entry.trackedHash : ""
+		);
+	}
+	return parts.join("|");
+}
+
+function collectReviewedIndexKeysByPath(indexer: ResetIndexerRuntime): Map<string, Set<string>> {
+	const out = new Map<string, Set<string>>();
+	const idx = indexer.index;
+	if (!idx || typeof idx !== "object") return out;
+	for (const list of Object.values(idx)) {
+		if (!Array.isArray(list)) continue;
+		for (const entry of list) {
+			if (!entry || typeof entry !== "object") continue;
+			if (entry.reviewState !== "reviewed") continue;
+			const path = typeof entry.file === "string" ? entry.file : "";
+			if (!path) continue;
+			const key = reviewCarryKey(entry);
+			if (!key) continue;
+			let set = out.get(path);
+			if (!set) {
+				set = new Set<string>();
+				out.set(path, set);
+			}
+			set.add(key);
+		}
+	}
+	return out;
+}
+
+function reapplyReviewedKeysToFileData(indexer: ResetIndexerRuntime, reviewedByPath: Map<string, Set<string>>): number {
+	let changedFiles = 0;
+	for (const [path, keys] of reviewedByPath.entries()) {
+		if (!keys || keys.size === 0) continue;
+		const data = indexer.files?.[path];
+		if (!data) continue;
+		const entries: ResetEntryRuntime[] = [];
+		if (data.cdate && typeof data.cdate === "object") entries.push(data.cdate);
+		if (data.namedDate && typeof data.namedDate === "object") entries.push(data.namedDate);
+		if ((data as { dateProp?: unknown }).dateProp && typeof (data as { dateProp?: unknown }).dateProp === "object") {
+			entries.push((data as { dateProp?: ResetEntryRuntime }).dateProp as ResetEntryRuntime);
+		}
+		if (Array.isArray(data.contentDates)) {
+			for (const item of data.contentDates) {
+				if (item && typeof item === "object") entries.push(item as ResetEntryRuntime);
+			}
+		}
+		const tracked = data.trackedDates;
+		if (tracked && typeof tracked === "object") {
+			for (const list of Object.values(tracked as Record<string, unknown>)) {
+				if (!Array.isArray(list)) continue;
+				for (const item of list) {
+					if (item && typeof item === "object") entries.push(item as ResetEntryRuntime);
+				}
+			}
+		}
+		let changed = false;
+		for (const entry of entries) {
+			if (entry.reviewState === "hidden" || entry.reviewState === "reviewed") continue;
+			const key = reviewCarryKey(entry);
+			if (!key || !keys.has(key)) continue;
+			entry.reviewState = "reviewed";
+			changed = true;
+		}
+		if (!changed) continue;
+		changedFiles++;
+		try {
+			indexer.updateAggregatedEntries?.(path);
+		} catch {
+			// ignore
+		}
+	}
+	return changedFiles;
+}
+
+function collectRecurringReviewedDatesByPath(indexer: ResetIndexerRuntime): Map<string, Set<string>> {
+	const out = new Map<string, Set<string>>();
+	const idx = indexer.index;
+	if (!idx || typeof idx !== "object") return out;
+	for (const list of Object.values(idx)) {
+		if (!Array.isArray(list)) continue;
+		for (const entry of list) {
+			if (!entry || typeof entry !== "object") continue;
+			if ((entry as { recurring?: unknown }).recurring !== true) continue;
+			if (entry.reviewState !== "reviewed") continue;
+			const path = typeof entry.file === "string" ? entry.file : "";
+			const key = typeof entry.date === "string" ? entry.date.trim() : "";
+			if (!path || !/^\d{4}-\d{2}-\d{2}$/.test(key)) continue;
+			let set = out.get(path);
+			if (!set) {
+				set = new Set<string>();
+				out.set(path, set);
+			}
+			set.add(key);
+		}
+	}
+	return out;
+}
+
+function reapplyRecurringReviewedDates(indexer: ResetIndexerRuntime, recurringReviewedByPath: Map<string, Set<string>>): number {
+	let changedFiles = 0;
+	for (const [path, reviewedSet] of recurringReviewedByPath.entries()) {
+		const data = indexer.files?.[path];
+		if (!data) continue;
+		const hidden = Array.isArray(data.recurHiddenDates)
+			? new Set(data.recurHiddenDates.map(v => String(v || "").trim()).filter(v => /^\d{4}-\d{2}-\d{2}$/.test(v)))
+			: new Set<string>();
+		const next = Array.from(reviewedSet).filter(v => !hidden.has(v)).sort((a, b) => a.localeCompare(b));
+		const prev = Array.isArray(data.recurReviewedDates)
+			? data.recurReviewedDates.map(v => String(v || "").trim()).filter(v => /^\d{4}-\d{2}-\d{2}$/.test(v)).sort((a, b) => a.localeCompare(b))
+			: [];
+		if (next.length === prev.length && next.every((v, i) => v === prev[i])) continue;
+		data.recurReviewedDates = next;
+		changedFiles++;
+		try {
+			indexer.updateAggregatedEntries?.(path);
+		} catch {
+			// ignore
+		}
+	}
+	return changedFiles;
 }
 
 export function clearAllMarks(plugin: EpochPlugin): number {
@@ -146,8 +295,19 @@ export function resetAllReviewStates(plugin: EpochPlugin): number {
 
 export function reviewAllDraftFiles(plugin: EpochPlugin): number {
 	const indexer = getResetIndexer(plugin);
-	const paths = getIndexedPaths(indexer);
-	let changedCount = 0;
+	const pathSet = new Set<string>(getIndexedPaths(indexer));
+	const idx = indexer.index;
+	if (idx && typeof idx === "object") {
+		for (const list of Object.values(idx)) {
+			if (!Array.isArray(list)) continue;
+			for (const entry of list) {
+				if (!entry || typeof entry !== "object") continue;
+				if (typeof entry.file === "string" && entry.file) pathSet.add(entry.file);
+			}
+		}
+	}
+	const paths = Array.from(pathSet);
+	const changedFiles = new Set<string>();
 	for (const p of paths) {
 		try {
 			const preserveFn = indexer.setFileReviewStateForAllRecordsPreserveHidden;
@@ -187,30 +347,48 @@ export function reviewAllDraftFiles(plugin: EpochPlugin): number {
 				}
 			}
 			const changed = preserveChanged || standardChanged || fallbackChanged;
-			if (changed) changedCount++;
+			if (changed) changedFiles.add(p);
 		} catch {
 			// ignore
 		}
 	}
-	if (changedCount === 0) {
-		const idx = indexer.index;
-		if (idx && typeof idx === "object") {
-			const changedFiles = new Set<string>();
-			for (const list of Object.values(idx)) {
-				if (!Array.isArray(list)) continue;
-				for (const entry of list) {
-					if (!entry || typeof entry !== "object") continue;
-					if (entry.reviewState === "hidden") continue;
-					if (entry.reviewState !== "reviewed") {
-						entry.reviewState = "reviewed";
-						if (typeof entry.file === "string" && entry.file) changedFiles.add(entry.file);
-					}
-				}
+	let changedOrphans = 0;
+	const liveIndex = indexer.index;
+	if (liveIndex && typeof liveIndex === "object") {
+		for (const list of Object.values(liveIndex)) {
+			if (!Array.isArray(list)) continue;
+			for (const entry of list) {
+				if (!entry || typeof entry !== "object") continue;
+				if (entry.reviewState === "hidden") continue;
+				if (entry.reviewState === "reviewed") continue;
+				entry.reviewState = "reviewed";
+				if (typeof entry.file === "string" && entry.file) changedFiles.add(entry.file);
+				else changedOrphans++;
 			}
-			changedCount = changedFiles.size;
 		}
 	}
-	return changedCount;
+	const reviewedByPath = collectReviewedIndexKeysByPath(indexer);
+	const rehydratedFiles = reapplyReviewedKeysToFileData(indexer, reviewedByPath);
+	const recurringReviewedByPath = collectRecurringReviewedDatesByPath(indexer);
+	const recurringRehydratedFiles = reapplyRecurringReviewedDates(indexer, recurringReviewedByPath);
+	for (const p of Array.from(reviewedByPath.keys())) {
+		changedFiles.add(p);
+	}
+	for (const p of Array.from(recurringReviewedByPath.keys())) {
+		changedFiles.add(p);
+	}
+	if (rehydratedFiles > 0) {
+		for (const p of Array.from(reviewedByPath.keys())) {
+			if (indexer.files?.[p]) changedFiles.add(p);
+		}
+	}
+	if (recurringRehydratedFiles > 0) {
+		for (const p of Array.from(recurringReviewedByPath.keys())) {
+			if (indexer.files?.[p]) changedFiles.add(p);
+		}
+	}
+	if (changedOrphans > 0 && changedFiles.size === 0) return 1;
+	return changedFiles.size;
 }
 
 export function clearAllPins(plugin: EpochPlugin): number {

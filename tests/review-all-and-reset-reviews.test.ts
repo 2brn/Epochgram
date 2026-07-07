@@ -33,6 +33,80 @@ describe("Review all + Reset reviews", () => {
 		expect(setFileReviewStateForAllRecordsPreserveHidden).toHaveBeenCalledWith("c.md", "reviewed");
 	});
 
+	it("Review all also updates index-only records when file-backed changes exist", () => {
+		const index: any = {
+			"2026-01-01": [
+				{ file: "a.md", source: "content", reviewState: "draft" },
+				{ file: "orphan.md", source: "content", reviewState: "draft" }
+			]
+		};
+		const files: any = {
+			"a.md": {}
+		};
+		const setFileReviewStateForAllRecordsPreserveHidden = vi.fn((p: string, next: any) => {
+			if (!files[p]) return false;
+			return p === "a.md" && next === "reviewed";
+		});
+		const indexer: any = {
+			files,
+			index,
+			getIndexedPaths: () => Object.keys(files),
+			setFileReviewStateForAllRecordsPreserveHidden
+		};
+
+		const changed = reviewAllDraftFiles(makePluginWithIndexer(indexer));
+		expect(changed).toBe(2);
+		expect(index["2026-01-01"][1].reviewState).toBe("reviewed");
+		expect(setFileReviewStateForAllRecordsPreserveHidden).toHaveBeenCalledWith("a.md", "reviewed");
+		expect(setFileReviewStateForAllRecordsPreserveHidden).toHaveBeenCalledWith("orphan.md", "reviewed");
+	});
+
+	it("Review all rehydrates file reviewState from reviewed date buckets", () => {
+		const index: any = {
+			"2026-07-07": [
+				{
+					file: "todo.md",
+					source: "content",
+					date: "2026-07-07",
+					blockStart: 12,
+					blockEnd: 12,
+					reviewState: "reviewed"
+				}
+			]
+		};
+		const files: any = {
+			"todo.md": {
+				cdate: null,
+				namedDate: null,
+				dateProp: null,
+				contentDates: [
+					{
+						file: "todo.md",
+						source: "content",
+						date: "2026-07-07",
+						blockStart: 12,
+						blockEnd: 12
+					}
+				],
+				trackedDates: {}
+			}
+		};
+		const updateAggregatedEntries = vi.fn();
+		const setFileReviewStateForAllRecordsPreserveHidden = vi.fn(() => false);
+		const indexer: any = {
+			files,
+			index,
+			getIndexedPaths: () => ["todo.md"],
+			setFileReviewStateForAllRecordsPreserveHidden,
+			updateAggregatedEntries
+		};
+
+		const changed = reviewAllDraftFiles(makePluginWithIndexer(indexer));
+		expect(changed).toBe(1);
+		expect(files["todo.md"].contentDates[0].reviewState).toBe("reviewed");
+		expect(updateAggregatedEntries).toHaveBeenCalledWith("todo.md");
+	});
+
 	it("Review all does not unhide hidden records", async () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date("2025-11-28T09:00:00.000Z"));
@@ -193,4 +267,5 @@ describe("Review all + Reset reviews", () => {
 
 		vi.useRealTimers();
 	});
+
 });

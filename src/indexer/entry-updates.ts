@@ -10,6 +10,7 @@ import {
 
 interface EntryUpdatesState {
 	files: Record<string, FileIndexData>;
+	index?: Record<string, DateEntry[]>;
 	plugin: unknown;
 	updateAggregatedEntries(filePath: string, options?: { skipSort?: boolean }): void;
 }
@@ -55,6 +56,41 @@ function gatherEntriesSafe(data: FileIndexData): DateEntry[] {
 		}
 	}
 	return out;
+}
+
+function normalizeDateKeys(values: unknown): string[] {
+	if (!Array.isArray(values)) return [];
+	const out = new Set<string>();
+	for (const value of values) {
+		const key = String(value || "").trim();
+		if (/^\d{4}-\d{2}-\d{2}$/.test(key)) out.add(key);
+	}
+	return Array.from(out).sort((a, b) => a.localeCompare(b));
+}
+
+function sameDateKeys(a: string[], b: string[]): boolean {
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) {
+		if (a[i] !== b[i]) return false;
+	}
+	return true;
+}
+
+function collectRecurringDateKeysForFile(s: EntryUpdatesState, path: string): string[] {
+	const out = new Set<string>();
+	const index = s.index;
+	if (!index || typeof index !== "object") return [];
+	for (const list of Object.values(index)) {
+		if (!Array.isArray(list)) continue;
+		for (const entry of list) {
+			if (!entry || typeof entry !== "object") continue;
+			if (entry.file !== path) continue;
+			if (entry.recurring !== true) continue;
+			const key = String(entry.date || "").trim();
+			if (/^\d{4}-\d{2}-\d{2}$/.test(key)) out.add(key);
+		}
+	}
+	return Array.from(out).sort((a, b) => a.localeCompare(b));
 }
 
 export function setEntryReviewState(indexer: unknown, target: DateEntry, reviewState: FileReviewState): boolean {
@@ -225,9 +261,13 @@ export function setFileHidden(indexer: unknown, path: string, hidden: boolean): 
 	if (!data) return false;
 
 	const entries = gatherEntriesSafe(data);
-	if (entries.length === 0) return false;
+	const recurringKeys = collectRecurringDateKeysForFile(s, p);
+	if (entries.length === 0 && recurringKeys.length === 0) return false;
 
-	const currentlyHidden = entries.every((e) => e.reviewState === "hidden");
+	const recurringHiddenSet = new Set<string>(normalizeDateKeys(data.recurHiddenDates));
+	const entriesHidden = entries.length === 0 || entries.every((e) => e.reviewState === "hidden");
+	const recurringHidden = recurringKeys.length === 0 || recurringKeys.every((k) => recurringHiddenSet.has(k));
+	const currentlyHidden = entriesHidden && recurringHidden;
 	if (hidden === currentlyHidden) return false;
 
 	let changed = false;
@@ -237,6 +277,17 @@ export function setFileHidden(indexer: unknown, path: string, hidden: boolean): 
 				entry.reviewState = "hidden";
 				changed = true;
 			}
+		}
+		const nextHidden = recurringKeys;
+		const prevHidden = normalizeDateKeys(data.recurHiddenDates);
+		if (!sameDateKeys(prevHidden, nextHidden)) {
+			data.recurHiddenDates = nextHidden;
+			changed = true;
+		}
+		const prevReviewed = normalizeDateKeys(data.recurReviewedDates);
+		if (prevReviewed.length > 0) {
+			data.recurReviewedDates = [];
+			changed = true;
 		}
 	}
 
@@ -275,8 +326,12 @@ export function isFileHidden(indexer: unknown, path: string): boolean {
 	const data = s.files[p];
 	if (!data) return false;
 	const entries = gatherEntriesSafe(data);
-	if (entries.length === 0) return false;
-	return entries.every((e) => e.reviewState === "hidden");
+	const recurringKeys = collectRecurringDateKeysForFile(s, p);
+	if (entries.length === 0 && recurringKeys.length === 0) return false;
+	const entriesHidden = entries.length === 0 || entries.every((e) => e.reviewState === "hidden");
+	const recurringHiddenSet = new Set<string>(normalizeDateKeys(data.recurHiddenDates));
+	const recurringHidden = recurringKeys.length === 0 || recurringKeys.every((k) => recurringHiddenSet.has(k));
+	return entriesHidden && recurringHidden;
 }
 
 export function setFileReviewStateForAllRecords(indexer: unknown, path: string, reviewState: FileReviewState): boolean {
@@ -287,7 +342,8 @@ export function setFileReviewStateForAllRecords(indexer: unknown, path: string, 
 	if (!data) return false;
 
 	const entries = gatherEntriesSafe(data);
-	if (entries.length === 0) return false;
+	const recurringKeys = collectRecurringDateKeysForFile(s, p);
+	if (entries.length === 0 && recurringKeys.length === 0) return false;
 
 	const desired = normalizeFileReviewState(reviewState);
 	let changed = false;
@@ -323,6 +379,13 @@ export function setFileReviewStateForAllRecords(indexer: unknown, path: string, 
 			data.recurReviewedDates = [];
 			changed = true;
 		}
+	} else {
+		const nextReviewed = recurringKeys;
+		const prevReviewed = normalizeDateKeys(data.recurReviewedDates);
+		if (!sameDateKeys(prevReviewed, nextReviewed)) {
+			data.recurReviewedDates = nextReviewed;
+			changed = true;
+		}
 	}
 
 	if (!changed) return false;
@@ -338,7 +401,8 @@ export function setFileReviewStateForAllRecordsPreserveHidden(indexer: unknown, 
 	if (!data) return false;
 
 	const entries = gatherEntriesSafe(data);
-	if (entries.length === 0) return false;
+	const recurringKeys = collectRecurringDateKeysForFile(s, p);
+	if (entries.length === 0 && recurringKeys.length === 0) return false;
 
 	const desired = normalizeFileReviewState(reviewState);
 	let changed = false;
@@ -351,6 +415,21 @@ export function setFileReviewStateForAllRecordsPreserveHidden(indexer: unknown, 
 			}
 		} else if (entry.reviewState !== "reviewed") {
 			entry.reviewState = "reviewed";
+			changed = true;
+		}
+	}
+
+	if (desired === "draft") {
+		if (Array.isArray(data.recurReviewedDates) && data.recurReviewedDates.length > 0) {
+			data.recurReviewedDates = [];
+			changed = true;
+		}
+	} else {
+		const hiddenSet = new Set<string>(normalizeDateKeys(data.recurHiddenDates));
+		const nextReviewed = recurringKeys.filter((k) => !hiddenSet.has(k));
+		const prevReviewed = normalizeDateKeys(data.recurReviewedDates);
+		if (!sameDateKeys(prevReviewed, nextReviewed)) {
+			data.recurReviewedDates = nextReviewed;
 			changed = true;
 		}
 	}
