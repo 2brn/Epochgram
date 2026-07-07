@@ -1,22 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
 import { withTrustedPro } from "./helpers/trusted-pro";
 
-vi.mock("../src/plugin/ai-summaries/epochs-after-ai", async (importOriginal) => {
-	const actual: any = await importOriginal();
-	return {
-		...actual,
-		scheduleEpochRegenerationAfterAiIdle: vi.fn()
-	};
-});
+vi.mock("obsidian", () => ({
+	Notice: class Notice {
+		constructor(_message: string, _timeout?: number) {}
+	},
+	Platform: { isDesktop: true },
+}));
+
+const scheduleAfterAiIdle = vi.fn();
+
+vi.mock("../src/plugin/ai-summaries/epochs-after-ai", () => ({
+	scheduleEpochRegenerationAfterAiIdle: (...args: any[]) => scheduleAfterAiIdle(...args)
+}));
 
 describe("Summarize all command behavior", () => {
 	it("respects Auto summarize: when OFF, does not enqueue AI summaries", async () => {
 		const { regenerateMissingAiSummariesAndEpochsForAllRecords } = await import(
 			"../src/plugin/ai-summaries/methods-regenerate"
 		);
-		const epochsAfterAi = await import("../src/plugin/ai-summaries/epochs-after-ai");
-		const scheduleSpy = (epochsAfterAi as any).scheduleEpochRegenerationAfterAiIdle as any;
-		scheduleSpy.mockClear();
+		scheduleAfterAiIdle.mockClear();
 
 		const pluginStub: any = {
 			hasProAccess: () => true,
@@ -30,7 +33,7 @@ describe("Summarize all command behavior", () => {
 		await regenerateMissingAiSummariesAndEpochsForAllRecords.call(pluginStub);
 
 		expect(pluginStub.generateMissingAiSummariesForAllRecords).not.toHaveBeenCalled();
-		expect(scheduleSpy).not.toHaveBeenCalled();
+		expect(scheduleAfterAiIdle).not.toHaveBeenCalled();
 		expect(pluginStub.regenerateMissingEpochsForAllRecords).toHaveBeenCalledTimes(1);
 	});
 
@@ -38,9 +41,7 @@ describe("Summarize all command behavior", () => {
 		const { regenerateMissingAiSummariesAndEpochsForAllRecords } = await import(
 			"../src/plugin/ai-summaries/methods-regenerate"
 		);
-		const epochsAfterAi = await import("../src/plugin/ai-summaries/epochs-after-ai");
-		const scheduleSpy = (epochsAfterAi as any).scheduleEpochRegenerationAfterAiIdle as any;
-		scheduleSpy.mockClear();
+		scheduleAfterAiIdle.mockClear();
 
 		const pluginStub: any = {
 			hasProAccess: () => true,
@@ -54,8 +55,8 @@ describe("Summarize all command behavior", () => {
 		await regenerateMissingAiSummariesAndEpochsForAllRecords.call(pluginStub);
 
 		expect(pluginStub.generateMissingAiSummariesForAllRecords).toHaveBeenCalledTimes(1);
-		expect(scheduleSpy).toHaveBeenCalledTimes(1);
-		expect(scheduleSpy).toHaveBeenCalledWith(pluginStub, "missing", true);
+		expect(scheduleAfterAiIdle).toHaveBeenCalledTimes(1);
+		expect(scheduleAfterAiIdle).toHaveBeenCalledWith(pluginStub, "missing", true);
 		expect(pluginStub.regenerateMissingEpochsForAllRecords).not.toHaveBeenCalled();
 	});
 
@@ -63,9 +64,7 @@ describe("Summarize all command behavior", () => {
 		const { regenerateMissingAiSummariesAndEpochsForAllRecords } = await import(
 			"../src/plugin/ai-summaries/methods-regenerate"
 		);
-		const epochsAfterAi = await import("../src/plugin/ai-summaries/epochs-after-ai");
-		const scheduleSpy = (epochsAfterAi as any).scheduleEpochRegenerationAfterAiIdle as any;
-		scheduleSpy.mockClear();
+		scheduleAfterAiIdle.mockClear();
 
 		const pluginStub: any = {
 			hasProAccess: () => true,
@@ -82,7 +81,7 @@ describe("Summarize all command behavior", () => {
 		await regenerateMissingAiSummariesAndEpochsForAllRecords.call(pluginStub);
 
 		expect(pluginStub.generateMissingAiSummariesForAllRecords).toHaveBeenCalledTimes(1);
-		expect(scheduleSpy).not.toHaveBeenCalled();
+		expect(scheduleAfterAiIdle).not.toHaveBeenCalled();
 		expect(pluginStub.regenerateMissingEpochsForAllRecords).not.toHaveBeenCalled();
 	});
 
@@ -90,9 +89,7 @@ describe("Summarize all command behavior", () => {
 		const { regenerateMissingAiSummariesAndEpochsForAllRecords } = await import(
 			"../src/plugin/ai-summaries/methods-regenerate"
 		);
-		const epochsAfterAi = await import("../src/plugin/ai-summaries/epochs-after-ai");
-		const scheduleSpy = (epochsAfterAi as any).scheduleEpochRegenerationAfterAiIdle as any;
-		scheduleSpy.mockClear();
+		scheduleAfterAiIdle.mockClear();
 
 		const pluginStub: any = {
 			hasProAccess: () => true,
@@ -106,7 +103,7 @@ describe("Summarize all command behavior", () => {
 		await regenerateMissingAiSummariesAndEpochsForAllRecords.call(pluginStub);
 
 		expect(pluginStub.generateMissingAiSummariesForAllRecords).toHaveBeenCalledTimes(1);
-		expect(scheduleSpy).not.toHaveBeenCalled();
+		expect(scheduleAfterAiIdle).not.toHaveBeenCalled();
 		expect(pluginStub.regenerateMissingEpochsForAllRecords).not.toHaveBeenCalled();
 	});
 });

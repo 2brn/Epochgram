@@ -103,7 +103,7 @@ describe("index refresh", () => {
 
 		await indexingMethods.runIndexOperation.call(plugin, "refresh", {
 			skipEnsure: true,
-			suppressNotices: true
+			suppressNotices: false
 		});
 
 		expect(loadSpy).toHaveBeenCalledTimes(1);

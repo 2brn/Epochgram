@@ -1,5 +1,10 @@
 # Epochgram changelog
 
+## [1.5.6] - 2026-07-07
+- Fixed review-state persistence so Review all remains stable after reload.
+- Extended Review/Draft/Hide propagation to recurring synthetic records.
+- Updated file and folder context-menu Review/Draft/Hide actions to apply recurring state updates consistently.
+
 ## [1.5.5] - 2026-07-04
 - Fixed icon sizing.
 

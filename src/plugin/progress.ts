@@ -174,11 +174,15 @@ function clearPlannedAiWork(plugin: EpochPlugin): void {
 	}
 }
 
+function isHtmlElement(value: unknown): value is HTMLElement {
+	return typeof HTMLElement !== "undefined" && value instanceof HTMLElement;
+}
+
 function getProgressParts(plugin: EpochPlugin): { root: HTMLElement; text: HTMLElement } | null {
 	const root = getProgressEl(plugin);
 	if (!root) return null;
 	const runtime = getRuntime(plugin);
-	if (runtime.__epochStatusBarProgressTextEl instanceof HTMLElement) {
+	if (isHtmlElement(runtime.__epochStatusBarProgressTextEl)) {
 		return {
 			root,
 			text: runtime.__epochStatusBarProgressTextEl
@@ -344,7 +348,7 @@ export function requestCancelEpochTask(plugin: EpochPlugin, kind: EpochProgressK
 function getProgressEl(plugin: EpochPlugin): HTMLElement | null {
 	if (!Platform.isDesktop) return null;
 	const runtime = getRuntime(plugin);
-	if (runtime.__epochStatusBarProgressEl instanceof HTMLElement) return runtime.__epochStatusBarProgressEl;
+	if (isHtmlElement(runtime.__epochStatusBarProgressEl)) return runtime.__epochStatusBarProgressEl;
 	try {
 		const el = plugin.addStatusBarItem();
 		setCssStyles(el, { display: "none" });
