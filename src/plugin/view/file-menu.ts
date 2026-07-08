@@ -3,7 +3,7 @@ import { Menu, TFile, TFolder } from "obsidian";
 import { applyMarkColorWithContext } from "../mark-context";
 import { setCssStyles } from "../../dom";
 import { gatherFileEntries } from "../../indexer/entry-state";
-import type { FileIndexData } from "../../indexer/types";
+import type { DateEntry, FileIndexData } from "../../indexer/types";
 import {
 	getEpochMarkColorGroups,
 	getEpochMarkColorSet,
@@ -39,7 +39,7 @@ type FileMenuIndexLike = {
 	setFileReviewStateForAllRecordsPreserveHidden?(path: string, next: "draft" | "reviewed"): boolean;
 	isFileHidden?(path: string): boolean;
 	setFileHidden?(path: string, hidden: boolean): boolean;
-	toJSON?(): { files?: Record<string, FileIndexData | undefined> };
+	toJSON?(): { files?: Record<string, FileIndexData | undefined>; dates?: Record<string, DateEntry[] | undefined> };
 };
 
 type FileMenuPluginLike = EpochPlugin & {
@@ -363,9 +363,22 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 				const idxAny = pluginState.indexer;
 				const fileReviewMode: "draft" | "reviewed" | "hidden" = (() => {
 					try {
-						const files = pluginState.indexer?.toJSON?.()?.files ?? null;
+						const snapshot = pluginState.indexer?.toJSON?.() ?? null;
+						const byDate = snapshot?.dates ?? null;
+						const entriesFromIndex: DateEntry[] = [];
+						if (byDate && typeof byDate === "object") {
+							for (const list of Object.values(byDate)) {
+								if (!Array.isArray(list)) continue;
+								for (const entry of list) {
+									if (!entry || typeof entry !== "object") continue;
+									if (entry.file !== file.path) continue;
+									entriesFromIndex.push(entry);
+								}
+							}
+						}
+						const files = snapshot?.files ?? null;
 						const data = files ? files[file.path] : null;
-						const entries = gatherFileEntries(data);
+						const entries = entriesFromIndex.length > 0 ? entriesFromIndex : gatherFileEntries(data);
 						if (entries.length === 0) return "draft";
 						const allHidden = entries.every((e) => e.reviewState === "hidden");
 						if (allHidden) return "hidden";

@@ -1,7 +1,6 @@
-import { NOTE_TITLE_SIMILARITY_JW_THRESHOLD } from "./utils";
-
 export const RESET_PRO_SIMILARITY_THRESHOLD = 0.85;
 export const RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE = 0.85;
+export const RESET_PRO_TITLE_JW_THRESHOLD = 1;
 
 export function applyProResetDefaults(settings: {
 	similarityThreshold: number;
@@ -10,5 +9,5 @@ export function applyProResetDefaults(settings: {
 }): void {
 	settings.similarityThreshold = RESET_PRO_SIMILARITY_THRESHOLD;
 	settings.similarityZeroShotMinScore = RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE;
-	settings.similarityTitleJwThreshold = NOTE_TITLE_SIMILARITY_JW_THRESHOLD;
+	settings.similarityTitleJwThreshold = RESET_PRO_TITLE_JW_THRESHOLD;
 }

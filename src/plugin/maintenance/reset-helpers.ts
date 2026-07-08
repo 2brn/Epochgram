@@ -30,6 +30,7 @@ type ResetFileRuntime = {
 
 type ResetIndexerRuntime = {
 	getIndexedPaths?: () => unknown;
+	refreshSyntheticEntries?: () => void;
 	files?: Record<string, ResetFileRuntime>;
 	index?: Record<string, ResetEntryRuntime[]>;
 	getFileMarkColor?: (path: string) => number | null;
@@ -295,6 +296,11 @@ export function resetAllReviewStates(plugin: EpochPlugin): number {
 
 export function reviewAllDraftFiles(plugin: EpochPlugin): number {
 	const indexer = getResetIndexer(plugin);
+	try {
+		indexer.refreshSyntheticEntries?.();
+	} catch {
+		// ignore
+	}
 	const pathSet = new Set<string>(getIndexedPaths(indexer));
 	const idx = indexer.index;
 	if (idx && typeof idx === "object") {

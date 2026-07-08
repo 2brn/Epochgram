@@ -143,4 +143,23 @@ describe("registerFileMenu", () => {
 
 		expect(menu.items.map((item: any) => item.title)).not.toContain("Epochgram: Show");
 	});
+
+	it("uses record-level review state from index dates for file menu actions", () => {
+		const plugin = setupPlugin();
+		plugin.indexer.toJSON = () => ({
+			files: {
+				"recurring.md": { entries: [{ reviewState: "draft" }] }
+			},
+			dates: {
+				"2026-07-08": [{ file: "recurring.md", reviewState: "reviewed", recurring: true }]
+			}
+		});
+
+		const menu: any = new Menu();
+		fileMenuHandler?.(menu, new TFile("recurring.md"));
+
+		const titles = menu.items.map((item: any) => item.title);
+		expect(titles).toContain("Epochgram: Draft");
+		expect(titles).not.toContain("Epochgram: Review");
+	});
 });

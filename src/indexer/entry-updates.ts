@@ -1,5 +1,6 @@
 import { MAX_MARK_COLORS } from "../ui/mark-colors";
 import type { DateEntry, FileIndexData, FileReviewState } from "./types";
+import { expandRecurrenceToDateKeys } from "./recurrence";
 import {
 	applyHighlightState,
 	entryEffectiveDate,
@@ -76,18 +77,52 @@ function sameDateKeys(a: string[], b: string[]): boolean {
 	return true;
 }
 
+function todayDateKey(): string {
+	const d = new Date();
+	const y = String(d.getFullYear());
+	const m = String(d.getMonth() + 1).padStart(2, "0");
+	const day = String(d.getDate()).padStart(2, "0");
+	return `${y}-${m}-${day}`;
+}
+
+function collectRecurringDateKeysFromData(data: FileIndexData): string[] {
+	const rec = data.recur;
+	if (!rec || typeof rec !== "object") return [];
+	const anchorRaw = data.namedDate?.date || data.dateProp?.date || data.cdate?.date || null;
+	const anchorKey = typeof anchorRaw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(anchorRaw)
+		? anchorRaw
+		: null;
+	const keys = expandRecurrenceToDateKeys({
+		recur: rec,
+		fallbackFromKey: anchorKey,
+		todayKey: todayDateKey()
+	});
+	const out = new Set<string>();
+	for (const key of keys) {
+		if (/^\d{4}-\d{2}-\d{2}$/.test(key)) out.add(key);
+	}
+	return Array.from(out).sort((a, b) => a.localeCompare(b));
+}
+
 function collectRecurringDateKeysForFile(s: EntryUpdatesState, path: string): string[] {
 	const out = new Set<string>();
 	const index = s.index;
-	if (!index || typeof index !== "object") return [];
-	for (const list of Object.values(index)) {
-		if (!Array.isArray(list)) continue;
-		for (const entry of list) {
-			if (!entry || typeof entry !== "object") continue;
-			if (entry.file !== path) continue;
-			if (entry.recurring !== true) continue;
-			const key = String(entry.date || "").trim();
-			if (/^\d{4}-\d{2}-\d{2}$/.test(key)) out.add(key);
+	if (index && typeof index === "object") {
+		for (const list of Object.values(index)) {
+			if (!Array.isArray(list)) continue;
+			for (const entry of list) {
+				if (!entry || typeof entry !== "object") continue;
+				if (entry.file !== path) continue;
+				if (entry.recurring !== true) continue;
+				const key = String(entry.date || "").trim();
+				if (/^\d{4}-\d{2}-\d{2}$/.test(key)) out.add(key);
+			}
+		}
+	}
+	const data = s.files[path];
+	if (data) {
+		for (const key of collectRecurringDateKeysFromData(data)) {
+			out.add(key);
 		}
 	}
 	return Array.from(out).sort((a, b) => a.localeCompare(b));

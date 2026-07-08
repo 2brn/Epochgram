@@ -4,7 +4,7 @@ import {
 	RESET_PRO_SIMILARITY_THRESHOLD,
 	RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE
 } from "../settings-reset-defaults";
-import { formatDate, NOTE_TITLE_SIMILARITY_JW_THRESHOLD } from "../utils";
+import { formatDate } from "../utils";
 import { normalizeSnapshotValue } from "../indexer/snapshot-helpers";
 import { runSimilarityStartupMaintenance } from "./similarity/startup-maintenance";
 import { isTrackChangesEffective } from "./pro-feature-state";
@@ -259,7 +259,7 @@ function applyFirstTimeProDefaults(plugin: EpochPlugin, hasActivatedProOnce: boo
 				// ignore
 			}
 		}
-		plugin.settings.similarityTitleJwThreshold = NOTE_TITLE_SIMILARITY_JW_THRESHOLD;
+		plugin.settings.similarityTitleJwThreshold = 1;
 			plugin.settings.similarityThreshold = RESET_PRO_SIMILARITY_THRESHOLD;
 			plugin.settings.similarityZeroShotMinScore = RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE;
 		plugin.settings.similarityUseLinks = true;

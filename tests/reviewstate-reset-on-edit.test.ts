@@ -85,6 +85,29 @@ describe("ReviewState reset on edit", () => {
 		expect(pinnedToday?.reviewState).toBe("reviewed");
 	});
 
+	it("editing a non-pinned Reviewed file resets it to Draft", async () => {
+		const ctime = Date.UTC(2025, 0, 1);
+		const file = makeFile("folder/regular.md", ctime);
+
+		contents[file.path] = "Initial";
+		await indexer.processFile(file, { reason: "modify" });
+
+		const data: any = (indexer as any).files[file.path];
+		expect(data).toBeTruthy();
+		if (data.cdate) (data.cdate as any).reviewState = "reviewed";
+		(indexer as any).updateAggregatedEntries(file.path);
+
+		contents[file.path] = "Initial\nChanged";
+		await indexer.processFile(file, { reason: "modify" });
+
+		const data2: any = (indexer as any).files[file.path];
+		expect(String((data2.cdate as any)?.reviewState ?? "draft")).toBe("draft");
+
+		const cdateKey = "2025-01-01";
+		const anchor = indexer.index[cdateKey]?.find(e => e.file === file.path);
+		expect(String(anchor?.reviewState ?? "draft")).toBe("draft");
+	});
+
 	it("editing a reviewed tracked-change record resets it to Draft", async () => {
 		pluginStub.settings.trackChanges = true;
 		const ctime = Date.UTC(2025, 0, 1);

@@ -312,6 +312,24 @@ export async function processFileInternal(
 		fileData.recur = previousData.recur ?? null;
 	}
 
+	const shouldResetReviewedOnEdit =
+		(options.reason === "create" || options.reason === "modify" || options.reason === "track") &&
+		!contentUnchanged &&
+		previousData.pinnedFile !== true;
+	if (shouldResetReviewedOnEdit) {
+		const clearReviewed = (entry: FileIndexData["cdate"] | FileIndexData["namedDate"] | FileIndexData["dateProp"]): void => {
+			if (!entry) return;
+			if (entry.reviewState === "reviewed") delete entry.reviewState;
+		};
+		clearReviewed(fileData.cdate);
+		clearReviewed(fileData.namedDate);
+		clearReviewed(fileData.dateProp);
+		for (const entry of fileData.contentDates) {
+			if (entry?.reviewState === "reviewed") delete entry.reviewState;
+		}
+		fileData.recurReviewedDates = [];
+	}
+
 	s.files[file.path] = fileData;
 	// MiniSearch: index file for timeline search.
 	try {

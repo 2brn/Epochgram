@@ -144,6 +144,7 @@ Settings interface starts in `settings.ts` (`export interface EpochSettings`). V
 - `openEpochViewOnStartup: boolean` (default `true`)
 - `enableAnimation: boolean` (default `true`; when `false`, disables UI animations and snaps transitions immediately)
 - `searchResultsLimit: number` (default `7`; controls max record suggestions shown in timeline search modal)
+- `anchorMdate: boolean` (default `true`; when enabled, cdate anchor uses file modified time instead of created time)
 - `parseDatesInFrontmatter: boolean` (default `false`; controls whether YAML frontmatter contributes parsed/content date entries)
 - `simpleMode: boolean` (default `false`; “Simple mode” toggle in General settings)
   - Intended scope: simplifies timeline UI only (see usages in `ui/epoch-view/*`, `ui/menus/*`, `ui/summary-rendering/*`, `ui/epoch-canvas-draw/*`).
@@ -376,6 +377,6 @@ Tracked changes with mixed Pro activation (Verified)
 First-time Pro activation defaults (Verified)
 - Enables tracked changes by default.
 - Enables similarity signals: links + tags.
-- Sets `similarityTitleJwThreshold` to the default Jaro–Winkler threshold (0.85).
+- Sets `similarityTitleJwThreshold` to `1.0` (same-folder title matching mode).
 - Sets `similarityThreshold` to 0.85 (semantic related-notes threshold).
 - Sets `similarityZeroShotMinScore` to 0.85 (topics/zero-shot min-score threshold).

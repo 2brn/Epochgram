@@ -55,7 +55,7 @@ export const DEFAULT_SETTINGS: EpochSettings = {
 	compactModeMinWidthPercent: 30,
 	searchResultsLimit: 7,
 	trackChanges: true,
-	anchorMdate: false,
+	anchorMdate: true,
 	timelineFilters: {
 		showDraftsOnly: false,
 		showAttachments: false,

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { reviewAllDraftFiles, resetAllReviewStates } from "../src/plugin/maintenance/reset-helpers";
 import { Indexer } from "../src/indexer/indexer";
+import { setFileReviewStateForAllRecordsPreserveHidden } from "../src/indexer/entry-updates";
 import { TFile } from "obsidian";
 
 function makePluginWithIndexer(indexer: any) {
@@ -19,9 +20,11 @@ describe("Review all + Reset reviews", () => {
 			// Simulate: only a.md actually changed.
 			return p === "a.md" && next === "reviewed";
 		});
+		const refreshSyntheticEntries = vi.fn();
 		const indexer: any = {
 			files,
 			getIndexedPaths: () => Object.keys(files),
+			refreshSyntheticEntries,
 			setFileReviewStateForAllRecordsPreserveHidden
 		};
 
@@ -31,6 +34,7 @@ describe("Review all + Reset reviews", () => {
 		expect(setFileReviewStateForAllRecordsPreserveHidden).toHaveBeenCalledWith("a.md", "reviewed");
 		expect(setFileReviewStateForAllRecordsPreserveHidden).toHaveBeenCalledWith("b.md", "reviewed");
 		expect(setFileReviewStateForAllRecordsPreserveHidden).toHaveBeenCalledWith("c.md", "reviewed");
+		expect(refreshSyntheticEntries).toHaveBeenCalledTimes(1);
 	});
 
 	it("Review all also updates index-only records when file-backed changes exist", () => {
@@ -59,6 +63,47 @@ describe("Review all + Reset reviews", () => {
 		expect(index["2026-01-01"][1].reviewState).toBe("reviewed");
 		expect(setFileReviewStateForAllRecordsPreserveHidden).toHaveBeenCalledWith("a.md", "reviewed");
 		expect(setFileReviewStateForAllRecordsPreserveHidden).toHaveBeenCalledWith("orphan.md", "reviewed");
+	});
+
+	it("Review all recurring can mark reviewed on first run without prebuilt synthetic recurring index entries", () => {
+		const filePath = "recur.md";
+		const files: any = {
+			[filePath]: {
+				cdate: {
+					date: "2026-03-01",
+					file: filePath,
+					source: "cdate",
+					blockStart: 0,
+					blockEnd: 0,
+					summary: ""
+				},
+				namedDate: null,
+				dateProp: null,
+				contentDates: [],
+				trackedDates: {},
+				recur: {
+					raw: "every day count 3",
+					rrule: "FREQ=DAILY",
+					kind: "friendly",
+					line: 0,
+					from: "2026-03-01",
+					count: 3
+				},
+				recurHiddenDates: [],
+				recurReviewedDates: []
+			}
+		};
+		const indexer: any = {
+			files,
+			index: {},
+			plugin: {},
+			updateAggregatedEntries: vi.fn()
+		};
+
+		const changed = setFileReviewStateForAllRecordsPreserveHidden(indexer, filePath, "reviewed");
+		expect(changed).toBe(true);
+		expect(new Set(files[filePath].recurReviewedDates ?? [])).toEqual(new Set(["2026-03-01", "2026-03-02", "2026-03-03"]));
+		expect(indexer.updateAggregatedEntries).toHaveBeenCalledWith(filePath);
 	});
 
 	it("Review all rehydrates file reviewState from reviewed date buckets", () => {
