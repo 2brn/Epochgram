@@ -317,7 +317,7 @@ export async function processFileInternal(
 		!contentUnchanged &&
 		previousData.pinnedFile !== true;
 	if (shouldResetReviewedOnEdit) {
-		const clearReviewed = (entry: FileIndexData["cdate"] | FileIndexData["namedDate"] | FileIndexData["dateProp"]): void => {
+		const clearReviewed = (entry: FileIndexData["cdate"]): void => {
 			if (!entry) return;
 			if (entry.reviewState === "reviewed") delete entry.reviewState;
 		};

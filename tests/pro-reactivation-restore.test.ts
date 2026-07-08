@@ -5,10 +5,10 @@ import * as obsidian from "obsidian";
 import { __resetDeviceProofCacheForTests } from "../src/plugin/device-proof";
 import { licenseMethods } from "../src/plugin/license";
 import {
+	RESET_PRO_TITLE_JW_THRESHOLD,
 	RESET_PRO_SIMILARITY_THRESHOLD,
 	RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE
 } from "../src/settings-reset-defaults";
-import { NOTE_TITLE_SIMILARITY_JW_THRESHOLD } from "../src/utils";
 import { __setServerVerifyKeyForTests } from "../src/plugin/pro-trust";
 import { buildEntitlementClaims, buildSignedEntitlementEnvelope, TEST_SERVER_VERIFY_KEY_DER_BASE64 } from "./helpers/signed-entitlement";
 
@@ -276,7 +276,7 @@ describe("license: signed activation certificates", () => {
 		expect(plugin.settings.trackChanges).toBe(true);
 		expect(plugin.settings.similarityUseLinks).toBe(true);
 		expect(plugin.settings.similarityUseTags).toBe(true);
-		expect(plugin.settings.similarityTitleJwThreshold).toBeCloseTo(NOTE_TITLE_SIMILARITY_JW_THRESHOLD);
+		expect(plugin.settings.similarityTitleJwThreshold).toBeCloseTo(RESET_PRO_TITLE_JW_THRESHOLD);
 		expect(plugin.viewPreferences.showTrackedChanges).toBe(true);
 		expect(plugin.settings.summarizeAI).toBe(false);
 		expect(plugin.settings.generateEpochs).toBe(false);
