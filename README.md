@@ -494,7 +494,7 @@ Epochgram also provides **Rebuild** and **Reset** popups for rebuilding or clear
 > Try rebuilding the index or reload Obsidian.
 
 > **What should I do if Obsidian cannot start and I suspect Epochgram?**  
-> Try restarting Obsidian first. If it still cannot start, temporarily disable Epochgram by moving or deleting the `.obsidian/plugins/epochgram` folder from your vault, then start Obsidian again. If the issue persists, please [open an issue on GitHub](https://github.com/2brn/Epochgram/issues).
+> Try restarting Obsidian first. If it still cannot start, temporarily disable Epochgram by moving or deleting the `.obsidian/plugins/epochgram` folder from your vault, then start Obsidian again.
 
 ## Disclosures
 
