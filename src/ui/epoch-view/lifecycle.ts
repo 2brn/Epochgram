@@ -399,21 +399,6 @@ export async function epochViewOnOpen(_view: unknown): Promise<void> {
 			canvas.snapInitialPosition(null, null, { draw: false });
 		}
 		view.updateActiveFile();
-		// Reconcile one frame later: some startup layouts settle after the first
-		// snap, which can produce a slight offset compared to manual ribbon open.
-		window.requestAnimationFrame(() => {
-			try {
-				if (!view.canvas) return;
-				if (Platform.isMobile && view.startupDeferredSnapPath) return;
-				if (view.startupSnapPath) {
-					view.canvas.snapInitialPosition(view.startupSnapPath, cursorLine, { draw: false });
-				} else {
-					view.canvas.snapInitialPosition(null, null, { draw: false });
-				}
-			} catch {
-				// ignore
-			}
-		});
 		if (!Platform.isMobile) {
 			view.startStartupDefaultNoteRefocus();
 		}

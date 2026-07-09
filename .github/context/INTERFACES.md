@@ -9,7 +9,7 @@
   - Desktop and mobile: it may auto-open Epochgram after layout is ready when `settings.openEpochViewOnStartup !== false`.
   - Opening Epochgram always targets the right/sidebar leaf and falls back to a tab leaf only when a right leaf is unavailable.
   - When the view opens, the timeline snaps to an open Markdown file’s best matching record (prefers the most recently active Markdown leaf when available); otherwise it snaps to Today.
-    - Snapping targets the **newest** visible non-recurring record for that file; if only recurring records are visible, it snaps to the **oldest** recurring record. Cursor line does not affect which record is chosen.
+    - Snapping targets the record whose date is nearest to Today for that file (for both recurring and non-recurring matches). Cursor line does not affect which record is chosen.
   - For a short, bounded startup window, Epochgram will also try to refocus to a *newly opened* default note (e.g., Daily note / New note created by other plugins) if it appears after the initial snap.
   - When the active Markdown file changes (primarily via the `file-open` event), the timeline auto-scrolls to keep that file’s best matching record visible.
     - On mobile, this follow-focus scroll can be computed even while the view is collapsed/hidden (using the last known viewport size), so opening the timeline later shows it already positioned.

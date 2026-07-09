@@ -1,4 +1,5 @@
 import type { EpochCanvas } from "./epoch-canvas";
+import { FOCUS_ANCHOR_RATIO } from "./epoch-canvas-constants";
 
 type CanvasWindowLike = {
 	devicePixelRatio?: number;
@@ -43,6 +44,7 @@ type CanvasSetupState = {
 	cancelFocusClear(): void;
 	clearHover(force?: boolean): void;
 	draw(): void;
+	getTodayOffset?(): number;
 	scheduleVisibilityCheck(): void;
 	visibilityRetryTimeout: number | null;
 	animFrame: number | null;
@@ -136,6 +138,22 @@ export const canvasSetupMethods: CanvasSetupMethods = {
 		const rect = state.canvas?.getBoundingClientRect?.() ?? state.root.getBoundingClientRect();
 		const width = rect.width || state.canvas?.clientWidth || state.root.clientWidth;
 		const height = rect.height || state.canvas?.clientHeight || state.root.clientHeight;
+		const prevKnownHeight = Number(state.__lastKnownCanvasCssHeight ?? Number.NaN);
+		const oldAnchorY = Number.isFinite(prevKnownHeight) && prevKnownHeight > 0
+			? prevKnownHeight * FOCUS_ANCHOR_RATIO
+			: (state.getTodayOffset?.() ?? Number.NaN);
+		const scale = Number(state.scale ?? Number.NaN);
+		const targetScale = Number(state.targetScale ?? Number.NaN);
+		const offsetY = Number(state.offsetY ?? Number.NaN);
+		const targetOffsetY = Number(state.targetOffsetY ?? Number.NaN);
+		const currentAnchorWorld =
+			Number.isFinite(scale) && scale !== 0 && Number.isFinite(offsetY) && Number.isFinite(oldAnchorY)
+				? (oldAnchorY - offsetY) / scale
+				: Number.NaN;
+		const targetAnchorWorld =
+			Number.isFinite(targetScale) && targetScale !== 0 && Number.isFinite(targetOffsetY) && Number.isFinite(oldAnchorY)
+				? (oldAnchorY - targetOffsetY) / targetScale
+				: Number.NaN;
 
 		try {
 			if (Number.isFinite(width) && width > 0) state.__lastKnownCanvasCssWidth = width;
@@ -194,6 +212,13 @@ export const canvasSetupMethods: CanvasSetupMethods = {
 		state.canvas.width = bufWidth;
 		state.canvas.height = bufHeight;
 		state.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		const newAnchorY = state.getTodayOffset?.() ?? Number.NaN;
+		if (Number.isFinite(newAnchorY) && Number.isFinite(currentAnchorWorld) && Number.isFinite(scale) && scale !== 0) {
+			state.offsetY = newAnchorY - currentAnchorWorld * scale;
+		}
+		if (Number.isFinite(newAnchorY) && Number.isFinite(targetAnchorWorld) && Number.isFinite(targetScale) && targetScale !== 0) {
+			state.targetOffsetY = newAnchorY - targetAnchorWorld * targetScale;
+		}
 		state.draw();
 	},
 

@@ -233,10 +233,8 @@ export function focusFile(
 	useHoverHighlight: boolean
 ): boolean {
 	const state = getFocusInternals(canvas);
-	let bestNonRecurring: { date: Date; ms: number } | null = null;
-	let bestNonRecurringEntry: DateEntry | null = null;
-	let bestOldestRecurring: { date: Date; ms: number } | null = null;
-	let bestOldestRecurringEntry: DateEntry | null = null;
+	let best: { date: Date; ms: number; distance: number } | null = null;
+	let bestEntry: DateEntry | null = null;
 	for (const [dateKey, entries] of Object.entries(state.index)) {
 		const nonRecurring = entries.filter((e) => !isRecurringEntry(e));
 		const recurring = entries.filter((e) => isRecurringEntry(e));
@@ -251,29 +249,14 @@ export function focusFile(
 		if (!date) continue;
 		const ms = date.getTime();
 		if (!Number.isFinite(ms)) continue;
-		if (matchNonRecurring) {
-			if (!bestNonRecurring || ms > bestNonRecurring.ms) {
-				bestNonRecurring = { date, ms };
-				bestNonRecurringEntry = matchNonRecurring;
-			}
-		}
-		if (matchRecurring) {
-			if (!bestOldestRecurring || ms < bestOldestRecurring.ms) {
-				bestOldestRecurring = { date, ms };
-				bestOldestRecurringEntry = matchRecurring;
-			}
+		const distance = Math.abs(getDayIndexForDate(canvas, date));
+		if (!Number.isFinite(distance)) continue;
+		const candidate = { date, ms, distance };
+		if (!best || distance < best.distance || (distance === best.distance && ms > best.ms)) {
+			best = candidate;
+			bestEntry = matchNonRecurring ?? matchRecurring;
 		}
 	}
-	const best = (() => {
-		if (!bestNonRecurring) return bestOldestRecurring;
-		if (!bestOldestRecurring) return bestNonRecurring;
-		return bestNonRecurring.ms >= bestOldestRecurring.ms ? bestNonRecurring : bestOldestRecurring;
-	})();
-	const bestEntry = (() => {
-		if (!bestNonRecurring) return bestOldestRecurringEntry;
-		if (!bestOldestRecurring) return bestNonRecurringEntry;
-		return bestNonRecurring.ms >= bestOldestRecurring.ms ? bestNonRecurringEntry : bestOldestRecurringEntry;
-	})();
 	if (!best || !bestEntry) return false;
 	const dayIndex = getDayIndexForDate(canvas, best.date);
 	const shouldScroll = !isDateVisible(canvas, dayIndex);
@@ -317,10 +300,8 @@ export function snapToFile(
 		return false;
 	}
 
-	let bestNonRecurring: { date: Date; ms: number } | null = null;
-	let bestNonRecurringEntry: DateEntry | null = null;
-	let bestOldestRecurring: { date: Date; ms: number } | null = null;
-	let bestOldestRecurringEntry: DateEntry | null = null;
+	let best: { date: Date; ms: number; distance: number } | null = null;
+	let bestEntry: DateEntry | null = null;
 	for (const [dateKey, entries] of Object.entries(state.index)) {
 		const nonRecurring = entries.filter((e) => !isRecurringEntry(e));
 		const recurring = entries.filter((e) => isRecurringEntry(e));
@@ -335,30 +316,14 @@ export function snapToFile(
 		if (!date) continue;
 		const ms = date.getTime();
 		if (!Number.isFinite(ms)) continue;
-		if (matchNonRecurring) {
-			if (!bestNonRecurring || ms > bestNonRecurring.ms) {
-				bestNonRecurring = { date, ms };
-				bestNonRecurringEntry = matchNonRecurring;
-			}
-		}
-		if (matchRecurring) {
-			if (!bestOldestRecurring || ms < bestOldestRecurring.ms) {
-				bestOldestRecurring = { date, ms };
-				bestOldestRecurringEntry = matchRecurring;
-			}
+		const distance = Math.abs(getDayIndexForDate(canvas, date));
+		if (!Number.isFinite(distance)) continue;
+		const candidate = { date, ms, distance };
+		if (!best || distance < best.distance || (distance === best.distance && ms > best.ms)) {
+			best = candidate;
+			bestEntry = matchNonRecurring ?? matchRecurring;
 		}
 	}
-	const best = (() => {
-		if (!bestNonRecurring) return bestOldestRecurring;
-		if (!bestOldestRecurring) return bestNonRecurring;
-		return bestNonRecurring.ms >= bestOldestRecurring.ms ? bestNonRecurring : bestOldestRecurring;
-	})();
-	const bestEntry = (() => {
-		if (!bestNonRecurring) return bestOldestRecurringEntry;
-		if (!bestOldestRecurring) return bestNonRecurringEntry;
-		return bestNonRecurring.ms >= bestOldestRecurring.ms ? bestNonRecurringEntry : bestOldestRecurringEntry;
-	})();
-	void bestEntry;
 	if (!best) return false;
 
 	const dayIndex = getDayIndexForDate(canvas, best.date);

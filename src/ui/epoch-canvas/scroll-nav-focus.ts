@@ -73,14 +73,76 @@ function asFilePath(value: unknown): string {
 	return typeof value === "string" ? value : "";
 }
 
-function isRecurringEntry(entry: unknown): boolean {
-	if (!entry || typeof entry !== "object") return false;
-	const recurring = (entry as { recurring?: unknown }).recurring;
-	return recurring === true;
+type DateSelectionCandidate = {
+	date: Date;
+	distance: number;
+	ms: number;
+	priority: number;
+};
+
+function dateDistanceFromToday(canvas: EpochCanvas, date: Date): number {
+	const dayIndex = getDayIndexForDateHelper(canvas, date);
+	if (!Number.isFinite(dayIndex)) return Number.POSITIVE_INFINITY;
+	return Math.abs(Number(dayIndex));
 }
 
-function filterNonRecurringEntries(entries: DateEntry[]): DateEntry[] {
-	return (entries ?? []).filter((e) => !isRecurringEntry(e));
+function pickBetterDateCandidate(
+	best: DateSelectionCandidate | null,
+	next: DateSelectionCandidate
+): DateSelectionCandidate {
+	if (!best) return next;
+	if (next.distance !== best.distance) return next.distance < best.distance ? next : best;
+	if (next.priority !== best.priority) return next.priority < best.priority ? next : best;
+	if (next.ms !== best.ms) return next.ms > best.ms ? next : best;
+	return best;
+}
+
+function findBestDateForFile(
+	canvas: EpochCanvas,
+	index: Record<string, DateEntry[]>,
+	filePath: string
+): Date | null {
+	let best: DateSelectionCandidate | null = null;
+	for (const dateKey of Object.keys(index)) {
+		const date = dateKeyToDateHelper(dateKey);
+		if (!date) continue;
+		const entries = getEntriesForDate(canvas, date);
+		if (!entries || entries.length === 0) continue;
+		const match = pickEntryForFile(canvas, entries, filePath, null);
+		if (!match) continue;
+		const ms = date.getTime();
+		if (!Number.isFinite(ms)) continue;
+		const distance = dateDistanceFromToday(canvas, date);
+		if (!Number.isFinite(distance)) continue;
+		best = pickBetterDateCandidate(best, {
+			date,
+			distance,
+			ms,
+			priority: getEntryPriority(match)
+		});
+	}
+	return best?.date ?? null;
+}
+
+function findBestVisibleDate(canvas: EpochCanvas, index: Record<string, DateEntry[]>): Date | null {
+	let best: DateSelectionCandidate | null = null;
+	for (const dateKey of Object.keys(index)) {
+		const date = dateKeyToDateHelper(dateKey);
+		if (!date) continue;
+		const entries = getEntriesForDate(canvas, date);
+		if (!entries || entries.length === 0) continue;
+		const ms = date.getTime();
+		if (!Number.isFinite(ms)) continue;
+		const distance = dateDistanceFromToday(canvas, date);
+		if (!Number.isFinite(distance)) continue;
+		best = pickBetterDateCandidate(best, {
+			date,
+			distance,
+			ms,
+			priority: 0
+		});
+	}
+	return best?.date ?? null;
 }
 
 export function focusFirstFilteredTimelineRecord(canvas: EpochCanvas): boolean {
@@ -114,48 +176,7 @@ export function focusFirstFilteredTimelineRecord(canvas: EpochCanvas): boolean {
 						const index = getCanvasIndex(c);
 						if (!index) continue;
 
-						let bestDateNonRecurring: Date | null = null;
-						let bestNonRecurring: { priority: number; ms: number } | null = null;
-						let bestDateOldestRecurring: Date | null = null;
-						let bestOldestRecurringMs = Number.POSITIVE_INFINITY;
-						for (const dateKey of Object.keys(index)) {
-							const date = dateKeyToDateHelper(dateKey);
-							if (!date) continue;
-							const entries = getEntriesForDate(canvas, date);
-							if (!entries || entries.length === 0) continue;
-							const nonRecurring = filterNonRecurringEntries(entries);
-							const recurringOnly = (entries ?? []).filter((e) => isRecurringEntry(e));
-							const matchNonRecurring =
-								nonRecurring.length > 0
-									? pickEntryForFile(canvas, nonRecurring, filePath, null)
-									: null;
-							const matchRecurring =
-								recurringOnly.length > 0
-									? pickEntryForFile(canvas, recurringOnly, filePath, null)
-									: null;
-							if (!matchNonRecurring && !matchRecurring) continue;
-							const ms = date.getTime();
-							if (!Number.isFinite(ms)) continue;
-							if (matchNonRecurring) {
-								const priority = getEntryPriority(matchNonRecurring);
-								if (
-									!bestNonRecurring ||
-									priority < bestNonRecurring.priority ||
-									(priority === bestNonRecurring.priority && ms > bestNonRecurring.ms)
-								) {
-									bestNonRecurring = { priority, ms };
-									bestDateNonRecurring = date;
-								}
-							}
-							if (matchRecurring) {
-								if (ms < bestOldestRecurringMs) {
-									bestOldestRecurringMs = ms;
-									bestDateOldestRecurring = date;
-								}
-							}
-						}
-
-						const bestDate = bestDateNonRecurring ?? bestDateOldestRecurring;
+						const bestDate = findBestDateForFile(canvas, index, filePath);
 						if (!bestDate) continue;
 						try {
 							c.scrollNavFile = filePath;
@@ -179,31 +200,7 @@ export function focusFirstFilteredTimelineRecord(canvas: EpochCanvas): boolean {
 
 	const index = getCanvasIndex(c);
 	if (!index) return false;
-	let bestDateNonRecurring: Date | null = null;
-	let bestNonRecurringMs = Number.NEGATIVE_INFINITY;
-	let bestDateOldestRecurring: Date | null = null;
-	let bestOldestRecurringMs = Number.POSITIVE_INFINITY;
-	for (const dateKey of Object.keys(index)) {
-		const date = dateKeyToDateHelper(dateKey);
-		if (!date) continue;
-		const entries = getEntriesForDate(canvas, date);
-		if (!entries || entries.length === 0) continue;
-		const ms = date.getTime();
-		if (!Number.isFinite(ms)) continue;
-		if (filterNonRecurringEntries(entries).length > 0) {
-			if (ms > bestNonRecurringMs) {
-				bestNonRecurringMs = ms;
-				bestDateNonRecurring = date;
-			}
-		}
-		if ((entries ?? []).some((e) => isRecurringEntry(e))) {
-			if (ms < bestOldestRecurringMs) {
-				bestOldestRecurringMs = ms;
-				bestDateOldestRecurring = date;
-			}
-		}
-	}
-	const bestDate = bestDateNonRecurring ?? bestDateOldestRecurring;
+	const bestDate = findBestVisibleDate(canvas, index);
 	if (!bestDate) return false;
 	let dayIndex: number | null = null;
 	try {
@@ -239,10 +236,6 @@ export function snapFirstFilteredTimelineRecord(canvas: EpochCanvas, options: { 
 	if (!index) return false;
 
 	const rawQuery = String(c.searchQuery || "").trim();
-	let bestDateNonRecurring: Date | null = null;
-	let bestNonRecurring: { priority: number; ms: number } | null = null;
-	let bestDateOldestRecurring: Date | null = null;
-	let bestOldestRecurringMs = Number.POSITIVE_INFINITY;
 	let bestDate: Date | null = null;
 	if (rawQuery) {
 		try {
@@ -256,43 +249,7 @@ export function snapFirstFilteredTimelineRecord(canvas: EpochCanvas, options: { 
 					for (const fpRaw of rankedList) {
 						const filePath = asFilePath(fpRaw);
 						if (!filePath) continue;
-						for (const dateKey of Object.keys(index)) {
-							const date = dateKeyToDateHelper(dateKey);
-							if (!date) continue;
-							const entries = getEntriesForDate(canvas, date);
-							if (!entries || entries.length === 0) continue;
-							const nonRecurring = filterNonRecurringEntries(entries);
-							const recurringOnly = (entries ?? []).filter((e) => isRecurringEntry(e));
-							const matchNonRecurring =
-								nonRecurring.length > 0
-									? pickEntryForFile(canvas, nonRecurring, filePath, null)
-									: null;
-							const matchRecurring =
-								recurringOnly.length > 0
-									? pickEntryForFile(canvas, recurringOnly, filePath, null)
-									: null;
-							if (!matchNonRecurring && !matchRecurring) continue;
-							const ms = date.getTime();
-							if (!Number.isFinite(ms)) continue;
-							if (matchNonRecurring) {
-								const priority = getEntryPriority(matchNonRecurring);
-								if (
-									!bestNonRecurring ||
-									priority < bestNonRecurring.priority ||
-									(priority === bestNonRecurring.priority && ms > bestNonRecurring.ms)
-								) {
-									bestNonRecurring = { priority, ms };
-									bestDateNonRecurring = date;
-								}
-							}
-							if (matchRecurring) {
-								if (ms < bestOldestRecurringMs) {
-									bestOldestRecurringMs = ms;
-									bestDateOldestRecurring = date;
-								}
-							}
-						}
-						bestDate = bestDateNonRecurring ?? bestDateOldestRecurring;
+						bestDate = findBestDateForFile(canvas, index, filePath);
 						if (bestDate) {
 							c.scrollNavFile = filePath;
 							break;
@@ -306,30 +263,7 @@ export function snapFirstFilteredTimelineRecord(canvas: EpochCanvas, options: { 
 	}
 
 	if (!bestDate) {
-		let bestNonRecurringMs = Number.NEGATIVE_INFINITY;
-		let bestOldestRecurringMs = Number.POSITIVE_INFINITY;
-		let bestDateOldestRecurring: Date | null = null;
-		for (const dateKey of Object.keys(index)) {
-			const date = dateKeyToDateHelper(dateKey);
-			if (!date) continue;
-			const entries = getEntriesForDate(canvas, date);
-			if (!entries || entries.length === 0) continue;
-			const ms = date.getTime();
-			if (!Number.isFinite(ms)) continue;
-			if (filterNonRecurringEntries(entries).length > 0) {
-				if (ms > bestNonRecurringMs) {
-					bestNonRecurringMs = ms;
-					bestDateNonRecurring = date;
-				}
-			}
-			if ((entries ?? []).some((e) => isRecurringEntry(e))) {
-				if (ms < bestOldestRecurringMs) {
-					bestOldestRecurringMs = ms;
-					bestDateOldestRecurring = date;
-				}
-			}
-		}
-		bestDate = bestDateNonRecurring ?? bestDateOldestRecurring;
+		bestDate = findBestVisibleDate(canvas, index);
 	}
 	if (!bestDate) return false;
 
@@ -380,26 +314,7 @@ export function focusFilteredTimelineRecordForFile(canvas: EpochCanvas, filePath
 	const fp = String(filePath || "");
 	if (!fp) return false;
 
-	let bestDateNonRecurring: Date | null = null;
-	let bestNonRecurring: { priority: number; ms: number } | null = null;
-	for (const dateKey of Object.keys(index)) {
-		const date = dateKeyToDateHelper(dateKey);
-		if (!date) continue;
-		const entries = getEntriesForDate(canvas, date);
-		if (!entries || entries.length === 0) continue;
-		const nonRecurring = filterNonRecurringEntries(entries);
-		if (nonRecurring.length === 0) continue;
-		const match = pickEntryForFile(canvas, nonRecurring, fp, null);
-		if (!match) continue;
-		const ms = date.getTime();
-		if (!Number.isFinite(ms)) continue;
-		const priority = getEntryPriority(match);
-		if (!bestNonRecurring || priority < bestNonRecurring.priority || (priority === bestNonRecurring.priority && ms > bestNonRecurring.ms)) {
-			bestNonRecurring = { priority, ms };
-			bestDateNonRecurring = date;
-		}
-	}
-	const bestDate = bestDateNonRecurring;
+	const bestDate = findBestDateForFile(canvas, index, fp);
 	if (!bestDate) return false;
 
 	try {

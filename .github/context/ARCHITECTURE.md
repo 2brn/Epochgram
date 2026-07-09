@@ -37,9 +37,10 @@
   - Once ready, refreshes views.
   - When Epochgram is opened on startup, it may run a short-lived refocus loop to snap the currently-open file to the focus anchor; these refocus attempts suppress hover/highlight so startup doesn’t repeatedly retrigger hover animations.
   - When Epochgram is opened on startup, it may run a short-lived refocus loop to snap the currently-open file to the focus anchor; these refocus attempts suppress hover/highlight so startup doesn’t repeatedly retrigger hover animations. The loop cancels as soon as the user interacts with the timeline (click/pan/zoom/scroll-nav) to avoid “snap back” fights.
+  - Canvas resize now preserves the current world anchor at the Today focus ratio (for both live and target offsets), reducing startup/post-resize position drift.
   - When focusing/snapping the timeline view to the currently-open file (startup refocus / initial snap):
     - If a visible on-screen record matches the editor cursor line, that record is preferred.
-    - Otherwise, Epochgram prefers the newest non-recurring record for the file (recurring synthetic occurrences are ignored for “newest” selection unless they are the only available matches).
+    - Otherwise, Epochgram selects the file's record date that is nearest to Today (applies to both recurring and non-recurring matches).
   - On `file-open`, if the opened file is indexable but missing from the current index, Epochgram opportunistically indexes it and refreshes views.
   - After index load, runs similarity startup maintenance to enqueue missing vectors/topics when enabled. Vectors cover “likely text” files (see `utils.ts:isLikelyTextFileExtension`), while topic classification runs only for Markdown notes.
     - For huge vaults, missing semantic vectors are enqueued in a single pass so the semantics queue reflects the whole eligible vault (vector computation remains throttled in the background queue).
