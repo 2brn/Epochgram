@@ -211,7 +211,7 @@ describe("epoch view non-md lifecycle", () => {
 		await epochViewOnOpen(view);
 
 		expect(view.canvas.snapInitialPosition).toHaveBeenCalledWith("photo.png", null, { draw: false });
-		expect(view.canvas.snapInitialPosition).toHaveBeenCalledTimes(2);
+		expect(view.canvas.snapInitialPosition).toHaveBeenCalledTimes(1);
 
 		(globalThis as any).requestAnimationFrame = prevRaf;
 	});

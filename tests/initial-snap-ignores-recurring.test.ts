@@ -77,10 +77,10 @@ describe("initial snap ignores recurring", () => {
 		vi.clearAllMocks();
 	});
 
-	test("snapFirstFilteredTimelineRecord prefers newest non-recurring date", () => {
+	test("snapFirstFilteredTimelineRecord picks nearest-to-today date", () => {
 		const canvas = makeCanvas({
 			"2026-03-01": [nonRecurringOld],
-			"2026-04-01": [recurringNew]
+			"2026-04-10": [recurringNew]
 		});
 		const ok = snapFirstFilteredTimelineRecord(canvas as any, { draw: false });
 		expect(ok).toBe(true);
@@ -88,10 +88,10 @@ describe("initial snap ignores recurring", () => {
 		expect(canvas.scrollNavAnchorDayIndex).toBe(1);
 	});
 
-	test("focusFirstFilteredTimelineRecord prefers newest non-recurring date", () => {
+	test("focusFirstFilteredTimelineRecord picks nearest-to-today date", () => {
 		const canvas = makeCanvas({
 			"2026-03-01": [nonRecurringOld],
-			"2026-04-01": [recurringNew]
+			"2026-04-10": [recurringNew]
 		});
 		const ok = focusFirstFilteredTimelineRecord(canvas as any);
 		expect(ok).toBe(true);
@@ -108,15 +108,16 @@ describe("initial snap ignores recurring", () => {
 		expect(ok).toBe(true);
 	});
 
-	test("when only recurring records exist, snaps to the oldest recurring date", () => {
+	test("when only recurring records exist, snaps to nearest-to-today date", () => {
 		const canvas = makeCanvas({
 			"2026-04-01": [recurringNew],
 			"2026-03-01": [{ ...recurringNew, file: "c.md" }]
 		});
 		const ok = snapFirstFilteredTimelineRecord(canvas as any, { draw: false });
 		expect(ok).toBe(true);
-		expect(hoisted.getDayIndexForDate).toHaveBeenCalledTimes(1);
-		const calledWithDate = (hoisted.getDayIndexForDate.mock.calls[0] as any[])[1] as Date;
-		expect(hoisted.keyFromLocalDate(calledWithDate)).toBe("2026-03-01");
+		const calls = hoisted.getDayIndexForDate.mock.calls;
+		expect(calls.length).toBeGreaterThan(0);
+		const calledWithDate = (calls[calls.length - 1] as any[])[1] as Date;
+		expect(hoisted.keyFromLocalDate(calledWithDate)).toBe("2026-04-01");
 	});
 });

@@ -1,5 +1,10 @@
 # Epochgram changelog
 
+## [1.5.9] - 2026-07-09
+- Stabilized startup timeline snap positioning to eliminate micro-jitter on Obsidian startup.
+- Preserved world-anchor alignment during canvas resize/reposition.
+- Unified date targeting to choose records nearest to Today for recurring/non-recurring entries.
+
 ## [1.5.7] - 2026-07-08
 - Fixed review-state synchronization for recurring records/context menus, reset reviewed -> draft on real edits, and updated defaults (anchor mdate ON, first Pro title threshold = 1.0).
 
