@@ -194,7 +194,7 @@ class TopicSuggestModal extends SuggestModal<TopicSuggestItem> {
 		}
 		if (item.kind === "remove") {
 			const t = String(item.term || "").trim();
-			el.setText(t ? `(remove ${t})` : "(remove topic)");
+			el.setText(t ? `(Remove ${t})` : "(Remove topic)");
 			return;
 		}
 		const v = String(item.term ?? "").trim();

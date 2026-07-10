@@ -74,7 +74,7 @@ describe("TimelineSearchModal (Filter) suggestion", () => {
 		expect(onCommit).toHaveBeenCalledWith("alpha");
 	});
 
-	it("renders filter suggestion as (filter {query})", () => {
+	it("renders filter suggestion as (Filter {query})", () => {
 		const modal: any = new TimelineSearchModal({} as any, {
 			initial: "",
 			getTopMatches: () => []
@@ -82,7 +82,7 @@ describe("TimelineSearchModal (Filter) suggestion", () => {
 		const [filter] = modal.getSuggestions("alpha");
 		const el: any = { setText: vi.fn() };
 		modal.renderSuggestion(filter as any, el);
-		expect(el.setText).toHaveBeenCalledWith("(filter alpha)");
+		expect(el.setText).toHaveBeenCalledWith("(Filter alpha)");
 	});
 
 	it("ctrl+enter opens selected record suggestion", () => {

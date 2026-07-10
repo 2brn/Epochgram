@@ -366,7 +366,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 		}
 		if (value.kind === "filter") {
 			const q = String(value.query ?? "").trim();
-			el.setText(q ? `(filter ${q})` : "(filter)");
+			el.setText(q ? `(Filter ${q})` : "(Filter)");
 			return;
 		}
 		el.setText("(Clear)");
