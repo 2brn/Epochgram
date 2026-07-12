@@ -1,5 +1,10 @@
 # Epochgram changelog
 
+## [1.6.0] - 2026-07-12
+- Added cloud backend support for AI bridge summarization and updated related runtime/polyfill flow.
+- Added and refined opening AI bridge in Obsidian Web viewer, including startup/open behavior updates.
+- Refactored AI bridge settings/validation paths and updated README wording/documentation.
+
 ## [1.5.9] - 2026-07-09
 - Stabilized startup timeline snap positioning to eliminate micro-jitter on Obsidian startup.
 - Preserved world-anchor alignment during canvas resize/reposition.
