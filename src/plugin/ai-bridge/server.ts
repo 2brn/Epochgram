@@ -9,6 +9,7 @@ import type { AiBridgeStatus, AiSummaryJob, AiSummaryJobResult } from "./types";
 type RuntimeGlobalLike = typeof window & {
 	__epochNodeHttpModule?: string;
 	__epochAiBridgeLastCloseAt?: number;
+	require?: (moduleName: string) => unknown;
 };
 
 type RequestLike = {
@@ -102,13 +103,6 @@ type ServerPluginRuntime = {
 };
 
 const runtimeGlobal = window as RuntimeGlobalLike;
-
-async function importHttpModule(): Promise<HttpModuleLike> {
-	if (Platform.isDesktop) {
-		return import("http") as unknown as Promise<HttpModuleLike>;
-	}
-	throw new Error("http import is desktop-only");
-}
 
 function clearIntervalHandle(handle: unknown): void {
 	(window.clearInterval as unknown as (id: unknown) => void)(handle);
@@ -536,7 +530,12 @@ export class AiBridgeServer {
 		if (!Platform.isDesktop) {
 			throw new Error("AI Bridge server is only available on desktop");
 		}
-		const http = await importHttpModule();
+
+		const moduleRequire = runtimeGlobal.require;
+		if (typeof moduleRequire !== "function") {
+			throw new Error("http require is not available in this runtime");
+		}
+		const http = moduleRequire("http") as HttpModuleLike;
 
 		this.server = http.createServer((req: RequestLike, res: ResponseLike) => {
 			void (async () => {
