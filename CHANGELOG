@@ -1,5 +1,9 @@
 # Epochgram changelog
 
+## [1.6.1] - 2026-07-12
+- Added fallback handling for AI bridge disconnect when closing the Obsidian Web viewer tab.
+- Fixed AI bridge server HTTP module loading path via `require("http")` for desktop runtime.
+
 ## [1.6.0] - 2026-07-12
 - Added cloud backend support for AI bridge summarization and updated related runtime/polyfill flow.
 - Added and refined opening AI bridge in Obsidian Web viewer, including startup/open behavior updates.

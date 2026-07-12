@@ -1,7 +1,7 @@
 {
 	"id": "epochgram",
 	"name": "Epochgram",
-	"version": "1.6.0",
+	"version": "1.6.1",
 	"minAppVersion": "1.12.4",
 	"description": "A timemap of your mind. Epochgram turns your notes into an AI-powered interactive timeline.",
 	"author": "Andriy Babets",
