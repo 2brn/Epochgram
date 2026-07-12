@@ -21,12 +21,31 @@ type AiBridgeRuntime = {
 	aiBridge?: AiBridgeServer | null;
 	aiBridgeStartPromise?: Promise<void> | null;
 	aiBridgeLastOpenAt?: number;
+	aiBridgeHadWebViewerLeaf?: boolean;
 	epochRegenAfterAiTimer?: unknown;
 	epochRegenAfterAiMode?: unknown;
 	aiBridgePersistTimer?: number | null;
 	refreshAiBridgeStatusBar?: () => void;
 	settings: EpochPlugin["settings"];
 	app: EpochPlugin["app"];
+};
+
+type BridgeLeafStateLike = {
+	url?: unknown;
+	path?: unknown;
+	file?: unknown;
+};
+
+type BridgeLeafLike = {
+	getViewState?: () => { state?: BridgeLeafStateLike } | null;
+	view?: {
+		getViewState?: () => { state?: BridgeLeafStateLike } | null;
+		getState?: () => BridgeLeafStateLike | null;
+	};
+};
+
+type BridgeWorkspaceLike = {
+	getLeavesOfType?: (type: string) => BridgeLeafLike[];
 };
 
 type InternalPluginLike = {
@@ -127,6 +146,102 @@ async function syncWebViewerPreferenceIfInvalid(plugin: EpochPlugin): Promise<vo
 
 function delay(ms: number): Promise<void> {
 	return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
+function readLeafUrl(leaf: BridgeLeafLike): string | null {
+	const fromViewState = (() => {
+		try {
+			const state = leaf.getViewState?.()?.state;
+			return typeof state?.url === "string" ? state.url : null;
+		} catch {
+			return null;
+		}
+	})();
+	if (fromViewState) return fromViewState;
+
+	const fromViewGetViewState = (() => {
+		try {
+			const state = leaf.view?.getViewState?.()?.state;
+			return typeof state?.url === "string" ? state.url : null;
+		} catch {
+			return null;
+		}
+	})();
+	if (fromViewGetViewState) return fromViewGetViewState;
+
+	const fromViewGetState = (() => {
+		try {
+			const state = leaf.view?.getState?.();
+			return typeof state?.url === "string" ? state.url : null;
+		} catch {
+			return null;
+		}
+	})();
+	if (fromViewGetState) return fromViewGetState;
+
+	return null;
+}
+
+function hasBridgeLeafOpen(plugin: EpochPlugin, bridge: AiBridgeServer): boolean {
+	let expectedOrigin = "";
+	let expectedPath = "/";
+	let expectedToken = "";
+	try {
+		const u = new URL(bridge.getUrl());
+		expectedOrigin = u.origin;
+		expectedPath = u.pathname || "/";
+		expectedToken = String(u.searchParams.get("token") || "");
+	} catch {
+		return false;
+	}
+	if (!expectedOrigin || !expectedToken) return false;
+
+	const ws = plugin.app.workspace as unknown as BridgeWorkspaceLike;
+	if (!ws || typeof ws.getLeavesOfType !== "function") return false;
+	const leaves = [
+		...(ws.getLeavesOfType("webviewer") ?? []),
+		...(ws.getLeavesOfType("browser") ?? [])
+	];
+
+	for (const leaf of leaves) {
+		const rawUrl = readLeafUrl(leaf);
+		if (!rawUrl) continue;
+		try {
+			const u = new URL(rawUrl);
+			if (u.origin !== expectedOrigin) continue;
+			if ((u.pathname || "/") !== expectedPath) continue;
+			if (String(u.searchParams.get("token") || "") !== expectedToken) continue;
+			return true;
+		} catch {
+			continue;
+		}
+	}
+
+	return false;
+}
+
+export function syncAiBridgeConnectionFromWebViewerLeaves(this: EpochPlugin): void {
+	if (!Platform.isDesktop || Platform.isMobile) return;
+	if (!prefersObsidianWebViewer(this)) return;
+
+	const runtime = this as unknown as AiBridgeRuntime;
+	const bridge = runtime.aiBridge ?? null;
+	if (!bridge) {
+		runtime.aiBridgeHadWebViewerLeaf = false;
+		return;
+	}
+
+	const hasLeaf = hasBridgeLeafOpen(this, bridge);
+	const hadLeaf = runtime.aiBridgeHadWebViewerLeaf === true;
+	runtime.aiBridgeHadWebViewerLeaf = hasLeaf;
+
+	if (hadLeaf && !hasLeaf) {
+		try {
+			bridge.markClientDisconnected();
+		} catch {
+			// ignore
+		}
+	}
 }
 
 function getGlobalAiBridgeLastOpenAt(): number {

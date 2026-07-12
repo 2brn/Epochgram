@@ -6,6 +6,7 @@ export interface AiSummariesMethods {
 	maybeOpenAiBridgeOnStartup(): Promise<void>;
 	openAiBridgeWindow(options?: { silent?: boolean; source?: "command" | "maintenance" | "auto" | "other"; forceOpen?: boolean }): Promise<void>;
 	ensureAiSummarizerReadyWithProgress(): Promise<void>;
+	syncAiBridgeConnectionFromWebViewerLeaves(): void;
 	enqueueAiSummariesForFile(filePath: string, options?: { force?: boolean; showNotice?: boolean; enableIfDisabled?: boolean }): Promise<void>;
 	enqueueAiSummaryForEntry(entry: FileDateEntry, options?: { force?: boolean; showNotice?: boolean; enableIfDisabled?: boolean }): Promise<void>;
 	enqueueEpochsForDateKeys(dateKeys: string[], options?: { force?: boolean; showNotice?: boolean; buckets?: EpochBucket[] }): Promise<void>;
@@ -26,6 +27,7 @@ import {
 	maybeOpenAiBridgeOnStartup,
 	openAiBridgeWindow,
 	ensureAiSummarizerReadyWithProgress,
+	syncAiBridgeConnectionFromWebViewerLeaves,
 	stopAiBridge,
 	onAiBridgeOptionsChanged
 } from "./methods-bridge";
@@ -52,6 +54,7 @@ export const aiSummariesMethods: AiSummariesMethods = {
 	maybeOpenAiBridgeOnStartup,
 	openAiBridgeWindow,
 	ensureAiSummarizerReadyWithProgress,
+	syncAiBridgeConnectionFromWebViewerLeaves,
 	enqueueAiSummariesForFile,
 	enqueueAiSummaryForEntry,
 	enqueueEpochsForDateKeys,

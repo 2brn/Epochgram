@@ -55,6 +55,7 @@ type LifecycleRuntime = EpochPlugin & {
 	__epochSettingTab?: EpochSettingTabLike;
 	openAiBridgeWindow?: (options: { silent: boolean; source: string }) => void;
 	regenerateMissingAiSummariesAndEpochsForAllRecords?: () => void;
+	syncAiBridgeConnectionFromWebViewerLeaves?: () => void;
 	enqueueAiSummariesForFile?: (path: string, options: { force: boolean; showNotice: boolean; enableIfDisabled: boolean }) => Promise<void>;
 	maybeIndexOpenedFile?: (file: unknown) => void;
 	persistIndex?: (options: { skipEnsure: true }) => Promise<void>;
@@ -657,6 +658,14 @@ export const lifecycleMethods: LifecycleMethods = {
 		} catch {
 			// ignore
 		}
+
+		this.registerInterval(window.setInterval(() => {
+			try {
+				runtime.syncAiBridgeConnectionFromWebViewerLeaves?.();
+			} catch {
+				// ignore
+			}
+		}, 1000));
 
 		const handleConfigChanged = () => {
 			if (this.refreshExcludedMatchers()) {

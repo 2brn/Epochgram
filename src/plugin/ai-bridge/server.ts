@@ -435,6 +435,25 @@ export class AiBridgeServer {
 		this.clearQueueInternal();
 	}
 
+	markClientDisconnected(): void {
+		this.lastClientSeenAt = 0;
+		try {
+			getPluginRuntime(this.plugin).refreshAiBridgeStatusBar?.();
+		} catch {
+			// ignore
+		}
+		try {
+			getPluginRuntime(this.plugin).refreshAiBridgeProgress?.();
+		} catch {
+			// ignore
+		}
+		try {
+			runtimeGlobal.__epochAiBridgeLastCloseAt = Date.now();
+		} catch {
+			// ignore
+		}
+	}
+
 	private clearQueueInternal(): void {
 		this.pending = [];
 		this.inProgress.clear();
@@ -596,25 +615,7 @@ export class AiBridgeServer {
 						safeJson(req, res, 405, { error: "method not allowed" });
 						return;
 					}
-					// Best-effort: the bridge page is closing. Mark it disconnected immediately
-					// so subsequent actions can re-open Chrome without waiting for the stale
-					// connection timeout.
-					this.lastClientSeenAt = 0;
-					try {
-						runtime.refreshAiBridgeStatusBar?.();
-					} catch {
-						// ignore
-					}
-					try {
-						runtime.refreshAiBridgeProgress?.();
-					} catch {
-						// ignore
-					}
-					try {
-						runtimeGlobal.__epochAiBridgeLastCloseAt = Date.now();
-					} catch {
-						// ignore
-					}
+					this.markClientDisconnected();
 					safeJson(req, res, 200, { ok: true });
 					return;
 				}
