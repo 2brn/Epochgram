@@ -29,6 +29,102 @@ type AiBridgeRuntime = {
 	app: EpochPlugin["app"];
 };
 
+type InternalPluginLike = {
+	enabled?: boolean;
+	instance?: {
+		options?: Record<string, unknown>;
+		data?: Record<string, unknown>;
+		getData?: () => unknown;
+	};
+};
+
+type InternalPluginsLike = {
+	getPluginById?: (id: string) => InternalPluginLike | null;
+	plugins?: Record<string, InternalPluginLike>;
+};
+
+type VaultConfigLike = {
+	getConfig?: (key: string) => unknown;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+	if (!value || typeof value !== "object") return null;
+	return value as Record<string, unknown>;
+}
+
+function readBoolFromRecords(records: Array<Record<string, unknown> | null>, keys: string[]): boolean | null {
+	for (const rec of records) {
+		if (!rec) continue;
+		for (const key of keys) {
+			if (!Object.prototype.hasOwnProperty.call(rec, key)) continue;
+			const raw = rec[key];
+			if (typeof raw === "boolean") return raw;
+		}
+	}
+	return null;
+}
+
+function getWebViewerRequirements(plugin: EpochPlugin): { enabled: boolean; openExternalLinks: boolean } {
+	try {
+		const internal = (plugin.app as unknown as { internalPlugins?: InternalPluginsLike }).internalPlugins;
+		const webviewer = typeof internal?.getPluginById === "function"
+			? internal.getPluginById("webviewer")
+			: (internal?.plugins?.["webviewer"] ?? null);
+		const enabled = webviewer?.enabled === true;
+		const instanceData = (() => {
+			try {
+				return webviewer?.instance?.getData?.();
+			} catch {
+				return null;
+			}
+		})();
+		const vaultWebViewerCfg = (() => {
+			try {
+				const vault = plugin.app.vault as unknown as VaultConfigLike;
+				return vault?.getConfig?.("webviewer");
+			} catch {
+				return null;
+			}
+		})();
+		const records = [
+			asRecord(webviewer?.instance?.options),
+			asRecord(webviewer?.instance?.data),
+			asRecord(instanceData),
+			asRecord(vaultWebViewerCfg)
+		];
+		const openExternalLinks = readBoolFromRecords(records, [
+			"openExternalLinks",
+			"openExternalURLs",
+			"openLinksExternally",
+			"openExternal"
+		]);
+		return {
+			enabled,
+			openExternalLinks: openExternalLinks === true
+		};
+	} catch {
+		return { enabled: false, openExternalLinks: false };
+	}
+}
+
+function prefersObsidianWebViewer(plugin: EpochPlugin): boolean {
+	if (plugin.settings.openAiBridgeInObsidianWebViewer !== true) return false;
+	const req = getWebViewerRequirements(plugin);
+	return req.enabled && req.openExternalLinks;
+}
+
+async function syncWebViewerPreferenceIfInvalid(plugin: EpochPlugin): Promise<void> {
+	if (plugin.settings.openAiBridgeInObsidianWebViewer !== true) return;
+	const req = getWebViewerRequirements(plugin);
+	if (req.enabled && req.openExternalLinks) return;
+	plugin.settings.openAiBridgeInObsidianWebViewer = false;
+	try {
+		await plugin.onSettingsChanged("openAiBridgeInObsidianWebViewer");
+	} catch {
+		// ignore
+	}
+}
+
 function delay(ms: number): Promise<void> {
 	return new Promise(resolve => window.setTimeout(resolve, ms));
 }
@@ -97,11 +193,13 @@ export async function openAiBridgeWindow(
 	if (!Platform.isDesktop || Platform.isMobile) {
 		return;
 	}
+	await syncWebViewerPreferenceIfInvalid(this);
 
 	// Hard guarantee: when Open AI bridge on startup is OFF, never auto-open Chrome.
 	// Only explicit user actions (command / status bar click) can open the bridge page.
 	let allowAutoOpen = false;
 	let closeOnDisconnect = false;
+	const preferWebViewer = prefersObsidianWebViewer(this);
 	allowAutoOpen = isOpenAiBridgeOnStartupEffective(this);
 	closeOnDisconnect = allowAutoOpen;
 	const isUserInitiated = options.source === "command";
@@ -130,7 +228,7 @@ export async function openAiBridgeWindow(
 		if (bridge2) {
 			const status2 = bridge2.getStatus() as AiBridgeStatusLike;
 			if (status2.clientConnected) {
-				if (shouldShowAlreadyOpenNotice) new Notice("AI bridge is already open in Chrome.");
+				if (shouldShowAlreadyOpenNotice) new Notice("AI bridge is already open.");
 				return;
 			}
 			const lastOpenAt2: number = Math.max(runtime.aiBridgeLastOpenAt ?? 0, getGlobalAiBridgeLastOpenAt());
@@ -143,7 +241,7 @@ export async function openAiBridgeWindow(
 			}
 			try {
 				if (!tryAcquireOpenLockOrReturn()) return;
-				await bridge2.openInChrome({ closeOnDisconnect });
+				await bridge2.openInChrome({ closeOnDisconnect, preferWebViewer });
 				const now = Date.now();
 				runtime.aiBridgeLastOpenAt = now;
 				setGlobalAiBridgeLastOpenAt(now);
@@ -156,7 +254,7 @@ export async function openAiBridgeWindow(
 	if (existing) {
 		const status = existing.getStatus() as AiBridgeStatusLike;
 		if (status.clientConnected) {
-			if (shouldShowAlreadyOpenNotice) new Notice("AI bridge is already open in Chrome.");
+			if (shouldShowAlreadyOpenNotice) new Notice("AI bridge is already open.");
 			return;
 		}
 		const lastOpenAtRaw: number = Math.max(runtime.aiBridgeLastOpenAt ?? 0, getGlobalAiBridgeLastOpenAt());
@@ -171,7 +269,7 @@ export async function openAiBridgeWindow(
 		}
 		try {
 			if (!tryAcquireOpenLockOrReturn()) return;
-			await existing.openInChrome({ closeOnDisconnect });
+			await existing.openInChrome({ closeOnDisconnect, preferWebViewer });
 			const now = Date.now();
 			runtime.aiBridgeLastOpenAt = now;
 			setGlobalAiBridgeLastOpenAt(now);
@@ -184,7 +282,7 @@ export async function openAiBridgeWindow(
 		const bridge: AiBridgeServer | null = runtime.aiBridge ?? null;
 		if (!bridge) return;
 		if (!tryAcquireOpenLockOrReturn()) return;
-		await bridge.openInChrome({ closeOnDisconnect });
+		await bridge.openInChrome({ closeOnDisconnect, preferWebViewer });
 		const now = Date.now();
 		runtime.aiBridgeLastOpenAt = now;
 		setGlobalAiBridgeLastOpenAt(now);
@@ -272,7 +370,7 @@ export async function ensureAiSummarizerReadyWithProgress(this: EpochPlugin): Pr
 		if (s.clientConnected) return;
 		await delay(500);
 	}
-	throw new Error("Timed out waiting for Chrome bridge. Open the bridge page in Google Chrome.");
+	throw new Error("Timed out waiting for AI bridge connection. Open the bridge page and try again.");
 }
 
 export async function stopAiBridge(this: EpochPlugin): Promise<void> {

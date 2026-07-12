@@ -36,6 +36,84 @@ type ProPanelRuntime = {
 	regenerateMissingEpochsForAllRecords?: () => Promise<void>;
 };
 
+type InternalPluginLike = {
+	enabled?: boolean;
+	instance?: {
+		options?: Record<string, unknown>;
+		data?: Record<string, unknown>;
+		getData?: () => unknown;
+	};
+};
+
+type InternalPluginsLike = {
+	getPluginById?: (id: string) => InternalPluginLike | null;
+	plugins?: Record<string, InternalPluginLike>;
+};
+
+type VaultConfigLike = {
+	getConfig?: (key: string) => unknown;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+	if (!value || typeof value !== "object") return null;
+	return value as Record<string, unknown>;
+}
+
+function readBoolFromRecords(records: Array<Record<string, unknown> | null>, keys: string[]): boolean | null {
+	for (const rec of records) {
+		if (!rec) continue;
+		for (const key of keys) {
+			if (!Object.prototype.hasOwnProperty.call(rec, key)) continue;
+			const raw = rec[key];
+			if (typeof raw === "boolean") return raw;
+		}
+	}
+	return null;
+}
+
+function getWebViewerRequirements(app: App): { enabled: boolean; openExternalLinks: boolean } {
+	try {
+		const internal = (app as unknown as { internalPlugins?: InternalPluginsLike }).internalPlugins;
+		const plugin = typeof internal?.getPluginById === "function"
+			? internal.getPluginById("webviewer")
+			: (internal?.plugins?.["webviewer"] ?? null);
+		const enabled = plugin?.enabled === true;
+		const instanceData = (() => {
+			try {
+				return plugin?.instance?.getData?.();
+			} catch {
+				return null;
+			}
+		})();
+		const vaultWebViewerCfg = (() => {
+			try {
+				const vault = app.vault as unknown as VaultConfigLike;
+				return vault?.getConfig?.("webviewer");
+			} catch {
+				return null;
+			}
+		})();
+		const records = [
+			asRecord(plugin?.instance?.options),
+			asRecord(plugin?.instance?.data),
+			asRecord(instanceData),
+			asRecord(vaultWebViewerCfg)
+		];
+		const openExternalLinks = readBoolFromRecords(records, [
+			"openExternalLinks",
+			"openExternalURLs",
+			"openLinksExternally",
+			"openExternal"
+		]);
+		return {
+			enabled,
+			openExternalLinks: openExternalLinks === true
+		};
+	} catch {
+		return { enabled: false, openExternalLinks: false };
+	}
+}
+
 export function renderProPanel(
 	containerEl: HTMLElement,
 	app: App,
@@ -285,7 +363,7 @@ export function renderProPanel(
 
 	if (!isPro) {
 		const upsellItems = [
-			"Summarize records on-device via Google Chrome AI",
+			"Summarize records via AI bridge (on-device or cloud)",
 			"Generate multi-day Epochs for broader time retrospectives",
 			"Find similar records across links, tags, semantics, and topics",
 			"Track edits and create recurring events on the timeline"
@@ -576,7 +654,7 @@ export function renderProPanel(
 
 		const summarizeSetting = markLockedRow(new Setting(aiSection)
 			.setName("Auto summarize")
-			.setDesc(canSummarize ? "Generate notes summaries using local Chrome AI." : "Requires Epochgram Pro."));
+			.setDesc(canSummarize ? "Generate notes summaries via AI bridge." : "Requires Epochgram Pro."));
 		summarizeSetting.addToggle((toggle) => {
 			const canUse = canSummarize;
 			toggle
@@ -601,7 +679,7 @@ export function renderProPanel(
 
 						const ok = await confirmModal(app, {
 							title: "Generate missing summaries?",
-							description: `Run local AI summarization for missing notes (${missingCount} jobs).`,
+							description: `Run AI summarization for missing notes (${missingCount} jobs).`,
 							yesText: "Yes",
 							noText: "Later"
 						});
@@ -618,7 +696,7 @@ export function renderProPanel(
 
 		const epochsSetting = markLockedRow(new Setting(aiSection)
 			.setName(`Generate ${"Epochs"}`)
-			.setDesc(canGenerateEpochs ? "Generate period summaries using local Chrome AI." : "Requires Epochgram Pro."));
+			.setDesc(canGenerateEpochs ? "Generate period summaries via AI bridge." : "Requires Epochgram Pro."));
 		epochsSetting.addToggle((toggle) => {
 			const canUse = canGenerateEpochs;
 			const current = plugin.settings.generateEpochs === true;
@@ -643,7 +721,7 @@ export function renderProPanel(
 
 						const ok = await confirmModal(app, {
 							title: "Generate missing Epochs?",
-							description: `Run local AI period summarization for missing Epochs (${missingCount} jobs).`,
+							description: `Run AI period summarization for missing Epochs (${missingCount} jobs).`,
 							yesText: "Yes",
 							noText: "Later"
 						});
@@ -662,7 +740,7 @@ export function renderProPanel(
 			.setName("Open AI bridge on startup")
 			.setDesc(
 				canAiBridge
-					? "Auto-open AI bridge in Chrome and close it when Obsidian quits."
+					? "Auto-open AI bridge on startup and close it when Obsidian quits."
 					: "Requires Epochgram Pro."
 			));
 		bridgeStartupSetting.addToggle((toggle) => {
@@ -674,6 +752,63 @@ export function renderProPanel(
 					if (!canUse) return;
 					plugin.settings.openAiBridgeOnStartup = value;
 					await plugin.onSettingsChanged("openAiBridgeOnStartup");
+				});
+		});
+
+		const bridgeWebViewerSetting = markLockedRow(new Setting(aiSection)
+			.setName("Open AI bridge in Obsidian")
+			.setDesc(""));
+		const reqAtRender = getWebViewerRequirements(app);
+		if (canAiBridge && plugin.settings.openAiBridgeInObsidianWebViewer === true && !(reqAtRender.enabled && reqAtRender.openExternalLinks)) {
+			plugin.settings.openAiBridgeInObsidianWebViewer = false;
+			void plugin.onSettingsChanged("openAiBridgeInObsidianWebViewer");
+		}
+		const renderBridgeWebViewerDesc = (warningText?: string): void => {
+			bridgeWebViewerSetting.descEl.empty();
+			if (!canAiBridge) {
+				bridgeWebViewerSetting.setDesc("Requires Epochgram Pro.");
+				return;
+			}
+			bridgeWebViewerSetting.descEl.createDiv({
+				text: "Open AI bridge inside Obsidian Web viewer. Works only with cloud providers."
+			});
+			if (warningText) {
+				const warn = bridgeWebViewerSetting.descEl.createDiv({ text: warningText });
+				warn.addClass("mod-warning");
+			}
+		};
+		renderBridgeWebViewerDesc();
+		let bridgeWebViewerToggleProgrammatic = false;
+		bridgeWebViewerSetting.addToggle((toggle) => {
+			const canUse = canAiBridge;
+			toggle
+				.setValue(canUse ? plugin.settings.openAiBridgeInObsidianWebViewer === true : false)
+				.setDisabled(!canUse)
+				.onChange(async (value) => {
+					if (bridgeWebViewerToggleProgrammatic) return;
+					if (!canUse) return;
+					if (!value) {
+						renderBridgeWebViewerDesc();
+						plugin.settings.openAiBridgeInObsidianWebViewer = false;
+						await plugin.onSettingsChanged("openAiBridgeInObsidianWebViewer");
+						return;
+					}
+					const webViewerReq = getWebViewerRequirements(app);
+					if (!(webViewerReq.enabled && webViewerReq.openExternalLinks)) {
+						renderBridgeWebViewerDesc("Enable Core plugin Web viewer and turn ON 'Open external links' in Web viewer settings.");
+						bridgeWebViewerToggleProgrammatic = true;
+						try {
+							toggle.setValue(false);
+						} finally {
+							bridgeWebViewerToggleProgrammatic = false;
+						}
+						plugin.settings.openAiBridgeInObsidianWebViewer = false;
+						await plugin.onSettingsChanged("openAiBridgeInObsidianWebViewer");
+						return;
+					}
+					renderBridgeWebViewerDesc();
+					plugin.settings.openAiBridgeInObsidianWebViewer = value;
+					await plugin.onSettingsChanged("openAiBridgeInObsidianWebViewer");
 				});
 		});
 	}

@@ -30,6 +30,7 @@ const SYNC_SAFE_SETTING_KEYS = [
 	"summarizeAI",
 	"generateEpochs",
 	"openAiBridgeOnStartup",
+	"openAiBridgeInObsidianWebViewer",
 	"proActivatedOnce",
 	"similarityUseLinks",
 	"similarityUseTags",

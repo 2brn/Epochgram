@@ -29,6 +29,7 @@ export interface EpochSettings {
 	summarizeAI: boolean;
 	generateEpochs: boolean;
 	openAiBridgeOnStartup: boolean;
+	openAiBridgeInObsidianWebViewer: boolean;
 	// Internal flag: used to apply one-time defaults on the first successful Pro activation.
 	proActivatedOnce?: boolean;
 	// Pro-only similarity tuning (undefined => defaults)
@@ -70,6 +71,7 @@ export const DEFAULT_SETTINGS: EpochSettings = {
 	summarizeAI: false,
 	generateEpochs: false,
 	openAiBridgeOnStartup: false,
+	openAiBridgeInObsidianWebViewer: false,
 	proActivatedOnce: false,
 	similarityEmbeddingModelId: undefined,
 	similarityZeroShotModelId: undefined,

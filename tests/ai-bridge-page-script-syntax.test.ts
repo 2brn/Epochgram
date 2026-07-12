@@ -12,4 +12,45 @@ describe("AI bridge page scripts", () => {
 			new vm.Script(`${AI_BRIDGE_SCRIPT_PART1}\n${AI_BRIDGE_SCRIPT_PART2}\n${AI_BRIDGE_SCRIPT_PART3}`);
 		}).not.toThrow();
 	});
+
+	it("includes cloud apiKey in summarizer cache key", () => {
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("backend.cloud.apiKey");
+	});
+
+	it("normalizes backend maxRetries from backend settings", () => {
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("raw.maxRetries");
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("maxRetries");
+	});
+
+	it("prefers polyfill Summarizer in cloud mode", () => {
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("if (!api || !api.__isPolyfill) throw new Error(\"Summarizer polyfill failed to load\")");
+	});
+
+	it("preserves backend in fallback summarizer options", () => {
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("backend: o && o.backend ? o.backend : { mode: \"native\" }");
+	});
+
+	it("forces prompt polyfill in cloud mode", () => {
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("window.__FORCE_PROMPT_API_POLYFILL__ = true");
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("window.__FORCE_SUMMARIZER_POLYFILL__ = true");
+	});
+
+	it("passes openai baseUrl into OPENAI_CONFIG", () => {
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("baseURL: baseUrl");
+	});
+
+	it("installs fetch patch for openai baseUrl routing", () => {
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("installOpenAiBaseUrlFetchPatch(baseUrl)");
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("parsed.hostname !== \"api.openai.com\"");
+	});
+
+	it("retries summarize create without language options when unsupported", () => {
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("requested language options are not supported");
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("const relaxed = {");
+	});
+
+	it("forces cloud status away from model downloading", () => {
+		expect(AI_BRIDGE_SCRIPT_PART1).toContain("if (mode === \"cloud\") {");
+		expect(AI_BRIDGE_SCRIPT_PART1).toContain("setModelReadyStatus()");
+	});
 });

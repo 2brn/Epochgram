@@ -345,6 +345,15 @@ export const settingsHandlerMethods: SettingsHandlerMethods = {
 			return;
 		}
 
+		if (key === "openAiBridgeInObsidianWebViewer") {
+			try {
+				(this as unknown as SettingsHandlerRuntime).refreshAiBridgeStatusBar?.();
+			} catch {
+				// ignore
+			}
+			return;
+		}
+
 
 		if (
 			key === "filenameWordsCount" ||

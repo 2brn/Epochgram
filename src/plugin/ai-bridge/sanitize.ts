@@ -28,12 +28,16 @@ const TYPE_VALUES = new Set(["key-points", "tldr", "teaser", "headline"]);
 const FORMAT_VALUES = new Set(["markdown", "plain-text"]);
 const LENGTH_VALUES = new Set(["short", "medium", "long"]);
 const PREFERENCE_VALUES = new Set(["auto", "speed", "capability"]);
+const BACKEND_MODE_VALUES = new Set(["native", "cloud"]);
+const BACKEND_PROVIDER_VALUES = new Set(["gemini", "openai"]);
 const PERIOD_ORDER = ["day", "2days", "4days", "week", "2weeks", "month", "3months", "6months", "year"] as const;
-const ROOT_KEYS = new Set(["sharedContext", "type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages", "maxRelatedChars", "maxOutputWords", "reduce", "records", "epochs"]);
-const BLOCK_KEYS = ["context", "type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages", "maxOutputWords"] as const;
+const ROOT_KEYS = new Set(["sharedContext", "type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages", "backend", "maxRelatedChars", "maxOutputWords", "reduce", "records", "epochs"]);
+const BLOCK_KEYS = ["context", "type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages", "backend", "maxOutputWords"] as const;
 const REDUCE_KEYS = new Set([...BLOCK_KEYS, "maxDepth", "maxChunkChars"]);
 const RECORDS_KEYS = new Set([...BLOCK_KEYS, "maxInputChars"]);
 const EPOCH_KEYS = new Set(["period", ...BLOCK_KEYS, "maxFileChars"]);
+const BACKEND_KEYS = new Set(["mode", "maxRetries", "cloud"]);
+const BACKEND_CLOUD_KEYS = new Set(["provider", "apiKey", "modelName", "baseUrl"]);
 const SHARED_CONTEXT_ALLOWED_PLACEHOLDERS = new Set<string>();
 const REDUCE_CONTEXT_ALLOWED_PLACEHOLDERS = new Set<string>();
 const RECORDS_CONTEXT_ALLOWED_PLACEHOLDERS = new Set(["filePath", "fileName", "related"]);
@@ -56,6 +60,21 @@ type BridgeKind = "key-points" | "tldr" | "teaser" | "headline";
 type BridgeFormat = "markdown" | "plain-text";
 type BridgeLength = "short" | "medium" | "long";
 type BridgePreference = "auto" | "speed" | "capability";
+export type BridgeBackendMode = "native" | "cloud";
+export type BridgeCloudProvider = "gemini" | "openai";
+
+export type BridgeBackendCloudConfig = {
+	provider: BridgeCloudProvider;
+	apiKey: string;
+	modelName?: string;
+	baseUrl?: string;
+};
+
+export type BridgeBackendConfig = {
+	mode: BridgeBackendMode;
+	maxRetries: number;
+	cloud?: BridgeBackendCloudConfig;
+};
 
 type BridgeTuningFields = {
 	maxInputChars?: number;
@@ -74,6 +93,7 @@ export type BridgeSettingsBlock = {
 	expectedInputLanguages: BridgeLanguage[];
 	outputLanguage: BridgeLanguage;
 	expectedContextLanguages: BridgeLanguage[];
+	backend?: BridgeBackendConfig;
 	context?: string;
 	maxOutputWords?: number;
 };
@@ -105,6 +125,10 @@ export type BridgeOptionsValidation = {
 	formattedMergedYaml: string;
 	resolved: BridgeResolvedSettings;
 	stored: BridgeOptionsState;
+};
+
+type BridgeOptionsValidationOptions = {
+	secretLookup?: (id: string) => string | null;
 };
 
 function normalizePositiveInteger(raw: unknown): number | null {
@@ -225,6 +249,157 @@ function validateContextPlaceholders(name: string, text: string, errors: string[
 	}
 }
 
+function normalizeBackendMode(raw: unknown): BridgeBackendMode | null {
+	if (typeof raw !== "string") return null;
+	const v = String(raw).trim().toLowerCase();
+	return BACKEND_MODE_VALUES.has(v) ? (v as BridgeBackendMode) : null;
+}
+
+function normalizeBackendProvider(raw: unknown): BridgeCloudProvider | null {
+	if (typeof raw !== "string") return null;
+	const v = String(raw).trim().toLowerCase();
+	return BACKEND_PROVIDER_VALUES.has(v) ? (v as BridgeCloudProvider) : null;
+}
+
+function normalizeOptionalString(raw: unknown): string | undefined {
+	if (typeof raw !== "string") return undefined;
+	const v = String(raw).trim();
+	return v ? v : undefined;
+}
+
+function normalizeRequiredString(raw: unknown): string | null {
+	if (typeof raw !== "string") return null;
+	const v = String(raw).trim();
+	return v ? v : null;
+}
+
+function validateSecretPlaceholderSyntaxForApiKey(name: string, rawApiKey: unknown, errors: string[]): void {
+	if (typeof rawApiKey !== "string") return;
+	const text = String(rawApiKey || "").trim();
+	if (!text.includes("{{") && !text.includes("}}")) return;
+
+	const exact = text.match(/^\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}$/);
+	if (!exact) {
+		errors.push(`${name}.backend.cloud.apiKey placeholder must be a single token like '{{your-openai-api-key}}'`);
+		return;
+	}
+
+	const rawId = String(exact[1] || "").trim();
+	if (!rawId) {
+		errors.push(`${name}.backend.cloud.apiKey placeholder cannot be empty`);
+	}
+}
+
+function validateBackendConfig(name: string, rawBackend: unknown, errors: string[]): BridgeBackendConfig | undefined {
+	if (rawBackend == null) return undefined;
+	const backend = asRecord(rawBackend);
+	if (!backend) {
+		errors.push(`${name}.backend must be a YAML map`);
+		return undefined;
+	}
+
+	checkUnknownKeys(`${name}.backend`, backend, BACKEND_KEYS, errors);
+
+	if (hasOwn(backend, "mode") && isEmptyYamlScalar(backend.mode)) {
+		errors.push(`${name}.backend.mode cannot be empty`);
+		return undefined;
+	}
+	if (hasOwn(backend, "maxRetries") && isEmptyYamlScalar(backend.maxRetries)) {
+		errors.push(`${name}.backend.maxRetries cannot be empty`);
+	}
+
+	const mode = normalizeBackendMode(backend.mode);
+	if (!mode) {
+		errors.push(`${name}.backend.mode is required and must be one of: native, cloud`);
+		return undefined;
+	}
+
+	const maxRetries = normalizePositiveInteger(backend.maxRetries);
+	if (maxRetries == null) {
+		errors.push(`${name}.backend.maxRetries is required and must be a positive integer`);
+	}
+
+	if (mode === "native") {
+		return {
+			mode: "native",
+			maxRetries: maxRetries ?? 1
+		};
+	}
+
+	const cloud = asRecord(backend.cloud);
+	if (!cloud) {
+		errors.push(`${name}.backend.cloud is required when mode is 'cloud'`);
+		return {
+			mode: "cloud",
+			maxRetries: maxRetries ?? 1
+		};
+	}
+
+	checkUnknownKeys(`${name}.backend.cloud`, cloud, BACKEND_CLOUD_KEYS, errors);
+
+	if (hasOwn(cloud, "provider") && isEmptyYamlScalar(cloud.provider)) {
+		errors.push(`${name}.backend.cloud.provider cannot be empty`);
+	}
+	if (hasOwn(cloud, "apiKey") && isEmptyYamlScalar(cloud.apiKey)) {
+		errors.push(`${name}.backend.cloud.apiKey cannot be empty`);
+	}
+	validateSecretPlaceholderSyntaxForApiKey(name, cloud.apiKey, errors);
+	if (hasOwn(cloud, "baseUrl") && isEmptyYamlScalar(cloud.baseUrl)) {
+		errors.push(`${name}.backend.cloud.baseUrl cannot be empty`);
+	}
+
+	const provider = normalizeBackendProvider(cloud.provider);
+	if (!provider) {
+		errors.push(`${name}.backend.cloud.provider is required and must be one of: gemini, openai`);
+	}
+
+	const apiKey = normalizeRequiredString(cloud.apiKey);
+	if (!apiKey) {
+		errors.push(`${name}.backend.cloud.apiKey is required when mode is 'cloud'`);
+	}
+
+	const modelName = normalizeOptionalString(cloud.modelName);
+	if (hasOwn(cloud, "modelName") && cloud.modelName != null && typeof cloud.modelName !== "string") {
+		errors.push(`${name}.backend.cloud.modelName must be a string`);
+	}
+
+	const baseUrl = normalizeOptionalString(cloud.baseUrl);
+	if (hasOwn(cloud, "baseUrl") && cloud.baseUrl != null && typeof cloud.baseUrl !== "string") {
+		errors.push(`${name}.backend.cloud.baseUrl must be a string`);
+	}
+
+	if (provider === "openai" && !baseUrl) {
+		errors.push(`${name}.backend.cloud.baseUrl is required for provider 'openai'`);
+	}
+	if (baseUrl) {
+		if (provider && provider !== "openai") {
+			errors.push(`${name}.backend.cloud.baseUrl is supported only for provider 'openai'`);
+		} else {
+			try {
+				const parsed = new URL(baseUrl);
+				if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+					errors.push(`${name}.backend.cloud.baseUrl must use http or https`);
+				}
+			} catch {
+				errors.push(`${name}.backend.cloud.baseUrl must be a valid URL`);
+			}
+		}
+	}
+
+	const outCloud: BridgeBackendCloudConfig = {
+		provider: provider ?? "gemini",
+		apiKey: apiKey ?? "",
+		...(modelName ? { modelName } : {}),
+		...(baseUrl ? { baseUrl } : {})
+	};
+
+	return {
+		mode: "cloud",
+		maxRetries: maxRetries ?? 1,
+		cloud: outCloud
+	};
+}
+
 function replaceNullScalarsWithEmptyString(value: unknown): unknown {
 	if (value === null) return "";
 	if (Array.isArray(value)) {
@@ -244,6 +419,68 @@ function parseYamlObject(raw: string): UnknownRecord {
 	return asRecord(doc) ?? {};
 }
 
+function toSecretCandidateIds(rawName: string): string[] {
+	const name = String(rawName || "").trim();
+	if (!name) return [];
+	const out: string[] = [];
+	const push = (value: string) => {
+		const v = String(value || "").trim();
+		if (!v) return;
+		if (!out.includes(v)) out.push(v);
+	};
+	push(name);
+	push(name.toLowerCase());
+	push(name.toLowerCase().replace(/_/g, "-"));
+	return out;
+}
+
+function isApiKeyLineInCloudMode(yamlText: string, apiKeyOffset: number): boolean {
+	const src = String(yamlText || "");
+	if (!src) return false;
+	const safeOffset = Math.max(0, Math.min(src.length, Math.floor(Number(apiKeyOffset) || 0)));
+	const lineStart = src.lastIndexOf("\n", safeOffset) + 1;
+	const lineEndRaw = src.indexOf("\n", lineStart);
+	const lineEnd = lineEndRaw >= 0 ? lineEndRaw : src.length;
+	const line = src.slice(lineStart, lineEnd);
+	const apiIndent = (line.match(/^(\s*)/)?.[1] || "").length;
+
+	const lines = src.slice(0, lineStart).split(/\r?\n/);
+	for (let i = lines.length - 1; i >= 0; i--) {
+		const ln = String(lines[i] || "");
+		if (!ln.trim()) continue;
+		const indent = (ln.match(/^(\s*)/)?.[1] || "").length;
+		if (indent >= apiIndent) continue;
+		if (indent < 2) break;
+		if (/^\s*mode\s*:\s*cloud\b/i.test(ln)) return true;
+		if (/^\s*mode\s*:/i.test(ln)) return false;
+	}
+	return false;
+}
+
+function resolveSecretPlaceholders(raw: string, lookup: (id: string) => string | null, errors: string[]): string {
+	const src = String(raw || "");
+	if (!src) return src;
+	return src.replace(/(^\s*apiKey\s*:\s*)(["']?)\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}\2(\s*(?:#.*)?)$/gm, (_all, prefix: string, quote: string, nameRaw: string, suffix: string, offsetRaw: number) => {
+		if (!isApiKeyLineInCloudMode(src, offsetRaw)) {
+			return _all;
+		}
+		const ids = toSecretCandidateIds(nameRaw);
+		if (ids.length === 0) {
+			errors.push(`secret placeholder '{{${String(nameRaw)}}}' is invalid`);
+			return _all;
+		}
+		for (const id of ids) {
+			const value = lookup(id);
+			if (typeof value === "string" && value.trim().length > 0) {
+				const outQuote = quote || "";
+				return `${prefix}${outQuote}${value}${outQuote}${suffix || ""}`;
+			}
+		}
+		errors.push(`secret placeholder '{{${String(nameRaw)}}}' not found in Secret Storage (Settings > Keychain)`);
+		return _all;
+	});
+}
+
 function deepMerge(base: unknown, override: unknown): unknown {
 	if (Array.isArray(base) || Array.isArray(override)) {
 		return override == null ? base : override;
@@ -257,6 +494,27 @@ function deepMerge(base: unknown, override: unknown): unknown {
 		out[key] = deepMerge(baseRecord[key], overrideRecord[key]);
 	}
 	return out;
+}
+
+function stripInheritedOpenAiBaseUrlForNonOpenAiProvider(mergedBlock: unknown, userBlock: unknown): void {
+	const mergedRec = asRecord(mergedBlock);
+	if (!mergedRec) return;
+	const mergedBackend = asRecord(mergedRec.backend);
+	if (!mergedBackend) return;
+	const mergedCloud = asRecord(mergedBackend.cloud);
+	if (!mergedCloud) return;
+
+	const provider = normalizeBackendProvider(mergedCloud.provider);
+	if (provider === "openai") return;
+	if (!hasOwn(mergedCloud, "baseUrl")) return;
+
+	const userRec = asRecord(userBlock);
+	const userBackend = asRecord(userRec?.backend);
+	const userCloud = asRecord(userBackend?.cloud);
+	const userHasExplicitBaseUrl = !!(userCloud && hasOwn(userCloud, "baseUrl"));
+	if (userHasExplicitBaseUrl) return;
+
+	delete mergedCloud.baseUrl;
 }
 
 function asYamlString(value: unknown): string {
@@ -414,6 +672,7 @@ function validateBlock(name: string, block: unknown, errors: string[], opts?: { 
 	if (defaultMissing || raw.expectedInputLanguages != null) out.expectedInputLanguages = normalizeLangList(raw.expectedInputLanguages, ["en", "ja", "es"]);
 	if (defaultMissing || raw.outputLanguage != null) out.outputLanguage = normalizeLang(raw.outputLanguage);
 	if (defaultMissing || raw.expectedContextLanguages != null) out.expectedContextLanguages = normalizeLangList(raw.expectedContextLanguages, ["en"]);
+	if (defaultMissing || raw.backend != null) out.backend = validateBackendConfig(name, raw.backend, errors);
 	if (allowContext && typeof raw.context === "string") out.context = raw.context;
 	applyOptionalPositiveIntegerField(name, raw, "maxOutputWords", errors, out);
 
@@ -508,10 +767,16 @@ function validateEpochRuleBlock(name: string, block: unknown, errors: string[]):
 	return out;
 }
 
-export function validateBridgeOptionsYaml(settingsYamlRaw: string): BridgeOptionsValidation {
+export function validateBridgeOptionsYaml(settingsYamlRaw: string, options?: BridgeOptionsValidationOptions): BridgeOptionsValidation {
 	const errors: string[] = [];
 	const warnings: string[] = [];
 	const userYaml = String(settingsYamlRaw || "").trim();
+	const userYamlResolved = (() => {
+		if (!userYaml) return "";
+		const lookup = options?.secretLookup;
+		if (typeof lookup !== "function") return userYaml;
+		return resolveSecretPlaceholders(userYaml, lookup, errors);
+	})();
 	let userObj: UnknownRecord = {};
 	let defaultObj: UnknownRecord = {};
 
@@ -523,7 +788,7 @@ export function validateBridgeOptionsYaml(settingsYamlRaw: string): BridgeOption
 
 	if (userYaml) {
 		try {
-			userObj = parseYamlObject(userYaml);
+			userObj = parseYamlObject(userYamlResolved);
 		} catch (err: unknown) {
 			errors.push(`settings YAML parse error: ${err instanceof Error ? err.message : String(err)}`);
 		}
@@ -553,6 +818,14 @@ export function validateBridgeOptionsYaml(settingsYamlRaw: string): BridgeOption
 	}
 
 	const merged = (deepMerge(defaultObj, userObj) as UnknownRecord) ?? {};
+	stripInheritedOpenAiBaseUrlForNonOpenAiProvider(merged, userObj);
+	stripInheritedOpenAiBaseUrlForNonOpenAiProvider(merged.reduce, userObj.reduce);
+	stripInheritedOpenAiBaseUrlForNonOpenAiProvider(merged.records, userObj.records);
+	const mergedEpochsForBackend = Array.isArray(merged.epochs) ? merged.epochs : [];
+	const userEpochsForBackend = Array.isArray(userObj.epochs) ? userObj.epochs : [];
+	for (let i = 0; i < mergedEpochsForBackend.length; i++) {
+		stripInheritedOpenAiBaseUrlForNonOpenAiProvider(mergedEpochsForBackend[i], userEpochsForBackend[i]);
+	}
 	const rootBlock = validateBlock("root", merged, errors, { defaultMissing: true }) as BridgeSettingsBlock;
 	const sharedContext = typeof merged.sharedContext === "string" ? merged.sharedContext : "";
 	if (hasOwn(merged, "maxRelatedChars")) {

@@ -144,11 +144,11 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 		const yamlText = String(settingsYamlEl && settingsYamlEl.value != null ? settingsYamlEl.value : "");
 		const result = await validateSettingsYaml(yamlText);
 		const ok = !!(result && result.ok === true);
+		renderYamlHighlight(yamlText);
+		syncYamlOverlayScroll();
 		setYamlValidationState(ok, result && result.errors ? result.errors : [], result && result.warnings ? result.warnings : []);
 		if (!ok) return null;
 		const nextYaml = yamlText;
-		renderYamlHighlight(nextYaml);
-		syncYamlOverlayScroll();
 		const nextState = normalizeOptionsState({
 			settingsYaml: nextYaml,
 			settingsYamlFormatted: typeof result.formattedUserYaml === "string" ? result.formattedUserYaml : "",
@@ -159,6 +159,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 		if (prevYaml !== nextState.settingsYaml) {
 			try { summarizersByKey.clear(); } catch { void 0; }
 		}
+		try { setErrText(""); } catch { void 0; }
 		if (shouldPersist) {
 			writeOptionsState(nextState);
 			void postSavedOptionsToObsidian({ settingsYaml: nextState.settingsYaml });
@@ -203,6 +204,62 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 		return null;
 	}
 
+	function isPlainObject(value) {
+		return !!value && typeof value === "object" && !Array.isArray(value);
+	}
+
+	function deepMergeObject(base, override) {
+		if (!isPlainObject(base) && !isPlainObject(override)) {
+			return override == null ? base : override;
+		}
+		if (!isPlainObject(base)) return Object.assign({}, override || {});
+		if (!isPlainObject(override)) return Object.assign({}, base || {});
+		const out = Object.assign({}, base || {});
+		for (const k of Object.keys(override)) {
+			const bv = base ? base[k] : undefined;
+			const ov = override[k];
+			out[k] = (isPlainObject(bv) && isPlainObject(ov)) ? deepMergeObject(bv, ov) : ov;
+		}
+		return out;
+	}
+
+	function normalizeBackendMode(raw) {
+		const v = String(raw || "").trim().toLowerCase();
+		return v === "cloud" ? "cloud" : "native";
+	}
+
+	function normalizeBackendProvider(raw) {
+		const v = String(raw || "").trim().toLowerCase();
+		if (v === "openai") return v;
+		return "gemini";
+	}
+
+	function normalizeBackendConfig(raw) {
+		if (!isPlainObject(raw)) return { mode: "native", maxRetries: 1 };
+		const mode = normalizeBackendMode(raw.mode);
+		const maxRetriesRaw = Number(raw.maxRetries);
+		const maxRetries = Number.isFinite(maxRetriesRaw) ? Math.max(1, Math.floor(maxRetriesRaw)) : 1;
+		if (mode !== "cloud") return { mode: "native", maxRetries };
+
+		const cloudRaw = isPlainObject(raw.cloud) ? raw.cloud : {};
+		const provider = normalizeBackendProvider(cloudRaw.provider);
+		const apiKey = String(cloudRaw.apiKey || "").trim();
+		const modelName = String(cloudRaw.modelName || "").trim();
+		const baseUrl = String(cloudRaw.baseUrl || "").trim();
+		const out = {
+			mode: "cloud",
+			maxRetries,
+			cloud: {
+				provider,
+				apiKey,
+				...(modelName ? { modelName } : {}),
+				...(baseUrl ? { baseUrl } : {})
+			}
+		};
+
+		return out;
+	}
+
 	function periodCoversBucket(period, bucket) {
 		const order = ["day", "2days", "4days", "week", "2weeks", "month", "3months", "6months", "year"];
 		const normalizedBucket = normalizeEpochBucket(bucket);
@@ -222,8 +279,13 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 	function mergeSettingsBlock(base, override) {
 		const out = Object.assign({}, base || {});
 		if (!override || typeof override !== "object") return out;
-		for (const key of ["type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages", "context", "maxOutputWords"]) {
-			if (override[key] != null) out[key] = override[key];
+		for (const key of ["type", "format", "length", "preference", "expectedInputLanguages", "outputLanguage", "expectedContextLanguages", "context", "maxOutputWords", "backend"]) {
+			if (override[key] == null) continue;
+			if (key === "backend") {
+				out.backend = deepMergeObject(out.backend, override.backend);
+				continue;
+			}
+			out[key] = override[key];
 		}
 		return out;
 	}
@@ -272,6 +334,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 		const sharedContext = String(root.sharedContext || "").trim();
 		const jobSpecificContext = String(contextTemplate || "").trim();
 		const maxOutputWords = normalizeOptionalPositiveInteger(merged.maxOutputWords);
+		const backend = normalizeBackendConfig(merged.backend);
 
 		return {
 			type: normalizeSummarizerType(merged.type),
@@ -281,6 +344,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_A = String.raw`
 			outputLanguage: normalizeSupportedLanguage(merged.outputLanguage),
 			expectedInputLanguages: normalizeSupportedLanguageList(merged.expectedInputLanguages, ["en", "ja", "es"]),
 			expectedContextLanguages: normalizeSupportedLanguageList(merged.expectedContextLanguages, ["en"]),
+			backend,
 			maxOutputWords,
 			sharedContext,
 			jobSpecificContext

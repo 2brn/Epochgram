@@ -213,6 +213,11 @@ Topics (Verified)
 Additional settings exist in `settings.ts` (e.g. similarity thresholds, epochs generation).
 - Pointer: search `DEFAULT_SETTINGS` in `settings-model.ts` for the full set.
 
+AI Bridge startup/open settings (Verified)
+- `openAiBridgeOnStartup: boolean` (default `false`) controls whether the bridge page auto-opens on startup.
+- `openAiBridgeInObsidianWebViewer: boolean` (default `false`) prefers opening the bridge in Obsidian Web viewer.
+- Web viewer preference is applied regardless of backend mode.
+
 Summary generation (Verified)
 - Normal (non-AI) summaries use `summaryWordsCount` words from `indexer/summarizer.ts` (default: 5).
 - When `summaryWordsCount` is set to `0`, normal (non-AI) word-based summarization is disabled; timeline entries fall back to the note title/filename instead of blank summaries.
@@ -332,6 +337,14 @@ AI bridge startup behavior (Verified)
     - Summarizer `epochType` and `epochLength` are user-selectable (type: `tldr`, `teaser`, `key-points`, `headline`; length: `short`, `medium`, `long`; defaults: `key-points` + `short`).
 - The bridge page persists its options in localStorage under `epoch_ai_bridge_yaml_v1` and posts the same YAML to `/api/options`; plugin settings persist the sanitized state as `{ settingsYaml, settingsYamlFormatted, resolved }`.
 - The bridge YAML surface includes root summarizer settings plus `reduce`, `records`, and `epochs[]` blocks.
+  - `backend` is supported at root and inside `reduce`, `records`, and each `epochs[]` rule.
+  - `backend.mode` supports `native` and `cloud`.
+  - `cloud` provider supports `gemini` and `openai`.
+  - `backend.maxRetries` is required and must be a positive integer (minimum `1`; default `3`), and applies to both `native` and `cloud` modes.
+  - `backend.cloud.baseUrl` is required for `provider: openai` (default `https://api.openai.com/v1`) and can be changed to OpenAI-compatible local endpoints (for example LM Studio).
+  - Secret placeholders in YAML are resolved via Obsidian Secret Storage with lowercase-dash IDs (`a-z`, `0-9`, `-`), for example `{{your-openai-api-key}}`.
+  - Runtime inheritance is root -> per-job block, where per-job `backend` overrides root `backend`.
+  - If `backend` is omitted, behavior remains native browser Summarizer.
   - Numeric tuning fields now include root `maxRelatedChars`, `records.maxInputChars`, `reduce.maxDepth`, `reduce.maxChunkChars`, and `epochs[].maxFileChars`.
 - Reduce jobs use the `reduce` block.
 - Per-note jobs use the `records` block.

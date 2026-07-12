@@ -67,13 +67,13 @@ export function buildAiBridgePageHtml(token: string): string {
 </head>
 <body>
 	<h2 class="bridgeTitle">${titleLogoSvg}</h2>
-	<p class="muted">Uses Chrome’s built-in Summarizer locally. Keep this page open while AI summaries are generated.</p>
+	<p class="muted">Uses the browser's built-in Summarizer in native mode or your configured cloud provider in cloud mode. Keep this page open while AI summaries are generated.</p>
 
 		<div class="row">
 		<div class="card">
 			<div><strong>Status</strong></div>
 			<div class="kv" style="margin-top: 10px;">
-				<div class="k">API</div><div class="v" id="status"></div>
+				<div class="k">Backend</div><div class="v" id="status"></div>
 				<div class="k">Processed</div><div id="processed" class="v"></div>
 				<div class="k">Remaining</div><div id="remaining" class="v"></div>
 				<div class="k">Speed</div><div id="speed" class="v"></div>
@@ -111,13 +111,13 @@ export function buildAiBridgePageHtml(token: string): string {
 			</div>
 			<div style="margin-top: 10px;" class="box cardFill">
 				<div><strong>Documentation</strong></div>
-				<p class="muted">If the Summarizer API is unavailable, download the latest <a href="https://www.google.com/intl/uk/chrome/update/" target="_blank" rel="noreferrer">Google Chrome</a> and review the requirements.</p>
+				<p class="muted">In native mode, if the Summarizer API is unavailable, download the latest <a href="https://www.google.com/intl/uk/chrome/update/" target="_blank" rel="noreferrer">Google Chrome</a> and review the requirements. In cloud mode, verify provider settings and API key.</p>
 				<ul style="margin: 8px 0 0 18px;">
 					<li><a href="https://developer.chrome.com/docs/ai/" target="_blank" rel="noreferrer">AI with Chrome</a></li>
 					<li><a href="https://developer.chrome.com/docs/ai/summarizer-api/" target="_blank" rel="noreferrer">Summarizer API</a></li>
 					<li><a href="https://chrome.dev/web-ai-demos/summarization-api-playground/" target="_blank" rel="noreferrer">Summarization API Playground</a></li>
 				</ul>
-				<p class="muted mono" style="margin-top: 12px;">Tip: if a model download is required, Chrome may require a user gesture or restart.</p>
+				<p class="muted mono" style="margin-top: 12px;">Tip: native mode may require a model download and user gesture;</p>
 			</div>
     </div>
   </div>
@@ -159,6 +159,8 @@ export function buildAiBridgePageHtml(token: string): string {
 	let lastStatus = null;
 	let openedUpdateLink = false;
 	const CHROME_UPDATE_URL = "https://www.google.com/intl/uk/chrome/update/";
+	const BRIDGE_POLYFILL_PROMPT_MODULE_URL = "https://esm.sh/prompt-api-polyfill@1.20.1?bundle";
+	const BRIDGE_POLYFILL_SUMMARIZER_MODULE_URL = "https://esm.sh/built-in-ai-task-apis-polyfills@1.15.1/summarizer?bundle";
 	const OPTS_KEY = "epoch_ai_bridge_yaml_v1";
 	let optionsSaveTimer = 0;
 	let optionsValidationTimer = 0;

@@ -76,22 +76,27 @@ function parsePoints(points: string): Array<{ x: number; y: number }> {
 }
 
 function ensureMeasureRoot(): SVGSVGElement {
-	let root = activeDocument.querySelector<SVGSVGElement>("svg[data-epoch-measure-root]");
-	if (root) return root;
-	root = activeDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
-	root.setAttribute("data-epoch-measure-root", "true");
-	root.setAttribute("width", "0");
-	root.setAttribute("height", "0");
-	setCssStyles(root, {
-		position: "absolute",
-		visibility: "hidden",
-		pointerEvents: "none",
-		left: "-9999px",
-		top: "-9999px",
-		overflow: "visible"
+	const existing = activeDocument.querySelector<SVGSVGElement>(
+		"svg[data-epoch-measure-root]"
+	);
+	if (existing) return existing;
+
+	return activeDocument.body.createSvg("svg", {
+		attr: {
+			"data-epoch-measure-root": "true",
+			width: "0",
+			height: "0"
+		}
+	}, (root) => {
+		setCssStyles(root, {
+			position: "absolute",
+			visibility: "hidden",
+			pointerEvents: "none",
+			left: "-9999px",
+			top: "-9999px",
+			overflow: "visible"
+		});
 	});
-	activeDocument.body.appendChild(root);
-	return root;
 }
 
 function measureIconBounds(svg: SVGElement): { x: number; y: number; width: number; height: number } | null {

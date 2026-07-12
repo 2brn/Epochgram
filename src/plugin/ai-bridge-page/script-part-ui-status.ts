@@ -21,6 +21,15 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 	function renderStatusText() {
 		if (!statusEl) return;
 		const mode = statusState.mode;
+		const backendMode = (() => {
+			try {
+				if (typeof getRootBackendConfig === "function") {
+					const cfg = getRootBackendConfig();
+					return String(cfg && cfg.mode ? cfg.mode : "native").trim().toLowerCase() === "cloud" ? "cloud" : "native";
+				}
+			} catch { void 0; }
+			return "native";
+		})();
 		setStatusBackground(mode);
 		try {
 			if (downloadBtn) downloadBtn.style.display = (mode === "downloadable") ? "inline-block" : "none";
@@ -30,6 +39,10 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 			return;
 		}
 		if (mode === "api-missing") {
+			if (backendMode === "cloud") {
+				statusEl.textContent = "Cloud not ready";
+				return;
+			}
 			try {
 				statusEl.textContent = "";
 				statusEl.appendChild(document.createTextNode("API not detected, download the latest "));
@@ -37,7 +50,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 				link.href = CHROME_UPDATE_URL;
 				link.target = "_blank";
 				link.rel = "noreferrer";
-				link.textContent = "Google Chrome";
+				link.textContent = "compatible browser";
 				statusEl.appendChild(link);
 				statusEl.appendChild(document.createTextNode("."));
 			} catch {
@@ -50,10 +63,18 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 			return;
 		}
 		if (mode === "downloadable") {
+			if (backendMode === "cloud") {
+				statusEl.textContent = "Cloud ready";
+				return;
+			}
 			statusEl.textContent = "Model downloading";
 			return;
 		}
 		if (mode === "downloading") {
+			if (backendMode === "cloud") {
+				statusEl.textContent = "Cloud ready";
+				return;
+			}
 			const pct = clamp01(statusState.progress);
 			const percentText = (pct * 100).toFixed(2);
 			const suffix = " (" + percentText + "%)";
@@ -61,7 +82,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 			return;
 		}
 		if (mode === "ready") {
-			statusEl.textContent = "Model ready";
+			statusEl.textContent = backendMode === "cloud" ? "Cloud ready" : "Native ready";
 			return;
 		}
 	}
@@ -93,6 +114,16 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 	function setModelDownloadingStatus(progress) {
 		// Downloading *mode* should come only from Summarizer.availability() via detect().
 		// Progress itself is driven by live downloadprogress events.
+		try {
+			if (typeof getRootBackendConfig === "function") {
+				const cfg = getRootBackendConfig();
+				const mode = String(cfg && cfg.mode ? cfg.mode : "native").trim().toLowerCase();
+				if (mode === "cloud") {
+					setModelReadyStatus();
+					return;
+				}
+			}
+		} catch { void 0; }
 		if (typeof progress !== "number") return;
 		const normalized = normalizeProgressOrNull(progress);
 		if (normalized == null) return;
@@ -173,6 +204,16 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 	}
 
 	function applyDownloadProgress(progress, ready, options) {
+		try {
+			if (typeof getRootBackendConfig === "function") {
+				const cfg = getRootBackendConfig();
+				const mode = String(cfg && cfg.mode ? cfg.mode : "native").trim().toLowerCase();
+				if (mode === "cloud") {
+					setModelReadyStatus();
+					return 1;
+				}
+			}
+		} catch { void 0; }
 		const normalized = normalizeProgressOrNull(progress);
 		if (normalized == null) {
 			return null;

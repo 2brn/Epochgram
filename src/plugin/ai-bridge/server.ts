@@ -9,7 +9,6 @@ import type { AiBridgeStatus, AiSummaryJob, AiSummaryJobResult } from "./types";
 type RuntimeGlobalLike = typeof window & {
 	__epochNodeHttpModule?: string;
 	__epochAiBridgeLastCloseAt?: number;
-	require?: (moduleName: string) => unknown;
 };
 
 type RequestLike = {
@@ -537,10 +536,7 @@ export class AiBridgeServer {
 		if (!Platform.isDesktop) {
 			throw new Error("AI Bridge server is only available on desktop");
 		}
-		const moduleRequire = runtimeGlobal.require;
-		const http = typeof moduleRequire === "function"
-			? (moduleRequire("http") as HttpModuleLike)
-			: (await importHttpModule());
+		const http = await importHttpModule();
 
 		this.server = http.createServer((req: RequestLike, res: ResponseLike) => {
 			void (async () => {
@@ -659,6 +655,7 @@ export class AiBridgeServer {
 						}
 						const obj = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
 						this.setBridgeOptions(sanitizeBridgeOptions(obj));
+						this.lastError = null;
 						safeJson(req, res, 200, { ok: true });
 						return;
 					}
@@ -679,7 +676,18 @@ export class AiBridgeServer {
 						// ignore
 					}
 						const obj = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
-						const checked = validateBridgeOptionsYaml(typeof obj.settingsYaml === "string" ? obj.settingsYaml : "");
+						const checked = validateBridgeOptionsYaml(
+							typeof obj.settingsYaml === "string" ? obj.settingsYaml : "",
+							{
+								secretLookup: (id: string) => {
+									try {
+										return this.plugin.app.secretStorage.getSecret(String(id || ""));
+									} catch {
+										return null;
+									}
+								}
+							}
+						);
 					safeJson(req, res, 200, {
 						ok: checked.valid,
 						errors: checked.errors,
@@ -957,8 +965,11 @@ export class AiBridgeServer {
 		}
 	}
 
-	async openInChrome(options?: { closeOnDisconnect?: boolean }): Promise<void> {
+	async openInChrome(options?: { closeOnDisconnect?: boolean; preferWebViewer?: boolean }): Promise<void> {
 		const { openAiBridgeInChrome } = await import("./chrome");
-		openAiBridgeInChrome(this.getUrl(options));
+		await openAiBridgeInChrome(this.getUrl(options), {
+			preferWebViewer: options?.preferWebViewer === true,
+			app: this.plugin.app
+		});
 	}
 }

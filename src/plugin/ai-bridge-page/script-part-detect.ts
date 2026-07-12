@@ -1,10 +1,191 @@
 export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 
 	let detectInFlight = null;
+	let cloudPolyfillLoadPromise = null;
+
+	function normalizeBackendMode(raw) {
+		return String(raw || "").trim().toLowerCase() === "cloud" ? "cloud" : "native";
+	}
+
+	function normalizeCloudProvider(raw) {
+		const v = String(raw || "").trim().toLowerCase();
+		if (v === "openai") return v;
+		return "gemini";
+	}
+
+	function normalizeBackendConfig(raw) {
+		if (!raw || typeof raw !== "object") return { mode: "native", maxRetries: 1 };
+		const mode = normalizeBackendMode(raw.mode);
+		const maxRetriesRaw = Number(raw.maxRetries);
+		const maxRetries = Number.isFinite(maxRetriesRaw) ? Math.max(1, Math.floor(maxRetriesRaw)) : 1;
+		if (mode !== "cloud") return { mode: "native", maxRetries };
+		const cloudRaw = (raw.cloud && typeof raw.cloud === "object") ? raw.cloud : {};
+		const provider = normalizeCloudProvider(cloudRaw.provider);
+		const apiKey = String(cloudRaw.apiKey || "").trim();
+		const modelName = String(cloudRaw.modelName || "").trim();
+		const baseUrl = String(cloudRaw.baseUrl || "").trim();
+		const out = {
+			mode: "cloud",
+			maxRetries,
+			cloud: {
+				provider,
+				apiKey,
+				...(modelName ? { modelName } : {}),
+				...(baseUrl ? { baseUrl } : {})
+			}
+		};
+		return out;
+	}
+
+	function getRootBackendConfig() {
+		try {
+			const resolved = optionsState && optionsState.resolved && typeof optionsState.resolved === "object"
+				? optionsState.resolved
+				: null;
+			if (!resolved || !resolved.backend) return { mode: "native" };
+			return normalizeBackendConfig(resolved.backend);
+		} catch {
+			return { mode: "native" };
+		}
+	}
+
+	function clearCloudBackendGlobals() {
+		try { delete window.GEMINI_CONFIG; } catch { void 0; }
+		try { delete window.OPENAI_CONFIG; } catch { void 0; }
+	}
+
+	function clearOpenAiBaseUrlFetchPatch() {
+		try {
+			if (window.__epochOriginalFetch && typeof window.__epochOriginalFetch === "function") {
+				window.fetch = window.__epochOriginalFetch;
+			}
+		} catch { void 0; }
+		try { delete window.__epochOriginalFetch; } catch { void 0; }
+		try { delete window.__epochOpenAiBaseUrlPatchKey; } catch { void 0; }
+	}
+
+	function installOpenAiBaseUrlFetchPatch(baseUrl) {
+		const target = String(baseUrl || "").trim();
+		if (!target) {
+			clearOpenAiBaseUrlFetchPatch();
+			return;
+		}
+
+		const patchKey = "openai:" + target;
+		if (window.__epochOpenAiBaseUrlPatchKey === patchKey && typeof window.__epochOriginalFetch === "function") {
+			return;
+		}
+
+		clearOpenAiBaseUrlFetchPatch();
+		if (typeof window.fetch !== "function") return;
+		window.__epochOriginalFetch = window.fetch.bind(window);
+		window.__epochOpenAiBaseUrlPatchKey = patchKey;
+
+		window.fetch = function(input, init) {
+			const originalFetch = window.__epochOriginalFetch;
+			if (typeof originalFetch !== "function") {
+				return window.fetch(input, init);
+			}
+			try {
+				const isRequest = typeof Request !== "undefined" && input instanceof Request;
+				const rawUrl = isRequest ? String(input.url || "") : String(input || "");
+				const parsed = new URL(rawUrl, window.location.href);
+				if (parsed.hostname !== "api.openai.com") {
+					return originalFetch(input, init);
+				}
+
+				const destination = new URL(target);
+				const srcPath = String(parsed.pathname || "");
+				const dstPath = String(destination.pathname || "");
+				let nextPath = srcPath;
+				if (dstPath && dstPath !== "/") {
+					if (srcPath.startsWith("/v1/")) {
+						nextPath = dstPath.replace(/\/$/, "") + srcPath.slice(3);
+					} else {
+						nextPath = dstPath.replace(/\/$/, "") + (srcPath.startsWith("/") ? srcPath : ("/" + srcPath));
+					}
+				}
+				destination.pathname = nextPath;
+				destination.search = parsed.search;
+				destination.hash = parsed.hash;
+				const nextUrl = destination.toString();
+
+				if (isRequest) {
+					const nextRequest = new Request(nextUrl, input);
+					return originalFetch(nextRequest, init);
+				}
+				return originalFetch(nextUrl, init);
+			} catch {
+				return originalFetch(input, init);
+			}
+		};
+	}
+
+	function applyCloudBackendGlobals(backend) {
+		clearCloudBackendGlobals();
+		clearOpenAiBaseUrlFetchPatch();
+		if (!backend || backend.mode !== "cloud" || !backend.cloud) return;
+		const cloud = backend.cloud;
+		const provider = normalizeCloudProvider(cloud.provider);
+		const apiKey = String(cloud.apiKey || "").trim();
+		const modelName = String(cloud.modelName || "").trim();
+		const baseUrl = String(cloud.baseUrl || "").trim();
+		if (provider === "gemini") {
+			window.GEMINI_CONFIG = {
+				apiKey,
+				...(modelName ? { modelName } : {})
+			};
+			return;
+		}
+		if (provider === "openai") {
+			window.OPENAI_CONFIG = {
+				apiKey,
+				...(modelName ? { modelName } : {}),
+				...(baseUrl ? { baseUrl, baseURL: baseUrl } : {})
+			};
+			installOpenAiBaseUrlFetchPatch(baseUrl);
+			return;
+		}
+	}
+
+	async function ensureCloudSummarizerApi(backend) {
+		const normalized = normalizeBackendConfig(backend);
+		if (normalized.mode !== "cloud") {
+			if (!("Summarizer" in window)) throw new Error("Summarizer API missing");
+			return Summarizer;
+		}
+		if (!(normalized.cloud && String(normalized.cloud.apiKey || "").trim())) {
+			throw new Error("Cloud backend API key is missing");
+		}
+		applyCloudBackendGlobals(normalized);
+		if (!cloudPolyfillLoadPromise) {
+			cloudPolyfillLoadPromise = (async () => {
+				window.__FORCE_PROMPT_API_POLYFILL__ = true;
+				window.__FORCE_SUMMARIZER_POLYFILL__ = true;
+				await import(BRIDGE_POLYFILL_PROMPT_MODULE_URL);
+				await import(BRIDGE_POLYFILL_SUMMARIZER_MODULE_URL);
+				const api = (window && window.Summarizer) ? window.Summarizer : null;
+				if (!api || !api.__isPolyfill) throw new Error("Summarizer polyfill failed to load");
+				return api;
+			})().catch((err) => {
+				cloudPolyfillLoadPromise = null;
+				throw err;
+			});
+		}
+		return await cloudPolyfillLoadPromise;
+	}
+
+	async function resolveSummarizerApiForBackend(backend) {
+		const normalized = normalizeBackendConfig(backend);
+		if (normalized.mode === "cloud") return await ensureCloudSummarizerApi(normalized);
+		if (!("Summarizer" in window)) throw new Error("Summarizer API missing");
+		return Summarizer;
+	}
 
 	async function readSummarizerAvailabilitySafe() {
 		try {
-			if (!("Summarizer" in window)) return { ok: false, availability: null };
+			const backend = getRootBackendConfig();
+			const summarizerApi = await resolveSummarizerApiForBackend(backend);
 			const langs = readSelectedBridgeLanguages("summary");
 			const opts = {
 				// Keep this conservative to avoid flakiness across Chrome versions.
@@ -12,7 +193,7 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 				expectedContextLanguages: [langs.expectedContextLanguages[0] || "en"],
 				outputLanguage: langs.outputLanguage || "en",
 			};
-			const availability = await Summarizer.availability(opts);
+			const availability = await summarizerApi.availability(opts);
 			return { ok: true, availability };
 		} catch (e) {
 			return { ok: false, availability: null };
@@ -20,7 +201,9 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 	}
 
 	async function detectInner() {
-		if (!("Summarizer" in window)) {
+		const backend = getRootBackendConfig();
+		const backendMode = normalizeBackendMode(backend && backend.mode ? backend.mode : "native");
+		if (backendMode !== "cloud" && !("Summarizer" in window)) {
 			setApiNotDetectedStatus();
 			return;
 		}
@@ -30,6 +213,18 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 			return;
 		}
 		const availability = first.availability;
+		if (backendMode === "cloud") {
+			if (availability === "available" || availability === "downloadable" || availability === "downloading") {
+				setModelReadyStatus();
+				return;
+			}
+			if (availability === "unavailable") {
+				setStatusMode("unknown");
+				return;
+			}
+			setStatusMode("unknown");
+			return;
+		}
 		if (availability === "unavailable") {
 			setUnavailableStatus();
 			return;
@@ -64,6 +259,11 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 	if (downloadBtn) {
 		downloadBtn.addEventListener("click", async () => {
 			try {
+				const backend = getRootBackendConfig();
+				if (normalizeBackendMode(backend.mode) === "cloud") {
+					setModelReadyStatus();
+					return;
+				}
 				if (!("Summarizer" in window)) {
 					setApiNotDetectedStatus();
 					return;
@@ -205,7 +405,8 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 	}
 
 	async function createSummarizer(optionsIn) {
-		if (!("Summarizer" in window)) throw new Error("Summarizer API missing");
+		const backend = optionsIn && optionsIn.backend ? optionsIn.backend : { mode: "native" };
+		const summarizerApi = await resolveSummarizerApiForBackend(backend);
 
 		lastProgress = null;
 		resetDownloadProgressState({ soft: true });
@@ -244,8 +445,22 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 		if (sharedCtx.trim()) options.sharedContext = sharedCtx;
 
 		try {
-			return await Summarizer.create(options);
+			return await summarizerApi.create(options);
 		} catch (e) {
+			const msg = String(e && e.message ? e.message : e);
+			if (/requested language options are not supported/i.test(msg)) {
+				try {
+					const relaxed = {
+						type: options.type,
+						length: options.length,
+						format: options.format,
+						preference: options.preference,
+						monitor: options.monitor
+					};
+					if (sharedCtx.trim()) relaxed.sharedContext = sharedCtx;
+					return await summarizerApi.create(relaxed);
+				} catch { void 0; }
+			}
 			try {
 				const fallback = {
 					type: "headline",
@@ -258,7 +473,7 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 				fallback.expectedContextLanguages = ctxLangs;
 				fallback.outputLanguage = outLang;
 				if (sharedCtx.trim()) fallback.sharedContext = sharedCtx;
-				return await Summarizer.create(fallback);
+				return await summarizerApi.create(fallback);
 			} catch {
 				throw e;
 			}
@@ -275,8 +490,13 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 		const l = String(o && o.length ? o.length : "long");
 		const f = String(o && o.format ? o.format : "plain-text");
 		const p = String(o && o.preference ? o.preference : "auto");
+		const backendMode = normalizeBackendMode(o && o.backend ? o.backend.mode : "native");
+		const provider = normalizeCloudProvider(o && o.backend && o.backend.cloud ? o.backend.cloud.provider : "gemini");
+		const apiKey = String(o && o.backend && o.backend.cloud && o.backend.cloud.apiKey ? o.backend.cloud.apiKey : "").trim();
+		const modelName = String(o && o.backend && o.backend.cloud && o.backend.cloud.modelName ? o.backend.cloud.modelName : "").trim();
+		const baseUrl = String(o && o.backend && o.backend.cloud && o.backend.cloud.baseUrl ? o.backend.cloud.baseUrl : "").trim();
 		const shared = String(o && typeof o.sharedContext === "string" ? o.sharedContext : "").trim();
-		return [outLang, inLangs.join(","), ctxLangs.join(","), t, l, f, p, shared].join("|");
+		return [outLang, inLangs.join(","), ctxLangs.join(","), t, l, f, p, backendMode, provider, apiKey, modelName, baseUrl, shared].join("|");
 	}
 
 	async function ensureSummarizer(o) {
@@ -288,8 +508,19 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 			return s;
 		} catch (e) {
 			try {
-				const s2 = await createSummarizer({ type: "headline", length: "long", format: "plain-text", preference: "auto", outputLanguage: "en", expectedInputLanguages: ["en"], expectedContextLanguages: ["en"] });
-				summarizersByKey.set(makeSummarizerKey({ type: "headline", length: "long", format: "plain-text", preference: "auto", outputLanguage: "en", expectedInputLanguages: ["en"], expectedContextLanguages: ["en"] }), s2);
+				const fallbackOptions = {
+					type: "headline",
+					length: "long",
+					format: "plain-text",
+					preference: "auto",
+					outputLanguage: "en",
+					expectedInputLanguages: ["en"],
+					expectedContextLanguages: ["en"],
+					backend: o && o.backend ? o.backend : { mode: "native" },
+					sharedContext: o && typeof o.sharedContext === "string" ? o.sharedContext : ""
+				};
+				const s2 = await createSummarizer(fallbackOptions);
+				summarizersByKey.set(makeSummarizerKey(fallbackOptions), s2);
 				return s2;
 			} catch {
 				throw e;

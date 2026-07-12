@@ -36,6 +36,229 @@ describe("AI bridge sanitizeBridgeOptions", () => {
 		expect(checked.resolved.epochs[0]?.maxOutputWords).toBe(9);
 	});
 
+	it("accepts backend at root and per-job blocks", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: cloud",
+			"  maxRetries: 3",
+			"  cloud:",
+			"    provider: openai",
+			"    apiKey: test-key",
+			"    modelName: gemini-2.5-flash-lite",
+			"    baseUrl: https://api.openai.com/v1",
+			"reduce:",
+			"  backend:",
+			"    mode: native",
+			"    maxRetries: 2",
+			"records:",
+			"  backend:",
+			"    mode: cloud",
+			"    maxRetries: 2",
+			"    cloud:",
+			"      provider: gemini",
+			"      apiKey: test-gemini",
+			"epochs:",
+			"  - period: day-2weeks",
+			"    backend:",
+			"      mode: cloud",
+			"      maxRetries: 4",
+			"      cloud:",
+			"        provider: openai",
+			"        apiKey: epoch-openai",
+			"        baseUrl: https://api.openai.com/v1"
+		].join("\n"));
+		expect(checked.valid).toBe(true);
+		expect(checked.resolved.backend?.mode).toBe("cloud");
+		expect(checked.resolved.reduce?.backend?.mode).toBe("native");
+		expect(checked.resolved.records?.backend?.cloud?.provider).toBe("gemini");
+		expect(checked.resolved.epochs[0]?.backend?.cloud?.provider).toBe("openai");
+	});
+
+	it("requires backend.mode when backend is present", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  maxRetries: 3",
+			"  cloud:",
+			"    provider: gemini",
+			"    apiKey: key"
+		].join("\n"));
+		// Root defaults are merged first; backend.mode defaults to native when omitted.
+		expect(checked.valid).toBe(true);
+	});
+
+	it("requires cloud.apiKey when mode is cloud", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: cloud",
+			"  maxRetries: 3",
+			"  cloud:",
+			"    provider: openai",
+			"    apiKey:",
+			"    modelName: any"
+		].join("\n"));
+		expect(checked.valid).toBe(false);
+		// apiKey remains required and cannot be empty.
+		expect(checked.errors.some((e) => e.includes("root.backend.cloud.apiKey is required"))).toBe(true);
+	});
+
+	it("does not validate apiKey placeholder in native mode", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: native",
+			"  maxRetries: 3",
+			"  cloud:",
+			"    provider: openai",
+			"    apiKey: \"{{your-openai-api-key}}\"",
+			"    baseUrl: https://api.openai.com/v1"
+		].join("\n"), {
+			secretLookup: () => null
+		});
+		expect(checked.valid).toBe(true);
+	});
+
+	it("shows not-found error for unresolved apiKey placeholder key name", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: cloud",
+			"  maxRetries: 3",
+			"  cloud:",
+			"    provider: openai",
+			"    apiKey: \"{{openadi-key}}\"",
+			"    baseUrl: https://api.openai.com/v1"
+		].join("\n"), {
+			secretLookup: () => null
+		});
+		expect(checked.valid).toBe(false);
+		expect(checked.errors.some((e) => e.includes("not found in Secret Storage"))).toBe(true);
+	});
+
+	it("resolves lowercase-dash secret placeholder ids", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: cloud",
+			"  maxRetries: 3",
+			"  cloud:",
+			"    provider: openai",
+			"    apiKey: \"{{your-openai-api-key}}\"",
+			"    baseUrl: https://api.openai.com/v1"
+		].join("\n"), {
+			secretLookup: (id: string) => (id === "your-openai-api-key" ? "sk-test" : null)
+		});
+		expect(checked.valid).toBe(true);
+		expect(checked.resolved.backend?.cloud?.apiKey).toBe("sk-test");
+	});
+
+	it("supports apiKey placeholder lookup with uppercase/underscore via normalization", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: cloud",
+			"  maxRetries: 3",
+			"  cloud:",
+			"    provider: openai",
+			"    apiKey: \"{{YOUR_OPENAI_API_KEY}}\"",
+			"    baseUrl: https://api.openai.com/v1"
+		].join("\n"), {
+			secretLookup: (id: string) => (id === "your-openai-api-key" ? "sk-upper" : null)
+		});
+		expect(checked.valid).toBe(true);
+		expect(checked.resolved.backend?.cloud?.apiKey).toBe("sk-upper");
+	});
+
+	it("rejects unsupported backend provider", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: cloud",
+			"  maxRetries: 3",
+			"  cloud:",
+			"    provider: anthropic",
+			"    apiKey: f-key"
+		].join("\n"));
+		expect(checked.valid).toBe(false);
+		expect(checked.errors.some((e) => e.includes("must be one of: gemini, openai"))).toBe(true);
+	});
+
+	it("accepts openai baseUrl for local openai-compatible endpoints", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: cloud",
+			"  maxRetries: 3",
+			"  cloud:",
+			"    provider: openai",
+			"    apiKey: local-key",
+			"    baseUrl: http://127.0.0.1:1234/v1"
+		].join("\n"));
+		expect(checked.valid).toBe(true);
+		expect(checked.resolved.backend?.cloud?.baseUrl).toBe("http://127.0.0.1:1234/v1");
+	});
+
+	it("requires backend.maxRetries when backend is present", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: cloud",
+			"  maxRetries:",
+			"  cloud:",
+			"    provider: gemini",
+			"    apiKey: key"
+		].join("\n"));
+		expect(checked.valid).toBe(false);
+		expect(checked.errors.some((e) => e.includes("backend.maxRetries cannot be empty"))).toBe(true);
+	});
+
+	it("rejects non-positive backend.maxRetries", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: cloud",
+			"  maxRetries: 0",
+			"  cloud:",
+			"    provider: gemini",
+			"    apiKey: key"
+		].join("\n"));
+		expect(checked.valid).toBe(false);
+		expect(checked.errors.some((e) => e.includes("backend.maxRetries is required and must be a positive integer"))).toBe(true);
+	});
+
+	it("rejects empty baseUrl for openai provider", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: cloud",
+			"  maxRetries: 3",
+			"  cloud:",
+			"    provider: openai",
+			"    apiKey: key",
+			"    baseUrl:"
+		].join("\n"));
+		expect(checked.valid).toBe(false);
+		expect(checked.errors.some((e) => e.includes("backend.cloud.baseUrl cannot be empty"))).toBe(true);
+	});
+
+	it("rejects baseUrl for non-openai providers", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: cloud",
+			"  maxRetries: 3",
+			"  cloud:",
+			"    provider: gemini",
+			"    apiKey: key",
+			"    baseUrl: http://127.0.0.1:1234/v1"
+		].join("\n"));
+		expect(checked.valid).toBe(false);
+		expect(checked.errors.some((e) => e.includes("baseUrl is supported only for provider 'openai'"))).toBe(true);
+	});
+
+	it("rejects invalid backend.cloud.baseUrl", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: cloud",
+			"  maxRetries: 3",
+			"  cloud:",
+			"    provider: openai",
+			"    apiKey: key",
+			"    baseUrl: not-a-url"
+		].join("\n"));
+		expect(checked.valid).toBe(false);
+		expect(checked.errors.some((e) => e.includes("backend.cloud.baseUrl must be a valid URL"))).toBe(true);
+	});
+
 	it("rejects invalid numeric tuning fields", () => {
 		const checked = validateBridgeOptionsYaml([
 			"maxRelatedChars: nope",

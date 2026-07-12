@@ -8,6 +8,16 @@ preference: capability
 expectedInputLanguages: [en]
 outputLanguage: en
 expectedContextLanguages: [en]
+
+backend:
+  mode: native
+  maxRetries: 3
+  cloud:
+    provider: openai
+    apiKey: "{{your-openai-key-secret}}"
+    modelName: gpt-4o-mini
+    baseUrl: https://api.openai.com/v1
+
 maxRelatedChars: 300
 
 reduce:

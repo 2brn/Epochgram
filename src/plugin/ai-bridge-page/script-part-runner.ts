@@ -35,19 +35,32 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 		}
 	}
 
-	async function retryUpTo3(fn, label) {
+	function resolveMaxRetries(backend) {
+		try {
+			const raw = Number(backend ? backend.maxRetries : NaN);
+			if (!Number.isFinite(raw)) return 1;
+			return Math.max(1, Math.floor(raw));
+		} catch {
+			return 1;
+		}
+	}
+
+	async function retryWithLimit(fn, label, maxAttemptsRaw) {
+		const maxAttempts = (typeof maxAttemptsRaw === "number" && Number.isFinite(maxAttemptsRaw))
+			? Math.max(1, Math.floor(maxAttemptsRaw))
+			: 1;
 		let lastErr = null;
-		for (let attempt = 1; attempt <= 3; attempt++) {
+		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
 			try {
 				return await fn(attempt);
 			} catch (e) {
 				lastErr = e;
 				const msg = String(e && e.message ? e.message : e);
 				const canRetry = shouldRetrySummarizeError(msg);
-				if (!canRetry || attempt >= 3) throw e;
+				if (!canRetry || attempt >= maxAttempts) throw e;
 				// Backoff a bit to avoid hammering the API.
 				const delay = 500 * attempt;
-				try { setErrText((label ? (String(label) + ": ") : "") + "error; retrying (" + attempt + "/3)...\n\n" + msg); } catch { void 0; }
+				try { setErrText((label ? (String(label) + ": ") : "") + "error; retrying (" + attempt + "/" + maxAttempts + ")...\n\n" + msg); } catch { void 0; }
 				await new Promise(r => window.setTimeout(r, delay));
 			}
 		}
@@ -175,6 +188,7 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 				length,
 				format: (jobSettings && jobSettings.format) ? jobSettings.format : FIXED_SUMMARIZER.format,
 				preference: (jobSettings && jobSettings.preference) ? jobSettings.preference : "auto",
+				backend: (jobSettings && jobSettings.backend) ? jobSettings.backend : { mode: "native" },
 				maxOutputWords: (jobSettings && typeof jobSettings.maxOutputWords === "number") ? jobSettings.maxOutputWords : null,
 				sharedContext: (jobSettings && typeof jobSettings.sharedContext === "string") ? jobSettings.sharedContext : "",
 				jobSpecificContext: (jobSettings && typeof jobSettings.jobSpecificContext === "string") ? jobSettings.jobSpecificContext : ""
@@ -185,7 +199,8 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 				const ctx = rendered && String(rendered).trim() ? rendered : (job && job.context ? job.context : "");
 				return ctx;
 			})();
-			const out = await retryUpTo3(async (attempt) => {
+			const maxRetries = resolveMaxRetries(summarizerOpts.backend);
+			const out = await retryWithLimit(async (attempt) => {
 				// After a failure, clear cached summarizers; Chrome can invalidate them.
 				if (attempt > 1) {
 					try { summarizersByKey.clear(); } catch { void 0; }
@@ -199,6 +214,7 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 					length: summarizerOpts.length,
 					format: summarizerOpts.format,
 					preference: summarizerOpts.preference,
+					backend: summarizerOpts.backend,
 					sharedContext: summarizerOpts.sharedContext
 				});
 				// If a queue built up while the model was downloading, refresh once
@@ -209,7 +225,7 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 					120000,
 					"summarize"
 				);
-			}, "summarize");
+			}, "summarize", maxRetries);
 			if (pageClosing) break;
 			const outStr = trimToExactWordCount(String(out ?? ""), summarizerOpts.maxOutputWords);
           if (/^Model not available in Chromium\b/i.test(outStr)) {

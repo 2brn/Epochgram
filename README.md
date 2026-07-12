@@ -6,10 +6,10 @@ A Timemap of Your Mind
 
 <p align="center">
   <a href="https://github.com/2brn/Epochgram/releases">
-    <img src="https://img.shields.io/github/v/release/2brn/Epochgram?style=for-the-badge&sort=semver" alt="GitHub release (latest SemVer)">
+    <img src="https://img.shields.io/github/v/release/2brn/Epochgram?style=for-the-badge&sort=semver&color=C14D58" alt="GitHub release (latest SemVer)">
   </a>
   <a href="https://github.com/2brn/Epochgram/releases">
-    <img src="https://img.shields.io/github/downloads/2brn/Epochgram/total?style=for-the-badge" alt="GitHub total downloads">
+    <img src="https://img.shields.io/badge/dynamic/json?style=for-the-badge&logo=Obsidian&color=%238b6cef&label=downloads&query=$[%22epochgram%22].downloads&url=https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugin-stats.json" alt="GitHub total downloads">
   </a>
 </p>
 
@@ -20,7 +20,7 @@ A Timemap of Your Mind
 > <font color="#c14d58">Pain</font>. Your vault fills up with quick capture notes. A week later, you've lost the thread. A month later, you can't reconstruct the story — and you don't see the themes, the slow stretches, or the bursts of activity.</br></br>
 > <font color="#c14d58">Solution</font>. Epochgram turns your notes into an AI-powered interactive timeline. Browse day by day to scan changes in order, spot bigger patterns across unsorted notes, and edit directly on the timeline — so you can focus on what really matters.</br></br>
 > <font color="#c14d58">Epochgram Pro</font> adds even more overview:
-> - On-device AI summaries via Google Chrome.
+> - On-device or cloud AI summaries via AI bridge.
 > - Epochs: a zoomable timemap, from daily detail to a year overview.
 > - Find related notes through links, tags, titles, and semantic similarity.
 > - Topic clustering and marked related groups.
@@ -38,7 +38,7 @@ A Timemap of Your Mind
 - [Review State](#review-state)
 - [Recurring (Pro)](#recurring-pro)
 - [Similarity (Pro)](#similarity-pro)
-- [AI Bridge (Pro)](#ai-bridge-pro-desktop-only)
+- [AI bridge (Pro)](#ai-bridge-pro-desktop-only)
 - [Epochs (Pro)](#ai-summaries--epochs-pro-desktop-only)
 - [Custom YAML](#custom-yaml)
 - [Settings & Data](#settings--data)
@@ -290,10 +290,10 @@ You can create recurring records, which will appear on the timeline. To add one,
 ```yaml
 ---
 repeat: every day
-repeat: every N days
-repeat: every week on monday,tuesday
+repeat: every N days from YYYY-MM-DD count N
+repeat: every week on monday,tuesday from YYYY-MM-DD to YYYY-MM-DD
 repeat: every N weeks on mon,tue
-repeat: every month on D
+repeat: every month on D until YYYY-MM-DD
 repeat: every month on -D # D days from end of month; -1 = last day
 repeat: every year on MM-DD
 repeat: FREQ=DAILY;COUNT=5 # RRULE
@@ -335,13 +335,16 @@ In addition to the standard red-to-violet palette, an extended palette is availa
 > **Alt/Option+Wheel/Up/Down** or **Two-Finger-Tap** → move through related records.</br>
 > **⌘ Epochgram: Toggle mark for current file** → assign the next unique color from the palette.
 
-## AI Bridge (Pro, desktop-only)
+## AI bridge (Pro, desktop-only)
 
 <p align="center"><img src="images/epochs.gif" height="360" alt="Epochs"></p>
 
-Epochgram Pro includes an **AI Bridge** that uses Google Chrome's on-device AI APIs for local summarization. When started, it runs a small local server on an available port at `http://127.0.0.1`. The bridge page can be opened from **⌘ Epochgram: Open AI bridge**, from the **⌀ AI** status bar button (button absent → server not started; button red → client disconnected), or automatically on startup if **⛭ Open AI bridge on startup** is enabled. This page processes summary jobs in Chrome and returns the results to the plugin. All summarization data stays **only on your device** and is not sent to external services.
+Epochgram Pro includes an **AI bridge** for summarization jobs. When started, it runs a small local server on an available port at `http://127.0.0.1`. The bridge page can be opened from **⌘ Epochgram: Open AI bridge**, from the **⌀ AI** status bar button in the bottom-right (button absent → server not started; button red → client disconnected), or automatically on startup if **⛭ Open AI bridge on startup** is enabled. You can also enable **⛭ Open AI bridge in Obsidian** in settings to prefer opening the bridge inside Obsidian (cloud providers only). This page processes summary jobs and returns the results to the plugin. By default (`backend.mode: native`), processing uses the browser's built-in on-device Summarizer API (currently supported browsers are https://developer.mozilla.org/en-US/docs/Web/API/Summarizer). If you switch to `backend.mode: cloud`, requests are sent to your selected cloud provider.
 
-On first use, Chrome may need a user gesture to download the built-in Gemini Nano model, and the drive with your Chrome profile [should have](https://developer.chrome.com/docs/ai/summarizer-api#hardware-requirements) at least **22 GB** of free space. The bridge page also serves as a control panel, showing connection and model status, queue progress, the current text preview, the latest result, and a chart with progress in gray and processing speed in blue. Keep it open while summaries are running. For larger notes, Epochgram can split input into chunks, summarize them separately, then merge the results. You can also adjust API settings and prompt/context texts in the YAML settings editor:
+> [!WARNING]
+> Cloud mode sends notes data for summarization to the provider and consumes your API quota.
+
+On first use of native summarization, a user gesture may be required to download the built-in Gemini Nano model, and the drive with your Google Chrome profile [should have](https://developer.chrome.com/docs/ai/summarizer-api#hardware-requirements) at least **22 GB** of free space. The bridge page also serves as a control panel, showing connection and model status, queue progress, the current text preview, the latest result, and a chart with progress in gray and processing speed in blue. Keep it open while summaries are running. For larger notes, Epochgram can split input into chunks, summarize them separately, then merge the results. You can also adjust API settings and prompt/context texts in the YAML settings editor:
 
 ```yaml
 sharedContext: | # Shared instructions across all summarization jobs
@@ -354,6 +357,16 @@ preference: capability # Model preference: auto | speed | capability
 expectedInputLanguages: [en] # Accepted input languages: en | es | ja
 outputLanguage: en # Output language: en | ja | es
 expectedContextLanguages: [en] # Accepted context languages: en | ja | es
+
+backend: # Optional
+  mode: native # native | cloud
+  maxRetries: 3 # Required (minimum: 1), applies to native and cloud
+  cloud: # Required only when mode: cloud
+    provider: openai # gemini | openai
+    apiKey: "{{your-openai-key-secret}}" # Secret Storage key placeholder (Settings > Keychain)
+    modelName: gpt-4o-mini # Optional
+    baseUrl: https://api.openai.com/v1 # Required for openai (use local endpoint for LM Studio/Ollama)
+
 maxRelatedChars: 300 # Related-context size limit
 
 reduce:
@@ -409,7 +422,7 @@ epochs:
 
 ## AI Summaries & Epochs (Pro, desktop-only)
 
-**⛭ Auto summarize** → when enabled, Epochgram automatically summarizes timeline records through the AI Bridge whenever the file changes. It does not modify the file content.
+**⛭ Auto summarize** → when enabled, Epochgram automatically summarizes timeline records through the **AI bridge** whenever the file changes. It does not modify the file content.
 
 **⛭ Generate Epochs** → when enabled, Epochgram creates a zoomable timemap that groups many days into larger period summaries, helping you see the bigger picture without reading the timeline day by day. Epochs are generated hierarchically from day up to year, in essence, summaries of summaries. If marked records are present, Epochs are colored by the most common mark color in that range. You can regenerate a specific Epoch from the context menu.
 
@@ -501,7 +514,7 @@ Epochgram also provides **Rebuild** and **Reset** popups for rebuilding or clear
 - Epochgram Pro:
 	- Requires a payment and internet access for license validation; your email address, license key, and basic server-side telemetry may be processed (see [TERMS](https://www.epochgram.com/terms)).
   - Is not affiliated with Obsidian Sync, Publish, or other Obsidian paid services.
-  - AI Bridge: Epochgram starts a local server on `http://127.0.0.1` and opens a local bridge page in Google Chrome to use Chrome's on-device Summarizer API. The bridge communication stays on your device. Chrome [may download](https://developer.chrome.com/docs/ai/summarizer-api) its built-in model(s) (Gemini Nano) the first time you use these APIs.
+  - AI bridge: Epochgram starts a local server on `http://127.0.0.1` and opens a local bridge page for summarization jobs. In native mode, it uses browser's built-in on-device Summarizer API and the bridge communication stays on your device. In cloud mode, summary data is sent to your selected provider and consumes your API quota. Google Chrome [may download](https://developer.chrome.com/docs/ai/summarizer-api) its built-in model(s) (Gemini Nano) the first time you use native summarization APIs.
   - Similarity: embeddings/topic models and runtime files may be downloaded on first use via `@huggingface/transformers` (for example from [Hugging Face](https://huggingface.co)) and ONNX Runtime Web WASM from [jsDelivr](https://cdn.jsdelivr.net/npm/onnxruntime-web@1.24.3/dist/).
-- All vault data is processed locally on your device and is NEVER sent over the internet.
+- All vault data is processed locally on your device and is NEVER sent over the internet, except when you explicitly use cloud summarization providers.
 - License: MIT (see [LICENSE](LICENSE)).
