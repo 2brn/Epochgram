@@ -8,6 +8,7 @@ type LeafLike = {
 
 type WorkspaceLike = {
 	getLeaf?: (newLeaf?: unknown) => LeafLike | null;
+	getRightLeaf?: (newLeaf?: boolean) => LeafLike | null;
 	revealLeaf?: (leaf: LeafLike) => void;
 	setActiveLeaf?: (leaf: LeafLike, params?: { focus?: boolean }) => void;
 };
@@ -36,7 +37,8 @@ function openExternal(url: string): void {
 async function openInObsidianWebViewer(url: string, app?: unknown): Promise<boolean> {
 	const ws = (app as { workspace?: WorkspaceLike } | undefined)?.workspace;
 	if (!ws || typeof ws.getLeaf !== "function") return false;
-	const leaf = ws.getLeaf("tab") || ws.getLeaf(false);
+	const rightLeaf = typeof ws.getRightLeaf === "function" ? ws.getRightLeaf(false) : null;
+	const leaf = rightLeaf || ws.getLeaf(true);
 	if (!leaf || typeof leaf.setViewState !== "function") return false;
 	const viewStates = [
 		{ type: "webviewer", state: { url }, active: true },

@@ -11,6 +11,7 @@ import { DEFAULT_SETTINGS } from "../settings-model";
 import { registerInfoResetGesture } from "./info-reset-gesture";
 import { countMissingAiSummaries, hasMissingAiSummariesFast } from "../plugin/ai-summaries/file-jobs";
 import { countMissingEpochsFast } from "../plugin/ai-summaries/epochs";
+import { ensureAiBridgeServerRunning } from "../plugin/ai-summaries/bridge-server";
 import { createSettingGroup } from "./setting-groups";
 import { DEFAULT_SIMILARITY_MODEL, DEFAULT_ZERO_SHOT_MODEL, NO_SIMILARITY_MODEL } from "../plugin/similarity/config";
 import {
@@ -413,7 +414,7 @@ export function renderProPanel(
 
 	const linksSetting = markLockedRow(new Setting(similaritySection)
 		.setName("Use links")
-		.setDesc(canSimilarity ? "Include links and backlinks." : "Requires Epochgram Pro."));
+		.setDesc(canSimilarity ? "Includes links and backlinks." : "Requires Epochgram Pro."));
 	linksSetting.addToggle((toggle) => {
 			const canUse = canSimilarity;
 			toggle
@@ -428,7 +429,7 @@ export function renderProPanel(
 
 	const tagsSetting = markLockedRow(new Setting(similaritySection)
 		.setName("Use tags")
-		.setDesc(canSimilarity ? "Include shared tags." : "Requires Epochgram Pro."));
+		.setDesc(canSimilarity ? "Includes shared tags." : "Requires Epochgram Pro."));
 	tagsSetting.addToggle((toggle) => {
 			const canUse = canSimilarity;
 			toggle
@@ -465,7 +466,7 @@ export function renderProPanel(
 			panel.setName(`Title threshold (${label})`);
 		};
 		setLabel(titleThr);
-		panel.setDesc(canSimilarity ? "Jaro–Winkler threshold (0 disables, 1.0 = same folder)." : "Requires Epochgram Pro.");
+		panel.setDesc(canSimilarity ? "Includes similar filenames (0 disables, 1.0 = same folder)." : "Requires Epochgram Pro.");
 		panel.addSlider((slider) => {
 			titleThrSlider = slider;
 			const canUse = canSimilarity;
@@ -520,7 +521,7 @@ export function renderProPanel(
 			: (embeddingModelId.length > 0 ? embeddingModelId : DEFAULT_SIMILARITY_MODEL);
 		similarityPanel.setDesc(
 			canSimilarity
-				? `Model: ${embeddingModel}.`
+				? `Uses model: ${embeddingModel}.`
 				: "Requires Epochgram Pro."
 		);
 		similarityPanel.addExtraButton((btn) => {
@@ -598,7 +599,7 @@ export function renderProPanel(
 			: (zeroShotModelId.length > 0 ? zeroShotModelId : DEFAULT_ZERO_SHOT_MODEL);
 		zeroShotPanel.setDesc(
 			canSimilarity
-				? `Model: ${zeroShotModel}.`
+				? `Uses model: ${zeroShotModel}.`
 				: "Requires Epochgram Pro."
 		);
 		zeroShotPanel.addExtraButton((btn) => {
@@ -654,7 +655,7 @@ export function renderProPanel(
 
 		const summarizeSetting = markLockedRow(new Setting(aiSection)
 			.setName("Auto summarize")
-			.setDesc(canSummarize ? "Generate notes summaries via AI bridge." : "Requires Epochgram Pro."));
+			.setDesc(canSummarize ? "Generates record summaries via AI Bridge instead of text starts." : "Requires Epochgram Pro."));
 		summarizeSetting.addToggle((toggle) => {
 			const canUse = canSummarize;
 			toggle
@@ -666,6 +667,14 @@ export function renderProPanel(
 					const nextEnabled = value === true;
 					plugin.settings.summarizeAI = nextEnabled;
 					await plugin.onSettingsChanged("summarizeAI");
+					if (nextEnabled) {
+						try {
+							await ensureAiBridgeServerRunning(plugin);
+							(plugin as { refreshAiBridgeStatusBar?: () => void }).refreshAiBridgeStatusBar?.();
+						} catch {
+							// ignore
+						}
+					}
 					if (nextEnabled && !wasEnabled) {
 						let missingCount = 0;
 						try {
@@ -696,7 +705,7 @@ export function renderProPanel(
 
 		const epochsSetting = markLockedRow(new Setting(aiSection)
 			.setName(`Generate ${"Epochs"}`)
-			.setDesc(canGenerateEpochs ? "Generate period summaries via AI bridge." : "Requires Epochgram Pro."));
+			.setDesc(canGenerateEpochs ? "Generates period summaries via AI Bridge." : "Requires Epochgram Pro."));
 		epochsSetting.addToggle((toggle) => {
 			const canUse = canGenerateEpochs;
 			const current = plugin.settings.generateEpochs === true;
@@ -709,6 +718,14 @@ export function renderProPanel(
 					const next = enabled === true;
 					plugin.settings.generateEpochs = next;
 					await plugin.onSettingsChanged("generateEpochs");
+					if (next) {
+						try {
+							await ensureAiBridgeServerRunning(plugin);
+							(plugin as { refreshAiBridgeStatusBar?: () => void }).refreshAiBridgeStatusBar?.();
+						} catch {
+							// ignore
+						}
+					}
 					if (prev === false && next === true) {
 						let missingCount = 0;
 						try {
@@ -740,7 +757,7 @@ export function renderProPanel(
 			.setName("Open AI bridge on startup")
 			.setDesc(
 				canAiBridge
-					? "Auto-open AI bridge on startup and close it when Obsidian quits."
+					? "Opens on startup and closes it when Obsidian quits."
 					: "Requires Epochgram Pro."
 			));
 		bridgeStartupSetting.addToggle((toggle) => {
@@ -770,7 +787,7 @@ export function renderProPanel(
 				return;
 			}
 			bridgeWebViewerSetting.descEl.createDiv({
-				text: "Open AI bridge inside Obsidian Web viewer. Works only with cloud providers."
+				text: "Opens in Obsidian Web viewer instead of external browser. Works only with cloud providers."
 			});
 			if (warningText) {
 				const warn = bridgeWebViewerSetting.descEl.createDiv({ text: warningText });

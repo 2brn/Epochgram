@@ -29,7 +29,7 @@ export function renderGeneralViewSettings(containerEl: HTMLElement, plugin: Epoc
 	let enableAnimationToggle: ToggleComponent | null = null;
 	const enableAnimationSetting = new Setting(containerEl)
 		.setName("Enable animation")
-		.setDesc("Turns on/off all animation.")
+		.setDesc("Enables all animations.")
 		.addToggle((toggle) => {
 			enableAnimationToggle = toggle;
 			toggle
@@ -58,7 +58,7 @@ export function renderGeneralViewSettings(containerEl: HTMLElement, plugin: Epoc
 		? Math.max(0, Math.min(100, Math.round(Number(plugin.settings.compactModeMinWidthPercent))))
 		: Math.max(0, Math.min(100, Math.round(Number(DEFAULT_SETTINGS.compactModeMinWidthPercent))));
 	setCompactModeMinWidthLabel(currentCompactModeMinWidth);
-	compactModeMinWidthSetting.setDesc("Collapse overflow records into a (+n) group.");
+	compactModeMinWidthSetting.setDesc("Collapses overflow records into a (+n) group.");
 	let compactModeMinWidthSlider: SliderComponent | null = null;
 	let suppressCompactModeMinWidthOnChange = false;
 	compactModeMinWidthSetting.addSlider((slider) => {
@@ -103,7 +103,7 @@ export function renderGeneralViewSettings(containerEl: HTMLElement, plugin: Epoc
 		? Math.max(1, Math.min(50, Math.round(Number(plugin.settings.searchResultsLimit))))
 		: Math.max(1, Math.min(50, Math.round(Number(DEFAULT_SETTINGS.searchResultsLimit))));
 	setSearchResultsLabel(currentSearchResults);
-	searchResultsSetting.setDesc("Maximum number of search record suggestions.");
+	searchResultsSetting.setDesc("Limits search record suggestions to this count.");
 	let searchResultsSlider: SliderComponent | null = null;
 	let suppressSearchResultsOnChange = false;
 	searchResultsSetting.addSlider((slider) => {
@@ -146,7 +146,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 	let trackChangesToggle: ToggleComponent | null = null;
 	const trackChangesSetting = new Setting(containerEl)
 		.setName("Track changes")
-		.setDesc(canTrackChanges ? "Track note change history on the timeline." : "Requires Epochgram Pro.")
+		.setDesc(canTrackChanges ? "Tracks note change history on the timeline." : "Requires Epochgram Pro.")
 		.addToggle((toggle) => {
 			trackChangesToggle = toggle;
 			toggle
@@ -171,7 +171,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 
 	const getAnchorMdateDesc = () => {
 		const prop = plugin.settings.yamlDateProperty || DEFAULT_SETTINGS.yamlDateProperty;
-		return `Use mdate instead of cdate when no date is found in filename or YAML \`${prop}\`.`;
+		return `Uses mdate instead of cdate when no date is found in filename or YAML \`${prop}\`.`;
 	};
 	let anchorMdateToggle: ToggleComponent | null = null;
 	const anchorMdateSetting = new Setting(containerEl)
@@ -208,7 +208,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 	};
 	const yamlDatePropSetting = new Setting(containerEl)
 		.setName("Anchor property")
-		.setDesc("Used as the note anchor date.")
+		.setDesc("Uses this property as the note anchor date.")
 		.addText((text) => {
 			yamlDatePropText = text;
 			text.inputEl?.classList.add("epoch-frontmatter-prop-input");
@@ -245,7 +245,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 	};
 	const yamlDescriptionPropSetting = new Setting(containerEl)
 		.setName("Summary property")
-		.setDesc("Used as manual summary override.")
+		.setDesc("Uses this property as the manual summary override.")
 		.addText((text) => {
 			yamlDescriptionPropText = text;
 			text.inputEl?.classList.add("epoch-frontmatter-prop-input");
@@ -270,7 +270,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 	let parseDatesInFrontmatterToggle: ToggleComponent | null = null;
 	const parseDatesInFrontmatterSetting = new Setting(containerEl)
 		.setName("Parse all properties")
-		.setDesc("Scan all YAML properties for date values.")
+		.setDesc("Scans all YAML properties for date values.")
 		.addToggle((toggle) => {
 			parseDatesInFrontmatterToggle = toggle;
 			toggle
@@ -297,7 +297,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 	};
 	const currentFilenameWords = plugin.settings.filenameWordsCount;
 	setFilenameLabel(currentFilenameWords);
-	filenameSetting.setDesc("Words of filename shown before summary (0 disables).");
+	filenameSetting.setDesc("Shows this many filename words before the summary (0 disables).");
 	let filenameSlider: SliderComponent | null = null;
 	let suppressFilenameSliderOnChange = false;
 	filenameSetting.addSlider((slider) => {
@@ -345,7 +345,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 	};
 	const currentSummaryWords = plugin.settings.summaryWordsCount;
 	setSummaryLabel(currentSummaryWords);
-	summarySetting.setDesc("Words per summary (0 disables). ");
+	summarySetting.setDesc("Limits summaries to this many words (0 disables).");
 	let summarySlider: SliderComponent | null = null;
 	let suppressSummarySliderOnChange = false;
 	summarySetting.addSlider((slider) => {

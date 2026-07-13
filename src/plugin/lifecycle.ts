@@ -63,7 +63,8 @@ type LifecycleRuntime = EpochPlugin & {
 	__epochInheritedMarkIndexByPath?: Map<string, unknown>;
 	__epochEnsuredViewOnStartup?: boolean;
 	__epochAutoOpenedOnStartup?: boolean;
-	maybeOpenAiBridgeOnStartup?: () => void;
+	__epochAiBridgeStartupPromise?: Promise<void> | null;
+	maybeOpenAiBridgeOnStartup?: () => Promise<void>;
 };
 
 type AppSettingRuntime = {
@@ -575,6 +576,20 @@ export const lifecycleMethods: LifecycleMethods = {
 				runtime.__epochEnsuredViewOnStartup = true;
 				this.app.workspace.onLayoutReady(() => {
 					window.setTimeout(() => {
+							const shouldStartAiBridgeOnStartup = this.settings.openAiBridgeOnStartup === true;
+							if (shouldStartAiBridgeOnStartup && !runtime.__epochAiBridgeStartupPromise) {
+								runtime.__epochAiBridgeStartupPromise = (async () => {
+									try {
+										const maybe = runtime.maybeOpenAiBridgeOnStartup;
+										if (typeof maybe === "function") await maybe();
+									} catch {
+										// ignore
+									}
+								})().finally(() => {
+									runtime.__epochAiBridgeStartupPromise = null;
+								});
+							}
+
 						const shouldAutoOpen = this.settings.openEpochViewOnStartup === true;
 						if (shouldAutoOpen) {
 							// Startup/activation: use the same open path as ribbon click.
@@ -608,7 +623,37 @@ export const lifecycleMethods: LifecycleMethods = {
 											};
 
 											const runOpen = () => {
-												wrapNoticeError("Epochgram: Auto-open timeline failed", () => this.openEpochView({ activate: true }))();
+												void (async () => {
+													try {
+														if (this.settings.openAiBridgeOnStartup === true) {
+															const startupPromise = runtime.__epochAiBridgeStartupPromise ?? null;
+															if (startupPromise) {
+																await Promise.race([
+																	startupPromise,
+																	new Promise<void>((resolve) => window.setTimeout(resolve, 3000))
+																]);
+															}
+														}
+													} catch {
+														// ignore
+													}
+													wrapNoticeError("Epochgram: Auto-open timeline failed", () => this.openEpochView({ activate: true }))();
+													if (this.settings.openAiBridgeOnStartup === true) {
+														const reclaimFocus = () => {
+															try {
+																const activeLeaf = (this.app.workspace as unknown as { activeLeaf?: { view?: { getViewType?: () => string } } }).activeLeaf;
+																const activeType = activeLeaf?.view?.getViewType?.();
+																if (activeType !== VIEW_TYPE_EPOCH) {
+																	void this.openEpochView({ activate: true, skipSnap: true });
+																}
+															} catch {
+																// ignore
+															}
+														};
+														window.setTimeout(reclaimFocus, 180);
+														window.setTimeout(reclaimFocus, 700);
+													}
+												})();
 											};
 
 											const attemptOpen = () => {
@@ -641,23 +686,6 @@ export const lifecycleMethods: LifecycleMethods = {
 		});
 
 		this.registerFileMenu();
-
-		// AI bridge: start server on startup so an already-open Chrome bridge page can reconnect
-		// after plugin reload. Only open a new Chrome tab if no bridge page connects.
-		try {
-			window.setTimeout(() => {
-				try {
-					const maybe = runtime.maybeOpenAiBridgeOnStartup;
-					if (typeof maybe === "function") {
-						wrapNoticeError("Epochgram: AI bridge startup failed", () => void maybe())();
-					}
-				} catch {
-					// ignore
-				}
-			}, 750);
-		} catch {
-			// ignore
-		}
 
 		this.registerInterval(window.setInterval(() => {
 			try {

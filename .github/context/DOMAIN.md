@@ -310,12 +310,15 @@ AI bridge startup behavior (Verified)
 - On desktop with Pro + AI enabled (`summarizeAI === true` or `generateEpochs === true`), Epochgram tries to start the local AI bridge server during plugin load.
 - If `Platform.isMobile` (including mobile emulation) or Node is unavailable, AI bridge startup is skipped.
 - During plugin hot reload/unload, the AI bridge server is stopped and then restarted on the next load; an already-open Chrome bridge page can typically reconnect by continuing to poll `/api/status`.
-- If an existing Chrome bridge page reconnects quickly (e.g. after plugin reload), Epochgram does not open a new tab.
+- If an existing bridge page is already open in Obsidian Web Viewer and startup auto-open is enabled, Epochgram activates that existing bridge leaf on startup.
 - Chrome auto-open is controlled by `openAiBridgeOnStartup` (Pro + Desktop). When OFF, Epochgram never opens Chrome automatically (only the explicit command/status bar click can open the AI Bridge page).
   - Desktop shows a status bar entrypoint (with a hover hint) for opening the AI Bridge page only after the local bridge server has started.
     - Once shown, the status bar entrypoint is red when the bridge page is disconnected (not open / not connected).
-  - When enabled: if no bridge client reconnects within ~20s, Epochgram auto-opens the bridge page in Chrome on startup.
+  - Enabling `summarizeAI` or `generateEpochs` from settings starts the local AI bridge HTTP server immediately on desktop (without waiting for the first queued AI job).
+  - When enabled: startup opens the bridge page immediately if no matching bridge leaf is already open.
+  - When both `openAiBridgeOnStartup` and `openAiBridgeInObsidianWebViewer` are enabled, startup always prefers activating/opening the bridge inside Obsidian Web Viewer.
   - When disabled: Epochgram does not auto-open Chrome on startup (but still starts the server so an existing bridge tab can reconnect).
+- When startup auto-open is enabled and Epochgram timeline auto-open is also enabled, startup activates the bridge leaf first and then activates the Epochgram view.
 - When Epochgram auto-opens the bridge page, it includes `closeOnDisconnect=1` in the URL; the page will best-effort close itself if the bridge server disconnects.
 - When the bridge page is not auto-opened (no `closeOnDisconnect=1`), the page stays open on disconnect and keeps retrying `/api/status` so it can recover when Obsidian restarts.
 - When enabling `summarizeAI` (Auto summarize) or switching `generateEpochs` from `false` to `true` in settings, the “Generate missing …?” confirmation prompt is shown only if there is actually missing work to run.

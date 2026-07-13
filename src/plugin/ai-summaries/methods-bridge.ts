@@ -46,6 +46,8 @@ type BridgeLeafLike = {
 
 type BridgeWorkspaceLike = {
 	getLeavesOfType?: (type: string) => BridgeLeafLike[];
+	revealLeaf?: (leaf: BridgeLeafLike) => void;
+	setActiveLeaf?: (leaf: BridgeLeafLike, params?: { focus?: boolean }) => void;
 };
 
 type InternalPluginLike = {
@@ -182,7 +184,7 @@ function readLeafUrl(leaf: BridgeLeafLike): string | null {
 	return null;
 }
 
-function hasBridgeLeafOpen(plugin: EpochPlugin, bridge: AiBridgeServer): boolean {
+function findBridgeLeaf(plugin: EpochPlugin, bridge: AiBridgeServer): BridgeLeafLike | null {
 	let expectedOrigin = "";
 	let expectedPath = "/";
 	let expectedToken = "";
@@ -192,12 +194,12 @@ function hasBridgeLeafOpen(plugin: EpochPlugin, bridge: AiBridgeServer): boolean
 		expectedPath = u.pathname || "/";
 		expectedToken = String(u.searchParams.get("token") || "");
 	} catch {
-		return false;
+		return null;
 	}
-	if (!expectedOrigin || !expectedToken) return false;
+	if (!expectedOrigin || !expectedToken) return null;
 
 	const ws = plugin.app.workspace as unknown as BridgeWorkspaceLike;
-	if (!ws || typeof ws.getLeavesOfType !== "function") return false;
+	if (!ws || typeof ws.getLeavesOfType !== "function") return null;
 	const leaves = [
 		...(ws.getLeavesOfType("webviewer") ?? []),
 		...(ws.getLeavesOfType("browser") ?? [])
@@ -211,13 +213,35 @@ function hasBridgeLeafOpen(plugin: EpochPlugin, bridge: AiBridgeServer): boolean
 			if (u.origin !== expectedOrigin) continue;
 			if ((u.pathname || "/") !== expectedPath) continue;
 			if (String(u.searchParams.get("token") || "") !== expectedToken) continue;
-			return true;
+			return leaf;
 		} catch {
 			continue;
 		}
 	}
 
-	return false;
+	return null;
+}
+
+function hasBridgeLeafOpen(plugin: EpochPlugin, bridge: AiBridgeServer): boolean {
+	return !!findBridgeLeaf(plugin, bridge);
+}
+
+function activateBridgeLeafIfOpen(plugin: EpochPlugin, bridge: AiBridgeServer): boolean {
+	const ws = plugin.app.workspace as unknown as BridgeWorkspaceLike;
+	if (!ws) return false;
+	const leaf = findBridgeLeaf(plugin, bridge);
+	if (!leaf) return false;
+	try {
+		ws.revealLeaf?.(leaf);
+	} catch {
+		// ignore
+	}
+	try {
+		ws.setActiveLeaf?.(leaf, { focus: true });
+	} catch {
+		// ignore
+	}
+	return true;
 }
 
 export function syncAiBridgeConnectionFromWebViewerLeaves(this: EpochPlugin): void {
@@ -408,10 +432,14 @@ export async function maybeOpenAiBridgeOnStartup(this: EpochPlugin): Promise<voi
 	const runtime = this as unknown as AiBridgeRuntime;
 	let shouldAutoOpenPage = false;
 	let aiEnabled = false;
+	let preferWebViewer = false;
+	let wantsWebViewer = false;
 	try {
 		if (!hasAiBridgeAccess(this)) return;
 		if (!Platform.isDesktop || Platform.isMobile) return;
 		shouldAutoOpenPage = isOpenAiBridgeOnStartupEffective(this);
+		wantsWebViewer = this.settings.openAiBridgeInObsidianWebViewer === true;
+		preferWebViewer = prefersObsidianWebViewer(this);
 		aiEnabled = isSummarizeAIEffective(this) || isGenerateEpochsEffective(this);
 		if (!aiEnabled) return;
 	} catch {
@@ -442,22 +470,30 @@ export async function maybeOpenAiBridgeOnStartup(this: EpochPlugin): Promise<voi
 			return;
 		}
 
-		// If a bridge page is already open (e.g. during plugin hot-reload), it should reconnect
-		// quickly once the server is back. Wait briefly before opening a new Chrome tab.
-		const timeoutAt = Date.now() + 20_000;
-		while (Date.now() < timeoutAt) {
-			try {
-				const s = bridge.getStatus() as AiBridgeStatusLike;
-				if (s.clientConnected) return;
-			} catch {
-				// ignore
+		if (wantsWebViewer) {
+			const activateOrRetry = async (): Promise<boolean> => {
+				if (activateBridgeLeafIfOpen(this, bridge)) return true;
+				const timeoutAt = Date.now() + 2000;
+				while (Date.now() < timeoutAt) {
+					await delay(120);
+					if (activateBridgeLeafIfOpen(this, bridge)) return true;
+				}
+				return false;
+			};
+
+			const activated = await activateOrRetry();
+			runtime.aiBridgeHadWebViewerLeaf = activated;
+			if (activated) {
+				try {
+					runtime.refreshAiBridgeStatusBar?.();
+				} catch {
+					// ignore
+				}
+				return;
 			}
-			await delay(200);
 		}
 
-		// Auto-summarize enabled: ensure the bridge page is open so background work can run.
-		// Use the regular open flow to respect global throttling/locking.
-		await this.openAiBridgeWindow({ silent: true });
+		await this.openAiBridgeWindow({ silent: true, source: "auto", forceOpen: true });
 		try {
 			runtime.refreshAiBridgeStatusBar?.();
 		} catch {
