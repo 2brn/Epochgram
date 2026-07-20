@@ -7,6 +7,8 @@
 - Startup behavior:
   - After layout is ready, the plugin ensures an `epochgram-view` leaf exists (without stealing focus).
   - Desktop and mobile: it may auto-open Epochgram after layout is ready when `settings.openEpochViewOnStartup !== false`.
+  - If AI bridge auto-start is enabled, the bridge startup flow runs before the timeline auto-open flow so an existing bridge leaf can be re-activated first.
+  - When `summarizeAI` (Auto summarize) or `generateEpochs` is switched on in settings, the local AI bridge HTTP server starts immediately on desktop instead of waiting for the first queued AI job.
   - Opening Epochgram always targets the right/sidebar leaf and falls back to a tab leaf only when a right leaf is unavailable.
   - When the view opens, the timeline snaps to an open Markdown file’s best matching record (prefers the most recently active Markdown leaf when available); otherwise it snaps to Today.
     - Snapping targets the record whose date is nearest to Today for that file (for both recurring and non-recurring matches). Cursor line does not affect which record is chosen.

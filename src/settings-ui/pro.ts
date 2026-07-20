@@ -521,7 +521,7 @@ export function renderProPanel(
 			: (embeddingModelId.length > 0 ? embeddingModelId : DEFAULT_SIMILARITY_MODEL);
 		similarityPanel.setDesc(
 			canSimilarity
-				? `Uses model: ${embeddingModel}.`
+				? `Model: ${embeddingModel}.`
 				: "Requires Epochgram Pro."
 		);
 		similarityPanel.addExtraButton((btn) => {
@@ -599,7 +599,7 @@ export function renderProPanel(
 			: (zeroShotModelId.length > 0 ? zeroShotModelId : DEFAULT_ZERO_SHOT_MODEL);
 		zeroShotPanel.setDesc(
 			canSimilarity
-				? `Uses model: ${zeroShotModel}.`
+				? `Model: ${zeroShotModel}.`
 				: "Requires Epochgram Pro."
 		);
 		zeroShotPanel.addExtraButton((btn) => {
@@ -757,7 +757,7 @@ export function renderProPanel(
 			.setName("Open AI bridge on startup")
 			.setDesc(
 				canAiBridge
-					? "Opens on startup and closes it when Obsidian quits."
+					? "Opens automatically on startup and closes it when Obsidian quits."
 					: "Requires Epochgram Pro."
 			));
 		bridgeStartupSetting.addToggle((toggle) => {

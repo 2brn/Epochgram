@@ -29,7 +29,7 @@ export function renderGeneralViewSettings(containerEl: HTMLElement, plugin: Epoc
 	let enableAnimationToggle: ToggleComponent | null = null;
 	const enableAnimationSetting = new Setting(containerEl)
 		.setName("Enable animation")
-		.setDesc("Enables all animations.")
+		.setDesc("Turns on/off all animation.")
 		.addToggle((toggle) => {
 			enableAnimationToggle = toggle;
 			toggle
@@ -103,7 +103,7 @@ export function renderGeneralViewSettings(containerEl: HTMLElement, plugin: Epoc
 		? Math.max(1, Math.min(50, Math.round(Number(plugin.settings.searchResultsLimit))))
 		: Math.max(1, Math.min(50, Math.round(Number(DEFAULT_SETTINGS.searchResultsLimit))));
 	setSearchResultsLabel(currentSearchResults);
-	searchResultsSetting.setDesc("Limits search record suggestions to this count.");
+	searchResultsSetting.setDesc("Limits search record suggestions count.");
 	let searchResultsSlider: SliderComponent | null = null;
 	let suppressSearchResultsOnChange = false;
 	searchResultsSetting.addSlider((slider) => {
@@ -208,7 +208,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 	};
 	const yamlDatePropSetting = new Setting(containerEl)
 		.setName("Anchor property")
-		.setDesc("Uses this property as the note anchor date.")
+		.setDesc("Uses as the note anchor date.")
 		.addText((text) => {
 			yamlDatePropText = text;
 			text.inputEl?.classList.add("epoch-frontmatter-prop-input");
@@ -245,7 +245,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 	};
 	const yamlDescriptionPropSetting = new Setting(containerEl)
 		.setName("Summary property")
-		.setDesc("Uses this property as the manual summary override.")
+		.setDesc("Uses as the manual summary override.")
 		.addText((text) => {
 			yamlDescriptionPropText = text;
 			text.inputEl?.classList.add("epoch-frontmatter-prop-input");
@@ -297,7 +297,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 	};
 	const currentFilenameWords = plugin.settings.filenameWordsCount;
 	setFilenameLabel(currentFilenameWords);
-	filenameSetting.setDesc("Shows this many filename words before the summary (0 disables).");
+	filenameSetting.setDesc("Words of filename shown before summary (0 disables).");
 	let filenameSlider: SliderComponent | null = null;
 	let suppressFilenameSliderOnChange = false;
 	filenameSetting.addSlider((slider) => {
@@ -345,7 +345,7 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 	};
 	const currentSummaryWords = plugin.settings.summaryWordsCount;
 	setSummaryLabel(currentSummaryWords);
-	summarySetting.setDesc("Limits summaries to this many words (0 disables).");
+	summarySetting.setDesc("Words per summary (0 disables).");
 	let summarySlider: SliderComponent | null = null;
 	let suppressSummarySliderOnChange = false;
 	summarySetting.addSlider((slider) => {
