@@ -1,4 +1,4 @@
-import type { DateEntry, FileDateEntry, FileIndexData, SerializedEpochIndex } from "./types";
+import { normalizePinMode, type DateEntry, type FileDateEntry, type FileIndexData, type SerializedEpochIndex } from "./types";
 
 type DateEntryWithExtras = DateEntry & {
 	recurring?: boolean;
@@ -108,7 +108,7 @@ export function normalizeSerializedEpochIndexForDisk(serialized: SerializedEpoch
 			embeddingTerm: anyData.embeddingTerm,
 			markColor: anyData.markColor,
 			markColorHex: anyData.markColorHex,
-			pinnedFile: anyData.pinnedFile,
+			pinnedFile: normalizePinMode(anyData.pinnedFile),
 			recur: anyData.recur,
 			recurHiddenDates: anyData.recurHiddenDates,
 			recurReviewedDates: anyData.recurReviewedDates

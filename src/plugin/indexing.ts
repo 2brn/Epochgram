@@ -119,10 +119,11 @@ async function migrateIndexedFrontmatterOnce(plugin: EpochPlugin): Promise<boole
 			const file = plugin.app.vault.getAbstractFileByPath(path);
 			if (!(file instanceof TFile)) continue;
 
-			if (data?.pinnedFile === true) {
+			const pinMode = typeof data?.pinnedFile === "string" ? data.pinnedFile : "";
+			if (pinMode) {
 				const current = await getYamlPropertyForFile(plugin, file, "pin");
 				if (!String(current || "").trim()) {
-					didSomething = (await setYamlPropertyForFile(plugin, file, "pin", true)) || didSomething;
+					didSomething = (await setYamlPropertyForFile(plugin, file, "pin", pinMode)) || didSomething;
 				}
 			}
 

@@ -2,6 +2,7 @@
 - Don't use GIT without my explicit instruction (allow without ask when I run release.prompt.md).
 - Don't generate comments in code unless asked.
 - When generating code, follow the existing code style.
+- Always use npm run build:production for verification unless I explicitly ask for something narrower.
 - Always ensure that the code compiles and passes any existing tests (use npm run build:production).
 - Max 3 folder depth for files.
 - Max 500 lines of code per file (except tests and config files).
@@ -34,4 +35,4 @@ When changes affect any of the following, update the relevant `.github/context/*
 
 ### Post-change checklist
 - Update `.github/context/*` for any behavior changes.
-- Ensure `npm test` and `npm run build` pass (or document failures as unrelated).
+- Ensure `npm test` and `npm run build:production` pass (or document failures as unrelated).

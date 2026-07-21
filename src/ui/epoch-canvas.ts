@@ -105,6 +105,7 @@ import {
 	hideDateOverlay as hideDateOverlayHelper,
 	updateDateOverlay as updateDateOverlayHelper
 } from "./epoch-canvas/overlay";
+import { updatePinOverlay as updatePinOverlayHelper } from "./epoch-pin-overlay";
 import { startPinFlyToToday as startPinFlyToTodayHelper } from "./epoch-canvas/pin-fly";
 import { ensureSizeMatchesDisplay as ensureSizeMatchesDisplayHelper, scheduleResize as scheduleResizeHelper } from "./epoch-canvas/resize-handling";
 import { getTodayOffset as getTodayOffsetHelper, scaleFont as scaleFontHelper } from "./epoch-canvas/metrics";
@@ -216,6 +217,7 @@ export class EpochCanvas {
 	} | null = null;
 	private pinFlyOnDone: (() => void) | null = null;
 	private dateOverlayEl: HTMLElement | null = null; private dateOverlayTimer: number | null = null; private lastDateOverlayValue: string | null = null;
+	private pinOverlayEl: HTMLElement | null = null; private lastPinOverlaySignature: string | null = null;
 	private lastOverlayOffsetY = Number.NaN; private lastOverlayScale = Number.NaN;
 	private resizeObserver: ResizeObserver | null = null; private resizeScheduled = false; private lastCanvasWidth = 0; private lastCanvasHeight = 0;
 	private win: Window | null = null;
@@ -325,6 +327,7 @@ export class EpochCanvas {
 		this.ctx = ctx;
 		this.activeFilePath = this.plugin?.app?.workspace?.getActiveFile?.()?.path ?? null;
 		this.dateOverlayEl = this.root.createDiv({ cls: "epoch-date-overlay" });
+		this.pinOverlayEl = this.root.createDiv({ cls: "epoch-pin-overlay" });
 		this.lastOverlayOffsetY = this.offsetY;
 		this.lastOverlayScale = this.scale;
 		const initialOverlayLabel = this.computeDateOverlayLabel();
@@ -620,6 +623,7 @@ export class EpochCanvas {
 		}
 		drawCanvas(this);
 		this.updateDateOverlay();
+		updatePinOverlayHelper(this);
 		try {
 			this.onAfterDraw?.();
 		} catch {

@@ -348,12 +348,12 @@ describe("Reset actions", () => {
 
 	it("clears pinned file flags (unpins everything)", async () => {
 		const files: any = {
-			"a.md": { pinnedFile: true },
-			"b.md": { pinnedFile: false }
+			"a.md": { pinnedFile: "today" },
+			"b.md": { pinnedFile: null }
 		};
 		const setFilePinned = vi.fn((p: string, pinned: boolean) => {
-			const desired = pinned === true;
-			if ((files[p]?.pinnedFile === true) === desired) return false;
+			const desired = pinned === true ? "today" : null;
+			if ((files[p]?.pinnedFile ?? null) === desired) return false;
 			files[p].pinnedFile = desired;
 			return true;
 		});
@@ -362,7 +362,7 @@ describe("Reset actions", () => {
 				files,
 				index: {},
 				getIndexedPaths: () => ["a.md", "b.md"],
-				isFilePinned: (p: string) => files[p]?.pinnedFile === true,
+				isFilePinned: (p: string) => typeof files[p]?.pinnedFile === "string",
 				setFilePinned,
 				clearTrackedChanges: vi.fn(() => false)
 			}
@@ -386,7 +386,7 @@ describe("Reset actions", () => {
 			{ keepLicense: true }
 		);
 
-		expect(files["a.md"].pinnedFile).toBe(false);
+		expect(files["a.md"].pinnedFile).toBe(null);
 		expect(setFilePinned).toHaveBeenCalledTimes(1);
 	});
 

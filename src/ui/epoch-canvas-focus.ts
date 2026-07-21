@@ -108,6 +108,62 @@ export function focusToday(canvas: EpochCanvas): void {
 	state.requestHoverAnimation();
 }
 
+export function focusDateWithZoom(
+	canvas: EpochCanvas,
+	date: Date,
+	highlight: boolean,
+	persistentHover: boolean = false
+): boolean {
+	const state = getFocusInternals(canvas);
+	const diffDays = getDayIndexForDate(canvas, date);
+	const rect = state.root.getBoundingClientRect();
+	const cachedHeight0 = Number(state.__lastKnownCanvasCssHeight ?? 0);
+	const height = rect.height || (Number.isFinite(cachedHeight0) ? cachedHeight0 : 0);
+	let didScroll = false;
+	if (height) {
+		const worldY = diffDays * BASE_SPACING;
+		const anchorY = height * FOCUS_ANCHOR_RATIO;
+		state.targetScale = 1;
+		state.targetOffsetY = anchorY - worldY;
+		state.animatingView = true;
+		didScroll = true;
+	} else {
+		state.pendingVisibilityDraw = true;
+		state.scheduleVisibilityCheck();
+	}
+	const didHighlight = focusDate(canvas, date, highlight, false, persistentHover);
+	state.requestHoverAnimation();
+	return didScroll || didHighlight;
+}
+
+export function focusDateWithCenterZoom(
+	canvas: EpochCanvas,
+	date: Date,
+	highlight: boolean,
+	persistentHover: boolean = false
+): boolean {
+	const state = getFocusInternals(canvas);
+	const diffDays = getDayIndexForDate(canvas, date);
+	const rect = state.root.getBoundingClientRect();
+	const cachedHeight0 = Number(state.__lastKnownCanvasCssHeight ?? 0);
+	const height = rect.height || (Number.isFinite(cachedHeight0) ? cachedHeight0 : 0);
+	let didScroll = false;
+	if (height) {
+		const worldY = diffDays * BASE_SPACING;
+		const anchorY = height * 0.5;
+		state.targetScale = 1;
+		state.targetOffsetY = anchorY - worldY;
+		state.animatingView = true;
+		didScroll = true;
+	} else {
+		state.pendingVisibilityDraw = true;
+		state.scheduleVisibilityCheck();
+	}
+	const didHighlight = focusDate(canvas, date, highlight, false, persistentHover);
+	state.requestHoverAnimation();
+	return didScroll || didHighlight;
+}
+
 export function snapToToday(canvas: EpochCanvas, options: { draw?: boolean } = {}): void {
 	const state = getFocusInternals(canvas);
 	const anchorY = state.getTodayOffset();
@@ -125,6 +181,30 @@ export function snapToToday(canvas: EpochCanvas, options: { draw?: boolean } = {
 	if (options.draw !== false) {
 		state.draw();
 	}
+}
+
+export function snapToDate(canvas: EpochCanvas, date: Date, options: { draw?: boolean } = {}): boolean {
+	const state = getFocusInternals(canvas);
+	const rect = state.root.getBoundingClientRect();
+	const cachedHeight0 = Number(state.__lastKnownCanvasCssHeight ?? 0);
+	const height = rect.height || (Number.isFinite(cachedHeight0) ? cachedHeight0 : 0);
+	if (!height) {
+		state.pendingVisibilityDraw = true;
+		state.scheduleVisibilityCheck();
+		return false;
+	}
+	const dayIndex = getDayIndexForDate(canvas, date);
+	const worldY = dayIndex * BASE_SPACING;
+	const anchorY = height * FOCUS_ANCHOR_RATIO;
+	state.scale = 1;
+	state.targetScale = 1;
+	state.offsetY = anchorY - worldY;
+	state.targetOffsetY = state.offsetY;
+	state.animatingView = false;
+	if (options.draw !== false) {
+		state.draw();
+	}
+	return true;
 }
 
 export function focusDate(

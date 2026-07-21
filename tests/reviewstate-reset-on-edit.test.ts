@@ -57,17 +57,16 @@ describe("ReviewState reset on edit", () => {
 		const ctime = Date.UTC(2025, 0, 1);
 		const file = makeFile("folder/pinned.md", ctime);
 
-		contents[file.path] = "Initial";
+		contents[file.path] = ["---", "pin: today", "---", "Initial"].join("\n");
 		await indexer.processFile(file, { reason: "modify" });
 
 		// simulate user pin + reviewed
 		const data: any = (indexer as any).files[file.path];
-		data.pinnedFile = true;
 		if (data.cdate) (data.cdate as any).reviewState = "reviewed";
 		(indexer as any).updateAggregatedEntries(file.path);
 
 		// edit again
-		contents[file.path] = "Initial\nChanged";
+		contents[file.path] = ["---", "pin: today", "---", "Initial", "Changed"].join("\n");
 		await indexer.processFile(file, { reason: "modify" });
 
 		const data2: any = (indexer as any).files[file.path];

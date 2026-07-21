@@ -49,7 +49,7 @@ Commands are registered in `plugin/lifecycle.ts` (export command via `plugin/exp
   - Does not unhide hidden records.
 
 Maintenance rebuild/reset flows are available in Settings → Indexer (`Index`).
-- Reset no longer includes the old Pinned/Marks toggles; Topics reset clears both classified topic data and explicit per-file topic terms (index/store only) and does not modify note frontmatter.
+- Reset includes dedicated Marks and Pinned options again; Topics reset clears both classified topic data and explicit per-file topic terms (index/store only) and does not modify note frontmatter.
 
 ## Current File Toggles
 These operate on the active file and are only available when a file is active, index-ready, and the file is indexable/known.
@@ -61,6 +61,8 @@ These operate on the active file and are only available when a file is active, i
   - When marking, it picks a default mark color that avoids clashes with other marked notes when possible.
   - After a change, inherited marks are recomputed so similar/related notes update immediately.
 - `toggle-pin-current-note` — “Toggle pin for current file”
+  - If the active file is not pinned, it writes `pin: today`.
+  - If the active file already has any explicit `pin:` mode (`today`, `date`, or `dock`), it removes the `pin:` property.
 
 - `toggle-visibility-current-file` — “Toggle visibility for current file”
   - Toggles file-wide hidden state.

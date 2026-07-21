@@ -119,7 +119,6 @@ export async function applyMarkColorWithContext(plugin: EpochPlugin, args: {
 }): Promise<boolean> {
 	const entry = normalizeNonEpochPath(args.entryPath);
 	if (!entry) return false;
-	const next = normalizeMarkColorIndex(args.nextColorIndex);
 	const state = plugin as MarkContextPluginLike;
 
 	try {

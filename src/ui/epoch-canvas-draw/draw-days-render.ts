@@ -34,6 +34,50 @@ type AnimSummaryState = DaySummaryRenderArgs["animSummary"];
 type PrevAnimSummaryState = DaySummaryRenderArgs["prevAnimSummary"];
 type OutgoingSummariesState = DaySummaryRenderArgs["outgoingSummaries"];
 
+type DrawIndexerLike = {
+	getFileIndexData?: (path: string) => {
+		cdate?: DateEntry | null;
+		namedDate?: DateEntry | null;
+		dateProp?: DateEntry | null;
+		pinnedFile?: unknown;
+	} | null;
+};
+
+function toDateKey(date: Date): string {
+	const y = date.getFullYear();
+	const m = String(date.getMonth() + 1).padStart(2, "0");
+	const d = String(date.getDate()).padStart(2, "0");
+	return `${y}-${m}-${d}`;
+}
+
+function shouldHideDateLabel(
+	plugin: CanvasDrawState["plugin"],
+	entries: DateEntry[],
+	dateKey: string,
+	cache: Map<string, { mode: string | null; anchorDate: string | null }>
+): boolean {
+	const pluginWithIndexer = plugin as CanvasDrawState["plugin"] & { indexer?: DrawIndexerLike };
+	const indexer = pluginWithIndexer.indexer;
+	if (!indexer || typeof indexer.getFileIndexData !== "function") return false;
+	for (const entry of entries) {
+		const file = String(entry?.file ?? "");
+		if (!file) continue;
+		let info = cache.get(file);
+		if (!info) {
+			const data = indexer.getFileIndexData(file) ?? null;
+			const modeRaw = typeof data?.pinnedFile === "string" ? data.pinnedFile.trim().toLowerCase() : null;
+			const mode = modeRaw === "date" || modeRaw === "dock" ? modeRaw : null;
+			const anchorDate = data?.namedDate?.date ?? data?.dateProp?.date ?? data?.cdate?.date ?? null;
+			info = { mode, anchorDate };
+			cache.set(file, info);
+		}
+		if ((info.mode === "date" || info.mode === "dock") && info.anchorDate === dateKey) {
+			return true;
+		}
+	}
+	return false;
+}
+
 export function drawDayLayouts(params: {
 	s: CanvasDrawState;
 	w: number;
@@ -165,9 +209,11 @@ export function drawDayLayouts(params: {
 		? Math.max(0, Math.min(100, compactModeMinWidthPercentRaw))
 		: 20;
 	const compactMinWidthRatio = compactModeMinWidthPercent / 100;
+	const pinInfoByFile = new Map<string, { mode: string | null; anchorDate: string | null }>();
 
 	for (const i of renderIndices) {
 		const date = s.getDateForIndex(i, today);
+		const dateKey = toDateKey(date);
 		const worldY = i * BASE_SPACING;
 		const yScreen = worldY * s.scale + s.offsetY;
 		const packedCenterY = epochsViewActive ? packedEpochDayCenterY.get(i) : packedNormalDayCenterY.get(i);
@@ -193,6 +239,7 @@ export function drawDayLayouts(params: {
 			}
 		}
 		const dateHoverT = Math.max(0, Math.min(1, Math.max(tIn, tOut)));
+		const hideDateLabel = shouldHideDateLabel(s.plugin, entries, dateKey, pinInfoByFile);
 
 		const marker = drawDayMarker({
 			ctx,
@@ -205,7 +252,8 @@ export function drawDayLayouts(params: {
 			fontMainHover,
 			colTextBase,
 			colSummaryHoverBg,
-			colToday
+			colToday,
+			hideLabel: hideDateLabel
 		});
 
 		const { kind, hasVisibleDate, dateRect } = marker;

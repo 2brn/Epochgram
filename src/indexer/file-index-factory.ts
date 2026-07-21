@@ -17,7 +17,7 @@ export function createEmptyFileIndex(): FileIndexData {
 		recurHiddenDates: [],
 		markColor: undefined,
 		markColorHex: undefined,
-		pinnedFile: false,
+		pinnedFile: null,
 	};
 }
 

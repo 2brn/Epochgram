@@ -87,7 +87,10 @@ export function getExplicitMarkPathsInGroup(canvas: EpochCanvas, groupSet: Set<n
 			const file = String(entry.file ?? "");
 			if (!file || file.startsWith("epoch://")) continue;
 			const idx = normalizeMarkColorIndex(entry.markColor);
-			if (!idx && !String((entry as { markColorHex?: unknown }).markColorHex ?? "").trim()) continue;
+			const explicitHex = typeof (entry as { markColorHex?: unknown }).markColorHex === "string"
+				? String((entry as { markColorHex?: string }).markColorHex || "").trim()
+				: "";
+			if (!idx && !explicitHex) continue;
 			if (!idx) continue;
 			if (!groupSet.has(idx)) continue;
 			if (seen.has(file)) continue;

@@ -4,7 +4,9 @@ import { writeTermStore } from "./similarity-term-store";
 import { getSimilarityModelId } from "./similarity/config";
 import { clearResultHandlerState } from "./ai-summaries/result-handler";
 import {
+	clearAllMarks,
 	clearAllAiSummaries,
+	clearAllPins,
 	clearAllEmbeddingTerms,
 	clearEpochEntries,
 	clearSemanticRuntimeState,
@@ -266,7 +268,9 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 		addSelected("settings", "Settings");
 		addSelected("search", "Search");
 		addSelected("dataFiles", "Data files");
+		addSelected("marks", "Marks");
 		addSelected("reviewState", "Reviews");
+		addSelected("pinned", "Pinned");
 		addSelected("semantics", "Semantics");
 		addSelected("topics", "Topics");
 		addSelected("trackedChanges", "Tracked changes");
@@ -275,6 +279,21 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 
 		if (sel.reviewState) {
 			const cleared = resetAllReviewStates(plugin);
+			if (cleared > 0) didSomething = true;
+		}
+
+		if (sel.marks) {
+			const cleared = clearAllMarks(plugin);
+			if (cleared > 0) didSomething = true;
+			try {
+				runtime.clearInheritedMarksCache?.();
+			} catch {
+				// ignore
+			}
+		}
+
+		if (sel.pinned) {
+			const cleared = clearAllPins(plugin);
 			if (cleared > 0) didSomething = true;
 		}
 

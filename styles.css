@@ -407,6 +407,70 @@ body.theme-light .epoch-license-section {
   transform: translate(-50%, 0);
 }
 
+.epoch-root .epoch-pin-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.epoch-root .epoch-pin-badge {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--epoch-pin-fill, var(--text-normal));
+  color: var(--epoch-pin-text, var(--background-primary));
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
+  border-radius: 0;
+  overflow: visible;
+  pointer-events: auto;
+  cursor: pointer;
+  transform-origin: center center;
+  transition: opacity 160ms ease, transform 140ms ease;
+}
+
+.epoch-root .epoch-pin-badge:hover,
+.epoch-root .epoch-pin-badge:focus-visible {
+  transform: scale(1.375);
+}
+
+.epoch-root .epoch-pin-badge-label {
+  position: absolute;
+  left: 4px;
+  right: 14px;
+  top: 0;
+  bottom: 0;
+  display: block;
+  line-height: 16px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: clip;
+  text-align: left;
+  font-size: var(--font-ui-smaller);
+  transform-origin: center center;
+  transition: transform 140ms ease;
+}
+
+.epoch-root .epoch-pin-badge:hover .epoch-pin-badge-label,
+.epoch-root .epoch-pin-badge:focus-visible .epoch-pin-badge-label {
+  transform: scaleX(1.03) scaleY(1.08);
+}
+
+.epoch-root .epoch-pin-badge-label.is-justify {
+  text-align: justify;
+  text-align-last: justify;
+  text-overflow: clip;
+}
+
+.epoch-root .epoch-pin-badge-label.is-left {
+  text-align: left;
+}
+
 /* Hide submenu arrows for circle-only mark group items. */
 .menu .menu-item.epoch-menu-no-arrow .menu-item-icon.mod-submenu,
 .menu .menu-item.epoch-menu-no-arrow .menu-item-submenu-icon,

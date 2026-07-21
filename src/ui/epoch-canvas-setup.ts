@@ -51,6 +51,7 @@ type CanvasSetupState = {
 	touchLongPressTimeout: number | null;
 	dateOverlayTimer: number | null;
 	dateOverlayEl: HTMLElement | null;
+	pinOverlayEl: HTMLElement | null;
 	pendingVisibilityDraw: boolean;
 	hoverPreviewKey: string | null;
 	lastPointerEvent: MouseEvent | null;
@@ -330,6 +331,10 @@ export const canvasSetupMethods: CanvasSetupMethods = {
 			state.dateOverlayEl.parentElement.removeChild(state.dateOverlayEl);
 		}
 		state.dateOverlayEl = null;
+		if (state.pinOverlayEl?.parentElement) {
+			state.pinOverlayEl.parentElement.removeChild(state.pinOverlayEl);
+		}
+		state.pinOverlayEl = null;
 		state.pendingVisibilityDraw = false;
 		state.hoverPreviewKey = null;
 		state.lastPointerEvent = null;

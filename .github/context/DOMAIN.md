@@ -25,7 +25,9 @@ Frontmatter date property (Verified)
   - `noparsed: <any>` suppresses parsed content-date indexing for the file (content-derived entries are not indexed or shown on the timeline).
   - `noindex: <any>` excludes the file from Epochgram indexing entirely (the file is removed from the timeline index and search cache).
 - Explicit UI frontmatter overrides (Verified):
-  - `pin: <any>` pins the file and takes priority over the saved index pin state.
+  - `pin:` / `pin: today` pins the file to Today and takes priority over the saved index pin state.
+  - `pin: date` renders a date-tied pin label only while that anchor date is inside the current viewport.
+  - `pin: dock` renders the same date-tied pin label and keeps a docked semitransparent label visible when that anchor date is outside the current viewport.
   - `mark: #hex` stores an explicit mark color and takes priority over the saved index mark state.
   - Removing one of these frontmatter keys removes the explicit override on the next index pass.
 - For content-derived entries (`source: "content"`), the normal UI summary strips embedded date literals (e.g. `2026-03-05`, `07/01/2025`, `March 8, 2025`) so the summary doesn’t redundantly repeat the row’s date.
@@ -96,7 +98,8 @@ Per-file UI-facing state includes:
   - Per-entry/per-day via an entry-level `reviewState: "hidden"` override; the Hide/Show action applies it to all entries from that note for the selected day.
     - For recurring synthetic occurrences, per-occurrence hidden overrides are persisted as date keys in `recurHiddenDates`.
 - Pinned:
-  - When a file is pinned and its anchor date differs from Today, a synthetic pinned-today entry is emitted on Today with `originalDate` set to the anchor date.
+  - `pin:` / `pin: today` emit a synthetic pinned-today entry on Today when the anchor date differs from Today; that synthetic row stores `originalDate` set to the anchor date.
+  - `pin: date` and `pin: dock` do not emit synthetic Today rows; they keep the note anchored on its real date and only affect date-label rendering.
   - When the local day changes while Epochgram remains open, synthetic pinned-today entries are refreshed so they move to the new Today date.
 - Marked with a mark color index (see `ui/mark-colors.ts` and usage in `plugin/view.ts` and `indexer/indexer-class.ts`).
 - Pin and mark UI actions update YAML frontmatter so the explicit override becomes the source of truth for the note.

@@ -174,7 +174,7 @@ export function addMarkSubmenu(
 					isEntryExplicit,
 					isEntrySimilarToActive,
 					currentColorIndex: current,
-					nextColorIndex: explicitHex ? (current == null ? 1 : (current % MAX_MARK_COLORS) + 1) : (color as number | null),
+					nextColorIndex: explicitHex ? (current == null ? 1 : (current % MAX_MARK_COLORS) + 1) : color,
 					activeFilePath,
 					isActiveFileInherited: isActiveInherited
 				});

@@ -1,6 +1,6 @@
 import type { TFile } from "obsidian";
 import type { ProcessOptions } from "./indexer";
-import type { FileIndexData } from "./types";
+import { normalizePinMode, type FileIndexData } from "./types";
 import { cloneTrackedDates, createEmptyFileIndex } from "./file-index-factory";
 import { normalizeDateFromTimestamp, parseAnyDate } from "./extractor";
 import { applyEntryState } from "./entry-state";
@@ -185,6 +185,7 @@ export async function processFileInternal(
 	const rawLines = isText ? rawContent.split(/\r?\n/) : [];
 	const lines = isText ? rawLines : [];
 	const explicitPinRaw = isText ? readYamlPropertyFromText(rawContent, "pin") : "";
+	const explicitPinMode = normalizePinMode(explicitPinRaw);
 	const explicitMarkRaw = isText ? readYamlPropertyFromText(rawContent, "mark") : "";
 	const explicitMarkHex = String(explicitMarkRaw || "").trim();
 	// Avoid keeping all file contents in memory across a whole vault.
@@ -211,8 +212,8 @@ export async function processFileInternal(
 		"cdate"
 	);
 	fileData.anchorUsesMdate = useAnchorMdate;
-	if (String(explicitPinRaw || "").trim() || /(^|\n)\s*pin\s*:/i.test(rawContent)) {
-		fileData.pinnedFile = true;
+	if (explicitPinMode) {
+		fileData.pinnedFile = explicitPinMode;
 	}
 	if (explicitMarkHex) {
 		fileData.markColorHex = explicitMarkHex;
@@ -338,7 +339,7 @@ export async function processFileInternal(
 		!contentUnchanged &&
 		!frontmatterWrite &&
 		!frontmatterOnlyChange &&
-		previousData.pinnedFile !== true;
+		normalizePinMode(previousData.pinnedFile) === null;
 	if (shouldResetReviewedOnEdit) {
 		const clearReviewed = (entry: FileIndexData["cdate"]): void => {
 			if (!entry) return;
@@ -377,7 +378,7 @@ export async function processFileInternal(
 				// ignore
 			}
 			try {
-				if (fileData.pinnedFile === true) metaParts.push("pinned");
+				if (normalizePinMode(fileData.pinnedFile)) metaParts.push("pinned");
 			} catch {
 				// ignore
 			}

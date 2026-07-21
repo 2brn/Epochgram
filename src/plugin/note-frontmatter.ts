@@ -21,11 +21,34 @@ type FrontmatterApiPluginLike = {
 };
 
 function normalizeValue(value: unknown): string {
-	return String(value ?? "").replace(/\r\n?/g, "\n").trim();
+	const raw = typeof value === "string"
+		? value
+		: typeof value === "number" || typeof value === "boolean"
+			? String(value)
+			: "";
+	return raw.replace(/\r\n?/g, "\n").trim();
 }
 
 function normalizeComparableValue(value: unknown): string {
 	if (typeof value === "boolean") return value ? "true" : "false";
+	return normalizeValue(value);
+}
+
+function normalizePinValue(value: unknown): "today" | "date" | "dock" | null {
+	if (value === true) return "today";
+	const normalized = normalizeValue(value).toLowerCase();
+	if (normalized === "today" || normalized === "date" || normalized === "dock") {
+		return normalized;
+	}
+	return null;
+}
+
+function readPinValue(value: unknown, hasProperty: boolean): string {
+	if (!hasProperty) return "";
+	if (value === true) return "today";
+	if (value == null) return "";
+	const normalizedPin = normalizePinValue(value);
+	if (normalizedPin) return normalizedPin;
 	return normalizeValue(value);
 }
 
@@ -59,12 +82,6 @@ function buildPropertyLines(propertyKey: string, value: unknown): string[] {
 		simpleKeys: false
 	}).trim();
 	return rendered ? rendered.split(/\r?\n/) : [];
-}
-
-function buildBarePropertyLines(propertyKey: string): string[] {
-	const key = String(propertyKey ?? "").trim();
-	if (!key) return [];
-	return [`${key}:`];
 }
 
 function escapeRegexLiteral(value: string): string {
@@ -141,43 +158,23 @@ function upsertYamlProperty(raw: string, propertyKey: string, value: unknown): s
 	return nextLines.join(newline);
 }
 
-function upsertYamlBareProperty(raw: string, propertyKey: string, present: boolean): string {
-	const { lines, newline } = splitLinesPreserveNewlines(raw);
-	const bounds = findFrontmatterBounds(lines);
-	if (!present) {
-		if (!bounds) return raw;
-		const nextLines = lines.slice();
-		const range = findPropertyRange(nextLines, bounds.end, propertyKey);
-		if (range) nextLines.splice(range.start, range.end - range.start + 1);
-		const remaining = nextLines.slice(1, bounds.end).filter((line) => String(line ?? "").trim());
-		if (remaining.length === 0) {
-			const after = nextLines.slice(bounds.end + 1).join(newline);
-			return after ? after.replace(/^\r?\n/, "") : "";
-		}
-		return nextLines.join(newline);
-	}
-
-	const bareLines = buildBarePropertyLines(propertyKey);
-	if (!bounds) {
-		return ["---", ...bareLines, "---", "", ...lines].join(newline);
-	}
-	const nextLines = lines.slice();
-	const range = findPropertyRange(nextLines, bounds.end, propertyKey);
-	if (range) nextLines.splice(range.start, range.end - range.start + 1);
-	nextLines.splice(1, 0, ...bareLines);
-	return nextLines.join(newline);
-}
-
 export function readYamlPropertyFromText(rawText: string, key: string): string {
 	try {
 		const text = String(rawText ?? "");
 		const match = text.match(/^[\uFEFF]?---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
 		if (!match) return "";
 		const frontmatter = YAML.parse(String(match[1] ?? "")) as FrontmatterRecord | null;
+		if (String(key ?? "").trim().toLowerCase() === "pin") {
+			const hasProperty = hasPropertyInFrontmatterText(text, key);
+			if (!frontmatter || typeof frontmatter !== "object") {
+				return "";
+			}
+			return readPinValue(readFrontmatterProperty(frontmatter, key), hasProperty);
+		}
 		const value = readFrontmatterProperty(frontmatter, key);
 		if (typeof value === "string") return normalizeValue(value);
 		if (value == null) return "";
-		return normalizeValue(String(value));
+		return normalizeValue(value);
 	} catch {
 		return "";
 	}
@@ -187,7 +184,7 @@ async function readCurrentYamlProperty(plugin: unknown, file: TFile, key: string
 	const value = await readCurrentYamlPropertyValue(plugin, file, key);
 	if (typeof value === "string") return normalizeValue(value);
 	if (value == null) return "";
-	return normalizeValue(String(value));
+	return normalizeValue(value);
 }
 
 async function readCurrentYamlPropertyValue(plugin: unknown, file: TFile, key: string): Promise<unknown> {
@@ -195,16 +192,19 @@ async function readCurrentYamlPropertyValue(plugin: unknown, file: TFile, key: s
 		try {
 			const cache = (plugin as FrontmatterApiPluginLike).app?.metadataCache?.getFileCache?.(file);
 			if (cache?.frontmatter && typeof cache.frontmatter === "object" && cache.frontmatter !== null) {
-				if (Object.prototype.hasOwnProperty.call(cache.frontmatter, key)) return true;
+				if (Object.prototype.hasOwnProperty.call(cache.frontmatter, key)) {
+					return readPinValue(readFrontmatterProperty(cache.frontmatter, key), true);
+				}
 			}
 		} catch {
 			// ignore
 		}
 		try {
 			const raw = await (plugin as FrontmatterApiPluginLike).app?.vault?.read?.(file);
-			return hasPropertyInFrontmatterText(String(raw ?? ""), key);
+			if (!hasPropertyInFrontmatterText(String(raw ?? ""), key)) return null;
+			return readYamlPropertyFromText(String(raw ?? ""), key);
 		} catch {
-			return false;
+			return null;
 		}
 	}
 	try {
@@ -239,7 +239,7 @@ async function updateYamlPropertyWithObsidianApi(plugin: unknown, file: TFile, k
 		const prev = typeof value === "boolean" ? prevRaw : normalizeComparableValue(prevRaw);
 		if (prev === (typeof value === "boolean" ? value : normalized)) return;
 		if (!normalized) delete fm[key];
-		else fm[key] = yamlValue as never;
+		else fm[key] = yamlValue;
 		changed = true;
 	});
 	return changed;
@@ -293,9 +293,7 @@ export async function setYamlPropertyForFile(plugin: unknown, file: TFile, key: 
 
 	try {
 		const raw = await (plugin as FrontmatterApiPluginLike).app?.vault?.read?.(file);
-		const next = isPin
-			? upsertYamlBareProperty(String(raw ?? ""), key, value === true)
-			: upsertYamlProperty(String(raw ?? ""), key, value);
+		const next = upsertYamlProperty(String(raw ?? ""), key, isPin ? normalizePinValue(value) : value);
 		if (next === String(raw ?? "")) return false;
 		await (plugin as FrontmatterApiPluginLike).app?.vault?.modify?.(file, next);
 		return true;

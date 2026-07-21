@@ -432,14 +432,12 @@ export async function maybeOpenAiBridgeOnStartup(this: EpochPlugin): Promise<voi
 	const runtime = this as unknown as AiBridgeRuntime;
 	let shouldAutoOpenPage = false;
 	let aiEnabled = false;
-	let preferWebViewer = false;
 	let wantsWebViewer = false;
 	try {
 		if (!hasAiBridgeAccess(this)) return;
 		if (!Platform.isDesktop || Platform.isMobile) return;
 		shouldAutoOpenPage = isOpenAiBridgeOnStartupEffective(this);
 		wantsWebViewer = this.settings.openAiBridgeInObsidianWebViewer === true;
-		preferWebViewer = prefersObsidianWebViewer(this);
 		aiEnabled = isSummarizeAIEffective(this) || isGenerateEpochsEffective(this);
 		if (!aiEnabled) return;
 	} catch {

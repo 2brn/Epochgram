@@ -1,7 +1,7 @@
 import { TFile } from "obsidian";
 import { MAX_MARK_COLORS } from "../ui/mark-colors";
 import { getEpochMarkColorSet } from "../ui/mark-colors";
-import type { DateEntry, FileIndexData, FileReviewState } from "./types";
+import { hasPinMode, isTodayPinMode, normalizePinMode, type DateEntry, type FileIndexData, type FileReviewState } from "./types";
 import { expandRecurrenceToDateKeys } from "./recurrence";
 import {
 	applyHighlightState,
@@ -45,7 +45,11 @@ function normalizeMarkColor(markColor: number | null): number | null {
 }
 
 function normalizeMarkHex(markColor: unknown): string {
-	const value = String(markColor ?? "").trim();
+	const value = typeof markColor === "string"
+		? markColor.trim()
+		: typeof markColor === "number" || typeof markColor === "boolean"
+			? String(markColor).trim()
+			: "";
 	if (!value) return "";
 	const hex = value.startsWith("#") ? value : `#${value}`;
 	if (!/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(hex)) return "";
@@ -672,7 +676,7 @@ export function setFileMarkColor(indexer: unknown, path: string, markColor: numb
 
 export function isFilePinned(indexer: unknown, path: string): boolean {
 	const s = state(indexer);
-	return s.files[path]?.pinnedFile === true;
+	return hasPinMode(s.files[path]?.pinnedFile);
 }
 
 export function setFilePinned(indexer: unknown, path: string, pinned: boolean): boolean {
@@ -682,13 +686,15 @@ export function setFilePinned(indexer: unknown, path: string, pinned: boolean): 
 		return false;
 	}
 	const desired = pinned === true;
-	if ((data.pinnedFile === true) === desired) {
+	const currentMode = normalizePinMode(data.pinnedFile);
+	const desiredMode = desired ? "today" : null;
+	if (currentMode === desiredMode) {
 		return false;
 	}
-	data.pinnedFile = desired;
+	data.pinnedFile = desiredMode;
 	try {
 		const file = getFileForPath(s, path);
-		if (file) void setYamlPropertyForFile(s.plugin, file, "pin", desired ? true : null);
+		if (file) void setYamlPropertyForFile(s.plugin, file, "pin", desired ? "today" : null);
 	} catch {
 		// ignore
 	}
@@ -700,7 +706,7 @@ export function setEntryPinned(indexer: unknown, target: DateEntry, pinned: bool
 	if (!target) return false;
 	const changed = setFilePinned(indexer, target.file, pinned);
 	if (changed) {
-		target.pinned = pinned === true;
+		target.pinned = pinned === true || isTodayPinMode((state(indexer).files[target.file] ?? {}).pinnedFile);
 	}
 	return changed;
 }

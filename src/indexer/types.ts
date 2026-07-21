@@ -2,6 +2,29 @@ export type DateSource = "cdate" | "namedate" | "dateprop" | "content" | "tracke
 export type TrackedChangeType = "added" | "removed" | "modified";
 
 export type RecurrenceKind = "friendly" | "rrule";
+export const PIN_MODES = ["today", "date", "dock"] as const;
+export type PinMode = (typeof PIN_MODES)[number];
+
+export function normalizePinMode(value: unknown): PinMode | null {
+	if (value === true) return "today";
+	const normalized = typeof value === "string"
+		? value.trim().toLowerCase()
+		: typeof value === "number" || typeof value === "boolean"
+			? String(value).trim().toLowerCase()
+			: "";
+	if (normalized === "today" || normalized === "date" || normalized === "dock") {
+		return normalized;
+	}
+	return null;
+}
+
+export function hasPinMode(value: unknown): value is PinMode {
+	return normalizePinMode(value) !== null;
+}
+
+export function isTodayPinMode(value: unknown): boolean {
+	return normalizePinMode(value) === "today";
+}
 
 export interface RecurrenceIndexData {
 	/** Raw value from YAML frontmatter `recur:`. */
@@ -102,7 +125,7 @@ export interface FileIndexData {
 	embeddingTerm?: string;
 	markColor?: number;
 	markColorHex?: string;
-    pinnedFile?: boolean;
+	pinnedFile?: PinMode | null;
 	/** Optional recurring schedule derived from YAML frontmatter `recur:`. */
 	recur?: RecurrenceIndexData | null;
 	/**

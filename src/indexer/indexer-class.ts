@@ -5,6 +5,8 @@ import {
 	EpochIndex,
 	FileDateEntry,
 	FileIndexData,
+	isTodayPinMode,
+	normalizePinMode,
 	SerializedEpochIndex,
 	StoredFileIndexData
 } from "./types";
@@ -123,7 +125,7 @@ export class Indexer {
 			this.index = sortIndex(serialized.dates);
 			const syntheticPaths = new Set<string>();
 			for (const [path, data] of Object.entries(this.files)) {
-				if (data?.pinnedFile === true) {
+				if (isTodayPinMode(data?.pinnedFile)) {
 					syntheticPaths.add(path);
 				}
 				if ((data as { recur?: unknown }).recur) {
@@ -146,7 +148,7 @@ export class Indexer {
 		const syntheticPaths: string[] = [];
 		for (const [path, data] of Object.entries(this.files ?? {})) {
 			if (!data) continue;
-			if (data.pinnedFile === true || (data as { recur?: unknown }).recur) {
+			if (isTodayPinMode(data.pinnedFile) || (data as { recur?: unknown }).recur) {
 				syntheticPaths.push(path);
 			}
 		}
@@ -651,7 +653,7 @@ export class Indexer {
 		const markColor = Number.isFinite(markColorRaw)
 			? Math.max(1, Math.min(MAX_MARK_COLORS, Math.floor(markColorRaw)))
 			: undefined;
-		const pinnedFile = data.pinnedFile === true;
+		const pinnedFile = normalizePinMode(data.pinnedFile);
 		const noparsed = rawData.noparsed === true;
 		const notracked = rawData.notracked === true;
 		const recurHiddenDates = (() => {

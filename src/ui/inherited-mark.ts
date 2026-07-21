@@ -101,7 +101,8 @@ export function computeInheritedMarkData(args: {
 	const titleSeeds: Array<{ path: string; idx: number; title: string }> = [];
 
 	for (const p of visible) {
-		const hex = String(getMarkHex?.(p) ?? "").trim();
+		const rawHex = getMarkHex?.(p);
+		const hex = typeof rawHex === "string" ? rawHex.trim() : "";
 		const idx = normalizeMarkIndex(getFileMarkColor(p));
 		if (hex && idx == null) {
 			ownMarked.set(p, 0);
@@ -118,7 +119,8 @@ export function computeInheritedMarkData(args: {
 		if (p.startsWith("epoch://")) continue;
 		if (seenSeed.has(p)) continue;
 		seenSeed.add(p);
-		const hex = String(getMarkHex?.(p) ?? "").trim();
+		const rawHex = getMarkHex?.(p);
+		const hex = typeof rawHex === "string" ? rawHex.trim() : "";
 		const idx = normalizeMarkIndex(getFileMarkColor(p));
 		if (hex && idx == null) continue;
 		if (idx == null) continue;

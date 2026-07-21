@@ -30,6 +30,7 @@ export function drawDayMarker(params: {
 	colTextBase: string;
 	colSummaryHoverBg: string;
 	colToday: string;
+	hideLabel?: boolean;
 }): {
 	kind: DayMarkerKind;
 	label: string | null;
@@ -47,7 +48,8 @@ export function drawDayMarker(params: {
 		fontMainHover,
 		colTextBase,
 		colSummaryHoverBg,
-		colToday
+		colToday,
+		hideLabel
 	} = params;
 
 	const isToday = dayIndex === 0;
@@ -129,7 +131,7 @@ export function drawDayMarker(params: {
 		ctx.restore();
 	}
 
-	if (label) {
+	if (label && !hideLabel) {
 		ctx.save();
 		ctx.fillStyle = dateColor;
 		ctx.font = dateFont;

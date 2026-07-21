@@ -68,7 +68,7 @@
 - Hover link source registered under `this.manifest.id` (see `plugin/lifecycle.ts`).
 - File context menu items (see `plugin/view.ts`):
   - “Epochgram: Edit summary…” edits the configured YAML frontmatter description property (default: `description`) for the file, then clears any stored per-file manual summary overrides and cached AI summaries so the frontmatter description becomes the visible source of truth.
-  - “Epochgram: Pin” / “Epochgram: Unpin” update `pin:` frontmatter as the source of truth for explicit pinning.
+  - “Epochgram: Pin” always writes `pin: today`; “Epochgram: Unpin” removes the `pin:` property. Existing `pin: date` / `pin: dock` notes still render correctly, but those modes are set by editing YAML rather than through a separate menu.
   - Review state (Simple mode off):
     - Shows only the actions that differ from the file’s current effective state (Draft vs Reviewed)
     - When the file is fully hidden, both “Epochgram: Draft” and “Epochgram: Review” are shown

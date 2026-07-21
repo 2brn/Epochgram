@@ -136,7 +136,7 @@ Rebuild ordering (Verified)
     - Clears the topics store and resets in-memory topic similarity state.
     - Forces similarity startup maintenance to run again so topics can re-enqueue.
   - Pinned:
-    - Clears per-file pin state so nothing remains pinned.
+    - Clears per-file pin state by removing the effective `pin:` override so nothing remains pinned, regardless of whether the stored mode was `today`, `date`, or `dock`.
   - Tracked changes:
     - Clears tracked entries and also clears tracked snapshot/baseline state so changes don’t immediately reappear.
   - AI summaries:

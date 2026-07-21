@@ -13,6 +13,7 @@ import type {
 	ReviewState,
 	RecurrenceIndexData
 } from "./types";
+import { isTodayPinMode } from "./types";
 import type { IndexerPipeline } from "./pipeline";
 import { hasRecurringAccess, isTrackChangesConfigured } from "../plugin/pro-feature-state";
 
@@ -75,7 +76,7 @@ export function updateAggregatedEntriesInternal(
 		if (fromData.noparsed || fromData.notracked) return fromData;
 		return resolveFrontmatterSuppressionFlags(s.plugin, filePath);
 	})();
-	const pinnedFile = data.pinnedFile === true;
+	const pinnedFile = isTodayPinMode(data.pinnedFile);
 	const canUseAiSummary = !!s.plugin?.hasProAccess?.();
 	const shouldUseAiSummaryForEntry = (entry: FileDateEntry): boolean => {
 		if (!canUseAiSummary) return false;

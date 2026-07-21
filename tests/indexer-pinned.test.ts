@@ -41,7 +41,7 @@ describe("Indexer pinned entries", () => {
 			trackedSnapshotDate: null,
 			trackedBaselineSnapshot: null,
 			trackedBaselineDate: null,
-			pinnedFile: true
+			pinnedFile: "today"
 		};
 		(indexer as any).files = { [PATH]: data };
 		(indexer as any).latestLines = { [PATH]: [] };
@@ -102,6 +102,15 @@ describe("Indexer pinned entries", () => {
 		expect(entry.pinned).toBe(true);
 		expect(entry.originalDate).toBeUndefined();
 		expect(entry.summary).toBe("Note");
+	});
+
+	it.each(["date", "dock"] as const)("does not create pinned-today synthetic entries for pin mode %s", (mode) => {
+		data.pinnedFile = mode;
+		(indexer as any).updateAggregatedEntries(PATH);
+
+		expect(indexer.index[TODAY_DATE] ?? []).toHaveLength(0);
+		const anchorEntries = indexer.index[ANCHOR_DATE] ?? [];
+		expect(anchorEntries.some(entry => entry.file === PATH && entry.pinned === true)).toBe(false);
 	});
 
 	it("hiding a pinned entry hides its anchor data", () => {
