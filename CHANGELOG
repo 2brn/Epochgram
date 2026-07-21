@@ -1,5 +1,9 @@
 # Epochgram changelog
 
+## [1.7.0] - 2026-07-21
+- Replaced one-off frontmatter migration flag with versioned migration registry (`completedMigrations`) for future-safe migration tracking.
+- Tagged pin/mark frontmatter sync as migration `1.7.0-frontmatter-pin-mark-sync`.
+
 ## [1.6.1] - 2026-07-12
 - Added fallback handling for AI bridge disconnect when closing the Obsidian Web viewer tab.
 - Fixed AI bridge server HTTP module loading path via `require("http")` for desktop runtime.

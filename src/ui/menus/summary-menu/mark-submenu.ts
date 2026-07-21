@@ -4,6 +4,7 @@ import type { EpochCanvas } from "../../epoch-canvas";
 import {
 	getEpochMarkColorGroups,
 	getEpochMarkColorSet,
+	MAX_MARK_COLORS,
 	normalizeMarkColorIndex
 } from "../../mark-colors";
 import {
@@ -20,7 +21,8 @@ const activeDocument = typeof window !== "undefined" ? window.document : null;
 
 type MarkGroupIndexerLike = {
 	getFileMarkColor(path: string): number | null | undefined;
-	setFileMarkColor(path: string, color: number | null): boolean;
+	getFileMarkHex?(path: string): string | null | undefined;
+	setFileMarkColor(path: string, color: number | string | null): boolean;
 };
 
 type MenuItemLike = MenuItem & {
@@ -87,6 +89,13 @@ export function addMarkSubmenu(
 		const palette = getEpochMarkColorSet(root);
 		const groups = getEpochMarkColorGroups(root);
 		const current = normalizeMarkColorIndex(currentMarkColor);
+		const currentHex = (() => {
+			try {
+				return String(indexer.getFileMarkHex?.(entry.file) ?? "").trim();
+			} catch {
+				return "";
+			}
+		})();
 		const explicit = (() => {
 			try {
 				return normalizeMarkColorIndex(indexer.getFileMarkColor(entry.file));
@@ -115,10 +124,11 @@ export function addMarkSubmenu(
 			// ignore
 		}
 
-		const applyMarkColor = async (color: number | null) => {
+		const applyMarkColor = async (color: number | string | null) => {
 			if (!indexer) return;
 			let changed = false;
 			const plugin = typedState.plugin;
+			const explicitHex = typeof color === "string" ? String(color || "").trim() : "";
 
 			try {
 				const activeFilePath = (() => {
@@ -143,7 +153,7 @@ export function addMarkSubmenu(
 				);
 
 				const isActiveInherited = activeFilePath ? isPathInheritedMarked(plugin, indexer, activeFilePath) : false;
-				const isEntryExplicit = explicit != null;
+				const isEntryExplicit = explicit != null || !!currentHex;
 				const isEntryInherited =
 					!isEntryExplicit && (!!inheritedSourcePath || isPathInheritedMarked(plugin, indexer, entry.file));
 				const isEntrySimilarToActive = (() => {
@@ -164,7 +174,7 @@ export function addMarkSubmenu(
 					isEntryExplicit,
 					isEntrySimilarToActive,
 					currentColorIndex: current,
-					nextColorIndex: color,
+					nextColorIndex: explicitHex ? (current == null ? 1 : (current % MAX_MARK_COLORS) + 1) : (color as number | null),
 					activeFilePath,
 					isActiveFileInherited: isActiveInherited
 				});
@@ -217,6 +227,7 @@ export function addMarkSubmenu(
 		};
 
 		const hasAny = !!current || explicit != null || inheritedSourcePath != null;
+		const hasExplicitAny = hasAny || !!currentHex;
 		const ICON_ONLY_LABEL = "\u00A0";
 		const isDesktopPointer = (): boolean => {
 			try {
@@ -229,7 +240,7 @@ export function addMarkSubmenu(
 			subItem
 				.setTitle(useTextLabels ? "Clear mark" : ICON_ONLY_LABEL)
 				.setIcon("ban")
-				.setDisabled(!hasAny)
+					.setDisabled(!hasExplicitAny)
 				.onClick(() => {
 					void Promise.resolve(applyMarkColor(null)).finally(hideContextMenu);
 				});

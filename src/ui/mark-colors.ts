@@ -388,14 +388,24 @@ function clamp(n: number, min: number, max: number): number {
 	return Math.max(min, Math.min(max, n));
 }
 
-export function getEpochMarkColorSet(root: HTMLElement): string[] {
+export function getEpochMarkColorSet(root: unknown): string[] {
 	const { palette } = getCachedMarkColors(root);
 	return palette.slice();
 }
 
-export function getEpochMarkColorGroups(root: HTMLElement): EpochMarkColorGroup[] {
+export function getEpochMarkColorGroups(root: unknown): EpochMarkColorGroup[] {
 	const { groups } = getCachedMarkColors(root);
 	return groups;
+}
+
+export function findMarkColorIndexForCss(css: string, root?: unknown): MarkColorIndex | null {
+	const value = String(css ?? "").trim().toLowerCase();
+	if (!value) return null;
+	const { palette } = getCachedMarkColors(root ?? null);
+	for (let i = 0; i < palette.length; i++) {
+		if (String(palette[i] ?? "").trim().toLowerCase() === value) return i + 1;
+	}
+	return null;
 }
 
 export function getEpochMarkBaseColorIndexOrder(): MarkColorIndex[] {

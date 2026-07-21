@@ -30,9 +30,15 @@ export function applyEntryState(
 	if (prevEmbeddingTerm) {
 		next.embeddingTerm = prevEmbeddingTerm;
 	}
+	const hasExplicitMarkHex = typeof next.markColorHex === "string" && String(next.markColorHex).trim() !== "";
 	const prevMark = typeof previous?.markColor === "number" ? previous.markColor : null;
-	next.markColor = prevMark != null ? prevMark : undefined;
-	next.pinnedFile = previous?.pinnedFile === true;
+	const prevMarkHex = typeof previous?.markColorHex === "string" ? String(previous.markColorHex).trim() : "";
+	if (!hasExplicitMarkHex) {
+		next.markColor = prevMark != null ? prevMark : undefined;
+		if (prevMarkHex) {
+			next.markColorHex = prevMarkHex;
+		}
+	}
 
 	if (next.cdate) {
 		transferAiSingle(previous?.cdate ?? null, next.cdate);
@@ -219,10 +225,18 @@ export function applyHighlightState(data: FileIndexData): void {
 	const rawMark = typeof data.markColor === "number" ? data.markColor : null;
 	const effectiveMarkColor =
 		rawMark != null && Number.isFinite(rawMark) && Math.floor(rawMark) > 0 ? Math.floor(rawMark) : null;
+	const effectiveMarkHex =
+		typeof data.markColorHex === "string" && String(data.markColorHex).trim()
+			? String(data.markColorHex).trim()
+			: "";
 	data.markColor = effectiveMarkColor != null ? effectiveMarkColor : undefined;
+	if (effectiveMarkHex) data.markColorHex = effectiveMarkHex;
+	else delete data.markColorHex;
 	const apply = (entry: FileDateEntry | null) => {
 		if (!entry) return;
 		entry.markColor = effectiveMarkColor != null ? effectiveMarkColor : undefined;
+		if (effectiveMarkHex) entry.markColorHex = effectiveMarkHex;
+		else delete entry.markColorHex;
 	};
 
 	apply(data.cdate);

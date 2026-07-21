@@ -3,7 +3,7 @@ import { DEFAULT_SETTINGS, EpochSettingTab } from "../settings";
 import { Indexer } from "../indexer/indexer";
 import { VIEW_TYPE_EPOCH } from "../ui/epoch-view-mode";
 import { EpochView } from "../ui/epoch-view";
-import { getUsedMarkColorIndexSet, normalizeMarkColorIndex, pickDefaultMarkColorIndex } from "../ui/mark-colors";
+import { getEpochMarkBaseColorIndexOrder, normalizeMarkColorIndex } from "../ui/mark-colors";
 import type { PersistedPluginData } from "./state";
 import type { EpochPlugin } from "../main";
 import { embeddingsSimilarityEnabled } from "./similarity/config";
@@ -415,11 +415,9 @@ export const lifecycleMethods: LifecycleMethods = {
 							}
 						})();
 						const hasAnyMark = explicit != null || inherited != null;
-						const filesObj: unknown = this.indexer.toJSON().files;
-
 						const desired = hasAnyMark
 							? null
-							: pickDefaultMarkColorIndex(getUsedMarkColorIndexSet(filesObj, file.path), current);
+							: (getEpochMarkBaseColorIndexOrder()[0] ?? 1);
 
 						await applyMarkColorWithContext(this, {
 							entryPath: file.path,

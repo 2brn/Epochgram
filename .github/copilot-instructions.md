@@ -9,6 +9,7 @@
 - Don't revert any existing code unless explicitly asked.
 - If I manually change code (e.g. `MAX_MATCHES`), treat it as intentional and do not revert it unless I explicitly ask.
 - Add tests when relevant.
+- For releases, always update `CHANGELOG` from git history since the last tag, covering all changes in max 5 bullet points.
 
 ## Docs / multi-repo workflow
 - Treat the root `README.md` as the single source of truth.

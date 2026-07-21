@@ -58,7 +58,7 @@ export function findSummaryEntryAtPoint(canvas: EpochCanvas, x: number, y: numbe
 			if (!(x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2)) continue;
 			const entry = rect.entry;
 			const filePath = entry.file;
-			const isMarked = !!normalizeMarkColorIndex(entry.markColor);
+			const isMarked = !!normalizeMarkColorIndex(entry.markColor) || !!String(entry.markColorHex ?? "").trim();
 			const hasInherited = !!(inheritedSourceMap && typeof filePath === "string" && filePath && inheritedSourceMap.get(filePath));
 			const isActive = !!(state.activeFilePath && typeof filePath === "string" && filePath === state.activeFilePath);
 			const centerY = (rect.y1 + rect.y2) / 2;

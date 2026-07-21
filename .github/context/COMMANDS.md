@@ -49,6 +49,7 @@ Commands are registered in `plugin/lifecycle.ts` (export command via `plugin/exp
   - Does not unhide hidden records.
 
 Maintenance rebuild/reset flows are available in Settings → Indexer (`Index`).
+- Reset no longer includes the old Pinned/Marks toggles; Topics reset clears both classified topic data and explicit per-file topic terms (index/store only) and does not modify note frontmatter.
 
 ## Current File Toggles
 These operate on the active file and are only available when a file is active, index-ready, and the file is indexable/known.

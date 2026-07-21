@@ -242,6 +242,7 @@ export function openSearchModal(view: SearchViewLike): void {
 
 		const out: Array<{ entry: DateEntry; label?: string }> = [];
 		const excludeFiles = new Set<string>();
+		const recentPathSet = new Set<string>(collectRecentPaths());
 		const currentOnlyActivePath = (() => {
 			if (!hasCurrentOnlyToken(parsed)) return "";
 			const raw = String(view.plugin.app?.workspace?.getActiveFile?.()?.path ?? "").trim();
@@ -364,7 +365,15 @@ export function openSearchModal(view: SearchViewLike): void {
 				rankedPaths.push(p);
 				if (rankedPaths.length >= Math.max(limit * 20, 50)) break;
 			}
-			pushPathBucket(rankedPaths);
+			const topK = rankedPaths.slice(0, limit);
+			const tail = rankedPaths.slice(limit);
+			const recentTopK: string[] = [];
+			const regularTopK: string[] = [];
+			for (const fp of topK) {
+				if (recentPathSet.has(fp)) recentTopK.push(fp);
+				else regularTopK.push(fp);
+			}
+			pushPathBucket([...recentTopK, ...regularTopK, ...tail]);
 		}
 
 		// Non-empty fallback: if MiniSearch ranked results are empty (e.g. token-only queries

@@ -141,7 +141,7 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 		for (let idx = 0; idx < entries.length; idx++) {
 			const entry = entries[idx];
 			if (!entry) continue;
-			if (normalizeMarkColorIndex(entry.markColor)) {
+			if (normalizeMarkColorIndex(entry.markColor) || String(entry.markColorHex ?? "").trim()) {
 				cache.anyMarkedIndex = idx;
 				anyMarkedEntry = entry;
 				break;

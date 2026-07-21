@@ -1,5 +1,5 @@
 import type { EpochPlugin } from "../main";
-import { normalizeMarkColorIndex } from "../ui/mark-colors";
+import { MAX_MARK_COLORS, normalizeMarkColorIndex } from "../ui/mark-colors";
 import { hasSimilarityAccess } from "./pro-feature-state";
 import { embeddingsSimilarityEnabled } from "./similarity/config";
 import {
@@ -12,7 +12,8 @@ import {
 type MarkContextIndexerLike = {
 	isFileKnown(path: string): boolean;
 	getFileMarkColor(path: string): number | null;
-	setFileMarkColor(path: string, color: number | null): boolean;
+	getFileMarkHex?(path: string): string | null;
+	setFileMarkColor(path: string, color: number | string | null): boolean;
 };
 
 type MarkContextPluginLike = EpochPlugin & {
@@ -113,7 +114,7 @@ async function isEntrySimilarToActiveFile(plugin: MarkContextPluginLike, activeF
 
 export async function applyMarkColorWithContext(plugin: EpochPlugin, args: {
 	entryPath: string;
-	nextColorIndex: number | null;
+	nextColorIndex: number | string | null;
 	currentColorIndex?: number | null;
 }): Promise<boolean> {
 	const entry = normalizeNonEpochPath(args.entryPath);
@@ -135,6 +136,13 @@ export async function applyMarkColorWithContext(plugin: EpochPlugin, args: {
 	const indexer = state.indexer;
 
 	const inheritedSourcePath = getCachedInheritedSourcePath(state, entry);
+	const explicitHex = (() => {
+		try {
+			return String(indexer.getFileMarkHex?.(entry) ?? "").trim();
+		} catch {
+			return "";
+		}
+	})();
 	const explicit = (() => {
 		try {
 			return normalizeMarkColorIndex(indexer.getFileMarkColor(entry));
@@ -146,10 +154,16 @@ export async function applyMarkColorWithContext(plugin: EpochPlugin, args: {
 	const current = normalizeMarkColorIndex(
 		typeof args.currentColorIndex === "number" ? args.currentColorIndex : explicit ?? getCachedInheritedMarkColorIndex(state, entry)
 	);
+	const nextColor = typeof args.nextColorIndex === "string"
+		? args.nextColorIndex
+		: normalizeMarkColorIndex(args.nextColorIndex);
+	const dummyNextIndex = typeof args.nextColorIndex === "string"
+		? (current == null ? 1 : ((current % MAX_MARK_COLORS) + 1))
+		: nextColor;
 
 	const activeFilePath = getActiveFilePathForMarking(state);
 	const isActiveInherited = activeFilePath ? isPathInheritedMarked(state, indexer, activeFilePath) : false;
-	const isEntryExplicit = explicit != null;
+	const isEntryExplicit = explicit != null || !!explicitHex;
 	const isEntryInherited = !isEntryExplicit && (!!inheritedSourcePath || isPathInheritedMarked(state, indexer, entry));
 	const isEntrySimilarToActive = activeFilePath ? await isEntrySimilarToActiveFile(state, activeFilePath, entry) : false;
 
@@ -163,7 +177,7 @@ export async function applyMarkColorWithContext(plugin: EpochPlugin, args: {
 		isEntryExplicit,
 		isEntrySimilarToActive,
 		currentColorIndex: current,
-		nextColorIndex: next,
+		nextColorIndex: dummyNextIndex,
 		activeFilePath,
 		isActiveFileInherited: isActiveInherited
 	});
@@ -174,7 +188,7 @@ export async function applyMarkColorWithContext(plugin: EpochPlugin, args: {
 	for (const p of finalTargets) {
 		if (!p || typeof p !== "string" || p.startsWith("epoch://")) continue;
 		try {
-			changed = !!indexer.setFileMarkColor(p, next) || changed;
+			changed = !!indexer.setFileMarkColor(p, nextColor) || changed;
 		} catch {
 			// ignore
 		}
@@ -198,7 +212,7 @@ export async function applyMarkColorWithContext(plugin: EpochPlugin, args: {
 	}
 
 	try {
-		if (next != null && hasSimilarityAccess(plugin) && embeddingsSimilarityEnabled(plugin)) {
+		if (nextColor != null && hasSimilarityAccess(plugin) && embeddingsSimilarityEnabled(plugin)) {
 			for (const p of finalTargets) {
 				try {
 					state.queueVectorUpdate?.(p);

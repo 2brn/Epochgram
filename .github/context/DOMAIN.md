@@ -24,6 +24,10 @@ Frontmatter date property (Verified)
   - `notracked: <any>` suppresses tracked-change indexing for the file (no tracked entries are indexed or shown on the timeline).
   - `noparsed: <any>` suppresses parsed content-date indexing for the file (content-derived entries are not indexed or shown on the timeline).
   - `noindex: <any>` excludes the file from Epochgram indexing entirely (the file is removed from the timeline index and search cache).
+- Explicit UI frontmatter overrides (Verified):
+  - `pin: <any>` pins the file and takes priority over the saved index pin state.
+  - `mark: #hex` stores an explicit mark color and takes priority over the saved index mark state.
+  - Removing one of these frontmatter keys removes the explicit override on the next index pass.
 - For content-derived entries (`source: "content"`), the normal UI summary strips embedded date literals (e.g. `2026-03-05`, `07/01/2025`, `March 8, 2025`) so the summary doesn’t redundantly repeat the row’s date.
 - If stripping date literals would make a content-derived summary empty (for date-only lines), Epochgram falls back to the original trimmed line/body text so parsed content-date records are not dropped during aggregation.
 
@@ -95,6 +99,7 @@ Per-file UI-facing state includes:
   - When a file is pinned and its anchor date differs from Today, a synthetic pinned-today entry is emitted on Today with `originalDate` set to the anchor date.
   - When the local day changes while Epochgram remains open, synthetic pinned-today entries are refreshed so they move to the new Today date.
 - Marked with a mark color index (see `ui/mark-colors.ts` and usage in `plugin/view.ts` and `indexer/indexer-class.ts`).
+- Pin and mark UI actions update YAML frontmatter so the explicit override becomes the source of truth for the note.
 
 ## View Preferences (Verified)
 Persisted (stored in `settings.timelineFilters`):
@@ -203,7 +208,7 @@ Frontmatter similarity overrides (Verified)
 - Similarity is applied symmetrically: two files only match via signals that are allowed by **both** files (intersection).
 
 Topics (Verified)
-- Per-file explicit topics are stored as `embeddingTerm` in the index (see `indexer/entry-updates.ts` `setFileEmbeddingTerm`).
+- Per-file explicit topics are stored as `embeddingTerm` in the index.
 - Topic terms are treated as **literal strings**. Prefix characters like `!` and `#` have no special meaning.
 - Zero-shot topic classification vocabulary is built from all explicit non-empty topic terms (see `plugin/similarity/topic.ts` `getTermVocabulary`).
 - Topic picker `(No topic)` behavior is **non-sticky**: it clears the explicit topic term for the note (and removes any stored inferred term record) but does not permanently suppress future re-classification.

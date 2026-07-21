@@ -12,6 +12,7 @@ type MarkGroupPluginLike = EpochPlugin & {
 
 type MarkGroupIndexerLike = {
 	getFileMarkColor(path: string): number | null | undefined;
+	getFileMarkHex?(path: string): string | null | undefined;
 };
 
 type ScoredPathLike = { path?: string };
@@ -22,14 +23,28 @@ function normalizeNonEpochPath(value: unknown): string {
 	return p;
 }
 
+function hasExplicitMark(indexer: MarkGroupIndexerLike, path: string): boolean {
+	try {
+		const hex = String(indexer.getFileMarkHex?.(path) ?? "").trim();
+		if (hex) return true;
+	} catch {
+		// ignore
+	}
+	try {
+		const explicit = normalizeMarkColorIndex(indexer.getFileMarkColor(path));
+		return explicit != null;
+	} catch {
+		return false;
+	}
+}
+
 
 export function isPathInheritedMarked(plugin: unknown, indexer: MarkGroupIndexerLike, path: string): boolean {
 	const p = normalizeNonEpochPath(path);
 	if (!p) return false;
 
 	try {
-		const explicit = normalizeMarkColorIndex(indexer.getFileMarkColor(p));
-		if (explicit != null) return false;
+		if (hasExplicitMark(indexer, p)) return false;
 	} catch {
 		// ignore
 	}
@@ -51,7 +66,7 @@ export function computeTargetsForMarkMenuAction(_plugin: unknown, args: {
 	isEntryExplicit: boolean;
 	isEntrySimilarToActive: boolean;
 	currentColorIndex: number | null;
-	nextColorIndex: number | null;
+	nextColorIndex: number | string | null;
 	activeFilePath: string;
 	isActiveFileInherited: boolean;
 }): Set<string> {
@@ -64,9 +79,10 @@ export function computeTargetsForMarkMenuAction(_plugin: unknown, args: {
 	if (ancestor) out.add(ancestor);
 
 	const current = normalizeMarkColorIndex(args.currentColorIndex);
+	const isCustom = typeof args.nextColorIndex === "string";
 	const next = normalizeMarkColorIndex(args.nextColorIndex);
-	const isClear = next == null;
-	const isRecolor = next != null && (current == null || next !== current);
+	const isClear = !isCustom && next == null;
+	const isRecolor = isCustom || (next != null && (current == null || next !== current));
 
 	// Explicitly marked entries are always their own target.
 	if (args.isEntryExplicit) {
@@ -146,8 +162,7 @@ export function getMarkCenterPathForGroupActions(
 	if (!inherited || inherited.startsWith("epoch://") || inherited === entry) return entry;
 
 	try {
-		const explicit = normalizeMarkColorIndex(indexer.getFileMarkColor(entry));
-		if (explicit != null) return entry;
+		if (hasExplicitMark(indexer, entry)) return entry;
 	} catch {
 		// ignore
 	}
@@ -167,8 +182,7 @@ export async function resolveMarkAncestorPath(
 
 	// Explicitly marked entries are their own ancestor.
 	try {
-		const explicit = normalizeMarkColorIndex(indexer.getFileMarkColor(entry));
-		if (explicit != null) return entry;
+		if (hasExplicitMark(indexer, entry)) return entry;
 	} catch {
 		// ignore
 	}
@@ -199,8 +213,7 @@ export async function resolveMarkAncestorPath(
 					const candidate = normalizeNonEpochPath(item?.path);
 					if (!candidate || candidate === entry) continue;
 					try {
-						const idx = indexer.getFileMarkColor(candidate);
-						if (normalizeMarkColorIndex(idx) != null) return candidate;
+						if (hasExplicitMark(indexer, candidate)) return candidate;
 					} catch {
 						// ignore
 					}
@@ -221,8 +234,7 @@ export async function resolveMarkAncestorPath(
 					const candidate = normalizeNonEpochPath(p0);
 					if (!candidate || candidate === entry) continue;
 					try {
-						const idx = indexer.getFileMarkColor(candidate);
-						if (normalizeMarkColorIndex(idx) != null) return candidate;
+						if (hasExplicitMark(indexer, candidate)) return candidate;
 					} catch {
 						// ignore
 					}

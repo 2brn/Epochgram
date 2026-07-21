@@ -34,6 +34,7 @@ type FileMenuIndexLike = {
 	isFileKnown?(path: string): boolean;
 	isFilePinned(path: string): boolean;
 	getFileMarkColor(path: string): number | null;
+	getFileMarkHex?(path: string): string | null;
 	getFileEmbeddingTerm?(path: string): unknown;
 	setFileReviewStateForAllRecords?(path: string, next: "draft" | "reviewed"): boolean;
 	setFileReviewStateForAllRecordsPreserveHidden?(path: string, next: "draft" | "reviewed"): boolean;
@@ -204,9 +205,16 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 					});
 			});
 			const currentMark: number | null = pluginState.indexer.getFileMarkColor(file.path);
+			const currentMarkHex: string = (() => {
+				try {
+					return String(pluginState.indexer.getFileMarkHex?.(file.path) ?? "").trim();
+				} catch {
+					return "";
+				}
+			})();
 			const explicitMark = normalizeMarkColorIndex(currentMark);
 			const inheritedMark: number | null = (() => {
-				if (explicitMark != null) return null;
+				if (explicitMark != null || currentMarkHex) return null;
 				try {
 					const map: unknown = pluginState.__epochInheritedMarkIndexByPath;
 					if (!(map instanceof Map)) return null;
@@ -223,7 +231,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 				const rootEl: HTMLElement = pluginState.app.workspace?.containerEl ?? activeDocument.body;
 				const groups = getEpochMarkColorGroups(rootEl);
 				const colors = getEpochMarkColorSet(rootEl);
-				const hasAnyMark = explicitMark != null || inheritedMark != null;
+				const hasAnyMark = explicitMark != null || inheritedMark != null || !!currentMarkHex;
 				const isDesktopPointer = (): boolean => {
 					try {
 						return !!window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches;
@@ -265,7 +273,6 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 							}
 						});
 				});
-
 				for (const group of groups) {
 					submenu.addItem((it: FileMenuItemLike) => {
 						it.setTitle(labelOrIconOnly(group.name)).setIcon("circle").setDisabled(false);

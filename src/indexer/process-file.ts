@@ -17,6 +17,8 @@ import {
 	buildFrontmatterPropertyLineRegex,
 	getYamlDatePropertyKey,
 } from "../plugin/frontmatter-keys";
+import { consumeNoteFrontmatterWritePath, readYamlPropertyFromText } from "../plugin/note-frontmatter";
+import { findMarkColorIndexForCss } from "../ui/mark-colors";
 
 function isDateKey(value: string): boolean {
 	return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
@@ -43,7 +45,7 @@ type ProcessFilePluginLike = {
 	indexer?: { getFileEmbeddingTerm?: (path: string) => string };
 	termSimilarityLoaded?: boolean;
 	termSimilarityIndex?: { files?: Record<string, { term?: string; score?: number }> };
-	app?: { metadataCache?: { getFileCache?: (file: TFile) => FileCacheLike | null } };
+	app?: { metadataCache?: { getFileCache?: (file: TFile) => FileCacheLike | null }, workspace?: { containerEl?: HTMLElement } };
 };
 
 type FileCacheLike = {
@@ -136,6 +138,9 @@ export async function processFileInternal(
 	const contentHash = isText ? computeTextHash(normalizedContent) : undefined;
 	const previousContentHash = typeof previousData.contentHash === "string" ? String(previousData.contentHash) : null;
 	const previousSnapshot = typeof previousData.trackedSnapshot === "string" ? normalizeSnapshotValue(previousData.trackedSnapshot) : null;
+	const frontmatterWrite = consumeNoteFrontmatterWritePath(s.plugin, file.path);
+	const bodySnapshot = isText ? (normalizeSnapshotValue(stripYamlFrontmatterBlock(normalizedContent)) ?? "") : "";
+	const frontmatterOnlyChange = isText && previousSnapshot != null && previousSnapshot === bodySnapshot;
 	const contentUnchanged = isText && (
 		(previousContentHash != null && previousContentHash === contentHash) ||
 		(previousContentHash == null && previousSnapshot != null && previousSnapshot === normalizedContent)
@@ -172,13 +177,16 @@ export async function processFileInternal(
 	if (options.reason === "create") {
 		fileDataRuntime.__pendingTrackedReviewStateClear = true;
 	} else if (options.reason === "modify" || options.reason === "track") {
-		if (!contentUnchanged) {
+		if (!contentUnchanged && !frontmatterWrite && !frontmatterOnlyChange) {
 			fileDataRuntime.__pendingTrackedReviewStateClear = true;
 		}
 	}
 
 	const rawLines = isText ? rawContent.split(/\r?\n/) : [];
 	const lines = isText ? rawLines : [];
+	const explicitPinRaw = isText ? readYamlPropertyFromText(rawContent, "pin") : "";
+	const explicitMarkRaw = isText ? readYamlPropertyFromText(rawContent, "mark") : "";
+	const explicitMarkHex = String(explicitMarkRaw || "").trim();
 	// Avoid keeping all file contents in memory across a whole vault.
 	// We only populate latestLines temporarily so aggregated entries can compute summaries,
 	// then drop it unless this is an on-demand operation.
@@ -203,6 +211,19 @@ export async function processFileInternal(
 		"cdate"
 	);
 	fileData.anchorUsesMdate = useAnchorMdate;
+	if (String(explicitPinRaw || "").trim() || /(^|\n)\s*pin\s*:/i.test(rawContent)) {
+		fileData.pinnedFile = true;
+	}
+	if (explicitMarkHex) {
+		fileData.markColorHex = explicitMarkHex;
+		try {
+			const root = (s.plugin as unknown as { app?: { workspace?: { containerEl?: HTMLElement } } }).app?.workspace?.containerEl ?? null;
+			const markIndex = findMarkColorIndexForCss(explicitMarkHex, root ?? null);
+			fileData.markColor = markIndex ?? undefined;
+		} catch {
+			fileData.markColor = undefined;
+		}
+	}
 	let recurLine = 0;
 	let recurValue: string | null = null;
 	try {
@@ -315,6 +336,8 @@ export async function processFileInternal(
 	const shouldResetReviewedOnEdit =
 		(options.reason === "create" || options.reason === "modify" || options.reason === "track") &&
 		!contentUnchanged &&
+		!frontmatterWrite &&
+		!frontmatterOnlyChange &&
 		previousData.pinnedFile !== true;
 	if (shouldResetReviewedOnEdit) {
 		const clearReviewed = (entry: FileIndexData["cdate"]): void => {

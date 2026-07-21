@@ -6,8 +6,6 @@ import { clearResultHandlerState } from "./ai-summaries/result-handler";
 import {
 	clearAllAiSummaries,
 	clearAllEmbeddingTerms,
-	clearAllMarks,
-	clearAllPins,
 	clearEpochEntries,
 	clearSemanticRuntimeState,
 	clearTopicRuntimeState,
@@ -268,32 +266,15 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 		addSelected("settings", "Settings");
 		addSelected("search", "Search");
 		addSelected("dataFiles", "Data files");
-		addSelected("marks", "Marks");
 		addSelected("reviewState", "Reviews");
-		addSelected("pinned", "Pinned");
 		addSelected("semantics", "Semantics");
 		addSelected("topics", "Topics");
 		addSelected("trackedChanges", "Tracked changes");
 		addSelected("aiSummaries", "AI summaries");
 		addSelected("epochs", "Epochs");
 
-		if (sel.marks) {
-			const cleared = clearAllMarks(plugin);
-			if (cleared > 0) didSomething = true;
-			try {
-				runtime.clearInheritedMarksCache?.();
-			} catch {
-				// ignore
-			}
-		}
-
 		if (sel.reviewState) {
 			const cleared = resetAllReviewStates(plugin);
-			if (cleared > 0) didSomething = true;
-		}
-
-		if (sel.pinned) {
-			const cleared = clearAllPins(plugin);
 			if (cleared > 0) didSomething = true;
 		}
 
@@ -377,9 +358,9 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 		}
 
 		if (sel.topics) {
-			const cleared = clearAllEmbeddingTerms(plugin);
-			if (cleared > 0) didSomething = true;
 			try {
+				const cleared = clearAllEmbeddingTerms(plugin);
+				if (cleared > 0) didSomething = true;
 				try {
 					// Topics reset clears the topics store; force re-run of similarity startup maintenance.
 					delete runtime.__epochDidSimilarityStartupMaintenance;

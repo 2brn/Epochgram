@@ -6,6 +6,10 @@ export function getEntryMarkColor(
 	markColors: string[] | undefined,
 	fallback: string
 ): string | null {
+	const explicitHex = typeof (entry as { markColorHex?: unknown }).markColorHex === "string"
+		? String((entry as { markColorHex?: string }).markColorHex || "").trim()
+		: "";
+	if (explicitHex) return explicitHex;
 	const idx = normalizeMarkColorIndex(entry.markColor);
 	if (!idx) return null;
 	const c = markColors && markColors.length >= idx ? markColors[idx - 1] : null;
@@ -20,6 +24,7 @@ export function getInheritedMarkColor(
 ): string | null {
 	if (!inheritedMarkIndexByPath) return null;
 	if (normalizeMarkColorIndex(entry.markColor)) return null;
+	if (typeof (entry as { markColorHex?: unknown }).markColorHex === "string" && String((entry as { markColorHex?: string }).markColorHex || "").trim()) return null;
 	const idx = normalizeMarkColorIndex(inheritedMarkIndexByPath.get(entry.file));
 	if (!idx) return null;
 	const c = markColors && markColors.length >= idx ? markColors[idx - 1] : null;

@@ -1,4 +1,6 @@
+import { TFile } from "obsidian";
 import { MAX_MARK_COLORS } from "../ui/mark-colors";
+import { getEpochMarkColorSet } from "../ui/mark-colors";
 import type { DateEntry, FileIndexData, FileReviewState } from "./types";
 import { expandRecurrenceToDateKeys } from "./recurrence";
 import {
@@ -8,6 +10,7 @@ import {
 	gatherFileEntries,
 	trackedEntryKey
 } from "./entry-state";
+import { setYamlPropertyForFile } from "../plugin/note-frontmatter";
 
 interface EntryUpdatesState {
 	files: Record<string, FileIndexData>;
@@ -24,11 +27,29 @@ function state(indexer: unknown): EntryUpdatesState {
 	return indexer as EntryUpdatesState;
 }
 
+function getFileForPath(indexer: EntryUpdatesState, path: string): TFile | null {
+	try {
+		const plugin = indexer.plugin as { app?: { vault?: { getAbstractFileByPath?: (filePath: string) => unknown } } };
+		const file = plugin.app?.vault?.getAbstractFileByPath?.(path);
+		return file instanceof TFile ? file : null;
+	} catch {
+		return null;
+	}
+}
+
 function normalizeMarkColor(markColor: number | null): number | null {
 	if (typeof markColor !== "number" || !Number.isFinite(markColor) || markColor <= 0) {
 		return null;
 	}
 	return Math.max(1, Math.min(MAX_MARK_COLORS, Math.floor(markColor)));
+}
+
+function normalizeMarkHex(markColor: unknown): string {
+	const value = String(markColor ?? "").trim();
+	if (!value) return "";
+	const hex = value.startsWith("#") ? value : `#${value}`;
+	if (!/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(hex)) return "";
+	return hex.toLowerCase();
 }
 
 function normalizeFileReviewState(value: unknown): FileReviewState {
@@ -513,6 +534,13 @@ export function toggleFileVisibility(indexer: unknown, path: string): "hidden" |
 	return !currentlyHidden ? "hidden" : "visible";
 }
 
+export function getFileMarkHex(indexer: unknown, path: string): string {
+	const s = state(indexer);
+	const data = s.files[path];
+	if (!data) return "";
+	return normalizeMarkHex(data.markColorHex);
+}
+
 export function getFileMarkColor(indexer: unknown, path: string): number | null {
 	const s = state(indexer);
 	const data = s.files[path];
@@ -602,19 +630,40 @@ export function isFileKnown(indexer: unknown, path: string): boolean {
 	return Boolean(s.files[path]);
 }
 
-export function setFileMarkColor(indexer: unknown, path: string, markColor: number | null): boolean {
+export function setFileMarkColor(indexer: unknown, path: string, markColor: number | string | null): boolean {
 	const s = state(indexer);
 	const data = s.files[path];
 	if (!data) return false;
-	const desired = normalizeMarkColor(markColor);
-	const prev = getFileMarkColor(indexer, path);
-	if ((prev == null) === (desired == null) && (prev == null || prev === desired)) {
+	const desiredIndex = normalizeMarkColor(typeof markColor === "number" ? markColor : null);
+	const desiredHex = typeof markColor === "string" ? normalizeMarkHex(markColor) : "";
+	const prevIndex = getFileMarkColor(indexer, path);
+	const prevHex = getFileMarkHex(indexer, path);
+	if (prevIndex === desiredIndex && prevHex === desiredHex && ((prevIndex == null) === (desiredIndex == null))) {
 		return false;
 	}
-	if (desired == null) {
+	if (desiredIndex == null && !desiredHex) {
 		delete data.markColor;
+		delete data.markColorHex;
+		try {
+			const file = getFileForPath(s, path);
+			if (file) void setYamlPropertyForFile(s.plugin, file, "mark", null);
+		} catch {
+			// ignore
+		}
 	} else {
-		data.markColor = desired;
+		if (desiredIndex != null) data.markColor = desiredIndex;
+		else delete data.markColor;
+		const root = (s.plugin as { app?: { workspace?: { containerEl?: HTMLElement } } }).app?.workspace?.containerEl ?? null;
+		const palette = getEpochMarkColorSet(root ?? null);
+		const hex = desiredHex || (desiredIndex != null ? String(palette[desiredIndex - 1] ?? "").trim().toLowerCase() : "");
+		if (hex) data.markColorHex = hex;
+		else delete data.markColorHex;
+		try {
+			const file = getFileForPath(s, path);
+			if (file) void setYamlPropertyForFile(s.plugin, file, "mark", hex);
+		} catch {
+			// ignore
+		}
 	}
 	applyHighlightState(data);
 	s.updateAggregatedEntries(path);
@@ -637,6 +686,12 @@ export function setFilePinned(indexer: unknown, path: string, pinned: boolean): 
 		return false;
 	}
 	data.pinnedFile = desired;
+	try {
+		const file = getFileForPath(s, path);
+		if (file) void setYamlPropertyForFile(s.plugin, file, "pin", desired ? true : null);
+	} catch {
+		// ignore
+	}
 	s.updateAggregatedEntries(path);
 	return true;
 }

@@ -36,6 +36,7 @@ export interface EpochSettings {
 	similarityUseLinks?: boolean;
 	similarityUseTags?: boolean;
 	similarityTitleJwThreshold?: number;
+	completedMigrations?: string[];
 	// Advanced similarity models (undefined/empty => defaults)
 	similarityEmbeddingModelId?: string;
 	similarityZeroShotModelId?: string;
@@ -63,6 +64,7 @@ export const DEFAULT_SETTINGS: EpochSettings = {
 		showTrackedChanges: true,
 		showParsed: true
 	},
+	completedMigrations: [],
 	parseDatesInFrontmatter: false,
 	yamlDateProperty: "date",
 	yamlDescriptionProperty: "description",

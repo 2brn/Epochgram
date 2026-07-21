@@ -68,7 +68,7 @@
 - Hover link source registered under `this.manifest.id` (see `plugin/lifecycle.ts`).
 - File context menu items (see `plugin/view.ts`):
   - “Epochgram: Edit summary…” edits the configured YAML frontmatter description property (default: `description`) for the file, then clears any stored per-file manual summary overrides and cached AI summaries so the frontmatter description becomes the visible source of truth.
-  - “Epochgram: Pin” / “Epochgram: Unpin”
+  - “Epochgram: Pin” / “Epochgram: Unpin” update `pin:` frontmatter as the source of truth for explicit pinning.
   - Review state (Simple mode off):
     - Shows only the actions that differ from the file’s current effective state (Draft vs Reviewed)
     - When the file is fully hidden, both “Epochgram: Draft” and “Epochgram: Review” are shown
@@ -89,6 +89,7 @@
     - When no file is active:
       - the clicked file becomes the explicit seed
     - Otherwise, actions apply to the resolved ancestor (typically the resolved inherited source).
+  - Topic actions update per-file explicit topic state in the index (`embeddingTerm`) and topic-similarity stores; they do not write `topic:` frontmatter.
 
 - Settings UI (Verified):
   - Pro activation/settings group is rendered at the top of settings (without a visible section title).

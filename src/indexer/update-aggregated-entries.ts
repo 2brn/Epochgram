@@ -175,10 +175,16 @@ export function updateAggregatedEntriesInternal(
 
 	const summarizeRange = (entry: FileDateEntry): FileDateEntry => {
 		const markColor = typeof entry.markColor === "number" ? entry.markColor : undefined;
+		const markColorHex = typeof entry.markColorHex === "string" && String(entry.markColorHex).trim()
+			? String(entry.markColorHex).trim()
+			: typeof data.markColorHex === "string" && String(data.markColorHex).trim()
+				? String(data.markColorHex).trim()
+				: undefined;
 		const entryReviewState = normalizeReviewState(entry.reviewState);
 		const base: FileDateEntry = {
 			...entry,
 			markColor,
+			markColorHex,
 			pinned: entry.pinned === true || pinnedFile
 		};
 		base.reviewState = entryReviewState;
@@ -300,6 +306,11 @@ export function updateAggregatedEntriesInternal(
 				...sourceEntry,
 				summary,
 				markColor: typeof sourceEntry.markColor === "number" ? sourceEntry.markColor : undefined,
+				markColorHex: typeof sourceEntry.markColorHex === "string" && String(sourceEntry.markColorHex).trim()
+					? String(sourceEntry.markColorHex).trim()
+					: typeof data.markColorHex === "string" && String(data.markColorHex).trim()
+						? String(data.markColorHex).trim()
+						: undefined,
 				pinned: sourceEntry.pinned === true || pinnedFile
 			};
 			anchorEntry.reviewState = entryReviewState;
@@ -406,6 +417,7 @@ export function updateAggregatedEntriesInternal(
 				recurring: true,
 				reviewState: entryReviewState,
 				markColor,
+				markColorHex: typeof data.markColorHex === "string" && String(data.markColorHex).trim() ? String(data.markColorHex).trim() : undefined,
 				pinned: pinnedFile
 			});
 		}

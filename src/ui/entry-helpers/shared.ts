@@ -194,6 +194,7 @@ export function getInheritedMarkComputedAt(canvas: EpochCanvas): number {
 
 export function isColorMarked(entry: DateEntry, inheritedMarkIndexByPath: Map<string, number> | null): boolean {
 	if (normalizeMarkColorIndex(entry.markColor)) return true;
+	if (typeof entry.markColorHex === "string" && String(entry.markColorHex || "").trim()) return true;
 	if (inheritedMarkIndexByPath && typeof entry.file === "string" && entry.file) {
 		return normalizeMarkColorIndex(inheritedMarkIndexByPath.get(entry.file)) != null;
 	}

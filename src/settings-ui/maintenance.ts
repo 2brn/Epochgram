@@ -121,8 +121,6 @@ export function renderMaintenanceSettings(containerEl: HTMLElement, app: App, pl
 									label: "Data files",
 									checked: false,
 									toggleWith: [
-										"pinned",
-										"marks",
 										"reviewState",
 										"semantics",
 										"topics",
@@ -132,8 +130,6 @@ export function renderMaintenanceSettings(containerEl: HTMLElement, app: App, pl
 									]
 								},
 								{ key: "search", label: "Search", checked: false },
-								{ key: "pinned", label: "Pinned", checked: false, parentKey: "dataFiles" },
-								{ key: "marks", label: "Marks", checked: false, parentKey: "dataFiles" },
 								{ key: "reviewState", label: "Reviews", checked: false, parentKey: "dataFiles" },
 								{ key: "semantics", label: "Semantics", checked: false, parentKey: "dataFiles" },
 								{ key: "topics", label: "Topics", checked: false, parentKey: "dataFiles" },
@@ -154,9 +150,7 @@ export function renderMaintenanceSettings(containerEl: HTMLElement, app: App, pl
 									settings: picked.settings === true,
 									search: picked.search === true,
 									dataFiles: picked.dataFiles === true,
-									marks: picked.marks === true,
 									reviewState: picked.reviewState === true,
-									pinned: picked.pinned === true,
 									semantics: picked.semantics === true,
 									topics: picked.topics === true,
 									trackedChanges: picked.trackedChanges === true,

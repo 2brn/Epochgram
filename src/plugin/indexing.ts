@@ -19,6 +19,8 @@ import {
 import { hydrateTimelineSearchIndexFromLoadedState } from "./timeline-search-hydration";
 import { bumpTimelineSearchIndexVersion, loadTimelineSearchCache, saveTimelineSearchCache } from "./timeline-search-cache";
 import { isTrackChangesEffective } from "./pro-feature-state";
+import { getYamlPropertyForFile, setYamlPropertyForFile } from "./note-frontmatter";
+import { getEpochMarkColorSet } from "../ui/mark-colors";
 
 interface IndexOperationOptions {
 	skipEnsure?: boolean;
@@ -47,7 +49,36 @@ type IndexingPluginState = EpochPlugin & {
 	scheduleInheritedMarkRecompute?: (reason: string) => void;
 	__timelineSearchAutoRebuildScheduled?: boolean;
 	rebuildTimelineSearchIndex?: () => Promise<void>;
+	settings: EpochPlugin["settings"] & { completedMigrations?: string[] };
 };
+
+const FRONTMATTER_SYNC_MIGRATION_ID = "1.7.0-frontmatter-pin-mark-sync";
+
+function hasCompletedMigration(state: IndexingPluginState, migrationId: string): boolean {
+	try {
+		const list = Array.isArray(state.settings.completedMigrations)
+			? state.settings.completedMigrations
+			: [];
+		if (list.includes(migrationId)) return true;
+	} catch {
+		// ignore
+	}
+	return false;
+}
+
+async function markMigrationCompleted(plugin: EpochPlugin, migrationId: string): Promise<void> {
+	const state = plugin as IndexingPluginState;
+	try {
+		const existing = Array.isArray(state.settings.completedMigrations)
+			? state.settings.completedMigrations.filter((id) => typeof id === "string" && id.trim().length > 0)
+			: [];
+		if (!existing.includes(migrationId)) existing.push(migrationId);
+		state.settings.completedMigrations = existing;
+		await plugin.saveSettings();
+	} catch {
+		// ignore
+	}
+}
 
 async function reapplySavedAiSummaries(plugin: EpochPlugin): Promise<void> {
 	try {
@@ -72,6 +103,51 @@ function recomputeSummariesAfterAiRehydrate(plugin: EpochPlugin): void {
 	} catch {
 		// ignore
 	}
+}
+
+async function migrateIndexedFrontmatterOnce(plugin: EpochPlugin): Promise<boolean> {
+	const state = plugin as IndexingPluginState;
+	if (hasCompletedMigration(state, FRONTMATTER_SYNC_MIGRATION_ID)) return false;
+
+	let didSomething = false;
+	let completed = false;
+	const files = plugin.indexer.toJSON().files ?? {};
+	const root = plugin.app?.workspace?.containerEl ?? null;
+	const markColors = getEpochMarkColorSet(root);
+	for (const [path, data] of Object.entries(files)) {
+		try {
+			const file = plugin.app.vault.getAbstractFileByPath(path);
+			if (!(file instanceof TFile)) continue;
+
+			if (data?.pinnedFile === true) {
+				const current = await getYamlPropertyForFile(plugin, file, "pin");
+				if (!String(current || "").trim()) {
+					didSomething = (await setYamlPropertyForFile(plugin, file, "pin", true)) || didSomething;
+				}
+			}
+
+			const markHex = String(data?.markColorHex || "").trim() || (() => {
+				const idx = Number(data?.markColor ?? 0);
+				return Number.isFinite(idx) && idx > 0 ? String(markColors[idx - 1] || "").trim() : "";
+			})();
+			if (markHex) {
+				const current = await getYamlPropertyForFile(plugin, file, "mark");
+				if (!String(current || "").trim()) {
+					didSomething = (await setYamlPropertyForFile(plugin, file, "mark", markHex)) || didSomething;
+				}
+			}
+
+		} catch {
+			// ignore per-file migration failures
+		}
+	}
+	completed = true;
+
+	if (completed) {
+		await markMigrationCompleted(plugin, FRONTMATTER_SYNC_MIGRATION_ID);
+	}
+
+	return didSomething;
 }
 
 export interface IndexingMethods {
@@ -215,6 +291,13 @@ export const indexingMethods: IndexingMethods = {
 				const cleared = this.indexer.clearTrackedChanges();
 				const reset = this.indexer.resetTrackedBaseline();
 				baselineCleanup = cleared || reset;
+			}
+			if (mode === "rebuild") {
+				try {
+					await migrateIndexedFrontmatterOnce(this);
+				} catch {
+					// ignore
+				}
 			}
 			await this.persist({ skipEnsure: true });
 		} finally {

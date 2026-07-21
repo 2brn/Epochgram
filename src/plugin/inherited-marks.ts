@@ -442,6 +442,7 @@ export const inheritedMarkMethods: InheritedMarkMethods = {
 					return true;
 				},
 				getFileMarkColor: (p) => this.indexer.getFileMarkColor(p),
+				getFileMarkHex: (p) => this.indexer.getFileMarkHex?.(p),
 				getEpochChildRecords: (epochPath) => epochChildByEpoch.get(epochPath) ?? [],
 				threshold,
 				termMinScore: topicsEnabled ? zeroShotMinScore : 0,

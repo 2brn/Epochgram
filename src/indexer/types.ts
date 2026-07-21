@@ -67,6 +67,7 @@ export interface DateEntry {
 	epochEnd?: string;
 	reviewState?: ReviewState;
 	markColor?: number;
+	markColorHex?: string;
     pinned?: boolean;
 	fileMtimeMs?: number;
     trackedChange?: TrackedChangeType;
@@ -100,6 +101,7 @@ export interface FileIndexData {
 	/** Optional user-provided term used as the embedding input for Similarity (Pro). */
 	embeddingTerm?: string;
 	markColor?: number;
+	markColorHex?: string;
     pinnedFile?: boolean;
 	/** Optional recurring schedule derived from YAML frontmatter `recur:`. */
 	recur?: RecurrenceIndexData | null;

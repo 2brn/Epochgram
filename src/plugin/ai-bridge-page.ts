@@ -159,7 +159,6 @@ export function buildAiBridgePageHtml(token: string): string {
 	let lastStatus = null;
 	let openedUpdateLink = false;
 	const CHROME_UPDATE_URL = "https://www.google.com/intl/uk/chrome/update/";
-	const BRIDGE_POLYFILL_PROMPT_MODULE_URL = "https://esm.sh/prompt-api-polyfill@1.20.1?bundle";
 	const BRIDGE_POLYFILL_SUMMARIZER_MODULE_URL = "https://esm.sh/built-in-ai-task-apis-polyfills@1.15.1/summarizer?bundle";
 	const OPTS_KEY = "epoch_ai_bridge_yaml_v1";
 	let optionsSaveTimer = 0;

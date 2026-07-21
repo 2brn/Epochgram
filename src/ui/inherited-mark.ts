@@ -70,12 +70,14 @@ export function computeInheritedMarkData(args: {
 	tagCandidatesBySeedPath?: PrecomputedGraphCandidates;
 	canMatch?: (seedPath: string, candidatePath: string, reason: InheritedMarkReason) => boolean;
 	getFileMarkColor: (path: string) => unknown;
+	getFileMarkHex?: (path: string) => unknown;
 	getEpochChildRecords?: (epochPath: string) => EpochChildRecord[];
 	threshold: number;
 	termMinScore?: number;
 	titleJwThreshold?: number;
 }): InheritedMarkData | null {
 	const { visiblePaths, storeFiles, getFileMarkColor } = args;
+	const getMarkHex = typeof args.getFileMarkHex === "function" ? args.getFileMarkHex : null;
 	const threshold = Number(args.threshold);
 	const termMinScoreRaw = Number(args.termMinScore);
 	const termMinScore = Number.isFinite(termMinScoreRaw) ? termMinScoreRaw : 0;
@@ -99,7 +101,12 @@ export function computeInheritedMarkData(args: {
 	const titleSeeds: Array<{ path: string; idx: number; title: string }> = [];
 
 	for (const p of visible) {
+		const hex = String(getMarkHex?.(p) ?? "").trim();
 		const idx = normalizeMarkIndex(getFileMarkColor(p));
+		if (hex && idx == null) {
+			ownMarked.set(p, 0);
+			continue;
+		}
 		if (idx == null) continue;
 		ownMarked.set(p, idx);
 	}
@@ -111,7 +118,9 @@ export function computeInheritedMarkData(args: {
 		if (p.startsWith("epoch://")) continue;
 		if (seenSeed.has(p)) continue;
 		seenSeed.add(p);
+		const hex = String(getMarkHex?.(p) ?? "").trim();
 		const idx = normalizeMarkIndex(getFileMarkColor(p));
+		if (hex && idx == null) continue;
 		if (idx == null) continue;
 		termSeeds.push({ path: p, idx });
 		try {

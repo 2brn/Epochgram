@@ -78,6 +78,15 @@ export function mergeConsecutiveEntries(
 				const curMark = typeof (current as FileDateEntryWithExtras).markColor === "number" ? (current as FileDateEntryWithExtras).markColor : null;
 				if (curMark == null) (current as FileDateEntryWithExtras).markColor = nextMark;
 			}
+			const nextMarkHex = typeof (next as { markColorHex?: unknown }).markColorHex === "string"
+				? String((next as { markColorHex?: string }).markColorHex || "").trim()
+				: ""
+			if (nextMarkHex) {
+				const curMarkHex = typeof (current as { markColorHex?: unknown }).markColorHex === "string"
+					? String((current as { markColorHex?: string }).markColorHex || "").trim()
+					: "";
+				if (!curMarkHex) (current as { markColorHex?: string }).markColorHex = nextMarkHex;
+			}
 		} else {
 			pushCurrent();
 			current = { ...next };

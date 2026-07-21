@@ -30,6 +30,7 @@ import {
 	cycleFileMarkColor,
 	clearFileReviewOverrides,
 	clearEntryAiSummary,
+	getFileMarkHex,
 	getFileEmbeddingTerm,
 	getFileIndexData,
 	getFileMarkColor,
@@ -313,6 +314,10 @@ export class Indexer {
 
 	public getFileMarkColor(path: string): number | null {
 		return getFileMarkColor(this, path);
+	}
+
+	public getFileMarkHex(path: string): string {
+		return getFileMarkHex(this, path);
 	}
 
 	public cycleFileMarkColor(path: string): boolean {
