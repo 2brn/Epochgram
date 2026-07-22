@@ -33,6 +33,8 @@ const SYNC_SAFE_SETTING_KEYS = [
 	"openAiBridgeInObsidianWebViewer",
 	"proActivatedOnce",
 	"completedMigrations",
+	"whatsNewShownVersions",
+	"whatsNewOptOut",
 	"similarityUseLinks",
 	"similarityUseTags",
 	"similarityTitleJwThreshold",

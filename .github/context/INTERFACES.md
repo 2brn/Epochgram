@@ -1,12 +1,16 @@
 # Interfaces
 
 ## Obsidian Integrations (Verified)
-- Custom view type: `epochgram-view` (see `ui/epoch-view-mode.ts`).
+- Custom view types: `epochgram-view` (timeline) and `epochgram-whats-new` (What's New).
 - View registration: `plugin/lifecycle.ts` registers `EpochView` for `epochgram-view`.
 - Obsidian protocol handler: `obsidian://epochgram?key=<CLAIM_KEY>` (also accepts `claimKey=`) opens the Epochgram settings tab and triggers Pro activation.
 - Startup behavior:
   - After layout is ready, the plugin ensures an `epochgram-view` leaf exists (without stealing focus).
   - Desktop and mobile: it may auto-open Epochgram after layout is ready when `settings.openEpochViewOnStartup !== false`.
+  - Desktop and mobile: it may also auto-open a dedicated What's New view tab (`epochgram-whats-new`) when a new eligible embedded page exists and `settings.whatsNewOptOut !== true`.
+    - Content is rendered from bundled markdown embedded in `main.js`.
+    - Existing users see at most one auto-open per matching plugin version page.
+    - Fresh installs (no saved settings) get the latest available page once.
   - If AI bridge auto-start is enabled, the bridge startup flow runs before the timeline auto-open flow so an existing bridge leaf can be re-activated first.
   - When `summarizeAI` (Auto summarize) or `generateEpochs` is switched on in settings, the local AI bridge HTTP server starts immediately on desktop instead of waiting for the first queued AI job.
   - Opening Epochgram always targets the right/sidebar leaf and falls back to a tab leaf only when a right leaf is unavailable.
@@ -153,7 +157,8 @@ The plugin reads/writes:
 Index no-op detection (Verified)
 - Per-file index data may include `indexedMtimeMs` + `indexedSize` for the last indexed file stat, used to skip reprocessing when deferred resync detects spurious/no-op file events (prevents unnecessary `epochgram-index.json` rewrites on startup).
 - For deferred resync, Epochgram also uses a per-file `contentHash` no-op check for text files (desktop + mobile) to avoid rewrites when content is unchanged.
-- Metadata-cache `changed` events for the active file defer a normal resync (not forced), so startup metadata refresh does not bypass no-op guards.
+- Metadata-cache `changed` events for the active file join the normal deferred edit-processing queue (not forced), so startup metadata refresh does not bypass no-op guards and active-file property edits can coalesce with nearby typing-triggered work.
+- Normal user-note edit processing (`editor-change` / `vault.modify`) is coalesced by path before `processFile` runs, and successful edit-time reindexing schedules a delayed persist instead of writing managed files immediately per event.
 - Disk normalization for `epochgram-index.json` sorts key order (top-level `files`, nested `trackedDates`, and date keys) so `JSON.stringify` output is deterministic and doesn't flap due to iteration order.
 - When persisting the index, Epochgram compares the new serialized payload with the current on-disk file and skips the write if identical.
 

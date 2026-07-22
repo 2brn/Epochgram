@@ -160,6 +160,13 @@ Settings interface starts in `settings.ts` (`export interface EpochSettings`). V
     - Draft italics are suppressed in summary rows.
     - Some context-menu affordances are collapsed/hidden (e.g., mark palette submenu becomes a single toggle; review submenu becomes Show/Hide).
     - Epochs view toggle button is hidden and epochs view is forced off.
+  - `whatsNewShownVersions?: string[]` (default `[]`; tracks which What's New versions were already auto-shown)
+  - `whatsNewOptOut?: boolean` (default `false`; disables automatic What's New startup opening when true)
+
+  What's New startup content (Verified)
+  - Startup What's New pages are sourced from embedded markdown bundled into `main.js` via the build-time registry.
+  - `whatsNewShownVersions` tracks per-version auto-display state.
+  - `whatsNewOptOut` is toggled directly from the What's New view checkbox and persisted in settings.
 
 Pro startup validation (Verified)
 - When Pro validation is attempted on startup and fails in a way that invalidates the activation (typically during plugin-update revalidation), Epochgram shows a one-time-per-session notice and keeps Pro locked until validation succeeds.

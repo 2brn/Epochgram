@@ -3,6 +3,8 @@ import { DEFAULT_SETTINGS, EpochSettingTab } from "../settings";
 import { Indexer } from "../indexer/indexer";
 import { VIEW_TYPE_EPOCH } from "../ui/epoch-view-mode";
 import { EpochView } from "../ui/epoch-view";
+import { VIEW_TYPE_WHATS_NEW } from "../ui/whats-new-view-mode";
+import { WhatsNewView } from "../ui/whats-new-view";
 import { getEpochMarkBaseColorIndexOrder, normalizeMarkColorIndex } from "../ui/mark-colors";
 import type { PersistedPluginData } from "./state";
 import type { EpochPlugin } from "../main";
@@ -16,6 +18,7 @@ import { reviewAllDraftFiles } from "./maintenance/reset-helpers";
 import { onViewUnload } from "./view/leaf-actions";
 import { hasAiBridgeAccess, hasVerifiedEntitlement, isTrackChangesEffective } from "./pro-feature-state";
 import { wrapNoticeError } from "./notice-utils";
+import { maybeOpenWhatsNewOnStartup } from "./whats-new";
 import {
 	mergeSyncedSettingsWithLocalActivation,
 	readLocalActivationState
@@ -64,6 +67,7 @@ type LifecycleRuntime = EpochPlugin & {
 	__epochEnsuredViewOnStartup?: boolean;
 	__epochAutoOpenedOnStartup?: boolean;
 	__epochAiBridgeStartupPromise?: Promise<void> | null;
+	__epochHadSavedSettingsAtStartup?: boolean;
 	maybeOpenAiBridgeOnStartup?: () => Promise<void>;
 };
 
@@ -128,6 +132,7 @@ export const lifecycleMethods: LifecycleMethods = {
 		const saved = (await this.loadData()) as PersistedPluginData | null;
 		this.lastDataSignature = this.computeDataSignature(saved);
 		const hadSavedSettings = !!saved?.settings;
+		runtime.__epochHadSavedSettingsAtStartup = hadSavedSettings;
 		this.settings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
@@ -569,6 +574,11 @@ export const lifecycleMethods: LifecycleMethods = {
 			(leaf) => new EpochView(leaf, this)
 		);
 
+		this.registerView(
+			VIEW_TYPE_WHATS_NEW,
+			(leaf) => new WhatsNewView(leaf, this)
+		);
+
 		try {
 			if (!runtime.__epochEnsuredViewOnStartup) {
 				runtime.__epochEnsuredViewOnStartup = true;
@@ -672,6 +682,12 @@ export const lifecycleMethods: LifecycleMethods = {
 								// ignore
 							}
 						}
+
+						void (async () => {
+							try {
+								await maybeOpenWhatsNewOnStartup(this, runtime.__epochHadSavedSettingsAtStartup === true);
+							} catch {}
+						})();
 					}, 1);
 				});
 			}

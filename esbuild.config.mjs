@@ -21,6 +21,8 @@ const EPOCHGRAM_LOGO_FULL_SVG_FILE = path.join("images", "epochgram-logo-full.sv
 const EPOCHGRAM_LOGO_FULL_VIRTUAL = "epochgram-logo-full";
 const BRIDGE_DEFAULT_SETTINGS_YAML_FILE = path.join("src", "plugin", "ai-bridge-page", "settings", "default-bridge-settings.yaml");
 const BRIDGE_DEFAULT_SETTINGS_YAML_VIRTUAL = "epochgram-bridge-default-settings-yaml";
+const WHATS_NEW_DIR = path.join("src", "whats-new");
+const WHATS_NEW_REGISTRY_VIRTUAL = "epochgram-whats-new-registry";
 
 const bridgeFaviconInlinePlugin = {
 	name: "epochgram-bridge-favicon-inline",
@@ -83,6 +85,42 @@ const bridgeDefaultSettingsYamlInlinePlugin = {
 				contents: `export default ${JSON.stringify(yamlText)};`,
 				loader: "js",
 				watchFiles: [BRIDGE_DEFAULT_SETTINGS_YAML_FILE]
+			};
+		});
+	}
+};
+
+const whatsNewRegistryInlinePlugin = {
+	name: "epochgram-whats-new-registry-inline",
+	setup(build) {
+		build.onResolve({ filter: /^epochgram-whats-new-registry$/ }, () => {
+			return { path: WHATS_NEW_REGISTRY_VIRTUAL, namespace: "epochgram-whats-new-registry-inline" };
+		});
+		build.onLoad({ filter: /.*/, namespace: "epochgram-whats-new-registry-inline" }, async () => {
+			const pages = {};
+			const watchFiles = [];
+			try {
+				const entries = await fs.promises.readdir(WHATS_NEW_DIR, { withFileTypes: true });
+				for (const entry of entries) {
+					if (!entry.isFile()) continue;
+					if (!entry.name.toLowerCase().endsWith(".md")) continue;
+					const version = entry.name.replace(/\.md$/i, "").trim();
+					if (!version) continue;
+					const filePath = path.join(WHATS_NEW_DIR, entry.name);
+					watchFiles.push(filePath);
+					let markdown = "";
+					try {
+						markdown = await fs.promises.readFile(filePath, "utf8");
+					} catch {
+						markdown = "";
+					}
+					pages[version] = markdown;
+				}
+			} catch {}
+			return {
+				contents: `export default ${JSON.stringify(pages)};`,
+				loader: "js",
+				watchFiles
 			};
 		});
 	}
@@ -191,7 +229,8 @@ const pluginContext = await esbuild.context({
 		yamlNoAtobBtoaPlugin,
 		bridgeFaviconInlinePlugin,
 		epochgramLogoFullInlinePlugin,
-		bridgeDefaultSettingsYamlInlinePlugin
+		bridgeDefaultSettingsYamlInlinePlugin,
+		whatsNewRegistryInlinePlugin
 	],
 	outfile: "main.js",
 	minify: prod,

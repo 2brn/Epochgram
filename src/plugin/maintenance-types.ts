@@ -10,9 +10,7 @@ export type ResetSelection = {
 	settings: boolean;
 	search: boolean;
 	dataFiles: boolean;
-	marks: boolean;
 	reviewState: boolean;
-	pinned: boolean;
 	semantics: boolean;
 	topics: boolean;
 	trackedChanges: boolean;

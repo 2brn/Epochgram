@@ -13,6 +13,7 @@
   - Registers file explorer context menu entries: file actions (Pin/Mark/Review/Draft/Hide) and folder actions (Review/Draft/Hide).
 - Persistence: `plugin/persistence.ts`
   - Persists sync-safe `settings` via `saveData`.
+  - Sync-safe settings include What's New state (`whatsNewShownVersions`, `whatsNewOptOut`) so one-time-per-version startup behavior is tracked across devices.
   - Stores device-bound Pro activation state in local storage per vault/device (not in synced plugin data).
   - Local activation state now consists of `installId`, `devicePublicKey`, a signed activation certificate envelope, a locally-verified witness, a monotonic `activationGenerationFloor`, and activation timestamps/status fields.
   - Writes the serialized index JSON to `epochgram-index.json` (normalized for disk; excludes epoch entries and AI summary fields via `indexer/disk-serialization.ts:normalizeSerializedEpochIndexForDisk`). Disk normalization also sorts key order (e.g., `files` and nested `trackedDates`) so serialization is deterministic across restarts (reduces no-op rewrites, especially on Android/mobile).
@@ -42,6 +43,12 @@
     - If a visible on-screen record matches the editor cursor line, that record is preferred.
     - Otherwise, Epochgram selects the file's record date that is nearest to Today (applies to both recurring and non-recurring matches).
   - On `file-open`, if the opened file is indexable but missing from the current index, Epochgram opportunistically indexes it and refreshes views.
+  - On startup, Epochgram may open a dedicated What's New view tab (`epochgram-whats-new`) when a new eligible embedded page exists and the user is not opted out.
+    - The view renders bundled markdown content from the build-time registry embedded into `main.js`.
+    - No per-version What's New markdown file is written under `.obsidian`.
+    - Existing users: only the current plugin version is considered, and shown once.
+    - Fresh install (no saved settings): opens the latest available embedded What's New page once.
+    - The service page contains a checkbox marker; toggling it updates `settings.whatsNewOptOut` via file modify events.
   - After index load, runs similarity startup maintenance to enqueue missing vectors/topics when enabled. Vectors cover “likely text” files (see `utils.ts:isLikelyTextFileExtension`), while topic classification runs only for Markdown notes.
     - For huge vaults, missing semantic vectors are enqueued in a single pass so the semantics queue reflects the whole eligible vault (vector computation remains throttled in the background queue).
     - Topic classification enqueueing remains markdown-only and is backfilled in batches.
@@ -102,6 +109,8 @@ MiniSearch cache (Verified)
 - After a successful index rebuild/refresh (or other MiniSearch mutations), Epochgram may write `${configDir}/epochgram-search.json` when the cache is dirty.
 - On startup, Epochgram attempts to load the cache; if missing/unreadable, it falls back to a lightweight hydration from already-loaded index state.
 - During normal operation, incremental indexing (create/modify/rename/delete) updates the MiniSearch index and bumps `__timelineSearchIndexVersion` so any active timeline search filter re-evaluates immediately.
+- During active note editing, normal user-note `modify` work is coalesced through a short deferred queue instead of reprocessing on every raw event; repeated `editor-change`, `vault.modify`, and active-file metadata-cache `changed` events for the same path collapse into one later `processFile` run.
+- Edit-driven index persistence is also deferred: after a successful deferred edit flush, Epochgram schedules a short delayed `persist()` rather than writing `data.json` / `epochgram-index.json` immediately on each keystroke.
 - Tokenization note: the timeline search index intentionally drops most 1-character alphabetic tokens (keeps 1-character numeric tokens). Unquoted search queries apply the same rule so queries like `Rawdat A.` do not accidentally require an unindexable `A` token.
 
 ### Reset Flow (Verified)
@@ -119,7 +128,7 @@ Rebuild ordering (Verified)
 - When both **AI summaries** and **Epochs** are selected in the rebuild modal, the rebuild flow enqueues AI summary jobs first.
 - Epoch regeneration then runs as a **bucket cascade** from **day → … → year**, starting only once the AI bridge becomes idle.
 - This preserves dependency order so higher-level epochs are generated from fresh lower-level epochs (and fresh AI summaries).
-  - Options include: Settings, Data files, Search, Marks, Reviews, Pinned, Semantics, Topics, Tracked changes, Manual summaries, AI summaries, Epochs.
+  - Options include: Settings, Data files, Search, Reviews, Semantics, Topics, Tracked changes, AI summaries, Epochs.
   - Settings:
     - Resets plugin settings back to `DEFAULT_SETTINGS` (and, when “keep license” is selected, keeps the local Pro activation state so Pro stays active on that device).
     - If Pro is active after license refresh, applies Pro similarity defaults.
@@ -135,8 +144,6 @@ Rebuild ordering (Verified)
   - Topics:
     - Clears the topics store and resets in-memory topic similarity state.
     - Forces similarity startup maintenance to run again so topics can re-enqueue.
-  - Pinned:
-    - Clears per-file pin state by removing the effective `pin:` override so nothing remains pinned, regardless of whether the stored mode was `today`, `date`, or `dock`.
   - Tracked changes:
     - Clears tracked entries and also clears tracked snapshot/baseline state so changes don’t immediately reappear.
   - AI summaries:
@@ -153,6 +160,7 @@ Rebuild ordering (Verified)
 
 ## Tracked Changes (Verified)
 - Tracked-change detection compares a per-file **baseline snapshot** to the current file contents and emits `source: "tracked"` entries for added/modified/removed fragments.
+- When Track changes is enabled, edit-time tracked reprocessing is scheduled through the same short deferred queue as normal note modifies; Epochgram no longer performs the full tracked diff synchronously on every `editor-change` callback.
 - Snapshot normalization is applied before diffing:
   - Normalizes line endings to `\n` (handles `CRLF`, `CR`-only, and Unicode separators).
   - Strips a leading BOM and normalizes Unicode to NFC.

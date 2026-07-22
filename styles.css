@@ -442,7 +442,7 @@ body.theme-light .epoch-license-section {
 .epoch-root .epoch-pin-badge-label {
   position: absolute;
   left: 4px;
-  right: 14px;
+  right: 10px;
   top: 0;
   bottom: 0;
   display: block;
@@ -928,4 +928,38 @@ body.theme-dark .epoch-pro-description {
   background: var(--background-secondary);
   color: var(--text-warning);
   font-size: 0.95em;
+}
+
+.epoch-whats-new-view .inline-title {
+  padding-top: 16px;
+}
+
+.epoch-whats-new-view .markdown-preview-view.markdown-rendered.node-insert-event.is-readable-line-width.allow-fold-headings.allow-fold-lists.show-indentation-guide {
+  padding: 0;
+}
+
+.epoch-whats-new-view .markdown-preview-section > hr,
+.epoch-whats-new-view .epoch-whats-new-body hr {
+  border: 0;
+  border-top: 1px solid var(--hr-color, var(--background-modifier-border));
+  margin: 1em 0;
+}
+
+.workspace-leaf-content[data-type="epochgram-whats-new"] .view-content.markdown-reading-view.epoch-whats-new-view {
+  padding: 14px 0;
+}
+
+.epoch-whats-new-view .markdown-preview-view.markdown-rendered .epoch-whats-new-body :is(p, pre, table, ul, ol) + :is(h1, h2, h3, h4, h5, h6),
+.epoch-whats-new-view .markdown-preview-view.markdown-rendered .epoch-whats-new-body div:is(.el-blockquote, .el-p, .el-pre, .el-table, .el-ul, .el-ol) + div > :is(h1, h2, h3, h4, h5, h6) {
+  margin-top: var(--heading-spacing);
+}
+
+.epoch-whats-new-view .epoch-whats-new-body > :is(h1, h2, h3, h4, h5, h6):not(:first-child),
+.epoch-whats-new-view .epoch-whats-new-body > div:is(.el-h1, .el-h2, .el-h3, .el-h4, .el-h5, .el-h6):not(:first-child) > :is(h1, h2, h3, h4, h5, h6) {
+  margin-top: var(--heading-spacing);
+}
+
+.epoch-whats-new-view .epoch-whats-new-body > :is(h1, h2, h3, h4, h5, h6):first-child,
+.epoch-whats-new-view .epoch-whats-new-body > div:is(.el-h1, .el-h2, .el-h3, .el-h4, .el-h5, .el-h6):first-child > :is(h1, h2, h3, h4, h5, h6) {
+  margin-top: 0;
 }

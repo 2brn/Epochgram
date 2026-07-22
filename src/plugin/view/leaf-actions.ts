@@ -1,5 +1,6 @@
 import { Platform, type WorkspaceLeaf } from "obsidian";
 import { VIEW_TYPE_EPOCH } from "../../ui/epoch-view-mode";
+import { VIEW_TYPE_WHATS_NEW } from "../../ui/whats-new-view-mode";
 import type { EpochPlugin } from "../../main";
 
 type FileRef = { path: string };
@@ -95,6 +96,7 @@ export function onViewUnload(plugin: EpochPlugin): void {
 		// ignore
 	}
 	plugin.app.workspace.detachLeavesOfType(VIEW_TYPE_EPOCH);
+	plugin.app.workspace.detachLeavesOfType(VIEW_TYPE_WHATS_NEW);
 }
 
 export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: boolean; activate?: boolean } = {}): Promise<void> {

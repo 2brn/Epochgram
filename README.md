@@ -438,6 +438,8 @@ Epochgram supports the following custom YAML properties:
 ---
 date: 2026-01-01 # override the anchor date
 description: my summary # override the summary
+pin: today # today | date (visible at any zoom) | dock (also outside viewport)
+mark: "#c14d58" # explicit mark color (hex)
 noindex: # exclude this file from all indexing
 notracked: # don't track changes for this file
 noparsed: # don't parse dates from this file's content
@@ -483,8 +485,6 @@ Epochgram also provides **Rebuild** and **Reset** popups for rebuilding or clear
     - **⛭ Settings** → reset all settings to defaults.
     - **⛭ Data files** → clear data files and schedule regeneration.
     - **⛭ Search** → clear the search cache.
-    - **⛭ Pinned** → unpin all items.
-    - **⛭ Marks** → remove all marks.
     - **⛭ Reviews** → set all records to draft.
     - **⛭ Semantics** → remove all embedding vectors.
     - **⛭ Topics** → remove all topics and classification data.

@@ -5,6 +5,13 @@ import { normalizeSnapshotValue } from "../indexer/snapshot-helpers";
 import { computeTextHash } from "../utils";
 import { isTrackChangesEffective } from "./pro-feature-state";
 
+const EDIT_PROCESS_DEFER_MS = 900;
+const EDIT_PERSIST_DEFER_MS = 1800;
+const EDIT_REFRESH_DEFER_MS = 700;
+
+type DeferredProcessReason = "modify" | "track";
+type DeferredRefreshOptions = { forceSemanticRelated?: boolean };
+
 type FileIndexDataLike = {
 	indexedMtimeMs?: number;
 	indexedSize?: number;
@@ -19,6 +26,13 @@ type FileEventPluginState = EpochPlugin & {
 	__epochDeferredIndexResync?: Set<string>;
 	__epochDeferredIndexResyncForce?: Set<string>;
 	__epochDeferredIndexResyncTimer?: number | null;
+	__epochDeferredEditProcess?: Set<string>;
+	__epochDeferredEditReasonByPath?: Map<string, DeferredProcessReason>;
+	__epochDeferredEditProcessTimer?: number | null;
+	__epochDeferredEditPersistTimer?: number | null;
+	__epochDeferredEditPersistPending?: boolean;
+	__epochDeferredEditRefreshTimer?: number | null;
+	__epochDeferredEditRefreshForceSemanticRelated?: boolean;
 	timelineSearchIndex?: TimelineSearchIndexLike;
 	maybeIndexOpenedFile?: (file: TFile) => Promise<void>;
 	queueVectorUpdate?: (path: string) => void;
@@ -80,6 +94,241 @@ async function shouldSkipUnchangedModify(plugin: EpochPlugin, file: TFile, force
 	}
 
 	return false;
+}
+
+function scheduleDeferredEditPersist(plugin: EpochPlugin): void {
+	const pluginState = state(plugin);
+	try {
+		pluginState.__epochDeferredEditPersistPending = true;
+		const prior = pluginState.__epochDeferredEditPersistTimer;
+		if (prior != null) {
+			try {
+				window.clearTimeout(prior);
+			} catch {
+				// ignore
+			}
+		}
+		pluginState.__epochDeferredEditPersistTimer = window.setTimeout(() => {
+			try {
+				pluginState.__epochDeferredEditPersistTimer = null;
+			} catch {
+				// ignore
+			}
+			void flushDeferredEditPersist(plugin);
+		}, EDIT_PERSIST_DEFER_MS);
+	} catch {
+		// ignore
+	}
+}
+
+async function flushDeferredEditPersist(plugin: EpochPlugin): Promise<void> {
+	const pluginState = state(plugin);
+	try {
+		if (pluginState.__epochDeferredEditPersistPending !== true) return;
+		pluginState.__epochDeferredEditPersistPending = false;
+	} catch {
+		return;
+	}
+	try {
+		await plugin.persist({ skipEnsure: true });
+	} catch {
+		try {
+			pluginState.__epochDeferredEditPersistPending = true;
+		} catch {
+			// ignore
+		}
+		scheduleDeferredEditPersist(plugin);
+	}
+}
+
+function scheduleDeferredEditRefresh(plugin: EpochPlugin, options?: DeferredRefreshOptions): void {
+	const pluginState = state(plugin);
+	try {
+		if (options?.forceSemanticRelated === true) {
+			pluginState.__epochDeferredEditRefreshForceSemanticRelated = true;
+		}
+		const prior = pluginState.__epochDeferredEditRefreshTimer;
+		if (prior != null) {
+			try {
+				window.clearTimeout(prior);
+			} catch {
+				// ignore
+			}
+		}
+		pluginState.__epochDeferredEditRefreshTimer = window.setTimeout(() => {
+			try {
+				pluginState.__epochDeferredEditRefreshTimer = null;
+			} catch {
+				// ignore
+			}
+			void flushDeferredEditRefresh(plugin);
+		}, EDIT_REFRESH_DEFER_MS);
+	} catch {
+		// ignore
+	}
+}
+
+async function flushDeferredEditRefresh(plugin: EpochPlugin): Promise<void> {
+	const pluginState = state(plugin);
+	let forceSemanticRelated = false;
+	try {
+		forceSemanticRelated = pluginState.__epochDeferredEditRefreshForceSemanticRelated === true;
+		pluginState.__epochDeferredEditRefreshForceSemanticRelated = false;
+	} catch {
+		forceSemanticRelated = false;
+	}
+	try {
+		if (forceSemanticRelated) {
+			plugin.refreshEpochViews({ forceSemanticRelated: true });
+			return;
+		}
+		plugin.refreshEpochViews();
+	} catch {
+		// ignore
+	}
+}
+
+function deferEditProcess(plugin: EpochPlugin, path: string, reason: DeferredProcessReason): void {
+	try {
+		const pluginState = state(plugin);
+		if (!(pluginState.__epochDeferredEditProcess instanceof Set)) {
+			pluginState.__epochDeferredEditProcess = new Set<string>();
+		}
+		if (!(pluginState.__epochDeferredEditReasonByPath instanceof Map)) {
+			pluginState.__epochDeferredEditReasonByPath = new Map<string, DeferredProcessReason>();
+		}
+		const normalizedPath = String(path || "").trim();
+		if (!normalizedPath) return;
+		pluginState.__epochDeferredEditProcess.add(normalizedPath);
+		const prev = pluginState.__epochDeferredEditReasonByPath.get(normalizedPath);
+		pluginState.__epochDeferredEditReasonByPath.set(
+			normalizedPath,
+			prev === "track" || reason === "track" ? "track" : "modify"
+		);
+	} catch {
+		// ignore
+	}
+	void scheduleDeferredEditProcess(plugin);
+}
+
+async function scheduleDeferredEditProcess(plugin: EpochPlugin): Promise<void> {
+	const pluginState = state(plugin);
+	try {
+		if (pluginState.__epochDeferredEditProcessTimer != null) return;
+	} catch {
+		// ignore
+	}
+	try {
+		pluginState.__epochDeferredEditProcessTimer = window.setTimeout(() => {
+			try {
+				pluginState.__epochDeferredEditProcessTimer = null;
+			} catch {
+				// ignore
+			}
+			void flushDeferredEditProcess(plugin);
+		}, EDIT_PROCESS_DEFER_MS);
+	} catch {
+		// ignore
+	}
+}
+
+async function flushDeferredEditProcess(plugin: EpochPlugin): Promise<void> {
+	const pluginState = state(plugin);
+	let set: Set<string> | null = null;
+	let reasonByPath: Map<string, DeferredProcessReason> | null = null;
+	try {
+		set = pluginState.__epochDeferredEditProcess ?? null;
+		reasonByPath = pluginState.__epochDeferredEditReasonByPath ?? null;
+	} catch {
+		set = null;
+		reasonByPath = null;
+	}
+	if (!(set instanceof Set) || set.size === 0) return;
+
+	if (plugin.indexLoadPromise || !plugin.indexReady) {
+		void scheduleDeferredEditProcess(plugin);
+		return;
+	}
+
+	const batch = Array.from(set).map((p) => String(p || "").trim()).filter(Boolean).slice(0, 50);
+	for (const p of batch) {
+		try {
+			set.delete(p);
+		} catch {
+			// ignore
+		}
+	}
+
+	let didSomething = false;
+	try {
+		await plugin.ensureIndexLoaded();
+		await plugin.waitForExcludedSync();
+		if (!plugin.indexReady) return;
+
+		for (const p of batch) {
+			const reason = (() => {
+				try {
+					return reasonByPath instanceof Map ? (reasonByPath.get(p) ?? "modify") : "modify";
+				} catch {
+					return "modify";
+				}
+			})();
+			try {
+				if (reasonByPath instanceof Map) reasonByPath.delete(p);
+			} catch {
+				// ignore
+			}
+
+			try {
+				const abs = plugin.app.vault.getAbstractFileByPath(p);
+				if (abs instanceof TFile && plugin.shouldIndexFile(abs)) {
+					if (await shouldSkipUnchangedModify(plugin, abs, false)) continue;
+					await plugin.indexer.processFile(abs, { reason });
+					didSomething = true;
+					try {
+						pluginState.queueVectorUpdate?.(abs.path);
+					} catch {
+						// ignore
+					}
+					try {
+						pluginState.queueTermSimilarityUpdate?.(abs.path);
+					} catch {
+						// ignore
+					}
+					continue;
+				}
+			} catch {
+				// ignore
+			}
+
+			try {
+				const removed = plugin.removePathsFromIndex([p]);
+				if (removed) didSomething = true;
+			} catch {
+				// ignore
+			}
+			try {
+				const timelineMutated = pluginState.timelineSearchIndex?.removeById?.(p) === true;
+				if (timelineMutated) {
+					markTimelineSearchIndexDirty(plugin);
+					scheduleTimelineSearchCacheSave(plugin);
+				}
+			} catch {
+				// ignore
+			}
+		}
+
+		if (didSomething) {
+			scheduleDeferredEditPersist(plugin);
+			scheduleDeferredEditRefresh(plugin);
+		}
+	} finally {
+		try {
+			if (set.size > 0) void scheduleDeferredEditProcess(plugin);
+		} catch {
+			// ignore
+		}
+	}
 }
 
 function deferIndexResync(plugin: EpochPlugin, path: string, options?: { force?: boolean }): void {
@@ -206,8 +455,8 @@ async function flushDeferredIndexResync(plugin: EpochPlugin): Promise<void> {
 		}
 
 		if (didSomething) {
-			await plugin.persist({ skipEnsure: true });
-			plugin.refreshEpochViews();
+			scheduleDeferredEditPersist(plugin);
+			scheduleDeferredEditRefresh(plugin);
 		}
 	} finally {
 		// If more work remains, schedule another flush.
@@ -413,51 +662,33 @@ export const fileEventMethods: FileEventMethods = {
 		this.vaultEventRefs.push(renameRef);
 
 		if (isTrackChangesEffective(this)) {
-			const handleTrackedChange = async (file: TFile) => {
-				await this.ensureIndexLoaded();
-				await this.waitForExcludedSync();
-				if (!this.shouldIndexFile(file)) {
-					const removed = this.removePathsFromIndex([file.path]);
-					if (removed) {
-						await this.persist({ skipEnsure: true });
-						this.refreshEpochViews();
-					}
+			const queueTrackedChange = (file: TFile) => {
+				if (this.indexLoadPromise || !this.indexReady) {
+					deferIndexResync(this, file.path);
 					return;
 				}
-				await this.indexer.processFile(file, { reason: "track" });
-				await this.persist({ skipEnsure: true });
-				try {
-					state(this).queueVectorUpdate?.(file.path);
-				} catch {
-					// ignore
-				}
-				try {
-					state(this).queueTermSimilarityUpdate?.(file.path);
-				} catch {
-					// ignore
-				}
-				this.refreshEpochViews();
+				deferEditProcess(this, file.path, "track");
 			};
 
 			const trackRef = this.app.workspace.on(
 				"editor-change",
-				async (_editor, _info) => {
+				(_editor, _info) => {
 					const file = this.app.workspace.getActiveFile();
 					if (!file) return;
-					await handleTrackedChange(file);
+					queueTrackedChange(file);
 				}
 			);
 			this.registerEvent(trackRef);
 			this.workspaceEventRefs.push(trackRef);
 
-			const trackModifyRef = this.app.vault.on("modify", async (file: TAbstractFile) => {
+			const trackModifyRef = this.app.vault.on("modify", (file: TAbstractFile) => {
 				if (!(file instanceof TFile)) return;
-				await handleTrackedChange(file);
+				queueTrackedChange(file);
 			});
 			this.registerEvent(trackModifyRef);
 			this.vaultEventRefs.push(trackModifyRef);
 		} else {
-			const modifyRef = this.app.vault.on("modify", async (file: TAbstractFile) => {
+			const modifyRef = this.app.vault.on("modify", (file: TAbstractFile) => {
 				if (!(file instanceof TFile)) return;
 				if (this.indexLoadPromise || !this.indexReady) {
 					try {
@@ -471,30 +702,7 @@ export const fileEventMethods: FileEventMethods = {
 					deferIndexResync(this, file.path);
 					return;
 				}
-				await this.ensureIndexLoaded();
-				await this.waitForExcludedSync();
-				if (!this.shouldIndexFile(file)) {
-					const removed = this.removePathsFromIndex([file.path]);
-					if (removed) {
-						await this.persist({ skipEnsure: true });
-						this.refreshEpochViews();
-					}
-					return;
-				}
-				if (await shouldSkipUnchangedModify(this, file, false)) return;
-				await this.indexer.processFile(file, { reason: "modify" });
-				await this.persist({ skipEnsure: true });
-				try {
-					state(this).queueVectorUpdate?.(file.path);
-				} catch {
-					// ignore
-				}
-				try {
-					state(this).queueTermSimilarityUpdate?.(file.path);
-				} catch {
-					// ignore
-				}
-				this.refreshEpochViews();
+				deferEditProcess(this, file.path, "modify");
 			});
 			this.registerEvent(modifyRef);
 			this.vaultEventRefs.push(modifyRef);
@@ -534,13 +742,17 @@ export const fileEventMethods: FileEventMethods = {
 
 		const metaChangedRef = this.app.metadataCache.on(
 			"changed",
-			async (file: TFile) => {
+			(file: TFile) => {
 				try {
 					if (!(file instanceof TFile)) return;
 					const active = this.app.workspace.getActiveFile();
 					if (!active || active.path !== file.path) return;
-					deferIndexResync(this, file.path);
-					this.refreshEpochViews({ forceSemanticRelated: true });
+					if (this.indexLoadPromise || !this.indexReady) {
+						deferIndexResync(this, file.path);
+						return;
+					}
+					scheduleDeferredEditRefresh(this, { forceSemanticRelated: true });
+					deferEditProcess(this, file.path, "modify");
 				} catch {
 					// ignore
 				}

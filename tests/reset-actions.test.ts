@@ -103,7 +103,7 @@ describe("Reset actions", () => {
 		expect(plugin.settings.filenameWordsCount).toBe(2);
 	});
 
-	it("clears marks (explicit) and drops inherited cache", async () => {
+	it("does not clear marks via reset selection", async () => {
 		const markByPath = new Map<string, number | null>([
 			["a.md", 2],
 			["b.md", null]
@@ -141,10 +141,10 @@ describe("Reset actions", () => {
 			{ keepLicense: true }
 		);
 
-		expect(markByPath.get("a.md")).toBe(null);
-		expect(plugin.clearInheritedMarksCache).toHaveBeenCalledTimes(1);
-		expect(plugin.persist).toHaveBeenCalledTimes(1);
-		expect(plugin.refreshEpochViews).toHaveBeenCalledTimes(1);
+		expect(markByPath.get("a.md")).toBe(2);
+		expect(plugin.clearInheritedMarksCache).toHaveBeenCalledTimes(0);
+		expect(plugin.persist).toHaveBeenCalledTimes(0);
+		expect(plugin.refreshEpochViews).toHaveBeenCalledTimes(0);
 	});
 
 	it("clears ai summaries", async () => {
@@ -346,7 +346,7 @@ describe("Reset actions", () => {
 		expect(plugin.refreshEpochViews).toHaveBeenCalledTimes(1);
 	});
 
-	it("clears pinned file flags (unpins everything)", async () => {
+	it("does not clear pinned file flags via reset selection", async () => {
 		const files: any = {
 			"a.md": { pinnedFile: "today" },
 			"b.md": { pinnedFile: null }
@@ -386,8 +386,8 @@ describe("Reset actions", () => {
 			{ keepLicense: true }
 		);
 
-		expect(files["a.md"].pinnedFile).toBe(null);
-		expect(setFilePinned).toHaveBeenCalledTimes(1);
+		expect(files["a.md"].pinnedFile).toBe("today");
+		expect(setFilePinned).toHaveBeenCalledTimes(0);
 	});
 
 	it("resets search (index)", async () => {
