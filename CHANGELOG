@@ -1,8 +1,11 @@
 # Epochgram changelog
 
-## [1.7.0] - 2026-07-21
-- Replaced one-off frontmatter migration flag with versioned migration registry (`completedMigrations`) for future-safe migration tracking.
-- Tagged pin/mark frontmatter sync as migration `1.7.0-frontmatter-pin-mark-sync`.
+## [1.7.0] - 2026-07-23
+- Added pin modes (`today`, `date`, `dock`) with improved pin badge interactions, including touch and drag behavior updates.
+- Moved pin and mark state into note YAML frontmatter, including explicit mark hex colors for consistent visible state.
+- Added AI bridge opening in the right side-bar webviewer and improved AI bridge stability.
+- Improved search and UI consistency with better recent-note suggestion priority and settings wording refinements.
+- Updated badge visuals and refreshed the What's New page for 1.7.0 with release illustrations.
 
 ## [1.6.1] - 2026-07-12
 - Added fallback handling for AI bridge disconnect when closing the Obsidian Web viewer tab.
