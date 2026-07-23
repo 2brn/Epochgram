@@ -20,13 +20,24 @@ describe("what's new startup decision", () => {
 		expect(next).toBe("1.8.0");
 	});
 
-	it("does not show when current version has no page", () => {
+	it("shows latest available page when current version has no page", () => {
 		const next = resolveWhatsNewVersionToShow({
 			hadSavedSettings: true,
 			currentVersion: "1.8.0",
 			shownVersions: [],
 			optOut: false,
 			availableVersions: ["1.7.0"]
+		});
+		expect(next).toBe("1.7.0");
+	});
+
+	it("does not show future page for older current version", () => {
+		const next = resolveWhatsNewVersionToShow({
+			hadSavedSettings: true,
+			currentVersion: "1.8.0",
+			shownVersions: [],
+			optOut: false,
+			availableVersions: ["1.9.0"]
 		});
 		expect(next).toBeNull();
 	});

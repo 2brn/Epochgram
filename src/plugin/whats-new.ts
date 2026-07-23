@@ -138,15 +138,21 @@ export function getAvailableWhatsNewVersions(): string[] {
 export function resolveWhatsNewVersionToShow(options: ShouldShowOptions): string | null {
 	if (options.optOut) return null;
 	if (!options.availableVersions.length) return null;
+	const sorted = [...options.availableVersions].sort((a, b) => compareVersions(b, a));
+	const shown = new Set(options.shownVersions.map((v) => String(v || "").trim()).filter(Boolean));
 	if (options.hadSavedSettings) {
-		if (!options.availableVersions.includes(options.currentVersion)) return null;
-		if (options.shownVersions.includes(options.currentVersion)) return null;
-		return options.currentVersion;
+		for (const version of sorted) {
+			if (compareVersions(version, options.currentVersion) > 0) continue;
+			if (shown.has(version)) continue;
+			return version;
+		}
+		return null;
 	}
-	const latest = options.availableVersions[0] ?? null;
-	if (!latest) return null;
-	if (options.shownVersions.includes(latest)) return null;
-	return latest;
+	for (const version of sorted) {
+		if (shown.has(version)) continue;
+		return version;
+	}
+	return null;
 }
 
 export async function maybeOpenWhatsNewOnStartup(plugin: EpochPlugin, hadSavedSettings: boolean): Promise<void> {
