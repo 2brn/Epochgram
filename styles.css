@@ -424,9 +424,8 @@ body.theme-light .epoch-license-section {
   appearance: none;
   -webkit-appearance: none;
   -webkit-tap-highlight-color: transparent;
-  background: var(--epoch-pin-fill, var(--text-normal));
+  background: transparent;
   color: var(--epoch-pin-text, var(--background-primary));
-  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
   border-radius: 3px;
   overflow: visible;
   pointer-events: auto;
@@ -435,11 +434,34 @@ body.theme-light .epoch-license-section {
   transition: opacity 160ms ease, transform 140ms ease;
 }
 
+.epoch-root .epoch-pin-badge::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 9.5px;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px 2px 2px 3px;
+  background: var(--epoch-pin-fill, var(--text-normal));
+}
+
+.epoch-root .epoch-pin-badge::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-left: 10px solid var(--epoch-pin-fill, var(--text-normal));
+}
+
 .epoch-root .epoch-pin-badge:hover,
 .epoch-root .epoch-pin-badge:focus-visible,
 .epoch-root .epoch-pin-badge:active,
 .epoch-root .epoch-pin-badge.is-menu-hovered {
-  background: var(--epoch-pin-fill, var(--text-normal));
+  background: transparent;
   color: var(--epoch-pin-text, var(--background-primary));
   transform: scale(1.375);
 }
@@ -468,7 +490,7 @@ body.theme-light .epoch-license-section {
 .epoch-root .epoch-pin-badge:hover .epoch-pin-badge-label,
 .epoch-root .epoch-pin-badge:focus-visible .epoch-pin-badge-label,
 .epoch-root .epoch-pin-badge.is-menu-hovered .epoch-pin-badge-label {
-  transform: scaleX(1.03) scaleY(1.08);
+  transform: translateY(0.5px) scaleX(1.03) scaleY(1.08);
 }
 
 .epoch-root .epoch-pin-badge-label.is-justify {
@@ -490,12 +512,6 @@ body.theme-light .epoch-license-section {
 }
 
 @media (hover: none), (pointer: coarse) {
-  .epoch-root .epoch-pin-badge::before {
-    content: "";
-    position: absolute;
-    inset: -18px;
-  }
-
   .epoch-root .epoch-pin-badge-label {
     transform: translateY(2px);
   }

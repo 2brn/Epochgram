@@ -686,7 +686,9 @@ export const lifecycleMethods: LifecycleMethods = {
 						void (async () => {
 							try {
 								await maybeOpenWhatsNewOnStartup(this, runtime.__epochHadSavedSettingsAtStartup === true);
-							} catch {}
+							} catch {
+								// ignore
+							}
 						})();
 					}, 1);
 				});

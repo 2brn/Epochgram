@@ -43,6 +43,9 @@
 		"yaml": "^2.9.0"
 	},
 	"overrides": {
-		"onnxruntime-web": "1.24.3"
+		"onnxruntime-web": "1.24.3",
+		"adm-zip": "0.6.0",
+		"protobufjs": "7.6.5",
+		"sharp": "0.35.3"
 	}
 }
