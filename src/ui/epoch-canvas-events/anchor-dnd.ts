@@ -516,7 +516,8 @@ function captureEntryRowSnapshot(canvas: EpochCanvas, entry: DateEntry): {
 
 		const doc = s.canvas?.ownerDocument ?? (typeof window !== "undefined" ? window.document : null);
 		if (!doc) return null;
-		const off = doc.createElement("canvas");
+		const winWithCreateEl = doc.win as Window & { createEl: (tag: "canvas") => HTMLCanvasElement };
+		const off: HTMLCanvasElement = winWithCreateEl.createEl("canvas");
 		off.width = sw;
 		off.height = sh;
 		const offCtx = off.getContext("2d");

@@ -6,7 +6,7 @@ import type { DayLayout } from "./epoch-canvas-types";
 import { BASE_SPACING, LABEL_OFFSET_X, LONG_PRESS_MS, TIMELINE_X } from "./epoch-canvas-constants";
 import { openEntry } from "./epoch-canvas-actions";
 import { beginAnchorEntryDrag, commitAnchorEntryDrag, updateAnchorEntryDrag } from "./epoch-canvas-events/anchor-dnd";
-import { focusDateWithZoom, snapToDate } from "./epoch-canvas-focus";
+import { focusDateWithZoom } from "./epoch-canvas-focus";
 import { getToday } from "./epoch-canvas-helpers";
 import { getEpochMarkColorSet } from "./mark-colors";
 import { getEntryMarkColor, getInheritedMarkColor } from "./summary-rendering/entry-mark-colors";
@@ -318,7 +318,8 @@ function createBadgeGhost(canvas: EpochCanvas, button: HTMLButtonElement, item: 
 		const s = state(canvas);
 		const doc = s.root?.ownerDocument ?? (typeof window !== "undefined" ? window.document : null);
 		if (!doc) return null;
-		const off = doc.createElement("canvas");
+		const winWithCreateEl = doc.win as Window & { createEl: (tag: "canvas") => HTMLCanvasElement };
+		const off: HTMLCanvasElement = winWithCreateEl.createEl("canvas");
 		off.width = w;
 		off.height = h;
 		const g = off.getContext("2d");
