@@ -1,5 +1,10 @@
 # Epochgram changelog
 
+## [1.7.2] - 2026-07-23
+- Fixed What's New startup fallback so existing users still see the latest available unseen page when current release notes page is absent.
+- Updated What's New decision tests to cover fallback and future-version guard behavior.
+- Refined 1.7.0 What's New content wording.
+
 ## [1.7.1] - 2026-07-23
 - Fixed pin badge mobile shape regression and restored consistent badge silhouette across devices.
 - Refined badge hover rendering to reduce seam/text-shift artifacts.
