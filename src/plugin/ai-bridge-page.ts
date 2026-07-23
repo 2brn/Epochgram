@@ -145,6 +145,54 @@ export function buildAiBridgePageHtml(token: string): string {
 	const resetDefaultsBtn = $("resetDefaults");
 	const chart = $("chart");
 	const chartCtx = chart && chart.getContext ? chart.getContext("2d") : null;
+	const statusKvEl = statusEl && statusEl.closest ? statusEl.closest(".kv") : null;
+
+	function refreshStatusValueOverflowTooltips() {
+		try {
+			if (!statusKvEl || !statusKvEl.querySelectorAll) return;
+			const nodes = statusKvEl.querySelectorAll(".v");
+			for (let i = 0; i < nodes.length; i++) {
+				const el = nodes[i];
+				if (!(el instanceof HTMLElement)) continue;
+				const fullText = String(el.textContent || "").trim();
+				const isOverflowing = el.scrollWidth > el.clientWidth + 1;
+				if (isOverflowing && fullText) el.title = fullText;
+				else el.removeAttribute("title");
+			}
+		} catch {
+			// ignore
+		}
+	}
+
+	let statusValueTooltipRaf = 0;
+	function scheduleStatusValueOverflowTooltips() {
+		try {
+			if (statusValueTooltipRaf) window.cancelAnimationFrame(statusValueTooltipRaf);
+			statusValueTooltipRaf = window.requestAnimationFrame(() => {
+				statusValueTooltipRaf = 0;
+				refreshStatusValueOverflowTooltips();
+			});
+		} catch {
+			refreshStatusValueOverflowTooltips();
+		}
+	}
+
+	try {
+		if (statusKvEl && typeof MutationObserver !== "undefined") {
+			const observer = new MutationObserver(() => {
+				scheduleStatusValueOverflowTooltips();
+			});
+			observer.observe(statusKvEl, { childList: true, characterData: true, subtree: true });
+		}
+	} catch {
+		// ignore
+	}
+	try {
+		window.addEventListener("resize", scheduleStatusValueOverflowTooltips);
+	} catch {
+		// ignore
+	}
+	scheduleStatusValueOverflowTooltips();
 
 	let languageDetector = null;
 	const summarizersByKey = new Map();

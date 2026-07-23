@@ -96,9 +96,25 @@ export async function buildJobsForFile(
 		if (!(maxChars > 0)) return "";
 		let out = "";
 		for (let i = 0; i < ls.length; i++) {
-			const next = (out ? "\n" : "") + String(ls[i] ?? "");
-			if (out.length + next.length > maxChars) break;
-			out += next;
+			const rawLine = String(ls[i] ?? "");
+			const prefix = out ? "\n" : "";
+			const next = prefix + rawLine;
+			if (out.length + next.length <= maxChars) {
+				out += next;
+				continue;
+			}
+			const remaining = maxChars - out.length;
+			if (remaining <= 0) break;
+			if (prefix && remaining === 1) {
+				out += "\n";
+				break;
+			}
+			if (prefix) out += "\n";
+			const lineBudget = maxChars - out.length;
+			if (lineBudget > 0) {
+				out += rawLine.slice(0, lineBudget);
+			}
+			break;
 		}
 		return out;
 	};

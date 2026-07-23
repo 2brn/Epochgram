@@ -423,10 +423,11 @@ body.theme-light .epoch-license-section {
   box-shadow: none;
   appearance: none;
   -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
   background: var(--epoch-pin-fill, var(--text-normal));
   color: var(--epoch-pin-text, var(--background-primary));
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
-  border-radius: 0;
+  border-radius: 3px;
   overflow: visible;
   pointer-events: auto;
   cursor: pointer;
@@ -435,8 +436,16 @@ body.theme-light .epoch-license-section {
 }
 
 .epoch-root .epoch-pin-badge:hover,
-.epoch-root .epoch-pin-badge:focus-visible {
+.epoch-root .epoch-pin-badge:focus-visible,
+.epoch-root .epoch-pin-badge:active,
+.epoch-root .epoch-pin-badge.is-menu-hovered {
+  background: var(--epoch-pin-fill, var(--text-normal));
+  color: var(--epoch-pin-text, var(--background-primary));
   transform: scale(1.375);
+}
+
+.epoch-root .epoch-pin-badge.is-drag-source {
+  visibility: hidden;
 }
 
 .epoch-root .epoch-pin-badge-label {
@@ -457,7 +466,8 @@ body.theme-light .epoch-license-section {
 }
 
 .epoch-root .epoch-pin-badge:hover .epoch-pin-badge-label,
-.epoch-root .epoch-pin-badge:focus-visible .epoch-pin-badge-label {
+.epoch-root .epoch-pin-badge:focus-visible .epoch-pin-badge-label,
+.epoch-root .epoch-pin-badge.is-menu-hovered .epoch-pin-badge-label {
   transform: scaleX(1.03) scaleY(1.08);
 }
 
@@ -480,6 +490,22 @@ body.theme-light .epoch-license-section {
 }
 
 @media (hover: none), (pointer: coarse) {
+  .epoch-root .epoch-pin-badge::before {
+    content: "";
+    position: absolute;
+    inset: -18px;
+  }
+
+  .epoch-root .epoch-pin-badge-label {
+    transform: translateY(2px);
+  }
+
+  .epoch-root .epoch-pin-badge:hover .epoch-pin-badge-label,
+  .epoch-root .epoch-pin-badge:focus-visible .epoch-pin-badge-label,
+  .epoch-root .epoch-pin-badge.is-menu-hovered .epoch-pin-badge-label {
+    transform: translateY(2px) scaleX(1.03) scaleY(1.08);
+  }
+
   .epoch-control-button:not(.is-active):hover,
   .epoch-control-button:not(.is-active):focus-visible,
   .epoch-control-button:not(.is-active):active {

@@ -1,4 +1,5 @@
 import type { DateEntry } from "../../indexer/types";
+import type { EpochCanvas } from "../epoch-canvas";
 import type { DayLayout, HoverOverlay } from "../epoch-canvas-types";
 import { renderDaySummaries } from "../summary-rendering";
 import { buildNormalColumns, computeNeedsDenseByWidthFast } from "../summary-rendering/normal-measure";
@@ -12,8 +13,11 @@ import {
 } from "../summary-rendering/dense";
 import {
 	BASE_SPACING,
+	DATE_RECT_HALF_HEIGHT,
+	DATE_RECT_RIGHT_EXTRA,
 	DAY_LABEL_MIN_SCALE,
 	HOVER_HIT_PAD,
+	LABEL_OFFSET_X,
 	SUMMARY_COLUMN_GAP,
 	SUMMARY_MARGIN,
 	SUMMARY_MAX_COL_WIDTH,
@@ -24,6 +28,7 @@ import {
 	SUMMARY_RIGHT_MARGIN,
 	TIMELINE_X
 } from "../epoch-canvas-constants";
+import { getPinBadgeRects, type PinBadgeRect } from "../epoch-pin-overlay";
 import { getEpochMarkColorSet } from "../mark-colors";
 import { drawDayMarker } from "./draw-days/date-marker";
 import type { CanvasDrawState } from "./state";
@@ -34,46 +39,23 @@ type AnimSummaryState = DaySummaryRenderArgs["animSummary"];
 type PrevAnimSummaryState = DaySummaryRenderArgs["prevAnimSummary"];
 type OutgoingSummariesState = DaySummaryRenderArgs["outgoingSummaries"];
 
-type DrawIndexerLike = {
-	getFileIndexData?: (path: string) => {
-		cdate?: DateEntry | null;
-		namedDate?: DateEntry | null;
-		dateProp?: DateEntry | null;
-		pinnedFile?: unknown;
-	} | null;
-};
+type DateLabelHideState = { hidden: boolean; changedAt: number };
+const dateLabelHideStateByCanvas = new WeakMap<CanvasDrawState, Map<number, DateLabelHideState>>();
 
-function toDateKey(date: Date): string {
-	const y = date.getFullYear();
-	const m = String(date.getMonth() + 1).padStart(2, "0");
-	const d = String(date.getDate()).padStart(2, "0");
-	return `${y}-${m}-${d}`;
+function rectsOverlap(a: PinBadgeRect, b: PinBadgeRect): boolean {
+	return a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
 }
 
-function shouldHideDateLabel(
-	plugin: CanvasDrawState["plugin"],
-	entries: DateEntry[],
-	dateKey: string,
-	cache: Map<string, { mode: string | null; anchorDate: string | null }>
-): boolean {
-	const pluginWithIndexer = plugin as CanvasDrawState["plugin"] & { indexer?: DrawIndexerLike };
-	const indexer = pluginWithIndexer.indexer;
-	if (!indexer || typeof indexer.getFileIndexData !== "function") return false;
-	for (const entry of entries) {
-		const file = String(entry?.file ?? "");
-		if (!file) continue;
-		let info = cache.get(file);
-		if (!info) {
-			const data = indexer.getFileIndexData(file) ?? null;
-			const modeRaw = typeof data?.pinnedFile === "string" ? data.pinnedFile.trim().toLowerCase() : null;
-			const mode = modeRaw === "date" || modeRaw === "dock" ? modeRaw : null;
-			const anchorDate = data?.namedDate?.date ?? data?.dateProp?.date ?? data?.cdate?.date ?? null;
-			info = { mode, anchorDate };
-			cache.set(file, info);
-		}
-		if ((info.mode === "date" || info.mode === "dock") && info.anchorDate === dateKey) {
-			return true;
-		}
+function shouldHideDateLabelByPinOverlap(yScreen: number, pinRects: PinBadgeRect[], tolerance: number): boolean {
+	if (!Array.isArray(pinRects) || pinRects.length === 0) return false;
+	const dateRect: PinBadgeRect = {
+		x1: TIMELINE_X - (LABEL_OFFSET_X + 40) - tolerance,
+		y1: yScreen - DATE_RECT_HALF_HEIGHT - tolerance,
+		x2: TIMELINE_X + DATE_RECT_RIGHT_EXTRA + tolerance,
+		y2: yScreen + DATE_RECT_HALF_HEIGHT + tolerance
+	};
+	for (const badge of pinRects) {
+		if (rectsOverlap(dateRect, badge)) return true;
 	}
 	return false;
 }
@@ -209,11 +191,18 @@ export function drawDayLayouts(params: {
 		? Math.max(0, Math.min(100, compactModeMinWidthPercentRaw))
 		: 20;
 	const compactMinWidthRatio = compactModeMinWidthPercent / 100;
-	const pinInfoByFile = new Map<string, { mode: string | null; anchorDate: string | null }>();
+	const pinRects = getPinBadgeRects(s as unknown as EpochCanvas);
+	const nowMs = Date.now();
+	const stableHideByDay = (() => {
+		const existing = dateLabelHideStateByCanvas.get(s);
+		if (existing) return existing;
+		const created = new Map<number, DateLabelHideState>();
+		dateLabelHideStateByCanvas.set(s, created);
+		return created;
+	})();
 
 	for (const i of renderIndices) {
 		const date = s.getDateForIndex(i, today);
-		const dateKey = toDateKey(date);
 		const worldY = i * BASE_SPACING;
 		const yScreen = worldY * s.scale + s.offsetY;
 		const packedCenterY = epochsViewActive ? packedEpochDayCenterY.get(i) : packedNormalDayCenterY.get(i);
@@ -239,7 +228,21 @@ export function drawDayLayouts(params: {
 			}
 		}
 		const dateHoverT = Math.max(0, Math.min(1, Math.max(tIn, tOut)));
-		const hideDateLabel = shouldHideDateLabel(s.plugin, entries, dateKey, pinInfoByFile);
+		const prevState = stableHideByDay.get(i);
+		const wasHidden = prevState?.hidden === true;
+		const hideTolerance = wasHidden ? 4 : 0;
+		const hideCandidate = shouldHideDateLabelByPinOverlap(dayCenterY, pinRects, hideTolerance);
+		const transitionCooldownMs = 120;
+		const hideDateLabel = prevState
+			&& hideCandidate !== prevState.hidden
+			&& (nowMs - prevState.changedAt) < transitionCooldownMs
+			? prevState.hidden
+			: hideCandidate;
+		if (!prevState || hideDateLabel !== prevState.hidden) {
+			stableHideByDay.set(i, { hidden: hideDateLabel, changedAt: nowMs });
+		} else {
+			stableHideByDay.set(i, prevState);
+		}
 
 		const marker = drawDayMarker({
 			ctx,

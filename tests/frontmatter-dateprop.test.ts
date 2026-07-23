@@ -157,6 +157,36 @@ describe("Frontmatter dateprop", () => {
 		expect(contentDates.some(e => e.source === "content" && e.date === "2025-01-08" && (e as any).fromFrontmatter === true)).toBe(true);
 	});
 
+	it("keeps parsing date and pin when mark frontmatter value is invalid", async () => {
+		const ctime = Date.UTC(2026, 7, 1);
+		const file = makeFile("folder/invalid-mark-frontmatter.md", ctime);
+
+		contents[file.path] = [
+			"---",
+			"mark: invalid",
+			"date: 2026-08-03",
+			"tags: []",
+			"pin: date",
+			"nosimilar:",
+			"---",
+			"Body"
+		].join("\n");
+
+		(pluginStub.app.metadataCache.getFileCache as any).mockImplementation(() => ({
+			frontmatter: {},
+			tags: []
+		}));
+
+		await indexer.processFile(file, { reason: "modify" });
+
+		const fileData = (indexer as any).files[file.path];
+		expect(fileData?.dateProp?.source).toBe("dateprop");
+		expect(fileData?.dateProp?.date).toBe("2026-08-03");
+		expect(fileData?.pinnedFile).toBe("date");
+		expect(fileData?.markColor).toBeUndefined();
+		expect(fileData?.markColorHex).toBeUndefined();
+	});
+
 	it("does not keep stale dateprop when metadata cache still reports removed frontmatter", async () => {
 		const ctime = Date.UTC(2025, 0, 1);
 		const file = makeFile("folder/somenote.md", ctime);

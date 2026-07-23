@@ -20,6 +20,18 @@ import {
 import { consumeNoteFrontmatterWritePath, readYamlPropertyFromText } from "../plugin/note-frontmatter";
 import { findMarkColorIndexForCss } from "../ui/mark-colors";
 
+function normalizeYamlMarkHex(value: unknown): string {
+	const raw = typeof value === "string"
+		? value.trim()
+		: typeof value === "number"
+			? String(value).trim()
+			: "";
+	if (!raw) return "";
+	const hex = raw.startsWith("#") ? raw : `#${raw}`;
+	if (!/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(hex)) return "";
+	return hex.toLowerCase();
+}
+
 function isDateKey(value: string): boolean {
 	return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
 }
@@ -187,7 +199,8 @@ export async function processFileInternal(
 	const explicitPinRaw = isText ? readYamlPropertyFromText(rawContent, "pin") : "";
 	const explicitPinMode = normalizePinMode(explicitPinRaw);
 	const explicitMarkRaw = isText ? readYamlPropertyFromText(rawContent, "mark") : "";
-	const explicitMarkHex = String(explicitMarkRaw || "").trim();
+	const explicitMarkText = String(explicitMarkRaw || "").trim();
+	const explicitMarkHex = normalizeYamlMarkHex(explicitMarkRaw);
 	// Avoid keeping all file contents in memory across a whole vault.
 	// We only populate latestLines temporarily so aggregated entries can compute summaries,
 	// then drop it unless this is an on-demand operation.
@@ -224,6 +237,14 @@ export async function processFileInternal(
 		} catch {
 			fileData.markColor = undefined;
 		}
+	} else if (isText && explicitMarkText) {
+		// Unsupported non-empty YAML mark clears explicit mark state instead of forcing a default color.
+		fileData.markColorHex = "";
+		fileData.markColor = undefined;
+	} else if (isText) {
+		// Mark state is frontmatter-driven: missing/empty `mark` clears the color.
+		fileData.markColorHex = "";
+		fileData.markColor = undefined;
 	}
 	let recurLine = 0;
 	let recurValue: string | null = null;

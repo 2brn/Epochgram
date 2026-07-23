@@ -69,7 +69,7 @@ export class WhatsNewView extends ItemView {
 	private buildMarkdown(version: string, body: string): string {
 		const checked = this.plugin.settings.whatsNewOptOut === true ? "x" : " ";
 		const safeBody = String(body || "").replace(/\r\n?/g, "\n").trim();
-		return `- [${checked}] ${this.optOutLabel}\n\n\n\n${safeBody}\n\n${WHATS_NEW_FOOTER}\n\n---\n`;
+		return `> - [${checked}] ${this.optOutLabel}\n\n---\n\n${safeBody}\n\n${WHATS_NEW_FOOTER}\n`;
 	}
 
 	private readLeafState(): Required<WhatsNewLeafState> {

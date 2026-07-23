@@ -106,4 +106,5 @@ describe("Frontmatter similar/nosimilar", () => {
 		const related: Set<string> = await methodsRelatedGraph.getGraphRelatedPathsForFile.call(pluginStub, "folder/Completely Different.md");
 		expect(Array.from(related).sort()).toEqual(["folder/Another Name.md", "folder/Completely Different.md"]);
 	});
+
 });

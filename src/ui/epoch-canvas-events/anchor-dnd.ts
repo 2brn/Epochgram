@@ -8,8 +8,6 @@ import { parseAnyDate, parseAnyDates } from "../../indexer/extractor";
 import { entrySummaryComponents } from "../epoch-canvas-utils";
 import { setCssStyles } from "../../dom";
 
-const activeDocument: Document | null = typeof window !== "undefined" ? window.document : null;
-
 
 type DragSource = "mouse" | "touch";
 
@@ -425,16 +423,12 @@ function captureEntryRowSnapshot(canvas: EpochCanvas, entry: DateEntry): {
 		const s = getAnchorDndState(canvas);
 		if (!s.canvas || !s.ctx) return null;
 
-		let rect: SummaryRectLike | null = null;
-		let usedHoverRects = false;
-		for (const layout of s.layouts ?? []) {
-			const useHover = (Array.isArray(layout?.summaryHoverRects) && layout.summaryHoverRects.length > 0);
-			const stableRects: SummaryRectLike[] = useHover ? (layout.summaryHoverRects ?? []) : (layout?.summaryRects ?? []);
-			for (const r of stableRects) {
+		const pickRectFromList = (rects: SummaryRectLike[] | undefined): SummaryRectLike | null => {
+			if (!Array.isArray(rects) || rects.length === 0) return null;
+			let fallback: SummaryRectLike | null = null;
+			for (const r of rects) {
 				if (r?.entry === entry) {
-					rect = r;
-					usedHoverRects = useHover;
-					break;
+					return r;
 				}
 				if (
 					getEntryFile(r?.entry ?? null) === getEntryFile(entry) &&
@@ -442,27 +436,36 @@ function captureEntryRowSnapshot(canvas: EpochCanvas, entry: DateEntry): {
 					getEntryBlockStart(r?.entry ?? null) === getEntryBlockStart(entry) &&
 					getEntryBlockEnd(r?.entry ?? null) === getEntryBlockEnd(entry)
 				) {
-					rect = r;
-					usedHoverRects = useHover;
-					break;
+					return r;
 				}
 				if (
-					!rect &&
+					!fallback &&
 					getEntryFile(r?.entry ?? null) === getEntryFile(entry) &&
 					getEntryDate(r?.entry ?? null) === getEntryDate(entry) &&
 					getEntrySource(r?.entry ?? null) === getEntrySource(entry)
 				) {
-					rect = r;
-					usedHoverRects = useHover;
-					break;
+					fallback = r;
 				}
-				if (!rect && getEntryFile(r?.entry ?? null) === getEntryFile(entry) && getEntryDate(r?.entry ?? null) === getEntryDate(entry)) {
-					rect = r;
-					usedHoverRects = useHover;
-					break;
+				if (!fallback && getEntryFile(r?.entry ?? null) === getEntryFile(entry) && getEntryDate(r?.entry ?? null) === getEntryDate(entry)) {
+					fallback = r;
 				}
 			}
-			if (rect) break;
+			return fallback;
+		};
+
+		let rect: SummaryRectLike | null = null;
+		let usedHoverRects = false;
+		for (const layout of s.layouts ?? []) {
+			rect = pickRectFromList(layout?.summaryRects);
+			if (rect) {
+				usedHoverRects = false;
+				break;
+			}
+			rect = pickRectFromList(layout?.summaryHoverRects);
+			if (rect) {
+				usedHoverRects = true;
+				break;
+			}
 		}
 		if (!rect) return null;
 		const rect0 = rect;
@@ -511,8 +514,9 @@ function captureEntryRowSnapshot(canvas: EpochCanvas, entry: DateEntry): {
 		}
 		if (!imgData) return null;
 
-		if (!activeDocument) return null;
-		const off = activeDocument.createEl("canvas");
+		const doc = s.canvas?.ownerDocument ?? (typeof window !== "undefined" ? window.document : null);
+		if (!doc) return null;
+		const off = doc.createElement("canvas");
 		off.width = sw;
 		off.height = sh;
 		const offCtx = off.getContext("2d");

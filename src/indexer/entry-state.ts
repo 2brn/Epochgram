@@ -30,10 +30,10 @@ export function applyEntryState(
 	if (prevEmbeddingTerm) {
 		next.embeddingTerm = prevEmbeddingTerm;
 	}
-	const hasExplicitMarkHex = typeof next.markColorHex === "string" && String(next.markColorHex).trim() !== "";
+	const hasExplicitMarkState = typeof next.markColorHex === "string" || typeof next.markColor === "number";
 	const prevMark = typeof previous?.markColor === "number" ? previous.markColor : null;
 	const prevMarkHex = typeof previous?.markColorHex === "string" ? String(previous.markColorHex).trim() : "";
-	if (!hasExplicitMarkHex) {
+	if (!hasExplicitMarkState) {
 		next.markColor = prevMark != null ? prevMark : undefined;
 		if (prevMarkHex) {
 			next.markColorHex = prevMarkHex;

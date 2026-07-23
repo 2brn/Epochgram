@@ -36,6 +36,14 @@ function resolveToday(state: { getToday?: () => Date }): Date {
 
 export function handleMouseDown(canvas: EpochCanvas, event: MouseEvent): void {
 	const s = getMouseState(canvas);
+	try {
+		const t = event.target;
+		if (t && typeof (t as Element).closest === "function" && (t as Element).closest(".epoch-pin-badge")) {
+			return;
+		}
+	} catch {
+		// ignore
+	}
 	const isMiddleButton = event.button === 1;
 	// Mobile: treat touch as the only interaction source.
 	// This prevents synthetic mouse events from driving hover/drag behavior.

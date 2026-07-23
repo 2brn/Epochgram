@@ -99,19 +99,66 @@ function suppressIncidentalHoverAfterTouch(state: TouchEventState, durationMs: n
 	}
 }
 
+function getNearestPinBadgeCenterDistance(s: TouchEventState, x: number, y: number): number {
+	try {
+		const anyState = s as TouchEventState & {
+			pinOverlayEl?: HTMLElement | null;
+		};
+		const overlay = anyState.pinOverlayEl;
+		if (!overlay) return Number.POSITIVE_INFINITY;
+		const canvasRect = s.canvas.getBoundingClientRect();
+		const pad = Number(DATE_TOUCH_HIT_PAD) || 0;
+		const nodes = overlay.querySelectorAll<HTMLElement>(".epoch-pin-badge");
+		let best = Number.POSITIVE_INFINITY;
+		for (let i = 0; i < nodes.length; i++) {
+			const node = nodes[i];
+			const rect = node.getBoundingClientRect();
+			const x1 = rect.left - canvasRect.left - pad;
+			const x2 = rect.right - canvasRect.left + pad;
+			const y1 = rect.top - canvasRect.top - pad;
+			const y2 = rect.bottom - canvasRect.top + pad;
+			if (x < x1 || x > x2 || y < y1 || y > y2) continue;
+			const cx = (x1 + x2) / 2;
+			const cy = (y1 + y2) / 2;
+			const d = Math.hypot(x - cx, y - cy);
+			if (d < best) best = d;
+		}
+		return best;
+	} catch {
+		// ignore
+	}
+	return Number.POSITIVE_INFINITY;
+}
+
 function findTouchDayLayoutAtPoint(s: TouchEventState, x: number, y: number): DayLayout | null {
 	const pad = Number(DATE_TOUCH_HIT_PAD) || 0;
 	const list = Array.isArray(s.layouts) ? s.layouts : [];
+	let bestDay: DayLayout | null = null;
+	let bestDayDist = Number.POSITIVE_INFINITY;
 	for (let i = 0; i < list.length; i++) {
 		const day = list[i];
 		if (!day || day.hasVisibleDate !== true) continue;
 		const r = day.dateRect;
 		if (!r) continue;
 		if (x >= r.x1 - pad && x <= r.x2 + pad && y >= r.y1 - pad && y <= r.y2 + pad) {
-			return day;
+			const cx = (r.x1 + r.x2) / 2;
+			const cy = (r.y1 + r.y2) / 2;
+			const d = Math.hypot(x - cx, y - cy);
+			if (d < bestDayDist) {
+				bestDayDist = d;
+				bestDay = day;
+			}
 		}
 	}
-	return null;
+	if (!bestDay) return null;
+	const badgeDist = getNearestPinBadgeCenterDistance(s, x, y);
+	if (Number.isFinite(badgeDist)) {
+		const hitPad = Number(DATE_TOUCH_HIT_PAD) || 0;
+		const dayEffectiveDist = Math.max(0, bestDayDist - hitPad);
+		const badgeEffectiveDist = Math.max(0, badgeDist - hitPad);
+		if (badgeEffectiveDist < dayEffectiveDist) return null;
+	}
+	return bestDay;
 }
 
 function findTouchSummaryEntryAtPoint(s: TouchEventState, x: number, y: number): DateEntry | null {
