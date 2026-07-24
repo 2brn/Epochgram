@@ -344,8 +344,8 @@ body.theme-light .epoch-license-section {
   }
 }
 
-.epoch-invalid-url-input {
-  border-color: var(--color-red) !important;
+.epoch-calendar-links-setting .setting-item-control input.epoch-invalid-url-input {
+  border-color: var(--color-red);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-red) 40%, transparent);
 }
 
