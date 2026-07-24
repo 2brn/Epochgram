@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.8.1] - 2026-07-24
+- Removed `!important` from invalid URL input style by increasing selector specificity.
+
 ## [1.8.0] - 2026-07-24
 - Added Calendar sync support for ICS feeds.
 - Fixed: pin fly animation, **⌘ Epochgram: Review all**.
