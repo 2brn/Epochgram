@@ -4,6 +4,28 @@ import { readFrontmatterProperty } from "./frontmatter-keys";
 
 type FrontmatterRecord = Record<string, unknown>;
 
+function toFrontmatterRecord(value: unknown): FrontmatterRecord | null {
+	if (!value) return null;
+	if (value instanceof Map) {
+		const out: FrontmatterRecord = {};
+		for (const [k, v] of value.entries()) {
+			if (typeof k === "string" || typeof k === "number" || typeof k === "boolean") {
+				out[String(k)] = v;
+			}
+		}
+		return out;
+	}
+	if (typeof value === "object" && !Array.isArray(value)) {
+		return value as FrontmatterRecord;
+	}
+	return null;
+}
+
+function parseFrontmatterRecord(raw: string): FrontmatterRecord | null {
+	const parsed: unknown = YAML.parse(String(raw ?? ""), { mapAsMap: true });
+	return toFrontmatterRecord(parsed);
+}
+
 type FrontmatterApiPluginLike = {
 	__epochNoteFrontmatterWritePaths?: Set<string>;
 	app?: {
@@ -163,7 +185,7 @@ export function readYamlPropertyFromText(rawText: string, key: string): string {
 		const text = String(rawText ?? "");
 		const match = text.match(/^[\uFEFF]?---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
 		if (!match) return "";
-		const frontmatter = YAML.parse(String(match[1] ?? "")) as FrontmatterRecord | null;
+		const frontmatter = parseFrontmatterRecord(String(match[1] ?? ""));
 		if (String(key ?? "").trim().toLowerCase() === "pin") {
 			const hasProperty = hasPropertyInFrontmatterText(text, key);
 			if (!frontmatter || typeof frontmatter !== "object") {
@@ -219,7 +241,7 @@ async function readCurrentYamlPropertyValue(plugin: unknown, file: TFile, key: s
 		const text = String(raw ?? "");
 		const match = text.match(/^[\uFEFF]?---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
 		if (!match) return null;
-		const frontmatter = YAML.parse(String(match[1] ?? "")) as FrontmatterRecord | null;
+		const frontmatter = parseFrontmatterRecord(String(match[1] ?? ""));
 		return readFrontmatterProperty(frontmatter, key);
 	} catch {
 		return null;

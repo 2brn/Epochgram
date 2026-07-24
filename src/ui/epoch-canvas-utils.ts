@@ -175,6 +175,17 @@ function trackedTimestamp(entry: DateEntry): number {
 	return Number.NEGATIVE_INFINITY;
 }
 
+function stringValue(value: unknown): string {
+	return typeof value === "string" ? value : "";
+}
+
+function isSyntheticPinnedTodayClone(entry: DateEntry): boolean {
+	if (!entry || entry.pinned !== true) return false;
+	const originalDate = stringValue((entry as { originalDate?: unknown }).originalDate).trim();
+	const date = String(entry.date ?? "").trim();
+	return !!originalDate && !!date && originalDate !== date;
+}
+
 function timelineSourcePriority(entry: DateEntry): number {
 	if (entry?.pinned === true) return 0;
 	switch (entry?.source) {
@@ -193,6 +204,16 @@ function timelineSourcePriority(entry: DateEntry): number {
 
 function pickTimelineCandidate(candidates: TimelineCandidate[]): TimelineCandidate | null {
 	if (candidates.length === 0) return null;
+	const pinned = candidates.filter(candidate => candidate.entry.pinned === true);
+	if (pinned.length > 0) {
+		const syntheticPinned = pinned.filter(candidate => isSyntheticPinnedTodayClone(candidate.entry));
+		const pool = syntheticPinned.length > 0 ? syntheticPinned : pinned;
+		pool.sort((a, b) => {
+			if (a.order !== b.order) return a.order - b.order;
+			return blockPosition(a.entry) - blockPosition(b.entry);
+		});
+		return pool[0];
+	}
 	const tracked = candidates.filter(candidate => candidate.entry.source === "tracked");
 	if (tracked.length > 0) {
 		tracked.sort((a, b) => {
@@ -206,8 +227,10 @@ function pickTimelineCandidate(candidates: TimelineCandidate[]): TimelineCandida
 	}
 	const content = candidates.filter(candidate => candidate.entry.source === "content");
 	if (content.length > 0) {
-		const nonRecurring = content.filter(c => c.entry.recurring !== true);
-		const pool = nonRecurring.length > 0 ? nonRecurring : content;
+		const reviewed = content.filter(c => c.entry.reviewState === "reviewed");
+		const contentPool = reviewed.length > 0 ? reviewed : content;
+		const nonRecurring = contentPool.filter(c => c.entry.recurring !== true);
+		const pool = nonRecurring.length > 0 ? nonRecurring : contentPool;
 		pool.sort((a, b) => {
 			if (a.order !== b.order) return a.order - b.order;
 			return blockPosition(a.entry) - blockPosition(b.entry);
@@ -220,11 +243,6 @@ function pickTimelineCandidate(candidates: TimelineCandidate[]): TimelineCandida
 	if (dateprop) return dateprop;
 	const cdate = candidates.find(candidate => candidate.entry.source === "cdate");
 	if (cdate) return cdate;
-	const pinned = candidates.filter(candidate => candidate.entry.pinned === true);
-	if (pinned.length > 0) {
-		pinned.sort((a, b) => a.order - b.order);
-		return pinned[0];
-	}
 	const ordered = candidates.slice().sort((a, b) => a.order - b.order);
 	return ordered[0];
 }

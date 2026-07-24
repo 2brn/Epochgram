@@ -16,6 +16,17 @@ function trackedTimestamp(entry: DateEntry): number {
 	return Number.NEGATIVE_INFINITY;
 }
 
+function stringValue(value: unknown): string {
+	return typeof value === "string" ? value : "";
+}
+
+function isSyntheticPinnedTodayClone(entry: DateEntry): boolean {
+	if (!entry || entry.pinned !== true) return false;
+	const originalDate = stringValue((entry as { originalDate?: unknown }).originalDate).trim();
+	const date = String(entry.date ?? "").trim();
+	return !!originalDate && !!date && originalDate !== date;
+}
+
 export function sortIndex(index: EpochIndex): EpochIndex {
 	const out: EpochIndex = {};
 	const dates = Object.keys(index).sort((a, b) => dateKey(a) - dateKey(b));
@@ -23,7 +34,11 @@ export function sortIndex(index: EpochIndex): EpochIndex {
 	for (const d of dates) {
 		const entries = index[d].slice();
 		entries.sort((a, b) => {
-			const pinnedRank = (entry: DateEntry) => (entry.pinned === true ? 0 : 1);
+			const pinnedRank = (entry: DateEntry) => {
+				if (isSyntheticPinnedTodayClone(entry)) return 0;
+				if (entry.pinned === true) return 1;
+				return 2;
+			};
 			const sourceRank = (entry: DateEntry) => {
 				switch (entry.source) {
 					case "tracked":

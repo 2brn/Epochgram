@@ -35,6 +35,7 @@ type SettingsHandlerRuntime = {
 	reloadTermSimilaritiesFromDisk?: () => Promise<void>;
 	scheduleMissingTopicClassificationSweep?: (reason?: string) => void;
 	refreshAiBridgeStatusBar?: () => void;
+	refreshCalendarSyncSchedule?: () => void;
 };
 
 export const settingsHandlerMethods: SettingsHandlerMethods = {
@@ -348,6 +349,20 @@ export const settingsHandlerMethods: SettingsHandlerMethods = {
 		if (key === "openAiBridgeInObsidianWebViewer") {
 			try {
 				(this as unknown as SettingsHandlerRuntime).refreshAiBridgeStatusBar?.();
+			} catch {
+				// ignore
+			}
+			return;
+		}
+
+		if (
+			key === "calendarSyncIcsUrls" ||
+			key === "calendarSyncPeriod" ||
+			key === "calendarSyncFolder" ||
+			key === "calendarSyncTemplatePath"
+		) {
+			try {
+				(this as unknown as SettingsHandlerRuntime).refreshCalendarSyncSchedule?.();
 			} catch {
 				// ignore
 			}

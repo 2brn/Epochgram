@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { sanitizeBridgeOptions, validateBridgeOptionsYaml } from "../src/plugin/ai-bridge/sanitize";
+import { resolveSecretPlaceholders } from "../src/utils/secret-placeholders";
 
 describe("AI bridge sanitizeBridgeOptions", () => {
 	it("returns default merged config when input is empty", () => {
@@ -162,6 +163,13 @@ describe("AI bridge sanitizeBridgeOptions", () => {
 		});
 		expect(checked.valid).toBe(true);
 		expect(checked.resolved.backend?.cloud?.apiKey).toBe("sk-upper");
+	});
+
+	it("resolves secret placeholders for shared settings inputs", () => {
+		const resolved = resolveSecretPlaceholders("https://example.com/calendar.ics?key={{secret_key}}", (id: string) => {
+			return id === "secret_key" ? "abc123" : null;
+		});
+		expect(resolved).toBe("https://example.com/calendar.ics?key=abc123");
 	});
 
 	it("rejects unsupported backend provider", () => {

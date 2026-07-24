@@ -1,7 +1,7 @@
 import { TFile } from "obsidian";
 import { MAX_MARK_COLORS } from "../ui/mark-colors";
 import { getEpochMarkColorSet } from "../ui/mark-colors";
-import { hasPinMode, isTodayPinMode, normalizePinMode, type DateEntry, type FileIndexData, type FileReviewState } from "./types";
+import { isTodayPinMode, normalizePinMode, type DateEntry, type FileIndexData, type FileReviewState } from "./types";
 import { expandRecurrenceToDateKeys } from "./recurrence";
 import {
 	applyHighlightState,
@@ -676,7 +676,7 @@ export function setFileMarkColor(indexer: unknown, path: string, markColor: numb
 
 export function isFilePinned(indexer: unknown, path: string): boolean {
 	const s = state(indexer);
-	return hasPinMode(s.files[path]?.pinnedFile);
+	return isTodayPinMode(s.files[path]?.pinnedFile);
 }
 
 export function setFilePinned(indexer: unknown, path: string, pinned: boolean): boolean {

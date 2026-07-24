@@ -1,5 +1,11 @@
 # Epochgram changelog
 
+## [1.8.0] - 2026-07-24
+- Added Calendar sync support for ICS feeds.
+- Fixed: pin fly animation, **⌘ Epochgram: Review all**.
+- Improved record ordering for the same day.
+- Updated README, what's new.
+
 ## [1.7.2] - 2026-07-23
 - Fixed What's New startup fallback so existing users still see the latest available unseen page when current release notes page is absent.
 - Updated What's New decision tests to cover fallback and future-version guard behavior.

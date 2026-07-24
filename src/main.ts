@@ -26,6 +26,7 @@ import { searchMethods, type SearchMethods } from "./plugin/search";
 import { TimelineSearchIndex } from "./search/timeline-search-index";
 import { dateFrontmatterMethods, type DateFrontmatterMethods } from "./plugin/date-frontmatter";
 import { descriptionFrontmatterMethods, type DescriptionFrontmatterMethods } from "./plugin/description-frontmatter";
+import { calendarSyncMethods, type CalendarSyncMethods } from "./plugin/calendar-sync";
 
 class EpochPluginImpl extends Plugin {
 	settings: EpochSettings = { ...DEFAULT_SETTINGS };
@@ -109,7 +110,8 @@ export type EpochPlugin = EpochPluginImpl &
 	InheritedMarkMethods &
 	SearchMethods &
 	DateFrontmatterMethods &
-	DescriptionFrontmatterMethods;
+	DescriptionFrontmatterMethods &
+	CalendarSyncMethods;
 
 Object.assign(
    EpochPluginImpl.prototype,
@@ -129,7 +131,8 @@ Object.assign(
    inheritedMarkMethods,
    searchMethods,
    dateFrontmatterMethods,
-   descriptionFrontmatterMethods,
+	descriptionFrontmatterMethods,
+	calendarSyncMethods,
    lifecycleMethods
 );
 

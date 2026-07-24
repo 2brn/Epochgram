@@ -344,6 +344,24 @@ body.theme-light .epoch-license-section {
   }
 }
 
+.epoch-invalid-url-input {
+  border-color: var(--color-red) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-red) 40%, transparent);
+}
+
+.epoch-calendar-links-setting .setting-item-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.epoch-calendar-links-setting .setting-item-control .epoch-calendar-link-input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
 @media (min-width: 900px) {
   .epoch-license-section .setting-item-control {
     flex-direction: row;

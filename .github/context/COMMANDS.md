@@ -42,6 +42,11 @@ Commands are registered in `plugin/lifecycle.ts` (export command via `plugin/exp
   - Available when the active file exists, is indexable, and is known by the index.
   - Enqueues summary jobs for all records from the active file (`force: true`).
 
+- `sync-calendar` — “Sync calendar”
+  - Pro + Desktop.
+  - Runs Calendar sync immediately (`runCalendarSync({ reason: "manual", showNotice: true })`).
+  - If run on mobile, shows a notice that calendar sync is desktop-only.
+
 - `review-all` — “Review all”
   - Always available.
   - Marks all non-hidden records as Reviewed across all indexed files and index-only records present in date buckets.

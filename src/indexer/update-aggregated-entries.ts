@@ -76,6 +76,11 @@ export function updateAggregatedEntriesInternal(
 		if (fromData.noparsed || fromData.notracked) return fromData;
 		return resolveFrontmatterSuppressionFlags(s.plugin, filePath);
 	})();
+	const todayKey = formatDate(s.today());
+	const isTodayEntry = (entry: { date?: unknown }): boolean => {
+		const date = typeof entry?.date === "string" ? entry.date : "";
+		return date === todayKey;
+	};
 	const pinnedFile = isTodayPinMode(data.pinnedFile);
 	const canUseAiSummary = !!s.plugin?.hasProAccess?.();
 	const shouldUseAiSummaryForEntry = (entry: FileDateEntry): boolean => {
@@ -186,7 +191,7 @@ export function updateAggregatedEntriesInternal(
 			...entry,
 			markColor,
 			markColorHex,
-			pinned: entry.pinned === true || pinnedFile
+			pinned: entry.pinned === true || (pinnedFile && isTodayEntry(entry))
 		};
 		base.reviewState = entryReviewState;
 		if (described) {
@@ -312,13 +317,12 @@ export function updateAggregatedEntriesInternal(
 					: typeof data.markColorHex === "string" && String(data.markColorHex).trim()
 						? String(data.markColorHex).trim()
 						: undefined,
-				pinned: sourceEntry.pinned === true || pinnedFile
+				pinned: sourceEntry.pinned === true || (pinnedFile && sourceEntry.date === todayKey)
 			};
 			anchorEntry.reviewState = entryReviewState;
 		}
 	}
 
-	const todayKey = formatDate(s.today());
 	let pinnedTodayEntry: DateEntry | null = null;
 	if (anchorEntry && pinnedFile) {
 		if (anchorEntry.date === todayKey) {
@@ -419,7 +423,7 @@ export function updateAggregatedEntriesInternal(
 				reviewState: entryReviewState,
 				markColor,
 				markColorHex: typeof data.markColorHex === "string" && String(data.markColorHex).trim() ? String(data.markColorHex).trim() : undefined,
-				pinned: pinnedFile
+				pinned: pinnedFile && dk === todayKey
 			});
 		}
 		return out;

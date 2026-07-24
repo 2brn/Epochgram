@@ -36,6 +36,7 @@ A Timemap of Your Mind
 - [Search](#search)
 - [Actions](#actions)
 - [Review State](#review-state)
+- [Calendar sync (Pro)](#calendar-sync-pro)
 - [Recurring (Pro)](#recurring-pro)
 - [Similarity (Pro)](#similarity-pro)
 - [AI bridge (Pro)](#ai-bridge-pro-desktop-only)
@@ -281,6 +282,56 @@ Not every record deserves space on the timeline. Some, such as minor tracked cha
 > **⌘ Epochgram: Review all** → set all records across the vault as reviewed.</br>
 > **⌘ Epochgram: Toggle visibility for current file** → hide or show all records from the current file.
 
+## Calendar sync (Pro)
+
+Import ICS calendar feeds into notes (one note per event) and index them on the timeline.
+
+**⛭ ICS link** → add one or more `http(s)` or `webcal` calendar links, supports `{{secret_key}}` from Secret Storage.
+
+> [!TIP]
+> **Google Calendar:** Settings → *Integrate calendar* → copy the **Secret address in iCal format**.</br>
+> **Apple Calendar / iCloud:** Share the calendar → **Public Calendar** → copy the subscription `.ics` URL.</br>
+> **Microsoft Outlook:** Publish or share the calendar → copy the generated **ICS** link.
+
+**⛭ Sync period** → choose `manual`, `on startup`, or an interval. You can also run **⌘ Sync calendar** at any time to sync immediately.
+
+**⛭ Event file location** → choose where synced event notes are created. Empty uses your Daily Notes folder.
+
+**⛭ Template file location** → Choose a custom template file for synced event notes. If empty, Epochgram uses the built-in default template:
+
+```yaml
+---
+source: "{{source}}" # Sync source (always ICS, required)
+icsSyncKey: "{{syncKey}}" # Unique key: uid + start (required)
+icsOwned: "{{owned}}" # Whether this note is managed by sync (required)
+icsUid: "{{uid}}" # Raw event UID from the calendar
+icsStart: "{{startIso}}" # Event start in ISO format
+icsEnd: "{{endIso}}" # Event end in ISO format
+icsSourceUrl: "{{sourceUrl}}" # URL of the ICS feed
+icsLastSyncedAt: "{{lastSyncedAt}}" # Last sync timestamp (ISO)
+cancelled: "{{cancelled}}" # Event cancellation flag
+title: "{{title}}" # Event title
+date: "{{date}}" # Event date (formatted)
+time: "{{time}}" # Event time (formatted)
+url: "{{url}}" # Event URL (if provided)
+location: "{{location}}" # Event location
+description: |- # Multiline event description
+  {{descriptionYaml}} # YAML-safe description content
+recur: "{{recur}}" # Recurrence rule (RRULE)
+status: "{{status}}" # Event status (for example CONFIRMED)
+allDay: "{{allDay}}" # True for all-day events
+---
+```
+
+Behavior:
+
+- Sync window is fixed to `-30` and `+365` days.
+- Recurring ICS events write YAML `recur`.
+- Missing/cancelled events are removed only for syncer-owned files; non-owned files are marked `cancelled: true`.
+
+> [!TIP]
+> For multi-day events, use `{{startIso}}-{{endIso}}` in the template to index a date range.
+
 ## Recurring (Pro)
 
 <p align="center"><img src="images/recurring.gif" height="360" alt="Recurring"></p>
@@ -299,7 +350,7 @@ repeat: every year on MM-DD
 repeat: FREQ=DAILY;COUNT=5 # RRULE
 ---
 ```
- 
+
 ## Similarity (Pro)
 
 <p align="center">

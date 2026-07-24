@@ -66,7 +66,7 @@ describe("Indexer pinned entries", () => {
 		const anchorEntries = indexer.index[ANCHOR_DATE];
 		expect(anchorEntries).toBeDefined();
 		expect(anchorEntries!.length).toBeGreaterThan(0);
-		expect(anchorEntries!.every(entry => entry.pinned === true)).toBe(true);
+		expect(anchorEntries!.every(entry => entry.pinned !== true)).toBe(true);
 	});
 
 	it("moves pinned-today entry when day changes", () => {
@@ -151,7 +151,7 @@ describe("Indexer pinned entries", () => {
 		expect(contentRecord?.reviewState).toBe("draft");
 	});
 
-		it("sorts pinned entries using source priority", () => {
+		it("sorts only synthetic pinned-today entries first", () => {
 			const date = "2025-01-03";
 			const base = (overrides: Partial<DateEntry>): DateEntry => ({
 				date,
@@ -161,21 +161,22 @@ describe("Indexer pinned entries", () => {
 				summary: overrides.summary ?? "",
 				source: overrides.source ?? "content",
 				reviewState: overrides.reviewState,
-				pinned: overrides.pinned ?? false
+				pinned: overrides.pinned ?? false,
+				...overrides
 			});
 			const mixed: DateEntry[] = [
+				base({ file: "virtual-pinned.md", source: "cdate", pinned: true, originalDate: "2025-01-01" }),
 				base({ file: "tracked-pinned.md", source: "tracked", pinned: true }),
 				base({ file: "content-pinned.md", source: "content", pinned: true }),
-				base({ file: "cdate-pinned.md", source: "cdate", pinned: true }),
 				base({ file: "tracked.md", source: "tracked", pinned: false }),
 				base({ file: "content.md", source: "content", pinned: false }),
 				base({ file: "namedate.md", source: "namedate", pinned: false })
 			];
 			const sorted = sortIndex({ [date]: mixed })[date] ?? [];
 			expect(sorted.map(entry => entry.file)).toEqual([
+				"virtual-pinned.md",
 				"tracked-pinned.md",
 				"content-pinned.md",
-				"cdate-pinned.md",
 				"tracked.md",
 				"content.md",
 				"namedate.md"

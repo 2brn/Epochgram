@@ -108,4 +108,24 @@ describe("timeline selection", () => {
 		const selected = pickTimelineEntryForFile(entries);
 		expect(selected?.summary).toBe("newer");
 	});
+
+	it("prefers pinned entries over tracked entries for the same file", () => {
+		const entries = [
+			makeEntry({ file: "same.md", summary: "tracked", source: "tracked", blockStart: 0, pinned: false }),
+			makeEntry({ file: "same.md", summary: "pinned", source: "content", blockStart: 5, pinned: true })
+		];
+		const selected = selectTimelineEntries(entries);
+		expect(selected).toHaveLength(1);
+		expect(selected[0]?.summary).toBe("pinned");
+	});
+
+	it("prefers reviewed recurring content over draft non-recurring content for the same file", () => {
+		const entries = [
+			makeEntry({ file: "same.md", summary: "draft", source: "content", blockStart: 0, recurring: false, reviewState: "draft" as any }),
+			makeEntry({ file: "same.md", summary: "recurring reviewed", source: "content", blockStart: 5, recurring: true, reviewState: "reviewed" as any })
+		];
+		const selected = selectTimelineEntries(entries);
+		expect(selected).toHaveLength(1);
+		expect(selected[0]?.summary).toBe("recurring reviewed");
+	});
 });

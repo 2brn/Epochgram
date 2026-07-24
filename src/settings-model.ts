@@ -30,6 +30,10 @@ export interface EpochSettings {
 	generateEpochs: boolean;
 	openAiBridgeOnStartup: boolean;
 	openAiBridgeInObsidianWebViewer: boolean;
+	calendarSyncIcsUrls?: string[];
+	calendarSyncPeriod?: "manual" | "startup" | "1m" | "5m" | "15m" | "1h" | "6h" | "24h";
+	calendarSyncFolder?: string;
+	calendarSyncTemplatePath?: string;
 	// Internal flag: used to apply one-time defaults on the first successful Pro activation.
 	proActivatedOnce?: boolean;
 	// Pro-only similarity tuning (undefined => defaults)
@@ -78,6 +82,10 @@ export const DEFAULT_SETTINGS: EpochSettings = {
 	generateEpochs: false,
 	openAiBridgeOnStartup: false,
 	openAiBridgeInObsidianWebViewer: false,
+	calendarSyncIcsUrls: [],
+	calendarSyncPeriod: "manual",
+	calendarSyncFolder: "",
+	calendarSyncTemplatePath: "",
 	proActivatedOnce: false,
 	similarityEmbeddingModelId: undefined,
 	similarityZeroShotModelId: undefined,

@@ -1,4 +1,4 @@
-import { Notice, Platform, Setting, setIcon, type App, type SliderComponent } from "obsidian";
+import { AbstractInputSuggest, Notice, Platform, Setting, TFile, TFolder, setIcon, type App, type DropdownComponent, type SliderComponent, type TextComponent } from "obsidian";
 import { formatDate } from "utils";
 import type { EpochPlugin } from "../main";
 import { NOTE_TITLE_SIMILARITY_JW_THRESHOLD } from "../utils";
@@ -12,6 +12,7 @@ import { registerInfoResetGesture } from "./info-reset-gesture";
 import { countMissingAiSummaries, hasMissingAiSummariesFast } from "../plugin/ai-summaries/file-jobs";
 import { countMissingEpochsFast } from "../plugin/ai-summaries/epochs";
 import { ensureAiBridgeServerRunning } from "../plugin/ai-summaries/bridge-server";
+import { resolveSecretPlaceholders } from "../utils/secret-placeholders";
 import { createSettingGroup } from "./setting-groups";
 import { DEFAULT_SIMILARITY_MODEL, DEFAULT_ZERO_SHOT_MODEL, NO_SIMILARITY_MODEL } from "../plugin/similarity/config";
 import {
@@ -54,6 +55,75 @@ type InternalPluginsLike = {
 type VaultConfigLike = {
 	getConfig?: (key: string) => unknown;
 };
+
+const InputSuggestBase = (AbstractInputSuggest ?? class {
+	constructor(_app: App, _inputEl: HTMLInputElement) {
+	}
+
+	close(): void {
+	}
+});
+
+class FolderPathSuggest extends InputSuggestBase<TFolder> {
+	private readonly appRef: App;
+	private readonly inputRef: HTMLInputElement;
+
+	constructor(app: App, inputEl: HTMLInputElement) {
+		super(app, inputEl);
+		this.appRef = app;
+		this.inputRef = inputEl;
+	}
+
+	getSuggestions(inputStr: string): TFolder[] {
+		const query = inputStr.trim().toLowerCase();
+		const folders = this.appRef.vault
+			.getAllLoadedFiles()
+			.filter((item): item is TFolder => item instanceof TFolder)
+			.sort((a, b) => a.path.localeCompare(b.path));
+		if (!query) return folders;
+		return folders.filter((folder) => folder.path.toLowerCase().includes(query));
+	}
+
+	renderSuggestion(folder: TFolder, el: HTMLElement): void {
+		el.setText(folder.path || "/");
+	}
+
+	selectSuggestion(folder: TFolder): void {
+		this.inputRef.value = folder.path || "";
+		this.inputRef.dispatchEvent(new Event("input"));
+		this.close();
+	}
+}
+
+class FilePathSuggest extends InputSuggestBase<TFile> {
+	private readonly appRef: App;
+	private readonly inputRef: HTMLInputElement;
+
+	constructor(app: App, inputEl: HTMLInputElement) {
+		super(app, inputEl);
+		this.appRef = app;
+		this.inputRef = inputEl;
+	}
+
+	getSuggestions(inputStr: string): TFile[] {
+		const query = inputStr.trim().toLowerCase();
+		const files = this.appRef.vault
+			.getMarkdownFiles()
+			.sort((a, b) => a.path.localeCompare(b.path));
+		if (!query) return files;
+		return files.filter((file) => file.path.toLowerCase().includes(query));
+	}
+
+	renderSuggestion(file: TFile, el: HTMLElement): void {
+		el.setText(file.path);
+	}
+
+	selectSuggestion(file: TFile): void {
+		this.inputRef.value = file.path;
+		this.inputRef.dispatchEvent(new Event("input"));
+		this.close();
+	}
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
 	if (!value || typeof value !== "object") return null;
@@ -367,7 +437,7 @@ export function renderProPanel(
 			"Summarize records via AI bridge (on-device or cloud)",
 			"Generate multi-day Epochs for broader time retrospectives",
 			"Find similar records across links, tags, semantics, and topics",
-			"Track edits and create recurring events on the timeline"
+			"Track edits, sync calendars, and create recurring events"
 		];
 		const upsellSetting = new Setting(proItems)
 			.setName("Unlock the full Epochgram Pro experience")
@@ -406,6 +476,7 @@ export function renderProPanel(
 		renderLicenseSetting(proItems);
 
 	const similarityGroup = createSettingGroup(advancedGroupsParentEl, "Similarity");
+	similarityGroup.groupEl.classList.add("epoch-similarity-settings-group");
 	markLockedHeading(similarityGroup.groupEl);
 	const { itemsEl: similaritySection } = similarityGroup;
 
@@ -829,6 +900,229 @@ export function renderProPanel(
 				});
 		});
 	}
+
+		const canCalendarSync = isPro;
+		const calendarGroup = createSettingGroup(advancedGroupsParentEl, "Calendar sync");
+		calendarGroup.groupEl.classList.add("epoch-calendar-settings-group");
+		markLockedHeading(calendarGroup.groupEl);
+		const { itemsEl: calendarSection } = calendarGroup;
+		const docsUrl = "https://www.epochgram.com/docs#calendar-sync-pro";
+		try {
+			const simEl = advancedGroupsParentEl.querySelector(":scope > .setting-group.epoch-similarity-settings-group");
+			if (simEl && simEl !== calendarGroup.groupEl) {
+				advancedGroupsParentEl.insertBefore(calendarGroup.groupEl, simEl);
+			}
+		} catch {
+			// ignore
+		}
+
+		const isValidCalendarUrl = (raw: string): boolean => {
+			const value = String(raw ?? "").trim();
+			if (!value) return false;
+			try {
+				const resolved = resolveSecretPlaceholders(value, (id: string) => {
+					try {
+						return plugin.app.secretStorage.getSecret(String(id || ""));
+					} catch {
+						return null;
+					}
+				});
+				const parsed = new URL(resolved.replace(/^webcal:/i, "https:"));
+				return parsed.protocol === "http:" || parsed.protocol === "https:";
+			} catch {
+				return false;
+			}
+		};
+		const normalizeStoredUrls = (): string[] => {
+			const raw = plugin.settings.calendarSyncIcsUrls;
+			if (!Array.isArray(raw)) return [];
+			const out: string[] = [];
+			for (const v of raw) {
+				const s = String(v ?? "").trim();
+				if (!isValidCalendarUrl(s)) continue;
+				const normalized = s;
+				if (!out.includes(normalized)) out.push(normalized);
+			}
+			return out;
+		};
+		const saveCalendarUrls = async (urls: string[]): Promise<void> => {
+			if (!canCalendarSync) return;
+			const next = urls.map((v) => String(v ?? "").trim()).filter(Boolean);
+			const prev = normalizeStoredUrls();
+			if (JSON.stringify(prev) === JSON.stringify(next)) return;
+			plugin.settings.calendarSyncIcsUrls = next;
+			await plugin.onSettingsChanged("calendarSyncIcsUrls");
+			refreshWithoutScroll();
+		};
+
+		const currentUrls = normalizeStoredUrls();
+		const urlRows = currentUrls.length > 0 ? [...currentUrls, ""] : [""];
+		const calendarLinksSetting = markLockedRow(new Setting(calendarSection)
+			.setName("ICS link")
+			.setDesc(canCalendarSync ? "" : "Requires Epochgram Pro."));
+		calendarLinksSetting.settingEl?.classList?.add("epoch-calendar-links-setting");
+		if (canCalendarSync) {
+			calendarLinksSetting.descEl.empty();
+			const link = calendarLinksSetting.descEl.createEl("a", {
+				text: "Read docs",
+				href: docsUrl
+			});
+			link.setAttr("target", "_blank");
+			link.setAttr("rel", "noopener noreferrer");
+		}
+		for (let i = 0; i < urlRows.length; i++) {
+			calendarLinksSetting.addText((text: TextComponent) => {
+				const value = String(urlRows[i] ?? "").trim();
+				text.inputEl.classList.add("epoch-calendar-link-input");
+				text
+					.setPlaceholder("https://example.com/calendar.ics")
+					.setValue(value)
+					.setDisabled(!canCalendarSync)
+					.onChange((changed) => {
+						const normalized = String(changed ?? "").trim();
+						const valid = normalized.length === 0 || isValidCalendarUrl(normalized);
+						text.inputEl.classList.toggle("epoch-invalid-url-input", !valid);
+					});
+				text.inputEl.classList.toggle("epoch-invalid-url-input", value.length > 0 && !isValidCalendarUrl(value));
+				text.inputEl.addEventListener("blur", () => {
+					void (async () => {
+						if (!canCalendarSync) return;
+						const typed = String(text.getValue() ?? "").trim();
+						if (!typed) {
+							const next = normalizeStoredUrls();
+							if (i < next.length) {
+								next.splice(i, 1);
+								await saveCalendarUrls(next);
+							}
+							return;
+						}
+						if (!isValidCalendarUrl(typed)) {
+							text.inputEl.classList.add("epoch-invalid-url-input");
+							return;
+						}
+						text.inputEl.classList.remove("epoch-invalid-url-input");
+						const normalized = typed;
+						const next = normalizeStoredUrls();
+						if (i < next.length) next[i] = normalized;
+						else next.push(normalized);
+						const deduped: string[] = [];
+						for (const v of next) {
+							if (!v || deduped.includes(v)) continue;
+							deduped.push(v);
+						}
+						await saveCalendarUrls(deduped);
+					})();
+				});
+			});
+		}
+
+		let calendarPeriodDropdown: DropdownComponent | null = null;
+		const normalizePeriod = (raw: unknown): string => {
+			const rawText = typeof raw === "string"
+				? raw
+				: (typeof raw === "number" || typeof raw === "boolean" ? String(raw) : "");
+			const value = rawText.trim().toLowerCase();
+			switch (value) {
+				case "manual":
+				case "startup":
+				case "1m":
+				case "5m":
+				case "15m":
+				case "1h":
+				case "6h":
+				case "24h":
+					return value;
+				default:
+					return "manual";
+			}
+		};
+		const periodSetting = markLockedRow(new Setting(calendarSection)
+			.setName("Sync period")
+			.setDesc(canCalendarSync ? "Manual, startup, or fixed interval sync." : "Requires Epochgram Pro."));
+		periodSetting.addDropdown((dropdown) => {
+			calendarPeriodDropdown = dropdown;
+			dropdown
+				.addOption("manual", "Manual")
+				.addOption("startup", "On startup")
+				.addOption("1m", "Every 1 min")
+				.addOption("5m", "Every 5 min")
+				.addOption("15m", "Every 15 min")
+				.addOption("1h", "Every 1 hour")
+				.addOption("6h", "Every 6 hours")
+				.addOption("24h", "Every 24 hours")
+				.setValue(canCalendarSync ? normalizePeriod(plugin.settings.calendarSyncPeriod) : "manual")
+				.setDisabled(!canCalendarSync)
+				.onChange(async (value) => {
+					if (!canCalendarSync) return;
+					const next = normalizePeriod(value);
+					if (normalizePeriod(plugin.settings.calendarSyncPeriod) === next) return;
+					plugin.settings.calendarSyncPeriod = next as "manual" | "startup" | "1m" | "5m" | "15m" | "1h" | "6h" | "24h";
+					await plugin.onSettingsChanged("calendarSyncPeriod");
+				});
+		});
+		registerInfoResetGesture(periodSetting, async () => {
+			if (!canCalendarSync) return;
+			plugin.settings.calendarSyncPeriod = "manual";
+			if (calendarPeriodDropdown) calendarPeriodDropdown.setValue("manual");
+			await plugin.onSettingsChanged("calendarSyncPeriod");
+		});
+
+		let folderText: TextComponent | null = null;
+		let folderPending = String(plugin.settings.calendarSyncFolder ?? "").trim();
+		const folderSetting = markLockedRow(new Setting(calendarSection)
+			.setName("Event file location")
+			.setDesc(canCalendarSync ? "Default uses Daily Notes folder." : "Requires Epochgram Pro."));
+		folderSetting.addText((text) => {
+			folderText = text;
+			new FolderPathSuggest(app, text.inputEl);
+			text
+				.setPlaceholder(canCalendarSync ? String(plugin.getDailyNoteFolder() || "/") : "")
+				.setValue(canCalendarSync ? folderPending : "")
+				.setDisabled(!canCalendarSync)
+				.onChange((value) => {
+					folderPending = String(value ?? "");
+				});
+			text.inputEl.addEventListener("blur", () => {
+				void (async () => {
+					if (!canCalendarSync) return;
+					const normalized = String(folderPending ?? "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
+					folderPending = normalized;
+					if (folderText && folderText.getValue() !== normalized) folderText.setValue(normalized);
+					if (String(plugin.settings.calendarSyncFolder ?? "").trim() === normalized) return;
+					plugin.settings.calendarSyncFolder = normalized;
+					await plugin.onSettingsChanged("calendarSyncFolder");
+				})();
+			});
+		});
+
+		let templateText: TextComponent | null = null;
+		let templatePending = String(plugin.settings.calendarSyncTemplatePath ?? "").trim();
+		const templateSetting = markLockedRow(new Setting(calendarSection)
+			.setName("Template file location")
+			.setDesc(canCalendarSync ? "Template file path for the event note." : "Requires Epochgram Pro."));
+		templateSetting.addText((text) => {
+			templateText = text;
+			new FilePathSuggest(app, text.inputEl);
+			text
+				.setPlaceholder("")
+				.setValue(canCalendarSync ? templatePending : "")
+				.setDisabled(!canCalendarSync)
+				.onChange((value) => {
+					templatePending = String(value ?? "");
+				});
+			text.inputEl.addEventListener("blur", () => {
+				void (async () => {
+					if (!canCalendarSync) return;
+					const normalized = String(templatePending ?? "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
+					templatePending = normalized;
+					if (templateText && templateText.getValue() !== normalized) templateText.setValue(normalized);
+					if (String(plugin.settings.calendarSyncTemplatePath ?? "").trim() === normalized) return;
+					plugin.settings.calendarSyncTemplatePath = normalized;
+					await plugin.onSettingsChanged("calendarSyncTemplatePath");
+				})();
+			});
+		});
+
 	// Keep a lightweight “proof” we’re still in the same render path.
 	void formatDate;
 }

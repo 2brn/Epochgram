@@ -106,6 +106,52 @@ describe("Review all + Reset reviews", () => {
 		expect(indexer.updateAggregatedEntries).toHaveBeenCalledWith(filePath);
 	});
 
+	it("Review all marks recurring entries reviewed in the aggregated index", () => {
+		const filePath = "recur.md";
+		const files: any = {
+			[filePath]: {
+				cdate: null,
+				namedDate: null,
+				dateProp: null,
+				contentDates: [],
+				trackedDates: {},
+				recur: {
+					raw: "every day count 2",
+					rrule: "FREQ=DAILY",
+					kind: "friendly",
+					line: 0,
+					from: "2026-03-01",
+					count: 2
+				},
+				recurHiddenDates: [],
+				recurReviewedDates: []
+			}
+		};
+		const index: any = {
+			"2026-03-01": [
+				{ file: filePath, source: "content", date: "2026-03-01", recurring: true, reviewState: "draft" }
+			],
+			"2026-03-02": [
+				{ file: filePath, source: "content", date: "2026-03-02", recurring: true, reviewState: "draft" }
+			]
+		};
+		const indexer: any = {
+			files,
+			index,
+			getIndexedPaths: () => [filePath],
+			refreshSyntheticEntries: vi.fn(),
+			setFileReviewStateForAllRecordsPreserveHidden: vi.fn(() => true),
+			setFileReviewStateForAllRecords: vi.fn(() => true),
+			updateAggregatedEntries: vi.fn()
+		};
+
+		const changed = reviewAllDraftFiles(makePluginWithIndexer(indexer));
+		expect(changed).toBe(1);
+		expect(files[filePath].recurReviewedDates).toEqual(["2026-03-01", "2026-03-02"]);
+		expect(indexer.refreshSyntheticEntries).toHaveBeenCalledTimes(1);
+		expect(indexer.updateAggregatedEntries).toHaveBeenCalled();
+	});
+
 	it("Review all rehydrates file reviewState from reviewed date buckets", () => {
 		const index: any = {
 			"2026-07-07": [

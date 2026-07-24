@@ -73,6 +73,7 @@ export default defineConfig([
         {
           enforceCamelCaseLower: true,
           brands: ["Epochgram", "Pro", "Obsidian", "Google", "Chrome"],
+          acronyms: ["AI", "ID", "YAML", "ICS"],
           ignoreRegex: ["^Epochgram:\\s"],
         },
       ],

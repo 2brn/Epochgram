@@ -69,6 +69,8 @@ type LifecycleRuntime = EpochPlugin & {
 	__epochAiBridgeStartupPromise?: Promise<void> | null;
 	__epochHadSavedSettingsAtStartup?: boolean;
 	maybeOpenAiBridgeOnStartup?: () => Promise<void>;
+	refreshCalendarSyncSchedule?: () => void;
+	maybeRunCalendarSyncOnStartup?: () => Promise<void>;
 };
 
 type AppSettingRuntime = {
@@ -363,6 +365,23 @@ export const lifecycleMethods: LifecycleMethods = {
 							showNotice: true,
 							enableIfDisabled: true
 						});
+					})();
+					return true;
+				} catch {
+					return false;
+				}
+			}
+		});
+
+		this.addCommand({
+			id: "sync-calendar",
+			name: "Sync calendar",
+			checkCallback: (checking: boolean) => {
+				try {
+					if (!hasVerifiedEntitlement(this)) return false;
+					if (checking) return true;
+					void wrapNoticeError("Epochgram: Calendar sync failed", async () => {
+						await this.runCalendarSync({ reason: "manual", showNotice: true });
 					})();
 					return true;
 				} catch {
@@ -726,6 +745,19 @@ export const lifecycleMethods: LifecycleMethods = {
 		this.registerInterval(window.setInterval(() => {
 			wrapNoticeError("Epochgram: Background poll failed", () => this.pollExternalIndexChanges())();
 		}, 15000));
+
+		try {
+			runtime.refreshCalendarSyncSchedule?.();
+		} catch {
+			// ignore
+		}
+		void (async () => {
+			try {
+				await runtime.maybeRunCalendarSyncOnStartup?.();
+			} catch {
+				// ignore
+			}
+		})();
 	},
 
 	onunload(this: EpochPlugin): void {
