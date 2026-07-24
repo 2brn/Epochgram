@@ -41,9 +41,6 @@ type CanvasPinFlyInternals = {
 	requestHoverAnimation(): void;
 };
 
-const activeDocument: Document =
-	window.document;
-
 
 export function startPinFlyToToday(canvas: EpochCanvas, entry: DateEntry, onDone?: () => void): boolean {
 	try {
@@ -117,9 +114,10 @@ export function startPinFlyToToday(canvas: EpochCanvas, entry: DateEntry, onDone
 			imgData = null;
 		}
 		if (!imgData) return false;
+		const activeDocument = c.root?.ownerDocument ?? window.document;
 		if (!activeDocument) return false;
 
-		const off = activeDocument.createEl("canvas");
+		const off = activeDocument.createElement("canvas");
 		off.width = sw;
 		off.height = sh;
 		const offCtx = off.getContext("2d");
