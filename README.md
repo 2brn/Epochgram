@@ -25,7 +25,7 @@ A Timemap of Your Mind
 > - Find related notes through links, tags, titles, and semantic similarity.
 > - Topic clustering and marked related groups.
 > - Tracked content edits.
-> - Recurring events.
+> - Calendar sync and recurring events.
 
 ## Table of Contents
 
