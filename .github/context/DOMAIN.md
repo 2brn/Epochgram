@@ -166,6 +166,7 @@ Settings interface starts in `settings.ts` (`export interface EpochSettings`). V
   What's New startup content (Verified)
   - Startup What's New pages are sourced from embedded markdown bundled into `main.js` via the build-time registry.
   - `whatsNewShownVersions` tracks per-version auto-display state.
+  - If any newer version is already present in `whatsNewShownVersions`, older pages are not auto-shown later.
   - `whatsNewOptOut` is toggled directly from the What's New view checkbox and persisted in settings.
 
 Pro startup validation (Verified)

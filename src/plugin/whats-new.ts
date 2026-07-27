@@ -139,17 +139,21 @@ export function resolveWhatsNewVersionToShow(options: ShouldShowOptions): string
 	if (options.optOut) return null;
 	if (!options.availableVersions.length) return null;
 	const sorted = [...options.availableVersions].sort((a, b) => compareVersions(b, a));
-	const shown = new Set(options.shownVersions.map((v) => String(v || "").trim()).filter(Boolean));
+	const normalizedShown = options.shownVersions.map((v) => String(v || "").trim()).filter(Boolean);
+	const shown = new Set(normalizedShown);
+	const newestShown = normalizedShown.sort((a, b) => compareVersions(b, a))[0] ?? "";
 	if (options.hadSavedSettings) {
 		for (const version of sorted) {
 			if (compareVersions(version, options.currentVersion) > 0) continue;
 			if (shown.has(version)) continue;
+			if (newestShown && compareVersions(version, newestShown) <= 0) continue;
 			return version;
 		}
 		return null;
 	}
 	for (const version of sorted) {
 		if (shown.has(version)) continue;
+		if (newestShown && compareVersions(version, newestShown) <= 0) continue;
 		return version;
 	}
 	return null;

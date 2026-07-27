@@ -74,4 +74,15 @@ describe("what's new startup decision", () => {
 		});
 		expect(next).toBeNull();
 	});
+
+	it("does not show an older page when a newer version was already shown", () => {
+		const next = resolveWhatsNewVersionToShow({
+			hadSavedSettings: true,
+			currentVersion: "1.8.0",
+			shownVersions: ["1.8.0"],
+			optOut: false,
+			availableVersions: ["1.7.0"]
+		});
+		expect(next).toBeNull();
+	});
 });

@@ -48,6 +48,7 @@
     - No per-version What's New markdown file is written under `.obsidian`.
     - Existing users: only the current plugin version is considered, and shown once.
     - Fresh install (no saved settings): opens the latest available embedded What's New page once.
+    - If a newer What's New version was already shown, older versions are not auto-backfilled later.
     - The service page contains a checkbox marker; toggling it updates `settings.whatsNewOptOut` via file modify events.
   - After index load, runs similarity startup maintenance to enqueue missing vectors/topics when enabled. Vectors cover “likely text” files (see `utils.ts:isLikelyTextFileExtension`), while topic classification runs only for Markdown notes.
     - For huge vaults, missing semantic vectors are enqueued in a single pass so the semantics queue reflects the whole eligible vault (vector computation remains throttled in the background queue).
