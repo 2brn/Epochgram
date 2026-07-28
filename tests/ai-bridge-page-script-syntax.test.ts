@@ -53,4 +53,16 @@ describe("AI bridge page scripts", () => {
 		expect(AI_BRIDGE_SCRIPT_PART1).toContain("if (mode === \"cloud\") {");
 		expect(AI_BRIDGE_SCRIPT_PART1).toContain("setModelReadyStatus()");
 	});
+
+	it("pauses job processing while native model is downloading", () => {
+		expect(AI_BRIDGE_SCRIPT_PART3).toContain("function shouldWaitForModelReady(msg)");
+		expect(AI_BRIDGE_SCRIPT_PART3).toContain("waiting for model download");
+		expect(AI_BRIDGE_SCRIPT_PART3).toContain("if (shouldWaitForModelReady(msg)) {");
+	});
+
+	it("clears gesture errors after user starts model download", () => {
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("downloadBtn.addEventListener(\"click\"");
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("setErrText(\"\")");
+		expect(AI_BRIDGE_SCRIPT_PART1).toContain("prevMode !== mode");
+	});
 });

@@ -23,6 +23,13 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 	let lastSummaryPreview = "";
 	const AUTO_START_DELAY_MS = 3500;
 
+	function shouldWaitForModelReady(msg) {
+		const mode = String(statusState && statusState.mode ? statusState.mode : "").trim().toLowerCase();
+		if (mode === "downloadable" || mode === "downloading") return true;
+		const text = String(msg || "");
+		return /(requires?\s+(a\s+)?user\s+gesture|user\s+activation|user\s+interaction)/i.test(text);
+	}
+
 	function shouldRetrySummarizeError(msg) {
 		try {
 			const t = String(msg || "").trim();
@@ -138,6 +145,11 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
           await refreshStatus();
 						if (pageClosing) break;
 					if (!running) break;
+					if (shouldWaitForModelReady("")) {
+						curEl.textContent = "waiting for model download";
+						await new Promise(r => window.setTimeout(r, 500));
+						continue;
+					}
 					job = await get("nextJob");
           if (!job || !job.id) {
             curEl.textContent = "idle";
@@ -164,7 +176,7 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 			const kindKey = (job && job.kind === "epoch") ? "epoch" : "summary";
 			const langs = (typeof readSelectedBridgeLanguages === "function")
 				? readSelectedBridgeLanguages(kindKey)
-				: { outputLanguage: "en", expectedInputLanguages: ["en", "ja", "es"], expectedContextLanguages: ["en"] };
+				: { outputLanguage: "en", expectedInputLanguages: ["de", "en", "es", "fr", "ja"], expectedContextLanguages: ["en"] };
 			outputLanguage = (jobSettings && typeof jobSettings.outputLanguage === "string")
 				? jobSettings.outputLanguage
 				: langs.outputLanguage;
@@ -241,6 +253,11 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 				try { setErrText(""); } catch { try { errEl.textContent = ""; } catch { void 0; } }
         } catch (e) {
 					const msg = String(e && e.message ? e.message : e);
+					if (shouldWaitForModelReady(msg)) {
+						try { setErrText("Waiting for model download."); } catch { try { errEl.textContent = "Waiting for model download."; } catch { void 0; } }
+						await new Promise(r => window.setTimeout(r, 1000));
+						continue;
+					}
 					let details = msg;
 					try {
 						const templates = (() => { try { return pickTemplatesForJob(job); } catch { return null; } })();

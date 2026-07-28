@@ -405,9 +405,9 @@ sharedContext: | # Shared instructions across all summarization jobs
 
 format: plain-text # Output format: markdown | plain-text
 preference: capability # Model preference: auto | speed | capability
-expectedInputLanguages: [en] # Accepted input languages: en | es | ja
-outputLanguage: en # Output language: en | ja | es
-expectedContextLanguages: [en] # Accepted context languages: en | ja | es
+expectedInputLanguages: [en] # Accepted input languages: de | en | es | fr | ja
+outputLanguage: en # Output language: de | en | es | fr | ja
+expectedContextLanguages: [en] # Accepted context languages: de | en | es | fr | ja
 
 backend: # Optional
   mode: native # native | cloud

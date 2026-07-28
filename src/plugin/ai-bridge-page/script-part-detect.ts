@@ -257,6 +257,7 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 	if (downloadBtn) {
 		downloadBtn.addEventListener("click", async () => {
 			try {
+				try { setErrText(""); } catch { try { errEl.textContent = ""; } catch { void 0; } }
 				const backend = getRootBackendConfig();
 				if (normalizeBackendMode(backend.mode) === "cloud") {
 					setModelReadyStatus();
@@ -309,7 +310,7 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 		const raw = typeof code === "string" ? code : "";
 		if (!raw) return "en";
 		const base = raw.toLowerCase().split(/[-_]/)[0] || "en";
-		if (base === "en" || base === "es" || base === "ja") return base;
+		if (base === "de" || base === "en" || base === "es" || base === "fr" || base === "ja") return base;
 		return "en";
 	}
 
@@ -360,13 +361,13 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 				: readMulti(ctxEl);
 			return {
 				outputLanguage: outLang,
-				expectedInputLanguages: normalizeSupportedLanguageList(inRaw, ["en", "ja", "es"]),
+				expectedInputLanguages: normalizeSupportedLanguageList(inRaw, ["de", "en", "es", "fr", "ja"]),
 				expectedContextLanguages: normalizeSupportedLanguageList(ctxRaw, ["en"]),
 			};
 		} catch {
 			return {
 				outputLanguage: "en",
-				expectedInputLanguages: ["en", "ja", "es"],
+				expectedInputLanguages: ["de", "en", "es", "fr", "ja"],
 				expectedContextLanguages: ["en"],
 			};
 		}

@@ -250,15 +250,6 @@ function applyFirstTimeProDefaults(plugin: EpochPlugin, hasActivatedProOnce: boo
 	let activatedFirstTime = false;
 	if (!hasActivatedProOnce) {
 		plugin.settings.proActivatedOnce = true;
-		plugin.settings.trackChanges = true;
-		if (plugin.viewPreferences) {
-			plugin.viewPreferences.showTrackedChanges = true;
-			try {
-				plugin.refreshEpochViews();
-			} catch {
-				// ignore
-			}
-		}
 		plugin.settings.similarityTitleJwThreshold = 1;
 			plugin.settings.similarityThreshold = RESET_PRO_SIMILARITY_THRESHOLD;
 			plugin.settings.similarityZeroShotMinScore = RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE;
@@ -605,7 +596,13 @@ export const licenseMethods: LicenseMethods = {
 		}
 		if (proActivated) {
 			try {
-				void (this as unknown as LicenseRuntime).maybeOpenAiBridgeOnStartup?.();
+				const shouldProbeBridge =
+					this.settings.openAiBridgeOnStartup === true ||
+					this.settings.summarizeAI === true ||
+					this.settings.generateEpochs === true;
+				if (shouldProbeBridge) {
+					void (this as unknown as LicenseRuntime).maybeOpenAiBridgeOnStartup?.();
+				}
 			} catch {
 				// ignore
 			}

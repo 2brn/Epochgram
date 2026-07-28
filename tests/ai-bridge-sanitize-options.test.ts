@@ -378,7 +378,7 @@ describe("AI bridge sanitizeBridgeOptions", () => {
 			"expectedInputLanguages: [en-US, nope nope]"
 		].join("\n"));
 		expect(checked.valid).toBe(false);
-		expect(checked.errors.some((e) => e.includes("one of: en, ja, es"))).toBe(true);
+		expect(checked.errors.some((e) => e.includes("one of: de, en, es, fr, ja"))).toBe(true);
 	});
 
 	it("rejects duplicate language tags", () => {

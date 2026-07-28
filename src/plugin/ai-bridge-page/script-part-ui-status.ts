@@ -88,6 +88,7 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 	}
 
 	function setStatusMode(mode, detail) {
+		const prevMode = String(statusState.mode || "");
 		statusState.mode = mode;
 		if (mode === "downloading") {
 			const raw = detail && typeof detail.progress === "number" ? detail.progress : null;
@@ -95,6 +96,9 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 			if (normalized != null) {
 				statusState.progress = normalized;
 			}
+		}
+		if (prevMode !== mode && (mode === "downloadable" || mode === "downloading" || mode === "ready")) {
+			try { setErrText(""); } catch { try { errEl.textContent = ""; } catch { void 0; } }
 		}
 		renderStatusText();
 	}
@@ -425,7 +429,14 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 			}
 		}
 
-				if (s.lastError) setText(errEl, s.lastError);
+				if (s.lastError) {
+					const mode = String(statusState && statusState.mode ? statusState.mode : "").trim().toLowerCase();
+					const text = String(s.lastError || "");
+					const suppress =
+						(mode === "downloadable" || mode === "downloading" || mode === "ready") &&
+						(/(requires?\s+(a\s+)?user\s+gesture|user\s+activation|user\s+interaction|download)/i.test(text));
+					if (!suppress) setText(errEl, s.lastError);
+				}
 			})();
 			try {
 				return await refreshStatusPromise;

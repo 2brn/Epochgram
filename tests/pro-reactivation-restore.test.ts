@@ -273,7 +273,7 @@ describe("license: signed activation certificates", () => {
 		const result = await licenseMethods.applyClaimKey.call(plugin as any, "EPO-FIRST-ACTI-VATI-ON00");
 		expect(result.valid).toBe(true);
 		expect(plugin.settings.proActivatedOnce).toBe(true);
-		expect(plugin.settings.trackChanges).toBe(true);
+		expect(plugin.settings.trackChanges).toBe(false);
 		expect(plugin.settings.similarityUseLinks).toBe(true);
 		expect(plugin.settings.similarityUseTags).toBe(true);
 		expect(plugin.settings.similarityTitleJwThreshold).toBeCloseTo(RESET_PRO_TITLE_JW_THRESHOLD);

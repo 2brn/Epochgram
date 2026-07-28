@@ -42,7 +42,7 @@ const SHARED_CONTEXT_ALLOWED_PLACEHOLDERS = new Set<string>();
 const REDUCE_CONTEXT_ALLOWED_PLACEHOLDERS = new Set<string>();
 const RECORDS_CONTEXT_ALLOWED_PLACEHOLDERS = new Set(["filePath", "fileName", "related"]);
 const EPOCH_CONTEXT_ALLOWED_PLACEHOLDERS = new Set(["related"]);
-const SUPPORTED_LANGUAGES = new Set(["en", "ja", "es"]);
+const SUPPORTED_LANGUAGES = new Set(["de", "en", "es", "fr", "ja"]);
 const PERIOD_ALIASES: Record<string, (typeof PERIOD_ORDER)[number]> = {
 	day: "day",
 	"2days": "2days",
@@ -669,7 +669,7 @@ function validateBlock(name: string, block: unknown, errors: string[], opts?: { 
 	if (defaultMissing || raw.format != null) out.format = normalizeFormat(raw.format);
 	if (defaultMissing || raw.length != null) out.length = normalizeLength(raw.length);
 	if (defaultMissing || raw.preference != null) out.preference = normalizePreference(raw.preference);
-	if (defaultMissing || raw.expectedInputLanguages != null) out.expectedInputLanguages = normalizeLangList(raw.expectedInputLanguages, ["en", "ja", "es"]);
+	if (defaultMissing || raw.expectedInputLanguages != null) out.expectedInputLanguages = normalizeLangList(raw.expectedInputLanguages, ["de", "en", "es", "fr", "ja"]);
 	if (defaultMissing || raw.outputLanguage != null) out.outputLanguage = normalizeLang(raw.outputLanguage);
 	if (defaultMissing || raw.expectedContextLanguages != null) out.expectedContextLanguages = normalizeLangList(raw.expectedContextLanguages, ["en"]);
 	if (defaultMissing || raw.backend != null) out.backend = validateBackendConfig(name, raw.backend, errors);
@@ -706,7 +706,7 @@ function validateBlock(name: string, block: unknown, errors: string[], opts?: { 
 	if (raw.length != null && (typeof raw.length !== "string" || !LENGTH_VALUES.has(raw.length))) errors.push(`${name}.length must be one of: short, medium, long`);
 	if (raw.preference != null && (typeof raw.preference !== "string" || !PREFERENCE_VALUES.has(raw.preference))) errors.push(`${name}.preference must be one of: auto, speed, capability`);
 	if (raw.outputLanguage != null) {
-		if (!normalizeSupportedLanguageCode(raw.outputLanguage)) errors.push(`${name}.outputLanguage must be one of: en, ja, es`);
+		if (!normalizeSupportedLanguageCode(raw.outputLanguage)) errors.push(`${name}.outputLanguage must be one of: de, en, es, fr, ja`);
 	}
 	if (raw.expectedInputLanguages != null && !Array.isArray(raw.expectedInputLanguages)) {
 		errors.push(`${name}.expectedInputLanguages must be a YAML list`);
@@ -715,7 +715,7 @@ function validateBlock(name: string, block: unknown, errors: string[], opts?: { 
 		for (let i = 0; i < raw.expectedInputLanguages.length; i++) {
 			const canonical = normalizeSupportedLanguageCode(raw.expectedInputLanguages[i]);
 			if (!canonical) {
-				errors.push(`${name}.expectedInputLanguages[${i}] must be one of: en, ja, es`);
+				errors.push(`${name}.expectedInputLanguages[${i}] must be one of: de, en, es, fr, ja`);
 				continue;
 			}
 			if (seenInput.has(canonical)) {
@@ -732,7 +732,7 @@ function validateBlock(name: string, block: unknown, errors: string[], opts?: { 
 		for (let i = 0; i < raw.expectedContextLanguages.length; i++) {
 			const canonical = normalizeSupportedLanguageCode(raw.expectedContextLanguages[i]);
 			if (!canonical) {
-				errors.push(`${name}.expectedContextLanguages[${i}] must be one of: en, ja, es`);
+				errors.push(`${name}.expectedContextLanguages[${i}] must be one of: de, en, es, fr, ja`);
 				continue;
 			}
 			if (seenContext.has(canonical)) {

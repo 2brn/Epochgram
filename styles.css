@@ -991,11 +991,11 @@ body.theme-dark .epoch-pro-description {
 }
 
 .epoch-whats-new-view .inline-title {
-  padding-top: 16px;
+  padding-top: 0;
 }
 
 .epoch-whats-new-view .markdown-preview-view.markdown-rendered.node-insert-event.is-readable-line-width.allow-fold-headings.allow-fold-lists.show-indentation-guide {
-  padding: 0;
+  padding: var(--file-margins);
 }
 
 .epoch-whats-new-view .markdown-preview-section > hr,

@@ -343,16 +343,16 @@ AI bridge startup behavior (Verified)
 - When there is queued/in-progress AI work and no client is connected, Epochgram requires an explicit user action (command/status-bar click) to open the bridge page in Chrome.
 - The bridge page delays auto-starting processing for ~3.5s and skips Summarizer detection during that startup grace period (to reduce Chrome crash risk if the tab is closed immediately).
 - The bridge page does not perform language detection.
-  - Bridge YAML language fields (`outputLanguage`, `expectedInputLanguages`, `expectedContextLanguages`) accept only `en`, `ja`, or `es`.
+  - Bridge YAML language fields (`outputLanguage`, `expectedInputLanguages`, `expectedContextLanguages`) accept only `de`, `en`, `es`, `fr`, or `ja`.
   - Summary options:
-    - `summaryOutputLanguage` is user-selectable (default `en`; supported: `en`, `es`, `ja`) and is persisted in plugin settings via the bridge `/api/options` endpoint.
-    - `summaryExpectedInputLanguages` is user-selectable (multi-select; supported: `en`, `es`, `ja`).
-    - `summaryExpectedContextLanguages` is user-selectable (multi-select; supported: `en`, `es`, `ja`).
+    - `summaryOutputLanguage` is user-selectable (default `en`; supported: `de`, `en`, `es`, `fr`, `ja`) and is persisted in plugin settings via the bridge `/api/options` endpoint.
+    - `summaryExpectedInputLanguages` is user-selectable (multi-select; supported: `de`, `en`, `es`, `fr`, `ja`).
+    - `summaryExpectedContextLanguages` is user-selectable (multi-select; supported: `de`, `en`, `es`, `fr`, `ja`).
     - Summarizer `summaryType` and `summaryLength` are user-selectable (type: `tldr`, `teaser`, `key-points`, `headline`; length: `short`, `medium`, `long`; defaults: `headline` + `long`).
   - Epoch options:
-    - `epochOutputLanguage` is user-selectable (default `en`; supported: `en`, `es`, `ja`) and is persisted in plugin settings via the bridge `/api/options` endpoint.
-    - `epochExpectedInputLanguages` is user-selectable (multi-select; supported: `en`, `es`, `ja`).
-    - `epochExpectedContextLanguages` is user-selectable (multi-select; supported: `en`, `es`, `ja`).
+    - `epochOutputLanguage` is user-selectable (default `en`; supported: `de`, `en`, `es`, `fr`, `ja`) and is persisted in plugin settings via the bridge `/api/options` endpoint.
+    - `epochExpectedInputLanguages` is user-selectable (multi-select; supported: `de`, `en`, `es`, `fr`, `ja`).
+    - `epochExpectedContextLanguages` is user-selectable (multi-select; supported: `de`, `en`, `es`, `fr`, `ja`).
     - Summarizer `epochType` and `epochLength` are user-selectable (type: `tldr`, `teaser`, `key-points`, `headline`; length: `short`, `medium`, `long`; defaults: `key-points` + `short`).
 - The bridge page persists its options in localStorage under `epoch_ai_bridge_yaml_v1` and posts the same YAML to `/api/options`; plugin settings persist the sanitized state as `{ settingsYaml, settingsYamlFormatted, resolved }`.
 - The bridge YAML surface includes root summarizer settings plus `reduce`, `records`, and `epochs[]` blocks.
