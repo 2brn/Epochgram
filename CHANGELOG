@@ -1,5 +1,9 @@
 # Epochgram changelog
 
+## [1.8.4] - 2026-07-28
+- Fixed AI bridge model download progress so native Chrome download state now attaches a monitor and updates progress correctly.
+- Normalized native Summarizer fallback language order to prefer `en` before other supported languages.
+
 ## [1.8.3] - 2026-07-28
 - Refined AI bridge language support to cover `de`, `en`, `es`, `fr`, and `ja` across settings validation, runtime defaults, and docs.
 - Updated the AI bridge to pause jobs until the native model is ready and clear download-related errors when the model state changes.
