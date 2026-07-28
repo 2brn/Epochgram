@@ -131,10 +131,12 @@ export const AI_BRIDGE_SCRIPT_PART1_CHUNK_B = String.raw`
 		if (typeof progress !== "number") return;
 		const normalized = normalizeProgressOrNull(progress);
 		if (normalized == null) return;
-		statusState.progress = normalized;
-		if (statusState.mode === "downloading") {
-			renderStatusText();
+		if (statusState.mode !== "downloading") {
+			setStatusMode("downloading", { progress: normalized });
+			return;
 		}
+		statusState.progress = normalized;
+		renderStatusText();
 	}
 
 	function setModelReadyStatus() {

@@ -2,6 +2,7 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 
 	let detectInFlight = null;
 	let cloudPolyfillLoadPromise = null;
+	let nativeDownloadMonitorPromise = null;
 
 	function normalizeBackendMode(raw) {
 		return String(raw || "").trim().toLowerCase() === "cloud" ? "cloud" : "native";
@@ -198,6 +199,41 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 		}
 	}
 
+	function buildNativeMonitorOptions(kind) {
+		const langs = readSelectedBridgeLanguages(kind || "summary");
+		return {
+			outputLanguage: langs.outputLanguage || "en",
+			expectedInputLanguages: [langs.expectedInputLanguages[0] || "en"],
+			expectedContextLanguages: [langs.expectedContextLanguages[0] || "en"],
+			monitor(m) {
+				try {
+					m.addEventListener("downloadprogress", (e) => {
+						const agg = aggregateDownloadProgressEvent(e || {});
+						const normalized = applyDownloadProgress(agg.progress, false, { reset: agg.reset });
+						if (typeof normalized === "number") setModelDownloadingStatus(normalized);
+					});
+				} catch { void 0; }
+			}
+		};
+	}
+
+	function ensureNativeDownloadMonitor(kind) {
+		if (nativeDownloadMonitorPromise) return nativeDownloadMonitorPromise;
+		nativeDownloadMonitorPromise = (async () => {
+			try {
+				if (!("Summarizer" in window)) throw new Error("Summarizer API missing");
+				const options = buildNativeMonitorOptions(kind || "summary");
+				await Summarizer.create(options);
+				setModelReadyStatus();
+			} catch (e) {
+				void e;
+			} finally {
+				nativeDownloadMonitorPromise = null;
+			}
+		})();
+		return nativeDownloadMonitorPromise;
+	}
+
 	async function detectInner() {
 		const backend = getRootBackendConfig();
 		const backendMode = normalizeBackendMode(backend && backend.mode ? backend.mode : "native");
@@ -232,6 +268,7 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 				setDownloadableStatus();
 				return;
 			}
+			void ensureNativeDownloadMonitor("summary");
 			setStatusMode("downloading");
 			return;
 		}
@@ -361,13 +398,13 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 				: readMulti(ctxEl);
 			return {
 				outputLanguage: outLang,
-				expectedInputLanguages: normalizeSupportedLanguageList(inRaw, ["de", "en", "es", "fr", "ja"]),
+				expectedInputLanguages: normalizeSupportedLanguageList(inRaw, ["en", "de", "es", "fr", "ja"]),
 				expectedContextLanguages: normalizeSupportedLanguageList(ctxRaw, ["en"]),
 			};
 		} catch {
 			return {
 				outputLanguage: "en",
-				expectedInputLanguages: ["de", "en", "es", "fr", "ja"],
+				expectedInputLanguages: ["en", "de", "es", "fr", "ja"],
 				expectedContextLanguages: ["en"],
 			};
 		}
@@ -444,7 +481,8 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 		if (sharedCtx.trim()) options.sharedContext = sharedCtx;
 
 		try {
-			return await summarizerApi.create(options);
+			const created = await summarizerApi.create(options);
+			return created;
 		} catch (e) {
 			const msg = String(e && e.message ? e.message : e);
 			if (/requested language options are not supported/i.test(msg)) {
