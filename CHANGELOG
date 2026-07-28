@@ -1,5 +1,11 @@
 # Epochgram changelog
 
+## [1.8.3] - 2026-07-28
+- Refined AI bridge language support to cover `de`, `en`, `es`, `fr`, and `ja` across settings validation, runtime defaults, and docs.
+- Updated the AI bridge to pause jobs until the native model is ready and clear download-related errors when the model state changes.
+- Stopped enabling track changes automatically on first Pro activation.
+- Refined What's New view spacing and synchronized repo context/docs updates.
+
 ## [1.8.2] - 2026-07-27
 - Fixed What's New startup selection: once a newer version page has already been shown, older pages are no longer auto-shown.
 

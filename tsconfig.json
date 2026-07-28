@@ -1,8 +1,7 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
 	"paths": {
-		"utils": ["src/utils.ts"]
+    "utils": ["./src/utils.ts"]
 	},
     "inlineSourceMap": true,
     "inlineSources": true,
@@ -10,7 +9,7 @@
     "target": "ES6",
     "allowJs": true,
     "noImplicitAny": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "isolatedModules": true,
     "strictNullChecks": true,
 	"strict": true,
