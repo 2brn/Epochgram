@@ -1,5 +1,9 @@
 # Epochgram changelog
 
+## [1.8.5] - 2026-07-29
+- Hardened npm dependency security with overrides and lockfile updates to clear audit vulnerabilities.
+- Added macOS-specific pin badge label alignment.
+
 ## [1.8.4] - 2026-07-28
 - Fixed AI bridge model download progress so native Chrome download state now attaches a monitor and updates progress correctly.
 - Normalized native Summarizer fallback language order to prefer `en` before other supported languages.
