@@ -98,6 +98,7 @@ export async function epochViewOnOpen(_view: unknown): Promise<void> {
 	view.startupRefocusDone = false;
 	view.container = view.contentEl.createDiv("epoch-container");
 	const root = view.container.createDiv("epoch-root");
+	if (Platform.isMacOS) root.classList.add("is-macos");
 	view.rootEl = root;
 	view.controlsEl = root.createDiv("epoch-controls");
 	view.reviewFilterMode = view.plugin?.viewPreferences?.showDraftsOnly === true ? "draft" : "reviewed+draft";

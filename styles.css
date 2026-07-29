@@ -505,6 +505,11 @@ body.theme-light .epoch-license-section {
   transition: transform 140ms ease;
 }
 
+.epoch-root.is-macos .epoch-pin-badge-label {
+  right: 10.5px;
+  top: 1.5px;
+}
+
 .epoch-root .epoch-pin-badge:hover .epoch-pin-badge-label,
 .epoch-root .epoch-pin-badge:focus-visible .epoch-pin-badge-label,
 .epoch-root .epoch-pin-badge.is-menu-hovered .epoch-pin-badge-label {
