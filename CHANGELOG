@@ -1,5 +1,10 @@
 # Epochgram changelog
 
+## [1.8.7] - 2026-07-30
+- Refined Pro settings defaults and reset behavior so activation state stays predictable.
+- Fixed calendar-sync UI so Pro-off values stay blank until Pro is active again, while preserving restored values.
+- Added a regression test covering the Pro-off calendar-sync UI behavior.
+
 ## [1.8.6] - 2026-07-30
 - Added quick command-palette toggles for timeline filters (reviewed, tracked changes, content dates, attachments, Epochs).
 - Updated UI/docs terminology from parsed content to content dates and aligned command wording.
