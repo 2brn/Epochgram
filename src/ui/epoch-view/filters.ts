@@ -208,7 +208,7 @@ export function epochViewUpdateTrackedFilterButtonUi(view: unknown): void {
 	const button = v.buttonEdits;
 	if (!button) return;
 	const showTracked = !!v.showTrackedChanges;
-	const tooltip = showTracked ? "Tracked changes" : "No tracked changes";
+	const tooltip = showTracked ? "Show tracked changes" : "No tracked changes";
 	try {
 		button.setAttribute("aria-label", tooltip);
 	} catch {
@@ -221,7 +221,7 @@ export function epochViewUpdateAttachmentsFilterButtonUi(view: unknown): void {
 	const button = v.buttonAttachments;
 	if (!button) return;
 	const showAttachments = !!v.showAttachments;
-	const tooltip = showAttachments ? "Attachments" : "No attachments";
+	const tooltip = showAttachments ? "Show attachments" : "No attachments";
 	try {
 		button.setAttribute("aria-label", tooltip);
 	} catch {
@@ -234,7 +234,7 @@ export function epochViewUpdateReviewFilterButtonUi(view: unknown, mode: "review
 	const button = v.buttonReview;
 	if (!button) return;
 	const iconEl = button.querySelector<HTMLElement>(".epoch-filter-button-icon");
-	const tooltip = mode === "draft" ? "Drafts" : "Reviewed & Drafts";
+	const tooltip = mode === "draft" ? "Drafts only" : "Reviewed & drafts";
 	try {
 		button.setAttribute("aria-label", tooltip);
 	} catch {
@@ -256,8 +256,8 @@ export function epochViewUpdateParsedFilterButtonUi(view: unknown): void {
 	const iconEl = button.querySelector<HTMLElement>(".epoch-filter-button-icon");
 	const showParsed = !!v.showContentDates;
 	const tooltip = !showParsed
-		? "No parsed content"
-		: "Parsed content";
+		? "No content dates"
+		: "Show content dates";
 	try {
 		button.setAttribute("aria-label", tooltip);
 	} catch {

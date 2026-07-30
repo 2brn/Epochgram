@@ -25,6 +25,26 @@ Commands are registered in `plugin/lifecycle.ts` (export command via `plugin/exp
   - Opens/reveals Epochgram and opens the session-only timeline search popup.
   - When the search input is empty, suggestions prefer recently opened files (when available).
 
+- `toggle-reviewed-only` — “Toggle reviewed only”
+  - Always available.
+  - Opens/reveals Epochgram (without re-snapping the timeline) and toggles the review filter between `Reviewed & drafts` and `Drafts only`.
+
+- `toggle-content-dates` — “Toggle content dates”
+  - Always available.
+  - Opens/reveals Epochgram (without re-snapping the timeline) and toggles the content-dates filter.
+
+- `toggle-attachments` — “Toggle attachments”
+  - Always available.
+  - Opens/reveals Epochgram (without re-snapping the timeline) and toggles the attachments filter.
+
+- `toggle-tracked-changes` — “Toggle tracked changes”
+  - Pro + track changes enabled.
+  - Opens/reveals Epochgram (without re-snapping the timeline) and toggles the tracked-changes filter.
+
+- `toggle-epochs` — “Toggle Epochs”
+  - Pro + `generateEpochs === true`.
+  - Opens/reveals Epochgram (without re-snapping the timeline) and toggles Epochs view.
+
 - `open-ai-bridge` — “Open AI bridge“
   - Pro + Desktop.
   - Opens the local AI bridge page used by AI summaries/epochs workflows.

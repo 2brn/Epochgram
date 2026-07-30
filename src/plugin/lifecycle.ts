@@ -43,6 +43,14 @@ type LifecycleWorkspaceLike = {
 	getLeavesOfType?: (type: string) => LifecycleLeafLike[];
 };
 
+type EpochTimelineViewCommandsLike = {
+	toggleReviewedOnly?: () => void;
+	toggleContentDates?: () => void;
+	toggleAttachments?: () => void;
+	toggleTrackedChanges?: () => void;
+	toggleEpochsView?: () => void;
+};
+
 type LifecycleRuntime = EpochPlugin & {
 	refreshAiBridgeStatusBar?: () => void;
 	refreshAiBridgeProgress?: () => void;
@@ -300,6 +308,90 @@ export const lifecycleMethods: LifecycleMethods = {
 			id: "search-timeline",
 			name: "Search timeline",
 			callback: wrapNoticeError("Epochgram: Search timeline failed", () => this.openTimelineSearch())
+		});
+
+		const withEpochTimelineView = async (run: (view: EpochTimelineViewCommandsLike) => void): Promise<void> => {
+			await this.openEpochView({ skipSnap: true });
+			const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_EPOCH);
+			const leaf = Array.isArray(leaves) && leaves.length > 0 ? leaves[0] : null;
+			const view = (leaf?.view ?? null) as unknown as EpochTimelineViewCommandsLike | null;
+			if (!view) return;
+			run(view);
+		};
+
+		this.addCommand({
+			id: "toggle-reviewed-only",
+			name: "Toggle reviewed only",
+			callback: () => {
+				void wrapNoticeError("Epochgram: Toggle reviewed only failed", async () => {
+					await withEpochTimelineView((view) => {
+						view.toggleReviewedOnly?.();
+					});
+				})();
+			}
+		});
+
+		this.addCommand({
+			id: "toggle-content-dates",
+			name: "Toggle content dates",
+			callback: () => {
+				void wrapNoticeError("Epochgram: Toggle content dates failed", async () => {
+					await withEpochTimelineView((view) => {
+						view.toggleContentDates?.();
+					});
+				})();
+			}
+		});
+
+		this.addCommand({
+			id: "toggle-attachments",
+			name: "Toggle attachments",
+			callback: () => {
+				void wrapNoticeError("Epochgram: Toggle attachments failed", async () => {
+					await withEpochTimelineView((view) => {
+						view.toggleAttachments?.();
+					});
+				})();
+			}
+		});
+
+		this.addCommand({
+			id: "toggle-tracked-changes",
+			name: "Toggle tracked changes",
+			checkCallback: (checking: boolean) => {
+				try {
+					if (!isTrackChangesEffective(this)) return false;
+					if (checking) return true;
+					void wrapNoticeError("Epochgram: Toggle tracked changes failed", async () => {
+						await withEpochTimelineView((view) => {
+							view.toggleTrackedChanges?.();
+						});
+					})();
+					return true;
+				} catch {
+					return false;
+				}
+			}
+		});
+
+		this.addCommand({
+			id: "toggle-epochs",
+			name: "Toggle Epochs",
+			checkCallback: (checking: boolean) => {
+				try {
+					if (!hasVerifiedEntitlement(this)) return false;
+					if (this.settings.generateEpochs !== true) return false;
+					if (checking) return true;
+					void wrapNoticeError("Epochgram: Toggle Epochs failed", async () => {
+						await withEpochTimelineView((view) => {
+							view.toggleEpochsView?.();
+						});
+					})();
+					return true;
+				} catch {
+					return false;
+				}
+			}
 		});
 
 		this.addCommand({

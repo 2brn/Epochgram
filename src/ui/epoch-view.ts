@@ -168,6 +168,26 @@ export class EpochView extends ItemView {
 		this.openSearchModal();
 	}
 
+	public toggleReviewedOnly(): void {
+		this.cycleReviewFilterMode();
+	}
+
+	public toggleContentDates(): void {
+		this.setShowContentDates(!this.showContentDates);
+	}
+
+	public toggleAttachments(): void {
+		this.setShowAttachments(!this.showAttachments);
+	}
+
+	public toggleTrackedChanges(): void {
+		this.setShowTrackedChanges(!this.showTrackedChanges);
+	}
+
+	public toggleEpochsView(): void {
+		this.setShowEpochsView(!this.showEpochsView);
+	}
+
 	private shouldSuppressExternalAutoScroll(): boolean {
 		try {
 			if (this.searchModalOpen) return true;

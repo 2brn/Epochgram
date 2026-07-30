@@ -76,7 +76,7 @@ Manual install
 | **Click** date | Open the daily note |
 | **Ctrl/Cmd+Click** record | Open the file in a new tab |
 | **Right-Click** or **Long-Tap** record or date | Open the context menu |
-| **Right-Click** or **Long-Tap** empty space | Toggle Epochs view (Pro) |
+| **Right-Click** or **Long-Tap** empty space | Toggle Epochs (Pro) |
 | **Double-Click** empty space | Scroll to Today |
 | **Double-Click** date | Create a new daily note |
 | **Wheel** or **Pan** | Scroll |
@@ -103,7 +103,7 @@ The timeline is a scrollable, zoomable surface that collects records from all fi
 | Source | Description |
 | --- | --- |
 | <img src="images/pen.svg" width="16" height="16" alt=""> **Tracked changes** | Per-block edit history excluding YAML. Requires **⛭ Track changes** (Pro). |
-| <img src="images/calendar.svg" width="16" height="16" alt=""> **Content date** | Parsed content date (ranges), including <img src="images/recurring.svg" width="16" height="16" alt=""> **Recurring dates** (Pro). |
+| <img src="images/calendar.svg" width="16" height="16" alt=""> **Content dates** | Content dates (ranges), including <img src="images/recurring.svg" width="16" height="16" alt=""> **Recurring dates** (Pro). |
 | -- Anchors -- | |
 | **Filename date** | Parsed filename date. |
 | **Frontmatter date** | YAML **⛭ Anchor property**. |
@@ -221,8 +221,16 @@ You can show or hide specific types of records using collapsible filters under t
 | <img src="images/scan-eye.svg" width="18" height="18" alt=""> | Show drafts only. |
 | <img src="images/history.svg" width="18" height="18" alt=""> | Show tracked changes (Pro). |
 | <img src="images/calendar.svg" width="18" height="18" alt=""> | Show content dates, ranges, and recurring. |
-| <img src="images/paperclip.svg" width="18" height="18" alt=""> | Show non-text files. |
-| <img src="images/hourglass.svg" width="18" height="18" alt=""> | Toggle Epochs view (Pro). |
+| <img src="images/paperclip.svg" width="18" height="18" alt=""> | Show attachments. |
+| <img src="images/hourglass.svg" width="18" height="18" alt=""> | Toggle Epochs (Pro). |
+
+> [!TIP]
+> Toggle filters with commands:</br>
+> **⌘ Epochgram: Toggle reviewed only**</br>
+> **⌘ Epochgram: Toggle tracked changes**</br>
+> **⌘ Epochgram: Toggle content dates**</br>
+> **⌘ Epochgram: Toggle attachments**</br>
+> **⌘ Epochgram: Toggle Epochs**
 
 ## Search
 

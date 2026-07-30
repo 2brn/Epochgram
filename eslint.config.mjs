@@ -35,6 +35,48 @@ const epochgramUiPrefixCase = {
   },
 };
 
+const epochUiTermCase = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      useEpochCase: "Use 'Epoch' or 'Epochs' (not lowercase) in UI text.",
+    },
+  },
+  create(context) {
+    const uiKeys = new Set(["name", "label", "tooltip", "title", "description", "placeholder", "text"]);
+
+    const getPropertyName = (node) => {
+      const p = node?.parent;
+      if (!p || p.type !== "Property") return "";
+      const key = p.key;
+      if (!key) return "";
+      if (key.type === "Identifier") return key.name || "";
+      if (key.type === "Literal" && typeof key.value === "string") return key.value;
+      return "";
+    };
+
+    const check = (node, value) => {
+      if (typeof value !== "string") return;
+      const propName = getPropertyName(node);
+      if (!uiKeys.has(propName)) return;
+      if (!/\bepochs?\b/.test(value)) return;
+      context.report({ node, messageId: "useEpochCase" });
+    };
+
+    return {
+      Literal(node) {
+        check(node, node.value);
+      },
+      TemplateLiteral(node) {
+        const cooked = node.quasis?.[0]?.value?.cooked;
+        const raw = node.quasis?.[0]?.value?.raw;
+        check(node, cooked ?? raw ?? null);
+      },
+    };
+  },
+};
+
 export default defineConfig([
   {
     ignores: [
@@ -63,6 +105,7 @@ export default defineConfig([
       "epochgram-internal": {
         rules: {
           "ui-prefix-case": epochgramUiPrefixCase,
+          "ui-epoch-term-case": epochUiTermCase,
         },
       },
     },
@@ -74,10 +117,11 @@ export default defineConfig([
           enforceCamelCaseLower: true,
           brands: ["Epochgram", "Pro", "Obsidian", "Google", "Chrome"],
           acronyms: ["AI", "ID", "YAML", "ICS"],
-          ignoreRegex: ["^Epochgram:\\s"],
+          ignoreRegex: ["^Epochgram:\\s", "\\bEpochs?\\b"],
         },
       ],
       "epochgram-internal/ui-prefix-case": "error",
+      "epochgram-internal/ui-epoch-term-case": "error",
     },
   }
 ]);

@@ -254,7 +254,25 @@ export function openSearchModal(view: SearchViewLike): void {
 			searchQuery: q,
 		} as unknown) as EpochCanvas;
 		const epochsViewActive = canvas.epochsView === true;
-		const currentEpochBucket = String(canvas.epochsViewBucket ?? "");
+		const currentEpochBucket =
+			typeof canvas.epochsViewBucket === "string"
+				? canvas.epochsViewBucket
+				: typeof canvas.epochsViewBucket === "number"
+					? String(canvas.epochsViewBucket)
+					: "";
+		const normalizeEpochBucket = (value: unknown): string => {
+			if (typeof value === "string") return value;
+			if (typeof value === "number") return String(value);
+			return "";
+		};
+		const isEpochPathAllowed = (filePath: string, epochBucket?: unknown): boolean => {
+			const fp = String(filePath || "");
+			const isEpoch = fp.startsWith("epoch://");
+			if (!isEpoch) return true;
+			if (!epochsViewActive) return false;
+			if (!currentEpochBucket) return true;
+			return normalizeEpochBucket(epochBucket) === currentEpochBucket;
+		};
 		const hiddenOnly = (() => {
 			try {
 				const toks = String(parsed?.fuzzyText || "")
@@ -276,6 +294,7 @@ export function openSearchModal(view: SearchViewLike): void {
 				if (excludeFiles.has(fp)) continue;
 				const best = bestByPath.get(fp);
 				if (!best?.entry) continue;
+				if (!isEpochPathAllowed(fp, best.entry.epochBucket)) continue;
 				excludeFiles.add(fp);
 				out.push({ entry: best.entry, label: labelForEntry(best.entry, fp) });
 			}
@@ -299,6 +318,7 @@ export function openSearchModal(view: SearchViewLike): void {
 					if (out.length >= limit) break;
 					const fp = String(e.file ?? "");
 					if (!fp) continue;
+					if (!isEpochPathAllowed(fp, e.epochBucket)) continue;
 					if (excludeFiles.has(fp)) continue;
 					excludeFiles.add(fp);
 					out.push({ entry: e, label: labelForEntry(e, fp) });
@@ -326,6 +346,7 @@ export function openSearchModal(view: SearchViewLike): void {
 					const fp = String(e.file ?? "");
 					if (!fp) continue;
 					const isEpoch = fp.startsWith("epoch://");
+					if (!isEpochPathAllowed(fp, e.epochBucket)) continue;
 					if (epochsViewActive && isEpoch && currentEpochBucket) {
 						const b = String(e.epochBucket ?? "");
 						if (b !== currentEpochBucket) continue;

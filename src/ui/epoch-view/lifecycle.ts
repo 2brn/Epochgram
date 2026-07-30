@@ -132,7 +132,7 @@ export async function epochViewOnOpen(_view: unknown): Promise<void> {
 		notifyProFeature: (message) => void view.plugin?.notifyProFeature?.(message),
 		config: {
 			label: "Review",
-			tooltip: "Reviewed & Drafts",
+			tooltip: "Reviewed & drafts",
 			icon: "scan-eye",
 			getValue: () => {
 				return String(view.reviewFilterMode || "reviewed+draft") !== "reviewed+draft";
@@ -150,7 +150,7 @@ export async function epochViewOnOpen(_view: unknown): Promise<void> {
 		notifyProFeature: (message) => void view.plugin?.notifyProFeature?.(message),
 		config: {
 			label: "Edits",
-			tooltip: "Show tracked",
+			tooltip: "Show tracked changes",
 			icon: "history",
 			requiresPro: true,
 			proMessage: "Filtering tracked changes",
@@ -169,8 +169,8 @@ export async function epochViewOnOpen(_view: unknown): Promise<void> {
 		isPro: () => view.isPro(),
 		notifyProFeature: (message) => void view.plugin?.notifyProFeature?.(message),
 		config: {
-			label: "Parsed",
-			tooltip: "Show parsed",
+			label: "Content dates",
+			tooltip: "Show content dates",
 			icon: "file-text",
 			getValue: () => {
 				return !!view.showContentDates;

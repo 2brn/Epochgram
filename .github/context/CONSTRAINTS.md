@@ -21,10 +21,11 @@ When splitting large `*.ts` files, keep the original file as a stable entrypoint
 
 ## Release Packaging Constraint (Verified)
 - Distribution output includes: `main.js`, `manifest.json`, `styles.css` (optional), `README.md`, `versions.json`, `LICENSE`.
-- Production packaging (`scripts/prepare-production.js`) copies those files into `production/epochgram/`.
+- Production packaging (`scripts/prepare-production.js`) copies those files into `production/epochgram/` and updates files in-place without clearing the folder.
+- Production packaging ensures `.hotreload` exists in `production/epochgram/` (created when missing).
 - README image assets are also packaged at `images/*`.
-- Optional local deploy: `scripts/prepare-production.js --deploy-vault` also copies to Obsidian vault plugin folder(s) (auto-detected), e.g. `AKUPARA/.obsidian/plugins/epochgram` and/or `nicolevanderhoeven_202204/.obsidian/plugins/epochgram`.
-  - Auto-detection prefers user vault locations (e.g. under `~/OneDrive/Documents` or `~/Documents`) before falling back to repo-adjacent or drive-root vaults.
+- Optional local deploy: `scripts/prepare-production.js --deploy-vault` also copies to Obsidian vault plugin folder(s) (auto-detected), e.g. `AKUPARA/.obsidian/plugins/epochgram`.
+  - Auto-detection checks only `Docs/Obsidian/AKUPARA/.obsidian/plugins` across Windows drive letters `C:`–`Z:`.
   - Override path with `EPOCHGRAM_OBSIDIAN_PLUGINS_DIR` or `--vault-plugins <path>`.
   - Deploy preserves an existing `data.json` in the target plugin folder.
 - Similarity / ONNX Runtime WASM:
