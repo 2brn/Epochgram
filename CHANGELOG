@@ -1,5 +1,9 @@
 # Epochgram changelog
 
+## [1.8.8] - 2026-07-31
+- Updated the release and production-build workflows to current GitHub Actions versions and Node 24, removing the Node 20 deprecation warning.
+- Kept release packaging behavior aligned with the production build so published bundles stay consistent with local builds.
+
 ## [1.8.7] - 2026-07-30
 - Refined Pro settings defaults and reset behavior so activation state stays predictable.
 - Fixed calendar-sync UI so Pro-off values stay blank until Pro is active again, while preserving restored values.

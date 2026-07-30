@@ -94,19 +94,6 @@ function ensureDir(p) {
 
 function copyFileIfExists(src, dst) {
 	if (!fs.existsSync(src)) return false;
-	if (fs.existsSync(dst)) {
-		try {
-			const srcStat = fs.statSync(src);
-			const dstStat = fs.statSync(dst);
-			if (srcStat.size === dstStat.size) {
-				const srcBuf = fs.readFileSync(src);
-				const dstBuf = fs.readFileSync(dst);
-				if (srcBuf.equals(dstBuf)) return true;
-			}
-		} catch {
-			// ignore and continue with copy
-		}
-	}
 	ensureDir(path.dirname(dst));
 	fs.copyFileSync(src, dst);
 	return true;
@@ -180,9 +167,6 @@ function findDefaultVaultPluginsDirs(repoRoot) {
 
 function replaceDir(dstDir, options = {}) {
 	const preserve = Array.isArray(options.preserve) ? options.preserve : [];
-	const preserveSet = new Set(preserve);
-	const clearOnly = options.clearOnly === true;
-	const noCleanup = options.noCleanup === true;
 	const preserved = new Map();
 	const isSelfDir = (() => {
 		try {
@@ -205,16 +189,8 @@ function replaceDir(dstDir, options = {}) {
 	}
 	// If deploying into the repo directory itself (common when developing inside a vault plugin dir),
 	// never delete the directory. Just overwrite the packaged files in-place.
-	if (fs.existsSync(dstDir) && !isSelfDir && !noCleanup) {
-		if (clearOnly) {
-			for (const name of fs.readdirSync(dstDir)) {
-				if (preserveSet.has(name)) continue;
-				const child = path.join(dstDir, name);
-				fs.rmSync(child, { recursive: true, force: true });
-			}
-		} else {
-			fs.rmSync(dstDir, { recursive: true, force: true });
-		}
+	if (fs.existsSync(dstDir) && !isSelfDir) {
+		fs.rmSync(dstDir, { recursive: true, force: true });
 	}
 	ensureDir(dstDir);
 	if (preserved.size > 0) {
@@ -277,7 +253,6 @@ function touchHotReloadFile(dir) {
 	try {
 		ensureDir(dir);
 		const p = path.join(dir, ".hotreload");
-		if (fs.existsSync(p)) return true;
 		const stamp = new Date().toISOString() + "\n";
 		fs.writeFileSync(p, stamp);
 		return true;
@@ -293,8 +268,7 @@ function main() {
 	const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 
 	const packageDir = path.join(repoRoot, "production", pluginName);
-	const packaged = copyPackagedFiles(repoRoot, packageDir, { noCleanup: true, preserve: ["data.json", ".hotreload"] });
-	touchHotReloadFile(packageDir);
+	const packaged = copyPackagedFiles(repoRoot, packageDir);
 	const packagedFiles = packaged.copiedFiles;
 	const packagedBuildHash = packaged.buildHash;
 
