@@ -1,14 +1,10 @@
 import { AbstractInputSuggest, Notice, Platform, Setting, TFile, TFolder, setIcon, type App, type DropdownComponent, type SliderComponent, type TextComponent } from "obsidian";
 import { formatDate } from "utils";
 import type { EpochPlugin } from "../main";
-import { NOTE_TITLE_SIMILARITY_JW_THRESHOLD } from "../utils";
-import {
-	RESET_PRO_SIMILARITY_THRESHOLD,
-	RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE
-} from "../settings-reset-defaults";
-import { confirmModal, SimilarityModelSuggestModal } from "../ui/modals";
 import { DEFAULT_SETTINGS } from "../settings-model";
+import { confirmModal, SimilarityModelSuggestModal } from "../ui/modals";
 import { registerInfoResetGesture } from "./info-reset-gesture";
+import { getCalendarSyncDisplayValue, getCalendarSyncUrlRows } from "./calendar-sync-ui";
 import { countMissingAiSummaries, hasMissingAiSummariesFast } from "../plugin/ai-summaries/file-jobs";
 import { countMissingEpochsFast } from "../plugin/ai-summaries/epochs";
 import { ensureAiBridgeServerRunning } from "../plugin/ai-summaries/bridge-server";
@@ -521,7 +517,7 @@ export function renderProPanel(
 		const MAX = 1;
 		const round = (raw: number): number => {
 			const n = Number(raw);
-			if (!Number.isFinite(n)) return NOTE_TITLE_SIMILARITY_JW_THRESHOLD;
+			if (!Number.isFinite(n)) return Number(DEFAULT_SETTINGS.similarityTitleJwThreshold);
 			const clamped = Math.max(MIN, Math.min(MAX, n));
 			return Math.round(clamped / STEP) * STEP;
 		};
@@ -529,7 +525,7 @@ export function renderProPanel(
 		const titleThr = canSimilarity
 			? Number.isFinite(rawTitleThr)
 				? round(rawTitleThr)
-				: NOTE_TITLE_SIMILARITY_JW_THRESHOLD
+				: Number(DEFAULT_SETTINGS.similarityTitleJwThreshold)
 			: 0;
 		const setLabel = (val: number) => {
 			const rounded = round(val);
@@ -557,7 +553,12 @@ export function renderProPanel(
 		});
 		registerInfoResetGesture(panel, async () => {
 			if (!canSimilarity) return;
-			const def = NOTE_TITLE_SIMILARITY_JW_THRESHOLD;
+			const def = Number(DEFAULT_SETTINGS.similarityTitleJwThreshold);
+			if (plugin.settings.similarityTitleJwThreshold === def) {
+				if (titleThrSlider) titleThrSlider.setValue(def);
+				setLabel(def);
+				return;
+			}
 			if (titleThrSlider) titleThrSlider.setValue(def);
 			plugin.settings.similarityTitleJwThreshold = def;
 			setLabel(def);
@@ -632,7 +633,12 @@ export function renderProPanel(
 		});
 		registerInfoResetGesture(similarityPanel, async () => {
 			if (!canSimilarity) return;
-			const def = RESET_PRO_SIMILARITY_THRESHOLD;
+			const def = DEFAULT_SETTINGS.similarityThreshold;
+			if (plugin.settings.similarityThreshold === def) {
+				if (similaritySlider) similaritySlider.setValue(def);
+				setSimilarityLabel(def);
+				return;
+			}
 			if (similaritySlider) similaritySlider.setValue(def);
 			plugin.settings.similarityThreshold = def;
 			setSimilarityLabel(def);
@@ -710,7 +716,12 @@ export function renderProPanel(
 		});
 		registerInfoResetGesture(zeroShotPanel, async () => {
 			if (!canSimilarity) return;
-			const def = RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE;
+			const def = DEFAULT_SETTINGS.similarityZeroShotMinScore ?? 0;
+			if (plugin.settings.similarityZeroShotMinScore === def) {
+				if (zeroShotSlider) zeroShotSlider.setValue(def);
+				setLabel(def);
+				return;
+			}
 			if (zeroShotSlider) zeroShotSlider.setValue(def);
 			plugin.settings.similarityZeroShotMinScore = def;
 			setLabel(def);
@@ -956,7 +967,7 @@ export function renderProPanel(
 		};
 
 		const currentUrls = normalizeStoredUrls();
-		const urlRows = currentUrls.length > 0 ? [...currentUrls, ""] : [""];
+		const urlRows = getCalendarSyncUrlRows(canCalendarSync, currentUrls);
 		const calendarLinksSetting = markLockedRow(new Setting(calendarSection)
 			.setName("ICS link")
 			.setDesc(canCalendarSync ? "" : "Requires Epochgram Pro."));
@@ -976,7 +987,7 @@ export function renderProPanel(
 				text.inputEl.classList.add("epoch-calendar-link-input");
 				text
 					.setPlaceholder("https://example.com/calendar.ics")
-					.setValue(value)
+					.setValue(canCalendarSync ? value : "")
 					.setDisabled(!canCalendarSync)
 					.onChange((changed) => {
 						const normalized = String(changed ?? "").trim();
@@ -1062,8 +1073,13 @@ export function renderProPanel(
 		});
 		registerInfoResetGesture(periodSetting, async () => {
 			if (!canCalendarSync) return;
-			plugin.settings.calendarSyncPeriod = "manual";
-			if (calendarPeriodDropdown) calendarPeriodDropdown.setValue("manual");
+			const def = "manual";
+			if (plugin.settings.calendarSyncPeriod === def) {
+				if (calendarPeriodDropdown) calendarPeriodDropdown.setValue(def);
+				return;
+			}
+			plugin.settings.calendarSyncPeriod = def;
+			if (calendarPeriodDropdown) calendarPeriodDropdown.setValue(def);
 			await plugin.onSettingsChanged("calendarSyncPeriod");
 		});
 
@@ -1077,7 +1093,7 @@ export function renderProPanel(
 			new FolderPathSuggest(app, text.inputEl);
 			text
 				.setPlaceholder(canCalendarSync ? String(plugin.getDailyNoteFolder() || "/") : "")
-				.setValue(canCalendarSync ? folderPending : "")
+				.setValue(getCalendarSyncDisplayValue(canCalendarSync, String(plugin.settings.calendarSyncFolder ?? ""), folderPending))
 				.setDisabled(!canCalendarSync)
 				.onChange((value) => {
 					folderPending = String(value ?? "");
@@ -1105,7 +1121,7 @@ export function renderProPanel(
 			new FilePathSuggest(app, text.inputEl);
 			text
 				.setPlaceholder("")
-				.setValue(canCalendarSync ? templatePending : "")
+				.setValue(getCalendarSyncDisplayValue(canCalendarSync, String(plugin.settings.calendarSyncTemplatePath ?? ""), templatePending))
 				.setDisabled(!canCalendarSync)
 				.onChange((value) => {
 					templatePending = String(value ?? "");

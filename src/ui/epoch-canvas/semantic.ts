@@ -1,7 +1,8 @@
-import { canonicalizeTopicTerm, isNoTopicSentinel, NOTE_TITLE_SIMILARITY_JW_THRESHOLD } from "utils";
+import { canonicalizeTopicTerm, isNoTopicSentinel } from "utils";
 
 import type { EpochCanvas } from "../epoch-canvas";
 import type { EpochPlugin } from "../../main";
+import { DEFAULT_SETTINGS } from "../../settings-model";
 import { getEffectiveZeroShotMinScore, hasSimilarityAccess } from "../../plugin/pro-feature-state";
 import { embeddingsSimilarityEnabled, isTopicSimilarityEnabled } from "../../plugin/similarity/config";
 
@@ -400,7 +401,7 @@ export function refreshSemanticRelatedForActiveFile(canvas: EpochCanvas, force: 
 	const rawTitleThr = Number(c?.plugin?.settings?.similarityTitleJwThreshold);
 	const titleThr = Number.isFinite(rawTitleThr)
 		? Math.max(0, Math.min(1, rawTitleThr))
-		: NOTE_TITLE_SIMILARITY_JW_THRESHOLD;
+		: Number(DEFAULT_SETTINGS.similarityTitleJwThreshold);
 	const zeroShotMinRaw = Number(c?.plugin?.settings?.similarityZeroShotMinScore ?? 0);
 	const zeroShotMin = Number.isFinite(zeroShotMinRaw) ? Math.max(0, Math.min(1, zeroShotMinRaw)) : 0;
 	const plugin = asEpochPlugin(c.plugin);

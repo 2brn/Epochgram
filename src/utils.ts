@@ -265,7 +265,6 @@ export function parseDateFromDailyNoteFormat(text: string, format: string): stri
 
 // Title-similarity (Jaro–Winkler) constants.
 // Kept here so both semantic related notes and mark inheritance can share the same behavior.
-export const NOTE_TITLE_SIMILARITY_JW_THRESHOLD = 0.85;
 export const NOTE_TITLE_SIMILARITY_MAX_LEN_DIFF = 14;
 const NOTE_TITLE_SIMILARITY_WINKLER_P = 0.1;
 const NOTE_TITLE_SIMILARITY_WINKLER_MAX_PREFIX = 8;

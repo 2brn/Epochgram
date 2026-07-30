@@ -21,6 +21,10 @@ export function renderGeneralViewSettings(containerEl: HTMLElement, plugin: Epoc
 		});
 	registerInfoResetGesture(openOnStartupSetting, async () => {
 		const def = DEFAULT_SETTINGS.openEpochViewOnStartup;
+		if (plugin.settings.openEpochViewOnStartup === def) {
+			if (openOnStartupToggle) openOnStartupToggle.setValue(def);
+			return;
+		}
 		if (openOnStartupToggle) openOnStartupToggle.setValue(def);
 		plugin.settings.openEpochViewOnStartup = def;
 		await plugin.onSettingsChanged("openEpochViewOnStartup");
@@ -41,6 +45,10 @@ export function renderGeneralViewSettings(containerEl: HTMLElement, plugin: Epoc
 		});
 	registerInfoResetGesture(enableAnimationSetting, async () => {
 		const def = DEFAULT_SETTINGS.enableAnimation;
+		if (plugin.settings.enableAnimation === def) {
+			if (enableAnimationToggle) enableAnimationToggle.setValue(def);
+			return;
+		}
 		if (enableAnimationToggle) enableAnimationToggle.setValue(def);
 		plugin.settings.enableAnimation = def;
 		await plugin.onSettingsChanged("enableAnimation");
@@ -163,6 +171,10 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 	}
 	registerInfoResetGesture(trackChangesSetting, async () => {
 		const def = DEFAULT_SETTINGS.trackChanges === true;
+		if (plugin.settings.trackChanges === def) {
+			if (trackChangesToggle) trackChangesToggle.setValue(canTrackChanges ? def : false);
+			return;
+		}
 		if (trackChangesToggle) trackChangesToggle.setValue(canTrackChanges ? def : false);
 		if (!canTrackChanges) return;
 		plugin.settings.trackChanges = def;
@@ -188,6 +200,10 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 		});
 	registerInfoResetGesture(anchorMdateSetting, async () => {
 		const def = DEFAULT_SETTINGS.anchorMdate === true;
+		if (plugin.settings.anchorMdate === def) {
+			if (anchorMdateToggle) anchorMdateToggle.setValue(def);
+			return;
+		}
 		if (anchorMdateToggle) anchorMdateToggle.setValue(def);
 		plugin.settings.anchorMdate = def;
 		await plugin.onSettingsChanged("anchorMdate");
@@ -224,6 +240,12 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 		});
 	registerInfoResetGesture(yamlDatePropSetting, async () => {
 		const def = DEFAULT_SETTINGS.yamlDateProperty;
+		if (plugin.settings.yamlDateProperty === def) {
+			if (yamlDatePropText) yamlDatePropText.setValue(def);
+			yamlDatePropPending = def;
+			anchorMdateSetting.setDesc(getAnchorMdateDesc());
+			return;
+		}
 		if (yamlDatePropText) yamlDatePropText.setValue(def);
 		yamlDatePropPending = def;
 		plugin.settings.yamlDateProperty = def;
@@ -261,6 +283,11 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 		});
 	registerInfoResetGesture(yamlDescriptionPropSetting, async () => {
 		const def = DEFAULT_SETTINGS.yamlDescriptionProperty;
+		if (plugin.settings.yamlDescriptionProperty === def) {
+			if (yamlDescriptionPropText) yamlDescriptionPropText.setValue(def);
+			yamlDescriptionPropPending = def;
+			return;
+		}
 		if (yamlDescriptionPropText) yamlDescriptionPropText.setValue(def);
 		yamlDescriptionPropPending = def;
 		plugin.settings.yamlDescriptionProperty = def;
@@ -282,6 +309,10 @@ export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlu
 		});
 	registerInfoResetGesture(parseDatesInFrontmatterSetting, async () => {
 		const def = DEFAULT_SETTINGS.parseDatesInFrontmatter === true;
+		if (plugin.settings.parseDatesInFrontmatter === def) {
+			if (parseDatesInFrontmatterToggle) parseDatesInFrontmatterToggle.setValue(def);
+			return;
+		}
 		if (parseDatesInFrontmatterToggle) parseDatesInFrontmatterToggle.setValue(def);
 		plugin.settings.parseDatesInFrontmatter = def;
 		await plugin.onSettingsChanged("parseDatesInFrontmatter");

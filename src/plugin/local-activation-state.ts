@@ -35,7 +35,6 @@ const SYNC_SAFE_SETTING_KEYS = [
 	"calendarSyncPeriod",
 	"calendarSyncFolder",
 	"calendarSyncTemplatePath",
-	"proActivatedOnce",
 	"completedMigrations",
 	"whatsNewShownVersions",
 	"whatsNewOptOut",

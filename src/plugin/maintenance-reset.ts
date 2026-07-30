@@ -17,7 +17,7 @@ import { computeRebuildGating } from "./maintenance-gating";
 import type { ResetSelection } from "./maintenance-types";
 import { VIEW_TYPE_EPOCH } from "../ui/epoch-view-mode";
 import { DEFAULT_SETTINGS } from "../settings-model";
-import { hasVerifiedEntitlement, isTrackChangesEffective } from "./pro-feature-state";
+import { isTrackChangesEffective } from "./pro-feature-state";
 
 type ThrottleState = {
 	timerId?: unknown;
@@ -489,7 +489,6 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 			const activationStatus = options.keepLicense ? String(plugin.settings.activationStatus ?? "") : "inactive";
 			const lastValidationAt = options.keepLicense ? String(plugin.settings.lastValidationAt ?? "") : "";
 			const lastValidatedAt = options.keepLicense ? String(settingsRuntime.lastValidatedAt ?? "") : "";
-			const proActivatedOnce = options.keepLicense ? plugin.settings.proActivatedOnce === true : false;
 			const aiBridgeServer = plugin.settings.aiBridgeServer;
 			const aiBridgeOptions = plugin.settings.aiBridgeOptions;
 			try {
@@ -502,7 +501,6 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 					activationStatus,
 					lastValidationAt,
 					lastValidatedAt,
-					proActivatedOnce
 				});
 				if (aiBridgeServer) plugin.settings.aiBridgeServer = aiBridgeServer;
 				if (aiBridgeOptions) plugin.settings.aiBridgeOptions = aiBridgeOptions;
@@ -510,14 +508,6 @@ export async function runReset(plugin: EpochPlugin, sel: ResetSelection, options
 					await plugin.refreshLicenseState(false);
 				} catch {
 					// ignore
-				}
-			} catch {
-				// ignore
-			}
-			try {
-				const { applyProResetDefaults } = await import("../settings-reset-defaults");
-				if (hasVerifiedEntitlement(plugin)) {
-					applyProResetDefaults(plugin.settings);
 				}
 			} catch {
 				// ignore

@@ -373,8 +373,8 @@ Similarity helps find related records. When you open a note, similar records on 
 | **⛭ Links** | Treat notes as related through inbound and outbound links. |
 | **⛭ Tags** | Treat notes as related when they share tags. |
 | **⛭ Title threshold** | Use Jaro–Winkler matching to group notes with similar names or paths. Higher values match more; `0` disables it; `1.0` switches to same-folder matching. |
-| **⛭ Semantic threshold** | Use an embedding [default model](https://huggingface.co/Xenova/all-MiniLM-L6-v2) to find notes with similar meaning across the vault. Useful for notes that describe the same idea in different words. |
-| **⛭ Topic threshold** | Use a zero-shot [default model](https://huggingface.co/MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33) for similarity grouping. When you assign a topic to a note, Epochgram finds related records across the vault. Useful for broad themes like travel, health, or photography, where notes may share meaning without direct links or tags. |
+| **⛭ Semantic threshold** | Use an embedding [default model](https://huggingface.co/Xenova/all-MiniLM-L6-v2) to find notes with similar meaning across the vault. Useful for notes that describe the same idea in different words. Recommended default: 0.85. |
+| **⛭ Topic threshold** | Use a zero-shot [default model](https://huggingface.co/MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33) for similarity grouping. When you assign a topic to a note, Epochgram finds related records across the vault. Useful for broad themes like travel, health, or photography, where notes may share meaning without direct links or tags. Recommended default: 0.85. |
 
 > [!TIP]
 > Use **⛭** to open the model picker, or <img src="images/globe.svg" width="18" height="18" alt=""> to browse Hugging Face models.</br>

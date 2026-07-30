@@ -34,8 +34,6 @@ export interface EpochSettings {
 	calendarSyncPeriod?: "manual" | "startup" | "1m" | "5m" | "15m" | "1h" | "6h" | "24h";
 	calendarSyncFolder?: string;
 	calendarSyncTemplatePath?: string;
-	// Internal flag: used to apply one-time defaults on the first successful Pro activation.
-	proActivatedOnce?: boolean;
 	// Pro-only similarity tuning (undefined => defaults)
 	similarityUseLinks?: boolean;
 	similarityUseTags?: boolean;
@@ -62,12 +60,12 @@ export const DEFAULT_SETTINGS: EpochSettings = {
 	enableAnimation: true,
 	compactModeMinWidthPercent: 30,
 	searchResultsLimit: 7,
-	trackChanges: true,
+	trackChanges: false,
 	anchorMdate: true,
 	timelineFilters: {
 		showDraftsOnly: false,
 		showAttachments: false,
-		showTrackedChanges: true,
+		showTrackedChanges: false,
 		showParsed: true
 	},
 	completedMigrations: [],
@@ -86,10 +84,10 @@ export const DEFAULT_SETTINGS: EpochSettings = {
 	calendarSyncPeriod: "manual",
 	calendarSyncFolder: "",
 	calendarSyncTemplatePath: "",
-	proActivatedOnce: false,
 	similarityEmbeddingModelId: undefined,
 	similarityZeroShotModelId: undefined,
 	similarityThreshold: 0,
+	similarityTitleJwThreshold: 1,
 	similarityZeroShotMinScore: 0,
 	aiBridgeOptions: undefined,
 	aiBridgeServer: undefined,

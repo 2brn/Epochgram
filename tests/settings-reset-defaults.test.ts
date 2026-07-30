@@ -1,22 +1,13 @@
 import { describe, expect, it } from "vitest";
-import {
-	applyProResetDefaults,
-	RESET_PRO_TITLE_JW_THRESHOLD,
-	RESET_PRO_SIMILARITY_THRESHOLD,
-	RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE
-} from "../src/settings-reset-defaults";
+import { DEFAULT_SETTINGS } from "../src/settings-model";
 
-describe("settings: reset defaults", () => {
-	it("applies Pro reset defaults (including semantic threshold 0.79)", () => {
-		const settings = {
-			similarityThreshold: 0,
-			similarityZeroShotMinScore: 0,
-			similarityTitleJwThreshold: 0
-		};
-		applyProResetDefaults(settings);
+describe("settings: defaults", () => {
+	it("uses 0 as the default semantic and topic thresholds", () => {
+		expect(DEFAULT_SETTINGS.similarityThreshold).toBeCloseTo(0);
+		expect(DEFAULT_SETTINGS.similarityZeroShotMinScore).toBeCloseTo(0);
+	});
 
-		expect(settings.similarityThreshold).toBeCloseTo(RESET_PRO_SIMILARITY_THRESHOLD);
-		expect(settings.similarityZeroShotMinScore).toBeCloseTo(RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE);
-		expect(settings.similarityTitleJwThreshold).toBeCloseTo(RESET_PRO_TITLE_JW_THRESHOLD);
+	it("uses 1 as the default title similarity threshold", () => {
+		expect(DEFAULT_SETTINGS.similarityTitleJwThreshold).toBe(1);
 	});
 });

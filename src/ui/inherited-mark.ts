@@ -1,9 +1,9 @@
+import { DEFAULT_SETTINGS } from "../settings-model";
 import {
 	getFolderPathFromFilePath,
 	getNoteTitleFromPath,
 	normalizeTitleForSimilarity,
 	jaroWinkler,
-	NOTE_TITLE_SIMILARITY_JW_THRESHOLD,
 	NOTE_TITLE_SIMILARITY_MAX_LEN_DIFF
 } from "../utils";
 import { MAX_MARK_COLORS } from "./mark-colors";
@@ -85,7 +85,7 @@ export function computeInheritedMarkData(args: {
 	const titleJwRaw = Number(args.titleJwThreshold);
 	const titleJwThreshold = Number.isFinite(titleJwRaw)
 		? Math.max(0, Math.min(1, titleJwRaw))
-		: NOTE_TITLE_SIMILARITY_JW_THRESHOLD;
+		: Number(DEFAULT_SETTINGS.similarityTitleJwThreshold);
 	const sameFolderTitleMode = titleJwThreshold >= 1;
 	const titleMaxLenDiff = NOTE_TITLE_SIMILARITY_MAX_LEN_DIFF;
 
@@ -146,9 +146,9 @@ export function computeInheritedMarkData(args: {
 	const PRIORITY: Record<InheritedMarkReason, number> = {
 		link: 1,
 		tag: 2,
-		title: 3,
-		topic: 4,
-		embedding: 5,
+		topic: 3,
+		embedding: 4,
+		title: 5,
 		unknown: 99
 	};
 
@@ -211,8 +211,9 @@ export function computeInheritedMarkData(args: {
 	}
 
 	// Title threshold expansion (Jaro–Winkler).
-	// This helps inherit marks even when vectors are missing for some notes.
-	if (titleSeeds.length > 0 && titleJwThreshold > 0) {
+	// This is a fallback when vector-based similarity is unavailable, so it doesn't
+	// override the semantic threshold when vectors are present.
+	if (titleSeeds.length > 0 && titleJwThreshold > 0 && vectorSeeds.length === 0) {
 		const visibleTitles = new Map<string, string>();
 		const visibleTitleCandidates: string[] = [];
 		for (const p of visible) {

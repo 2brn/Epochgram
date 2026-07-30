@@ -1,8 +1,6 @@
 import type { EpochPlugin } from "../../main";
-import {
-	NOTE_TITLE_SIMILARITY_JW_THRESHOLD,
-	NOTE_TITLE_SIMILARITY_MAX_LEN_DIFF
-} from "../../utils";
+import { DEFAULT_SETTINGS } from "../../settings-model";
+import { NOTE_TITLE_SIMILARITY_MAX_LEN_DIFF } from "../../utils";
 import { getEffectiveSimilarityThreshold, getEffectiveZeroShotMinScore, hasSimilarityAccess } from "../pro-feature-state";
 
 export const DEFAULT_SIMILARITY_MODEL = "Xenova/all-MiniLM-L6-v2";
@@ -10,7 +8,7 @@ export const DEFAULT_ZERO_SHOT_MODEL = "MoritzLaurer/deberta-v3-xsmall-zeroshot-
 
 export const NO_SIMILARITY_MODEL = "__epoch_no_similarity_model__";
 
-export const TITLE_SIMILARITY_THRESHOLD = NOTE_TITLE_SIMILARITY_JW_THRESHOLD;
+export const TITLE_SIMILARITY_THRESHOLD = DEFAULT_SETTINGS.similarityTitleJwThreshold;
 export const TITLE_SIMILARITY_MAX_LEN_DIFF = NOTE_TITLE_SIMILARITY_MAX_LEN_DIFF;
 
 export const SIMILARITY_CONTENT_MAX_CHARS = 1000;

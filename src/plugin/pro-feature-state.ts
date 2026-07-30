@@ -1,6 +1,6 @@
 import { Platform } from "obsidian";
 import type { EpochPlugin } from "../main";
-import { NOTE_TITLE_SIMILARITY_JW_THRESHOLD } from "../utils";
+import { DEFAULT_SETTINGS } from "../settings-model";
 import { hasTrustedActivationState, hasVerifiedFeatureAccess } from "./pro-trust";
 
 export function hasVerifiedEntitlement(plugin: EpochPlugin): boolean {
@@ -81,6 +81,6 @@ export function getEffectiveSimilarityUseTags(plugin: EpochPlugin): boolean {
 export function getEffectiveTitleSimilarityThreshold(plugin: EpochPlugin): number {
 	if (!hasSimilarityAccess(plugin)) return 0;
 	const raw = Number(plugin.settings.similarityTitleJwThreshold);
-	if (!Number.isFinite(raw)) return NOTE_TITLE_SIMILARITY_JW_THRESHOLD;
+	if (!Number.isFinite(raw)) return Number(DEFAULT_SETTINGS.similarityTitleJwThreshold);
 	return Math.max(0, Math.min(1, raw));
 }

@@ -49,7 +49,7 @@ Note: Enabling attachments in the timeline view forces a semantic-related refres
 
 Note: When Obsidian’s metadata cache reports `changed` for the *active file*, Epochgram forces a semantic-related refresh for the active file so link/embedding graph updates (including new image embeds) can update related-highlights even if the indexed snapshot did not change.
 
-Note: On the first-ever successful Pro activation, Epochgram seeds `similarityZeroShotMinScore` (Topic threshold) to `0.85`.
+Note: On the first-ever successful Pro activation, Epochgram keeps `similarityZeroShotMinScore` (Topic threshold) at `0` unless the user changes it.
 
 ## Notices (Verified)
 - Index rebuild progress notices are throttled to avoid spam; there is a short grace period (~10s on mobile, ~1s on desktop) so fast operations don't show progress.

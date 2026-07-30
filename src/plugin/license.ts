@@ -1,11 +1,5 @@
 import { Notice, Platform, requestUrl } from "obsidian";
 import type { EpochPlugin } from "../main";
-import {
-	RESET_PRO_SIMILARITY_THRESHOLD,
-	RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE
-} from "../settings-reset-defaults";
-import { formatDate } from "../utils";
-import { normalizeSnapshotValue } from "../indexer/snapshot-helpers";
 import { runSimilarityStartupMaintenance } from "./similarity/startup-maintenance";
 import { isTrackChangesEffective } from "./pro-feature-state";
 import { ensureDeviceProofMaterial, ensureInstallId, signUpdateChallenge } from "./device-proof";
@@ -235,7 +229,7 @@ function restoreEffectiveProViewPreferences(plugin: EpochPlugin): void {
 	const showDraftsOnly = false;
 	if (plugin.viewPreferences) {
 		plugin.viewPreferences.showDraftsOnly = showDraftsOnly;
-		plugin.viewPreferences.showTrackedChanges = timelineDefaults.showTrackedChanges !== false;
+		plugin.viewPreferences.showTrackedChanges = timelineDefaults.showTrackedChanges === true;
 	}
 }
 
@@ -244,20 +238,6 @@ function deactivateProRuntimeState(plugin: EpochPlugin): void {
 	plugin.licenseHolder = "";
 	licenseMethods.disableProViewPreferences.call(plugin);
 	clearTrustedActivationCache(plugin);
-}
-
-function applyFirstTimeProDefaults(plugin: EpochPlugin, hasActivatedProOnce: boolean): boolean {
-	let activatedFirstTime = false;
-	if (!hasActivatedProOnce) {
-		plugin.settings.proActivatedOnce = true;
-		plugin.settings.similarityTitleJwThreshold = 1;
-			plugin.settings.similarityThreshold = RESET_PRO_SIMILARITY_THRESHOLD;
-			plugin.settings.similarityZeroShotMinScore = RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE;
-		plugin.settings.similarityUseLinks = true;
-		plugin.settings.similarityUseTags = true;
-		activatedFirstTime = true;
-	}
-	return activatedFirstTime;
 }
 
 async function postBackendJson(path: string, body: Record<string, unknown>): Promise<{ status: number; json: unknown; text: string }> {
@@ -760,55 +740,7 @@ export const licenseMethods: LicenseMethods = {
 	async applyClaimKey(this: EpochPlugin, rawKey: string): Promise<{ valid: boolean; message: string }> {
 		const trimmed = rawKey.trim();
 		const previouslyTracking = isTrackChangesEffective(this);
-		const hasActivatedProOnce = this.settings.proActivatedOnce === true;
-		let activatedFirstTime = false;
 
-		const seedTrackedBaselineLightweight = async (): Promise<void> => {
-			const runtime = this as unknown as LicenseRuntime;
-			try {
-				if (typeof runtime.ensureIndexLoaded !== "function") return;
-				if (typeof runtime.persist !== "function") return;
-				if (!this.app?.vault?.adapter || typeof this.app.vault.adapter.read !== "function") return;
-				await runtime.ensureIndexLoaded();
-				const indexerAny = this.indexer as unknown as LicenseIndexerRuntime;
-				const files = indexerAny.files ?? {};
-				const latestLines = indexerAny.latestLines ?? {};
-				const today = formatDate(new Date());
-				const paths = Object.keys(files).filter((p) => String(p).toLowerCase().endsWith(".md"));
-				let touched = 0;
-				for (let i = 0; i < paths.length; i++) {
-					const path = paths[i];
-					const data = files[path];
-					if (!data) continue;
-					let content = "";
-					const cached = latestLines[path];
-					if (Array.isArray(cached) && cached.length > 0) {
-						content = cached.join("\n");
-					} else {
-						try {
-							content = await this.app.vault.adapter.read(path);
-						} catch {
-							continue;
-						}
-					}
-					const snap = normalizeSnapshotValue(content) ?? "";
-					data.trackedDates = {};
-					data.trackedSnapshot = snap;
-					data.trackedSnapshotDate = today;
-					data.trackedBaselineSnapshot = snap;
-					data.trackedBaselineDate = today;
-					touched++;
-					if (touched % 25 === 0) {
-						await new Promise((r) => window.setTimeout(r, 0));
-					}
-				}
-				if (touched > 0) {
-					await runtime.persist({ skipEnsure: true });
-				}
-			} catch {
-				// ignore
-			}
-		};
 
 		if (!trimmed) {
 			this.settings.activationStatus = PRO_STATUS_INVALID_CLAIM;
@@ -856,27 +788,13 @@ export const licenseMethods: LicenseMethods = {
 					};
 				}
 				await this.refreshLicenseState();
-				activatedFirstTime = applyFirstTimeProDefaults(this, hasActivatedProOnce);
 
 				const trackingJustEnabled = isTrackChangesEffective(this) && !previouslyTracking;
-				if (trackingJustEnabled && !activatedFirstTime) {
+				if (trackingJustEnabled) {
 					await this.onSettingsChanged("trackChanges");
 				} else {
 					await this.saveSettings();
 					this.registerFileEvents();
-					if (activatedFirstTime && trackingJustEnabled) {
-						void seedTrackedBaselineLightweight();
-					}
-					if (activatedFirstTime) {
-						try {
-									const runtime = this as unknown as LicenseRuntime;
-									void runtime.recomputeInheritedMarksNow?.("similarityUseLinks");
-									void runtime.recomputeInheritedMarksNow?.("similarityUseTags");
-									void runtime.recomputeInheritedMarksNow?.("similarityTitleJwThreshold");
-						} catch {
-							// ignore
-						}
-					}
 				}
 				this.refreshEpochViews();
 				void (async () => {

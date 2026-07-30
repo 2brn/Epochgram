@@ -407,8 +407,8 @@ Tracked changes with mixed Pro activation (Verified)
 - Index data keeps tracked entries when `settings.trackChanges === true`; the inactive-device behavior is enforced by runtime/view gating instead of mutating the stored setting.
 
 First-time Pro activation defaults (Verified)
-- Enables tracked changes by default.
-- Enables similarity signals: links + tags.
+- Keeps tracked changes disabled by default.
+- Keeps similarity signals disabled by default.
 - Sets `similarityTitleJwThreshold` to `1.0` (same-folder title matching mode).
-- Sets `similarityThreshold` to 0.85 (semantic related-notes threshold).
-- Sets `similarityZeroShotMinScore` to 0.85 (topics/zero-shot min-score threshold).
+- Sets `similarityThreshold` to `0` (semantic related-notes threshold).
+- Sets `similarityZeroShotMinScore` to `0` (topics/zero-shot min-score threshold).

@@ -103,6 +103,45 @@ describe("Reset actions", () => {
 		expect(plugin.settings.filenameWordsCount).toBe(2);
 	});
 
+	it("clears additional similarity settings on reset", async () => {
+		const plugin = makePluginWithIndexer({
+			refreshLicenseState: vi.fn(() => {}),
+			hasProAccess: vi.fn(() => false),
+			viewPreferences: {},
+			settings: {
+				similarityUseLinks: false,
+				similarityUseTags: true,
+				similarityEmbeddingModelId: "custom-embedding",
+				similarityZeroShotModelId: "custom-topic",
+				similarityTitleJwThreshold: 0.25
+			}
+		});
+
+		await runReset(
+			plugin,
+			{
+				settings: true,
+				search: false,
+				dataFiles: false,
+				marks: false,
+				reviewState: false,
+				pinned: false,
+				semantics: false,
+				topics: false,
+				trackedChanges: false,
+				aiSummaries: false,
+				epochs: false
+			},
+			{ keepLicense: true }
+		);
+
+		expect(plugin.settings.similarityUseLinks).toBeUndefined();
+		expect(plugin.settings.similarityUseTags).toBeUndefined();
+		expect(plugin.settings.similarityEmbeddingModelId).toBeUndefined();
+		expect(plugin.settings.similarityZeroShotModelId).toBeUndefined();
+		expect(plugin.settings.similarityTitleJwThreshold).toBe(1);
+	});
+
 	it("does not clear marks via reset selection", async () => {
 		const markByPath = new Map<string, number | null>([
 			["a.md", 2],

@@ -4,11 +4,7 @@ import { Platform } from "obsidian";
 import * as obsidian from "obsidian";
 import { __resetDeviceProofCacheForTests } from "../src/plugin/device-proof";
 import { licenseMethods } from "../src/plugin/license";
-import {
-	RESET_PRO_TITLE_JW_THRESHOLD,
-	RESET_PRO_SIMILARITY_THRESHOLD,
-	RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE
-} from "../src/settings-reset-defaults";
+import { NOTE_TITLE_SIMILARITY_JW_THRESHOLD } from "../src/utils";
 import { __setServerVerifyKeyForTests } from "../src/plugin/pro-trust";
 import { buildEntitlementClaims, buildSignedEntitlementEnvelope, TEST_SERVER_VERIFY_KEY_DER_BASE64 } from "./helpers/signed-entitlement";
 
@@ -87,7 +83,6 @@ function createFakePlugin(settingsOverrides: AnySettings = {}, preferenceOverrid
 		generateEpochs: false,
 		similarityThreshold: 0,
 		similarityZeroShotMinScore: 0,
-		proActivatedOnce: false,
 		claimKeyPreview: "",
 		installId: "",
 		devicePublicKey: "",
@@ -220,7 +215,6 @@ describe("license: signed activation certificates", () => {
 		});
 
 		const plugin = createFakePlugin({
-			proActivatedOnce: true,
 			trackChanges: true,
 			summarizeAI: true,
 			generateEpochs: true,
@@ -249,11 +243,11 @@ describe("license: signed activation certificates", () => {
 		expect(plugin.settings.similarityTitleJwThreshold).toBeCloseTo(0.8);
 		expect(plugin.settings.similarityThreshold).toBeCloseTo(0.92);
 		expect(plugin.settings.similarityZeroShotMinScore).toBeCloseTo(0.88);
-		expect(plugin.viewPreferences.showTrackedChanges).toBe(true);
+		expect(plugin.viewPreferences.showTrackedChanges).toBe(false);
 		expect(plugin.onSettingsChanged).toHaveBeenCalledWith("trackChanges");
 	});
 
-	it("applies first-time Pro activation defaults exactly once", async () => {
+	it("keeps default settings on successful activation", async () => {
 		setRequestUrlHandler(async (request: any) => {
 			const body = JSON.parse(String(request.body ?? "{}"));
 			return mockResponse(200, {
@@ -262,7 +256,6 @@ describe("license: signed activation certificates", () => {
 		});
 
 		const plugin = createFakePlugin({
-			proActivatedOnce: false,
 			trackChanges: false,
 			summarizeAI: false,
 			generateEpochs: false,
@@ -272,16 +265,12 @@ describe("license: signed activation certificates", () => {
 
 		const result = await licenseMethods.applyClaimKey.call(plugin as any, "EPO-FIRST-ACTI-VATI-ON00");
 		expect(result.valid).toBe(true);
-		expect(plugin.settings.proActivatedOnce).toBe(true);
 		expect(plugin.settings.trackChanges).toBe(false);
-		expect(plugin.settings.similarityUseLinks).toBe(true);
-		expect(plugin.settings.similarityUseTags).toBe(true);
-		expect(plugin.settings.similarityTitleJwThreshold).toBeCloseTo(RESET_PRO_TITLE_JW_THRESHOLD);
-		expect(plugin.viewPreferences.showTrackedChanges).toBe(true);
 		expect(plugin.settings.summarizeAI).toBe(false);
 		expect(plugin.settings.generateEpochs).toBe(false);
-		expect(plugin.settings.similarityThreshold).toBeCloseTo(RESET_PRO_SIMILARITY_THRESHOLD);
-		expect(plugin.settings.similarityZeroShotMinScore).toBeCloseTo(RESET_PRO_SIMILARITY_ZERO_SHOT_MIN_SCORE);
+		expect(plugin.settings.similarityThreshold).toBeCloseTo(0);
+		expect(plugin.settings.similarityZeroShotMinScore).toBeCloseTo(0);
+		expect(plugin.viewPreferences.showTrackedChanges).toBe(false);
 		expect(plugin.onSettingsChanged).not.toHaveBeenCalledWith("trackChanges");
 	});
 
