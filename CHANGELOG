@@ -1,5 +1,12 @@
 # Epochgram changelog
 
+## [1.8.6] - 2026-07-30
+- Added quick command-palette toggles for timeline filters (reviewed, tracked changes, content dates, attachments, Epochs).
+- Updated UI/docs terminology from parsed content to content dates and aligned command wording.
+- Limited Epoch search suggestions to appear only when Epochs view is active.
+- Improved production packaging/hot-reload behavior with in-place file updates and `.hotreload` handling.
+- Added What's New page for 1.8.6.
+
 ## [1.8.5] - 2026-07-29
 - Hardened npm dependency security with overrides and lockfile updates to clear audit vulnerabilities.
 - Added macOS-specific pin badge label alignment.
