@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.8.11] - 2026-08-01
+- Fixed styles for What's new page for mobile view.
+
 ## [1.8.10] - 2026-08-01
 - Normalized bundled text assets to read from git blobs so repeated builds keep `main.js` byte-identical across WSL/Linux and GitHub.
 - Kept the timestamp-free settings footer and README/context text aligned with the bundled output.
