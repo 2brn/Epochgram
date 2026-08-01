@@ -4,6 +4,7 @@ import { builtinModules } from "node:module";
 import inlineWorkerPlugin from "esbuild-plugin-inline-worker";
 import path from "path";
 import fs from "fs";
+import childProcess from "node:child_process";
 
 const banner =
 `/*
@@ -24,6 +25,19 @@ const BRIDGE_DEFAULT_SETTINGS_YAML_VIRTUAL = "epochgram-bridge-default-settings-
 const WHATS_NEW_DIR = path.join("src", "whats-new");
 const WHATS_NEW_REGISTRY_VIRTUAL = "epochgram-whats-new-registry";
 
+function readGitBlobText(filePath) {
+	const relativePath = path.relative(process.cwd(), filePath).split(path.sep).join("/");
+	try {
+		return childProcess.execFileSync("git", ["show", `HEAD:${relativePath}`], { encoding: "utf8" });
+	} catch {
+		try {
+			return fs.readFileSync(filePath, "utf8");
+		} catch {
+			return "";
+		}
+	}
+}
+
 const bridgeFaviconInlinePlugin = {
 	name: "epochgram-bridge-favicon-inline",
 	setup(build) {
@@ -33,7 +47,7 @@ const bridgeFaviconInlinePlugin = {
 		build.onLoad({ filter: /.*/, namespace: "epochgram-bridge-favicon-inline" }, async () => {
 			let svg = "";
 			try {
-				svg = await fs.promises.readFile(BRIDGE_FAVICON_SVG_FILE, "utf8");
+				svg = readGitBlobText(BRIDGE_FAVICON_SVG_FILE);
 			} catch {
 				svg = "";
 			}
@@ -55,7 +69,7 @@ const epochgramLogoFullInlinePlugin = {
 		build.onLoad({ filter: /.*/, namespace: "epochgram-logo-full-inline" }, async () => {
 			let svg = "";
 			try {
-				svg = await fs.promises.readFile(EPOCHGRAM_LOGO_FULL_SVG_FILE, "utf8");
+				svg = readGitBlobText(EPOCHGRAM_LOGO_FULL_SVG_FILE);
 			} catch {
 				svg = "";
 			}
@@ -77,7 +91,7 @@ const bridgeDefaultSettingsYamlInlinePlugin = {
 		build.onLoad({ filter: /.*/, namespace: "epochgram-bridge-default-settings-yaml-inline" }, async () => {
 			let yamlText = "";
 			try {
-				yamlText = await fs.promises.readFile(BRIDGE_DEFAULT_SETTINGS_YAML_FILE, "utf8");
+				yamlText = readGitBlobText(BRIDGE_DEFAULT_SETTINGS_YAML_FILE);
 			} catch {
 				yamlText = "";
 			}
@@ -110,7 +124,7 @@ const whatsNewRegistryInlinePlugin = {
 					watchFiles.push(filePath);
 					let markdown = "";
 					try {
-						markdown = await fs.promises.readFile(filePath, "utf8");
+						markdown = readGitBlobText(filePath);
 					} catch {
 						markdown = "";
 					}

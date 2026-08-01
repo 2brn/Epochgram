@@ -1,5 +1,9 @@
 # Epochgram changelog
 
+## [1.8.10] - 2026-08-01
+- Normalized bundled text assets to read from git blobs so repeated builds keep `main.js` byte-identical across WSL/Linux and GitHub.
+- Kept the timestamp-free settings footer and README/context text aligned with the bundled output.
+
 ## [1.8.9] - 2026-08-01
 - Removed the build timestamp from the bundled output and settings footer so repeated production builds produce the same `main.js`.
 - Updated the README and repo context to match the timestamp-free settings footer.
