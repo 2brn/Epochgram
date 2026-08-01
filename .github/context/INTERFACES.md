@@ -101,7 +101,7 @@
   - General settings are grouped into:
 	- an untitled top group: `Open on startup`, `Enable animation`, `Record width limit`, `Search results count`.
     - `Indexer`: `Track changes` (Pro-gated/blurred when unavailable), `Anchor mdate`, `Anchor property`, `Summary property`, `Parse all properties`, `Filename length`, `Summary length`, `Similarity` group, `Generative AI` group (desktop-only), `Calendar sync` group (desktop-only), and `Index` actions.
-  - The bottom of the settings tab shows a compact metadata footer line in the format `v.<version>-<buildTimestamp>` (`YYYYMMDDHHmmss`).
+  - The bottom of the settings tab shows a compact footer line with the current version and a link to the [CHANGELOG](CHANGELOG).
   - These two inputs now commit/apply only on input blur (focus lost) or explicit reset, instead of applying on every keystroke.
 
 

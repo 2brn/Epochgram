@@ -552,7 +552,7 @@ Epochgram also provides **Rebuild** and **Reset** popups for rebuilding or clear
     - **⛭ Epochs** → remove all Epochs.
 
 > [!TIP]
-> **⛭ Version X.X.X** shows the current version, build timestamp, and a link to the [CHANGELOG](CHANGELOG).
+> **⛭ Version X.X.X** shows the current version and a link to the [CHANGELOG](CHANGELOG).
 
 ## FAQ
 

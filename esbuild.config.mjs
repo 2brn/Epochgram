@@ -172,15 +172,6 @@ const yamlNoAtobBtoaPlugin = {
 const importMetaUrlShim = process.platform === "win32"
 	? '"file:///C:/epoch/main.js"'
 	: '"file:///epoch/main.js"';
-const now = new Date();
-const pad2 = (n) => String(n).padStart(2, "0");
-const buildTimestampStamp =
-	`${now.getFullYear()}` +
-	`${pad2(now.getMonth() + 1)}` +
-	`${pad2(now.getDate())}` +
-	`${pad2(now.getHours())}` +
-	`${pad2(now.getMinutes())}` +
-	`${pad2(now.getSeconds())}`;
 
 const pluginContext = await esbuild.context({
 	banner: {
@@ -188,7 +179,6 @@ const pluginContext = await esbuild.context({
 	},
 	define: {
 		"import.meta.url": importMetaUrlShim,
-		"__EPOCHGRAM_BUILD_TIMESTAMP__": JSON.stringify(buildTimestampStamp),
 	},
 	entryPoints: ["src/main.ts"],
 	bundle: true,

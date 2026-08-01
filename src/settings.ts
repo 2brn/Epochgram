@@ -12,8 +12,6 @@ import { renderMaintenanceSettings } from "./settings-ui/maintenance";
 import { renderProPanel } from "./settings-ui/pro";
 import { createSettingGroup } from "./settings-ui/setting-groups";
 
-declare const __EPOCHGRAM_BUILD_TIMESTAMP__: string;
-
 type RuntimeWindowLike = Window & { require?: (id: string) => unknown };
 type ElectronLike = { shell?: { openExternal?: (url: string) => Promise<void> | void } };
 type EpochPluginWithSettingsTab = EpochPlugin & { __epochSettingTab?: EpochSettingTab };
@@ -56,18 +54,6 @@ export class EpochSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 		const version = String(this.plugin?.manifest?.version ?? "Unknown");
-		const buildStamp = (() => {
-			try {
-				const raw = typeof __EPOCHGRAM_BUILD_TIMESTAMP__ === "string" ? __EPOCHGRAM_BUILD_TIMESTAMP__.trim() : "";
-				if (!raw) return "unknown";
-				if (/^\d{14}$/.test(raw)) return raw;
-				const digits = raw.replace(/\D/g, "");
-				if (digits.length >= 14) return digits.slice(0, 14);
-				return "unknown";
-			} catch {
-				return "unknown";
-			}
-		})();
 
 		const { itemsEl: generalItems } = createSettingGroup(containerEl);
 		renderGeneralViewSettings(generalItems, this.plugin);
@@ -88,8 +74,7 @@ export class EpochSettingTab extends PluginSettingTab {
 
 		const { itemsEl: versionItems } = createSettingGroup(containerEl);
 		const versionSetting = new Setting(versionItems)
-			.setName(`Version ${version}`)
-			.setDesc(`Build: ${buildStamp}`);
+			.setName(`Version ${version}`);
 		versionSetting.addButton((button) => {
 			button
 				.setButtonText("Reddit community")

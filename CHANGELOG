@@ -1,5 +1,9 @@
 # Epochgram changelog
 
+## [1.8.9] - 2026-08-01
+- Removed the build timestamp from the bundled output and settings footer so repeated production builds produce the same `main.js`.
+- Updated the README and repo context to match the timestamp-free settings footer.
+
 ## [1.8.8] - 2026-07-31
 - Updated the release and production-build workflows to current GitHub Actions versions and Node 24, removing the Node 20 deprecation warning.
 - Kept release packaging behavior aligned with the production build so published bundles stay consistent with local builds.
