@@ -1011,7 +1011,9 @@ body.theme-dark .epoch-pro-description {
 }
 
 .workspace-leaf-content[data-type="epochgram-whats-new"] .view-content.markdown-reading-view.epoch-whats-new-view {
-  padding: 14px 0;
+  padding: 14px 0 0;
+  margin-top: var(--view-top-spacing);
+  margin-bottom: var(--view-bottom-spacing);
 }
 
 .epoch-whats-new-view .markdown-preview-view.markdown-rendered .epoch-whats-new-body :is(p, pre, table, ul, ol) + :is(h1, h2, h3, h4, h5, h6),

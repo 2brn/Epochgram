@@ -41,7 +41,7 @@ Commands:
 	- If the user supplied `major|minor|patch`, bump accordingly.
 
 ### 2) Bump versions in repo files
-1. Update `package.json` to the target version.
+1. Update `package.json` and `package-lock.json` to the target version.
 2. Run `npm run version` to sync `manifest.json` + `versions.json`.
 
 Commands:
