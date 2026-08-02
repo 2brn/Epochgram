@@ -57,7 +57,7 @@
       - Uses MiniSearch relevance for query-matching results across all indexed files (no timeline-filter gating).
       - No non-query fallback buckets are shown for non-empty input.
       - Falls back to scanning timeline records so record-only fields (summaries/AI summaries/topics/tags/aliases) still produce suggestions.
-      - `$current` limits non-empty suggestions and filtering to the currently open file when one exists; if no file is open, it behaves like `$similar` and does not narrow the result set.
+      - `$current` (aliases `$same` and `!same`) limits non-empty suggestions and filtering to the currently open file when one exists; if no file is open, it behaves like `$similar` and does not narrow the result set.
 	  - In Epochs view, suggestions include epoch records in the current zoom bucket, and can also include normal (non-epoch) record matches.
       - Epoch suggestions display as `YYYY-MM-DD - YYYY-MM-DD ⸱ <summary>` when a summary exists.
       - Record suggestions render with a primary title line (note name) and a smaller metadata line (folder path without filename and summary).

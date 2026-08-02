@@ -65,4 +65,8 @@ describe("AI bridge page scripts", () => {
 		expect(AI_BRIDGE_SCRIPT_PART2).toContain("setErrText(\"\")");
 		expect(AI_BRIDGE_SCRIPT_PART1).toContain("prevMode !== mode");
 	});
+
+	it("validates loaded YAML without persisting it", () => {
+		expect(AI_BRIDGE_SCRIPT_PART3).toContain("await validateAndPersistYaml({ persist: false, format: false });");
+	});
 });

@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-epochgram",
-	"version": "1.8.11",
+	"version": "1.8.12",
 	"description": "An AI-powered timeline plugin for Obsidian",
 	"main": "main.js",
 	"scripts": {

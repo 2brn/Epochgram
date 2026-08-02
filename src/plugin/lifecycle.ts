@@ -606,6 +606,49 @@ export const lifecycleMethods: LifecycleMethods = {
 		});
 
 		this.addCommand({
+			id: "toggle-review-current-file",
+			name: "Toggle review for current file",
+			checkCallback: (checking: boolean) => {
+				const file = this.app.workspace.getActiveFile();
+				if (!file) return false;
+				if (!this.shouldIndexFile(file)) return false;
+				if (!this.indexer.isFileKnown(file.path)) return false;
+				if (checking) return true;
+
+				void wrapNoticeError("Epochgram: Toggle review failed", async () => {
+					try {
+						await this.ensureIndexLoaded();
+						await this.waitForExcludedSync();
+					} catch {
+						// ignore
+					}
+					let result: "draft" | "reviewed" | null = null;
+					try {
+						result = this.indexer.toggleFileReviewState(file.path);
+					} catch {
+						result = null;
+					}
+					if (!result) {
+						new Notice("Epochgram: No records for current file", 2500);
+						return;
+					}
+
+					try {
+						if (typeof runtime.persistIndex === "function") await runtime.persistIndex({ skipEnsure: true });
+					} catch {
+						// ignore
+					}
+					try {
+						runtime.refreshEpochViews?.();
+					} catch {
+						// ignore
+					}
+				})();
+				return true;
+			}
+		});
+
+		this.addCommand({
 			id: "clear-tracked-changes-current-note",
 			name: "Clear tracked changes for current file",
 			checkCallback: (checking: boolean) => {

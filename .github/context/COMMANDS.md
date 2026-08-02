@@ -95,6 +95,12 @@ These operate on the active file and are only available when a file is active, i
   - If the file is currently hidden, it unhides the file (review state is unchanged).
   - Recurring synthetic occurrences for that file follow the same hide/show transition.
 
+- `toggle-review-current-file` — “Toggle review for current file”
+  - Toggles file-wide review state.
+  - If every record is Reviewed, it marks all file records Draft.
+  - Otherwise, it marks all file records Reviewed and clears hidden state.
+  - Recurring synthetic occurrences for that file follow the same transition.
+
 - File tree context menu (`file-menu`) actions:
   - Folder actions (`Epochgram: Review`, `Epochgram: Draft`, `Epochgram: Hide`) apply to all known files in the folder.
   - File actions (`Epochgram: Review`, `Epochgram: Draft`, `Epochgram: Hide`) apply to the selected file.

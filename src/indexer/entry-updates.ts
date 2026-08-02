@@ -538,6 +538,27 @@ export function toggleFileVisibility(indexer: unknown, path: string): "hidden" |
 	return !currentlyHidden ? "hidden" : "visible";
 }
 
+export function toggleFileReviewState(indexer: unknown, path: string): "draft" | "reviewed" | null {
+	const s = state(indexer);
+	const p = String(path || "");
+	if (!p) return null;
+	const data = s.files[p];
+	if (!data) return null;
+
+	const entries = gatherEntriesSafe(data);
+	const recurringKeys = collectRecurringDateKeysForFile(s, p);
+	if (entries.length === 0 && recurringKeys.length === 0) return null;
+
+	const reviewedRecurring = new Set<string>(normalizeDateKeys(data.recurReviewedDates));
+	const currentlyReviewed =
+		(entries.length === 0 || entries.every((entry) => entry.reviewState === "reviewed")) &&
+		(recurringKeys.length === 0 || recurringKeys.every((key) => reviewedRecurring.has(key)));
+	const next = currentlyReviewed ? "draft" : "reviewed";
+	const changed = setFileReviewStateForAllRecords(indexer, p, next);
+	if (!changed) return null;
+	return next;
+}
+
 export function getFileMarkHex(indexer: unknown, path: string): string {
 	const s = state(indexer);
 	const data = s.files[path];

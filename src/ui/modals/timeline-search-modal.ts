@@ -99,7 +99,7 @@ export class TimelineSearchModal extends SuggestModal<TimelineSearchSuggestion> 
 			{ command: "$marked", purpose: "" },
 			{ command: "$hidden", purpose: "" },
 			{ command: "$similar", purpose: "" },
-			{ command: "$current", purpose: "" },
+			{ command: "$same", purpose: "" },
 			{ command: "↵", purpose: "to open" },
 			{ command: `${newTabKeyLabel} ↵`, purpose: "to open in new tab" },
 			{ command: `${filterKeyLabel} ↵`, purpose: "to filter" },

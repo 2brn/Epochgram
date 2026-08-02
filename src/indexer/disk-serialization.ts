@@ -136,8 +136,7 @@ export function normalizeSerializedEpochIndexForDisk(serialized: SerializedEpoch
 			"pinnedFile",
 			"recur",
 			"recurHiddenDates",
-			"recurReviewedDates",
-			"__pendingTrackedReviewStateClear"
+			"recurReviewedDates"
 		]));
 		nextFiles[path] = next;
 	}

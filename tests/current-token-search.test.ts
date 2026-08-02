@@ -22,10 +22,10 @@ vi.mock("../src/plugin/similarity/config", () => ({
 
 import { matchesSearch } from "../src/ui/entry-helpers/search";
 
-describe("$current search token", () => {
-	it("limits matches to the active file when one is open", () => {
+describe("current-file search tokens", () => {
+	it.each(["$current", "$same", "!same"])("%s limits matches to the active file when one is open", (token) => {
 		const canvas: any = {
-			searchQuery: "alpha $current",
+			searchQuery: `alpha ${token}`,
 			activeFilePath: "notes/a.md",
 			plugin: {}
 		};
@@ -34,9 +34,9 @@ describe("$current search token", () => {
 		expect(matchesSearch(canvas, { file: "notes/b.md", summary: "alpha" } as any)).toBe(false);
 	});
 
-	it("falls back to normal matching when no active file is open", () => {
+	it.each(["$current", "$same", "!same"])("%s falls back to normal matching when no active file is open", (token) => {
 		const canvas: any = {
-			searchQuery: "alpha $current",
+			searchQuery: `alpha ${token}`,
 			plugin: {}
 		};
 

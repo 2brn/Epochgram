@@ -49,6 +49,7 @@ import {
 	setFilePinned,
 	setFileReviewStateForAllRecords,
 	setFileReviewStateForAllRecordsPreserveHidden,
+	toggleFileReviewState,
 	toggleFileVisibility
 } from "./entry-updates";
 import {
@@ -312,6 +313,10 @@ export class Indexer {
 
 	public toggleFileVisibility(path: string): "hidden" | "visible" | null {
 		return toggleFileVisibility(this, path);
+	}
+
+	public toggleFileReviewState(path: string): "draft" | "reviewed" | null {
+		return toggleFileReviewState(this, path);
 	}
 
 	public getFileMarkColor(path: string): number | null {

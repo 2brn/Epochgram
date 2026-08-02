@@ -129,6 +129,7 @@ export type BridgeOptionsValidation = {
 
 type BridgeOptionsValidationOptions = {
 	secretLookup?: (id: string) => string | null;
+	bridgeInWebViewer?: boolean;
 };
 
 function normalizePositiveInteger(raw: unknown): number | null {
@@ -767,6 +768,24 @@ function validateEpochRuleBlock(name: string, block: unknown, errors: string[]):
 	return out;
 }
 
+function validateWebViewerBackends(resolved: BridgeResolvedSettings, errors: string[]): void {
+	if (resolved.backend?.mode === "native") {
+		errors.push("root.backend.mode 'native' is not supported when the AI bridge opens in Obsidian Web Viewer; use 'cloud'");
+		return;
+	}
+
+	const validateOverride = (name: string, backend: BridgeBackendConfig | undefined): void => {
+		if (backend?.mode === "native") {
+			errors.push(`${name}.backend.mode 'native' is not supported when the AI bridge opens in Obsidian Web Viewer; use 'cloud'`);
+		}
+	};
+	validateOverride("reduce", resolved.reduce?.backend);
+	validateOverride("records", resolved.records?.backend);
+	for (let i = 0; i < resolved.epochs.length; i++) {
+		validateOverride(`epochs[${i}]`, resolved.epochs[i]?.backend);
+	}
+}
+
 export function validateBridgeOptionsYaml(settingsYamlRaw: string, options?: BridgeOptionsValidationOptions): BridgeOptionsValidation {
 	const errors: string[] = [];
 	const warnings: string[] = [];
@@ -893,6 +912,9 @@ export function validateBridgeOptionsYaml(settingsYamlRaw: string, options?: Bri
 		records,
 		epochs
 	};
+	if (options?.bridgeInWebViewer === true) {
+		validateWebViewerBackends(resolved, errors);
+	}
 
 	const stored: BridgeOptionsState = {
 		settingsYaml: userYaml

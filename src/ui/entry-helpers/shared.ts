@@ -107,7 +107,7 @@ export function hasCurrentOnlyToken(parsed: TimelineQuery): boolean {
 			.split(/\s+/g)
 			.map((token) => String(token || "").trim().toLowerCase())
 			.filter(Boolean);
-		return tokens.includes("!current") || tokens.includes("$current");
+		return tokens.includes("!current") || tokens.includes("$current") || tokens.includes("$same") || tokens.includes("!same");
 	} catch {
 		return false;
 	}

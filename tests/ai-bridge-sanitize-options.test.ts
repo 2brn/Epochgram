@@ -117,6 +117,31 @@ describe("AI bridge sanitizeBridgeOptions", () => {
 		expect(checked.valid).toBe(true);
 	});
 
+	it("rejects native backend when the bridge opens in Obsidian Web Viewer", () => {
+		const checked = validateBridgeOptionsYaml("", { bridgeInWebViewer: true });
+
+		expect(checked.valid).toBe(false);
+		expect(checked.errors).toContain("root.backend.mode 'native' is not supported when the AI bridge opens in Obsidian Web Viewer; use 'cloud'");
+	});
+
+	it("rejects native per-job backend override in Obsidian Web Viewer", () => {
+		const checked = validateBridgeOptionsYaml([
+			"backend:",
+			"  mode: cloud",
+			"  maxRetries: 3",
+			"  cloud:",
+			"    provider: gemini",
+			"    apiKey: key",
+			"records:",
+			"  backend:",
+			"    mode: native",
+			"    maxRetries: 2"
+		].join("\n"), { bridgeInWebViewer: true });
+
+		expect(checked.valid).toBe(false);
+		expect(checked.errors).toContain("records.backend.mode 'native' is not supported when the AI bridge opens in Obsidian Web Viewer; use 'cloud'");
+	});
+
 	it("shows not-found error for unresolved apiKey placeholder key name", () => {
 		const checked = validateBridgeOptionsYaml([
 			"backend:",

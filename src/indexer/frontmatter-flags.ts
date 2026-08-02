@@ -55,14 +55,16 @@ export function resolveFrontmatterSuppressionFlags(
 		const cache = pluginState?.app?.metadataCache?.getFileCache?.(file);
 		const fm = cache?.frontmatter ?? null;
 		out.notracked = hasOwn(fm, "notracked");
-		out.noparsed = hasOwn(fm, "noparsed");
+		out.noparsed = hasOwn(fm, "noparsed") || hasOwn(fm, "nodates");
 		out.noindex = hasOwn(fm, "noindex");
 	} catch {
 		// ignore
 	}
 
 	if (!out.notracked && rawText) out.notracked = scanYamlFrontmatterHasKey(rawText, "notracked");
-	if (!out.noparsed && rawText) out.noparsed = scanYamlFrontmatterHasKey(rawText, "noparsed");
+	if (!out.noparsed && rawText) {
+		out.noparsed = scanYamlFrontmatterHasKey(rawText, "noparsed") || scanYamlFrontmatterHasKey(rawText, "nodates");
+	}
 	if (!out.noindex && rawText) out.noindex = scanYamlFrontmatterHasKey(rawText, "noindex");
 
 	return out;

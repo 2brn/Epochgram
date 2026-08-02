@@ -685,7 +685,8 @@ export class AiBridgeServer {
 									} catch {
 										return null;
 									}
-								}
+								},
+								bridgeInWebViewer: this.plugin.settings.openAiBridgeInObsidianWebViewer === true
 							}
 						);
 					safeJson(req, res, 200, {

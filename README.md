@@ -248,7 +248,7 @@ A search bar at the bottom lets you search timeline records and shows the number
 | **$marked** | Show only marked records. |
 | **$hidden** | Show only hidden records. |
 | **$similar** | Show only similar records to currently opened file. |
-| **$current** | Show only records from the currently opened file. |
+| **$same** | Show only records from the currently opened file (same $current). |
 | **"exact"** | Find exact string. |
 
 > [!TIP]
@@ -289,6 +289,7 @@ Not every record deserves space on the timeline. Some, such as minor tracked cha
 > [!TIP]
 > **⌘ Epochgram: Review all** → set all records across the vault as reviewed.</br>
 > **⌘ Epochgram: Toggle visibility for current file** → hide or show all records from the current file.
+> **⌘ Epochgram: Toggle review for current file** → review or draft all records from the current file.
 
 ## Calendar sync (Pro)
 
@@ -501,11 +502,10 @@ pin: today # today | date (visible at any zoom) | dock (also outside viewport)
 mark: "#c14d58" # explicit mark color (hex)
 noindex: # exclude this file from all indexing
 notracked: # don't track changes for this file
-noparsed: # don't parse dates from this file's content
+nodates: # don't parse dates from this file's content (same noparsed:)
 nosimilar: # don't match this file by similarity
 similar: [links, tags, title, semantics, topics] # match similarity only by these relations
-repeat: every day # create recurring records
-recur: every day # same as repeat
+recur: every day # create recurring records (same repeat:)
 ---
 ```
 

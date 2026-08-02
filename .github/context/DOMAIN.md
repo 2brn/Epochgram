@@ -22,7 +22,7 @@ Frontmatter date property (Verified)
   - Raw YAML frontmatter remains the source of truth for top-level scalar keys; metadata-cache fallback token parsing supplements only nested paths so cache-normalized scalar values cannot introduce phantom parsed dates.
 - Frontmatter suppression flags (Verified):
   - `notracked: <any>` suppresses tracked-change indexing for the file (no tracked entries are indexed or shown on the timeline).
-  - `noparsed: <any>` suppresses parsed content-date indexing for the file (content-derived entries are not indexed or shown on the timeline).
+  - `noparsed: <any>` or `nodates: <any>` suppresses parsed content-date indexing for the file (content-derived entries are not indexed or shown on the timeline).
   - `noindex: <any>` excludes the file from Epochgram indexing entirely (the file is removed from the timeline index and search cache).
 - Explicit UI frontmatter overrides (Verified):
   - `pin:` / `pin: today` pins the file to Today and takes priority over the saved index pin state.
@@ -92,13 +92,14 @@ Per-file UI-facing state includes:
 - Review state is stored per-record:
   - Per-entry `reviewState: "reviewed"` is persisted on the underlying stored entry; Draft is the implicit default when no `reviewState` is present.
   - Synthetic recurring occurrences are virtual; per-occurrence reviewed state is persisted as date keys in `recurReviewedDates`.
-  - Meaningful file create/modify clears reviewed state carry-forward only for tracked-change entries on the same tracked change day bucket; non-tracked reviewed entries continue to carry forward when their entry identity still matches after reprocessing.
+  - Meaningful file create/modify resets only anchor records (`cdate`, `namedDate`, and `dateProp`) to Draft, regardless of pin state. Content, tracked-change, and recurring review states carry forward when their record identity still matches after reprocessing.
   - `draft` renders italic in the timeline summaries (unless `settings.simpleMode === true`).
 - Hidden can be applied either:
   - Per-entry/per-day via an entry-level `reviewState: "hidden"` override; the Hide/Show action applies it to all entries from that note for the selected day.
     - For recurring synthetic occurrences, per-occurrence hidden overrides are persisted as date keys in `recurHiddenDates`.
 - Pinned:
   - `pin:` / `pin: today` emit a synthetic pinned-today entry on Today when the anchor date differs from Today; that synthetic row stores `originalDate` set to the anchor date.
+  - A synthetic pinned-today entry inherits its review state from its source anchor and has no independent persisted review state.
   - `pin: date` and `pin: dock` do not emit synthetic Today rows; they keep the note anchored on its real date and only affect date-label rendering.
   - When the local day changes while Epochgram remains open, synthetic pinned-today entries are refreshed so they move to the new Today date.
 - Marked with a mark color index (see `ui/mark-colors.ts` and usage in `plugin/view.ts` and `indexer/indexer-class.ts`).
@@ -232,7 +233,8 @@ Additional settings exist in `settings.ts` (e.g. similarity thresholds, epochs g
 AI Bridge startup/open settings (Verified)
 - `openAiBridgeOnStartup: boolean` (default `false`) controls whether the bridge page auto-opens on startup.
 - `openAiBridgeInObsidianWebViewer: boolean` (default `false`) prefers opening the bridge in Obsidian Web viewer.
-- Web viewer preference is applied regardless of backend mode.
+- Web viewer requires cloud AI bridge backends; YAML validation rejects root or per-job `backend.mode: native` while this preference is enabled.
+- The Bridge page validates its loaded YAML on initialization and displays validation errors without rewriting the saved YAML.
 
 Summary generation (Verified)
 - Normal (non-AI) summaries use `summaryWordsCount` words from `indexer/summarizer.ts` (default: 5).

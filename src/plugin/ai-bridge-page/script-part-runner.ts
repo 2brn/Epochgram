@@ -296,9 +296,14 @@ export const AI_BRIDGE_SCRIPT_PART3 = String.raw`
 				applyOptionsStateToUi(merged);
 				writeOptionsState(merged);
 				wireOptionsPersistence();
+				await validateAndPersistYaml({ persist: false, format: false });
 				void postSavedOptionsToObsidian(merged);
 			} catch {
-				try { applyOptionsStateToUi(loadOptionsState()); wireOptionsPersistence(); } catch { void 0; }
+				try {
+					applyOptionsStateToUi(loadOptionsState());
+					wireOptionsPersistence();
+					await validateAndPersistYaml({ persist: false, format: false });
+				} catch { void 0; }
 			}
 		})();
 

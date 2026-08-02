@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Indexer } from "../src/indexer/indexer";
+import { resolveFrontmatterSuppressionFlags } from "../src/indexer/frontmatter-flags";
 import { TFile } from "obsidian";
 
 function makeFile(path: string, ctime: number, mtime?: number): TFile {
@@ -82,18 +83,18 @@ describe("Frontmatter suppression flags", () => {
 		expect(allEntries.some((e: any) => e && e.file === path && e.source === "tracked")).toBe(false);
 	});
 
-	it("noparsed suppresses parsed content-date indexing", async () => {
-		const path = "folder/noparsed.md";
+	it.each(["noparsed", "nodates"])("%s suppresses parsed content-date indexing", async (flag) => {
+		const path = `folder/${flag}.md`;
 		const file = makeFile(path, Date.UTC(2026, 2, 1));
 		contents[path] = [
 			"---",
-			"noparsed: whatever",
+			`${flag}: whatever`,
 			"---",
 			"Meet on 2026-03-05 with team"
 		].join("\n");
 
 		(pluginStub.app.metadataCache.getFileCache as any).mockImplementation(() => ({
-			frontmatter: { noparsed: "whatever" },
+			frontmatter: { [flag]: "whatever" },
 			tags: []
 		}));
 
@@ -102,5 +103,16 @@ describe("Frontmatter suppression flags", () => {
 		const list: any[] = ((indexer as any).index["2026-03-05"] ?? []) as any[];
 		const contentEntry = list.find((e) => e && e.file === path && e.source === "content" && e.recurring !== true);
 		expect(contentEntry).toBeFalsy();
+	});
+
+	it("nodates suppresses parsed content dates when metadata is stale", () => {
+		const flags = resolveFrontmatterSuppressionFlags({}, "folder/nodates.md", [
+			"---",
+			"nodates: true",
+			"---",
+			"Meet on 2026-03-05 with team"
+		].join("\n"));
+
+		expect(flags.noparsed).toBe(true);
 	});
 });

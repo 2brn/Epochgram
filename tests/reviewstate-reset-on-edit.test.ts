@@ -53,7 +53,7 @@ describe("ReviewState reset on edit", () => {
 		vi.useRealTimers();
 	});
 
-	it("editing a pinned Reviewed file keeps it Reviewed", async () => {
+	it("editing a pinned Reviewed file resets its anchor and virtual today record to Draft", async () => {
 		const ctime = Date.UTC(2025, 0, 1);
 		const file = makeFile("folder/pinned.md", ctime);
 
@@ -70,18 +70,18 @@ describe("ReviewState reset on edit", () => {
 		await indexer.processFile(file, { reason: "modify" });
 
 		const data2: any = (indexer as any).files[file.path];
-		expect((data2.cdate as any)?.reviewState).toBe("reviewed");
+		expect(String((data2.cdate as any)?.reviewState ?? "draft")).toBe("draft");
 
-		// sanity: aggregated entries stay reviewed
+		// The original anchor is reset regardless of the file's pin state.
 		const cdateKey = "2025-01-01";
 		const anchor = indexer.index[cdateKey]?.find(e => e.file === file.path);
-		expect(anchor?.reviewState).toBe("reviewed");
+		expect(String(anchor?.reviewState ?? "draft")).toBe("draft");
 
-		// pinned-today entry also stays reviewed
+		// The virtual pinned-today record mirrors the anchor review state.
 		const todayKey = "2026-01-12";
 		const pinnedToday = indexer.index[todayKey]?.find(e => e.file === file.path);
 		expect(pinnedToday?.pinned).toBe(true);
-		expect(pinnedToday?.reviewState).toBe("reviewed");
+		expect(String(pinnedToday?.reviewState ?? "draft")).toBe("draft");
 	});
 
 	it("editing a non-pinned Reviewed file resets it to Draft", async () => {
@@ -107,7 +107,7 @@ describe("ReviewState reset on edit", () => {
 		expect(String(anchor?.reviewState ?? "draft")).toBe("draft");
 	});
 
-	it("editing a reviewed tracked-change record resets it to Draft", async () => {
+	it("editing a reviewed tracked-change record preserves Reviewed", async () => {
 		pluginStub.settings.trackChanges = true;
 		const ctime = Date.UTC(2025, 0, 1);
 		const file = makeFile("folder/tracked.md", ctime);
@@ -123,18 +123,9 @@ describe("ReviewState reset on edit", () => {
 		const trackedEntry = (data.trackedDates?.[trackedDay] ?? [])[0];
 		expect(trackedEntry).toBeTruthy();
 		(trackedEntry as any).reviewState = "reviewed";
-		data.trackedDates["2026-01-11"] = [
-			{
-				...trackedEntry,
-				date: "2026-01-11",
-				summary: "Older tracked change",
-				trackedHash: "older-hash",
-				trackedTime: "2026-01-11T09:00:00.000Z",
-				reviewState: "reviewed"
-			}
-		];
 		(indexer as any).updateAggregatedEntries(file.path);
 
+		vi.setSystemTime(new Date("2026-01-13T09:00:00.000Z"));
 		contents[file.path] = "Initial\nChanged again";
 		await indexer.processFile(file, { reason: "modify" });
 
@@ -143,13 +134,10 @@ describe("ReviewState reset on edit", () => {
 		expect(trackedEntriesAfter.length).toBeGreaterThan(0);
 		expect(
 			trackedEntriesAfter.some((entry) => entry.date === trackedDay && entry.reviewState === "reviewed")
-		).toBe(false);
-		expect(
-			trackedEntriesAfter.find((entry) => entry.date === "2026-01-11")?.reviewState
-		).toBe("reviewed");
+		).toBe(true);
 
 		const trackedVisible = (indexer.index[trackedDay] ?? []).find((e) => e.file === file.path && e.source === "tracked");
-		expect(trackedVisible?.reviewState).toBe("draft");
+		expect(trackedVisible?.reviewState).toBe("reviewed");
 	});
 
 	it("a no-op modify (same content) does not reset Reviewed to Draft", async () => {

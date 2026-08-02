@@ -1,9 +1,5 @@
 import type { DateEntry, FileDateEntry, FileIndexData } from "./types";
 
-type FileIndexDataWithReviewClear = FileIndexData & {
-	__trackedReviewStateClearedDates?: unknown[];
-};
-
 export function applyEntryState(
 	previous: FileIndexData | undefined,
 	next: FileIndexData
@@ -63,7 +59,7 @@ export function applyEntryState(
 	if (next.trackedDates) {
 		transferAiTracked(previous?.trackedDates, next.trackedDates);
 		transferHiddenTracked(previous?.trackedDates, next.trackedDates);
-		transferReviewedTracked(previous?.trackedDates, next.trackedDates, next);
+		transferReviewedTracked(previous?.trackedDates, next.trackedDates);
 	}
 
 	applyHighlightState(next);
@@ -87,21 +83,6 @@ function transferHiddenSingle(
 	if (hiddenCarryForwardKey(previous) !== hiddenCarryForwardKey(next)) return;
 	if (previous.reviewState === "hidden") {
 		next.reviewState = "hidden";
-	}
-}
-
-
-function trackedReviewClearedDateKeys(nextFileData: FileIndexData): Set<string> {
-	try {
-		const raw = (nextFileData as FileIndexDataWithReviewClear).__trackedReviewStateClearedDates;
-		if (!Array.isArray(raw)) return new Set<string>();
-		return new Set<string>(
-			raw
-				.map((value: unknown) => (typeof value === "string" ? value.trim() : ""))
-				.filter((value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value))
-		);
-	} catch {
-		return new Set<string>();
 	}
 }
 
@@ -141,16 +122,13 @@ function transferReviewedArray(
 
 function transferReviewedTracked(
 	previous: Record<string, FileDateEntry[]> | undefined,
-	next: Record<string, FileDateEntry[]>,
-	nextFileData: FileIndexData
+	next: Record<string, FileDateEntry[]>
 ): void {
-	const clearedDates = trackedReviewClearedDateKeys(nextFileData);
 	const reviewed = new Set<string>();
 	if (previous) {
 		for (const entries of Object.values(previous)) {
 			for (const entry of entries) {
 				if (!entry) continue;
-				if (clearedDates.has(entryEffectiveDate(entry))) continue;
 				if (entry.reviewState !== "reviewed") continue;
 				reviewed.add(trackedEntryKey(entry));
 			}

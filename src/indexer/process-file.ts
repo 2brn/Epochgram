@@ -182,17 +182,6 @@ export async function processFileInternal(
 		contentHash
 	};
 	const useAnchorMdate = (s.plugin as unknown as ProcessFilePluginLike).settings?.anchorMdate === true;
-	const fileDataRuntime = fileData as FileIndexData & { __pendingTrackedReviewStateClear?: boolean };
-
-	// Reset tracked-entry review state for the tracked bucket day when the file
-	// meaningfully changes. (Hidden stays separate and is preserved.)
-	if (options.reason === "create") {
-		fileDataRuntime.__pendingTrackedReviewStateClear = true;
-	} else if (options.reason === "modify" || options.reason === "track") {
-		if (!contentUnchanged && !frontmatterWrite && !frontmatterOnlyChange) {
-			fileDataRuntime.__pendingTrackedReviewStateClear = true;
-		}
-	}
 
 	const rawLines = isText ? rawContent.split(/\r?\n/) : [];
 	const lines = isText ? rawLines : [];
@@ -359,8 +348,7 @@ export async function processFileInternal(
 		(options.reason === "create" || options.reason === "modify" || options.reason === "track") &&
 		!contentUnchanged &&
 		!frontmatterWrite &&
-		!frontmatterOnlyChange &&
-		normalizePinMode(previousData.pinnedFile) === null;
+		!frontmatterOnlyChange;
 	if (shouldResetReviewedOnEdit) {
 		const clearReviewed = (entry: FileIndexData["cdate"]): void => {
 			if (!entry) return;
@@ -369,10 +357,6 @@ export async function processFileInternal(
 		clearReviewed(fileData.cdate);
 		clearReviewed(fileData.namedDate);
 		clearReviewed(fileData.dateProp);
-		for (const entry of fileData.contentDates) {
-			if (entry?.reviewState === "reviewed") delete entry.reviewState;
-		}
-		fileData.recurReviewedDates = [];
 	}
 
 	s.files[file.path] = fileData;

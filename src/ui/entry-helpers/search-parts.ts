@@ -11,7 +11,7 @@ export function buildMiniSearchQueryParts(parsed: TimelineQuery): {
 		const token = String(tokenRaw || "").trim().toLowerCase();
 		return token === "!marked" || token === "!hidden" || token === "!similar"
 			|| token === "!current" || token === "$marked" || token === "$hidden" || token === "$similar"
-			|| token === "$current";
+			|| token === "$current" || token === "$same" || token === "!same";
 	};
 	const include: string[] = [];
 	const exclude: string[] = [];

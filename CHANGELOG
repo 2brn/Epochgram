@@ -1,5 +1,11 @@
 # Epochgram changelog
 
+## [1.8.12] - 2026-08-02
+- Added **Epochgram: Toggle review for current file** to switch all file records between Draft and Reviewed.
+- Refined edit handling so only anchor records reset from Reviewed to Draft; content, tracked-change, and recurring records preserve their review state.
+- Added `nodates:` as an alias for `noparsed:`, plus `$same` and `!same` aliases for current-file search.
+- Validated AI Bridge YAML when the page opens and reject native backends in Obsidian Web Viewer mode.
+
 ## [1.8.11] - 2026-08-01
 - Fixed styles for What's new page for mobile view.
 

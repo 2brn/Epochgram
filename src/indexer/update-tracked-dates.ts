@@ -13,10 +13,6 @@ import { stripYamlFrontmatterBlock } from "../utils";
 import { getYamlDescriptionPropertyKey } from "../plugin/frontmatter-keys";
 
 type FileWithMtime = TFile & { stat?: { mtime?: number } };
-type TrackedInternalFlags = FileIndexData & {
-	__pendingTrackedReviewStateClear?: boolean;
-	__trackedReviewStateClearedDates?: string[];
-};
 
 export function updateTrackedDatesInternal(
 	s: IndexerPipeline,
@@ -64,15 +60,6 @@ export function updateTrackedDatesInternal(
 		!s.isDateBefore(fileDay, lastSnapshotDay)
 	) {
 		dayKey = fileDay;
-	}
-	try {
-		const trackedFlags = data as TrackedInternalFlags;
-		if (trackedFlags.__pendingTrackedReviewStateClear === true) {
-			trackedFlags.__trackedReviewStateClearedDates = [dayKey];
-			delete trackedFlags.__pendingTrackedReviewStateClear;
-		}
-	} catch {
-		// ignore
 	}
 	const currentContent = stripForTracking(lines.join("\n")) ?? "";
 	const describedSummary = (() => {
