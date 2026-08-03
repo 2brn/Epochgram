@@ -83,7 +83,6 @@ export class EpochSettingTab extends PluginSettingTab {
 				});
 			button.buttonEl?.classList?.add("epoch-pro-get-pro-button");
 		});
-		versionSetting.descEl.createEl("br");
 		const changelogLink = versionSetting.descEl.createEl("a", {
 			text: "Read the changelog.",
 			href: "https://github.com/2brn/Epochgram/blob/main/CHANGELOG",
