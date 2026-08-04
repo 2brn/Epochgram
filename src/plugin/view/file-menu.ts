@@ -240,16 +240,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 					}
 				};
 
-				const nativeMenusEnabled = (() => {
-					try {
-						return !!pluginState.app.vault?.getConfig?.("nativeMenus");
-					} catch {
-						return false;
-					}
-				})();
-				const useTextLabels = nativeMenusEnabled;
-				const ICON_ONLY_LABEL = "\u00A0";
-				const labelOrIconOnly = (label: string): string => (useTextLabels ? label : ICON_ONLY_LABEL);
+				const labelOrIconOnly = (label: string): string => label;
 				let activeGroupSubmenu: Menu | null = null;
 				try {
 					menuWithHide.onHide?.(() => {
@@ -258,7 +249,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 				} catch { void 0; }
 				submenu.addItem((it: FileMenuItemLike) => {
 					it
-						.setTitle(useTextLabels ? "Clear mark" : ICON_ONLY_LABEL)
+						.setTitle("Clear mark")
 						.setIcon("ban")
 						.setDisabled(!hasAnyMark)
 						.onClick(async () => {

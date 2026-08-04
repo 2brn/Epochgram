@@ -73,16 +73,7 @@ export function addMarkSubmenu(
 		const typedState = state as MarkMenuStateLike;
 		const typedCanvas = canvas as unknown as CanvasRootLike;
 		const typedMenu = menu as MenuLike;
-		const nativeMenusEnabled = (() => {
-			try {
-				const plugin = typedState.plugin ?? null;
-				return !!plugin?.app?.vault?.getConfig?.("nativeMenus");
-			} catch {
-				return false;
-			}
-		})();
-		const useTextLabels = nativeMenusEnabled;
-		const labelOrIconOnly = (label: string): string => (useTextLabels ? label : "\u00A0");
+		const labelOrIconOnly = (label: string): string => label;
 
 		const root = typedCanvas.root ?? activeDocument?.body;
 		if (!root) return;
@@ -228,7 +219,6 @@ export function addMarkSubmenu(
 
 		const hasAny = !!current || explicit != null || inheritedSourcePath != null;
 		const hasExplicitAny = hasAny || !!currentHex;
-		const ICON_ONLY_LABEL = "\u00A0";
 		const isDesktopPointer = (): boolean => {
 			try {
 				return !!window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches;
@@ -238,7 +228,7 @@ export function addMarkSubmenu(
 		};
 		submenu.addItem((subItem) => {
 			subItem
-				.setTitle(useTextLabels ? "Clear mark" : ICON_ONLY_LABEL)
+				.setTitle("Clear mark")
 				.setIcon("ban")
 					.setDisabled(!hasExplicitAny)
 				.onClick(() => {
