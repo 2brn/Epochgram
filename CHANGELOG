@@ -1,5 +1,9 @@
 # Epochgram changelog
 
+## [1.8.13] - 2026-08-04
+- Fixed Mark context-menu labels so Native menus consistently show Mark items and color subitems.
+- Removed one extra line as a minor cleanup.
+
 ## [1.8.12] - 2026-08-02
 - Added **Epochgram: Toggle review for current file** to switch all file records between Draft and Reviewed.
 - Refined edit handling so only anchor records reset from Reviewed to Draft; content, tracked-change, and recurring records preserve their review state.
