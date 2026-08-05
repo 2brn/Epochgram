@@ -311,13 +311,13 @@ Import ICS calendar feeds into notes (one note per event) and index them on the 
 ```yaml
 ---
 source: "{{source}}" # Sync source (always ICS, required)
-icsSyncKey: "{{syncKey}}" # Unique key: uid + start (required)
-icsOwned: "{{owned}}" # Whether this note is managed by sync (required)
-icsUid: "{{uid}}" # Raw event UID from the calendar
-icsStart: "{{startIso}}" # Event start in ISO format
-icsEnd: "{{endIso}}" # Event end in ISO format
-icsSourceUrl: "{{sourceUrl}}" # URL of the ICS feed
-icsLastSyncedAt: "{{lastSyncedAt}}" # Last sync timestamp (ISO)
+syncKey: "{{syncKey}}" # Unique key: uid + start (required)
+owned: "{{owned}}" # Whether this note is managed by sync (required)
+uid: "{{uid}}" # Raw event UID from the calendar
+startIso: "{{startIso}}" # Event start in ISO format
+endIso: "{{endIso}}" # Event end in ISO format
+sourceUrl: "{{sourceUrl}}" # URL of the ICS feed (with removed secrets)
+lastSyncedAt: "{{lastSyncedAt}}" # Last sync timestamp (ISO)
 cancelled: "{{cancelled}}" # Event cancellation flag
 title: "{{title}}" # Event title
 date: "{{date}}" # Event date (formatted)

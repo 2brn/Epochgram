@@ -66,13 +66,13 @@ const DEFAULT_TEMPLATE_PATH = "";
 const DEFAULT_FALLBACK_TEMPLATE = [
 	"---",
 	"source: \"{{source}}\"",
-	"icsSyncKey: \"{{syncKey}}\"",
-	"icsOwned: \"{{owned}}\"",
-	"icsUid: \"{{uid}}\"",
-	"icsStart: \"{{startIso}}\"",
-	"icsEnd: \"{{endIso}}\"",
-	"icsSourceUrl: \"{{sourceUrl}}\"",
-	"icsLastSyncedAt: \"{{lastSyncedAt}}\"",
+	"syncKey: \"{{syncKey}}\"",
+	"owned: \"{{owned}}\"",
+	"uid: \"{{uid}}\"",
+	"startIso: \"{{startIso}}\"",
+	"endIso: \"{{endIso}}\"",
+	"sourceUrl: \"{{sourceUrl}}\"",
+	"lastSyncedAt: \"{{lastSyncedAt}}\"",
 	"cancelled: \"{{cancelled}}\"",
 	"title: \"{{title}}\"",
 	"date: \"{{date}}\"",
@@ -88,13 +88,13 @@ const DEFAULT_FALLBACK_TEMPLATE = [
 	"",
 ].join("\n");
 const SYNC_SOURCE = "ics";
-const FRONTMATTER_SYNC_KEY = "icsSyncKey";
-const FRONTMATTER_OWNED = "icsOwned";
-const FRONTMATTER_UID = "icsUid";
-const FRONTMATTER_START = "icsStart";
-const FRONTMATTER_END = "icsEnd";
-const FRONTMATTER_SOURCE_URL = "icsSourceUrl";
-const FRONTMATTER_LAST_SYNC = "icsLastSyncedAt";
+const FRONTMATTER_SYNC_KEY = "syncKey";
+const FRONTMATTER_OWNED = "owned";
+const FRONTMATTER_UID = "uid";
+const FRONTMATTER_START = "startIso";
+const FRONTMATTER_END = "endIso";
+const FRONTMATTER_SOURCE_URL = "sourceUrl";
+const FRONTMATTER_LAST_SYNC = "lastSyncedAt";
 const FRONTMATTER_CANCELLED = "cancelled";
 const RANGE_DAYS_PAST = 30;
 const RANGE_DAYS_FUTURE = 365;
@@ -192,6 +192,53 @@ function isUrlLike(raw: string): boolean {
 
 function normalizeSourceUrl(raw: string): string {
 	return String(raw ?? "").trim().replace(/^webcal:/i, "https:");
+}
+
+function decodeUrlSegment(raw: string): string {
+	try {
+		return decodeURIComponent(raw);
+	} catch {
+		return raw;
+	}
+}
+
+function isSensitiveSourceSegment(raw: string): boolean {
+	const segment = String(raw ?? "").trim();
+	if (!segment) return false;
+	const decoded = decodeUrlSegment(segment);
+	const lower = decoded.toLowerCase();
+	if (lower.startsWith("private-") || lower.startsWith("private_")) return true;
+	if (/(token|secret|apikey|api-key|auth|signature|sig|session|password|passwd|pwd|key)/i.test(lower)) return true;
+	if (/^[a-f0-9]{16,}$/i.test(decoded)) return true;
+	if (/^[a-z0-9_-]{24,}$/i.test(decoded)) return true;
+	return false;
+}
+
+function sanitizeSourcePath(pathname: string): string {
+	const segments = String(pathname || "").split("/").filter(Boolean);
+	const kept: string[] = [];
+	for (const segment of segments) {
+		if (isSensitiveSourceSegment(segment)) break;
+		kept.push(segment);
+	}
+	if (kept.length === 0) return "/";
+	return `/${kept.join("/")}`;
+}
+
+function sanitizeSourceUrlForStorage(raw: string): string {
+	const normalized = normalizeSourceUrl(raw);
+	if (!normalized) return "";
+	try {
+		const parsed = new URL(normalized);
+		const protocol = parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.protocol : "https:";
+		const safePath = sanitizeSourcePath(parsed.pathname || "/");
+		return `${protocol}//${parsed.host}${safePath}`;
+	} catch {
+		const hostMatch = normalized.match(/^(https?):\/\/([^/\s?#]+)([^?#]*)/i);
+		if (!hostMatch) return "";
+		const safePath = sanitizeSourcePath(String(hostMatch[3] || "/"));
+		return `${String(hostMatch[1]).toLowerCase()}://${hostMatch[2]}${safePath}`;
+	}
 }
 
 function unfoldIcsLines(text: string): string[] {
@@ -508,7 +555,7 @@ function renderTemplate(template: string, record: SyncRecord): string {
 			case "owned": return "true";
 			case "startiso": return startIso;
 			case "endiso": return endIso;
-			case "sourceurl": return record.sourceUrl || "";
+			case "sourceurl": return sanitizeSourceUrlForStorage(record.sourceUrl || "");
 			case "lastsyncedat": return lastSyncedAt;
 			case "cancelled": return "false";
 			case "recur": return record.rrule || "";
@@ -572,7 +619,10 @@ function extractSyncKeyFromFrontmatter(fm: Record<string, unknown>): string {
 
 function isOwnedSyncFile(fm: Record<string, unknown>): boolean {
 	const source = typeof fm.source === "string" ? fm.source.trim().toLowerCase() : "";
-	return fm[FRONTMATTER_OWNED] === true && source === SYNC_SOURCE && typeof fm[FRONTMATTER_SYNC_KEY] === "string";
+	const ownedRaw = fm[FRONTMATTER_OWNED];
+	const owned = ownedRaw === true
+		|| (typeof ownedRaw === "string" && ["true", "1", "yes", "on"].includes(ownedRaw.trim().toLowerCase()));
+	return owned && source === SYNC_SOURCE && extractSyncKeyFromFrontmatter(fm).length > 0;
 }
 
 function periodToMs(period: CalendarSyncPeriod): number {
@@ -604,12 +654,11 @@ function buildEventFrontmatter(plugin: EpochPlugin, record: SyncRecord, template
 	const descProperty = getYamlDescriptionPropertyKey(plugin);
 	const fm: Record<string, unknown> = {
 		source: SYNC_SOURCE,
-		uid: record.uid,
 		[dateProperty]: formatDate(record.start),
 		[FRONTMATTER_UID]: record.uid,
 		[FRONTMATTER_START]: record.start.toISOString(),
 		[FRONTMATTER_END]: record.end ? record.end.toISOString() : "",
-		[FRONTMATTER_SOURCE_URL]: record.sourceUrl,
+		[FRONTMATTER_SOURCE_URL]: sanitizeSourceUrlForStorage(record.sourceUrl),
 		[FRONTMATTER_SYNC_KEY]: record.syncKey,
 		[FRONTMATTER_OWNED]: true,
 		[FRONTMATTER_LAST_SYNC]: new Date().toISOString(),
@@ -630,11 +679,12 @@ async function createOrUpdateOwnedNote(
 	existing: ExistingSyncFile | null
 ): Promise<{ created: boolean; updated: boolean; file: TFile | null }> {
 	const templateProvided = templateText.trim().length > 0;
+	const managedFrontmatter = buildEventFrontmatter(plugin, record, templateProvided);
 	const content = (() => {
 		if (templateProvided) {
 			return renderTemplate(templateText, record).trimEnd() + "\n";
 		}
-		const frontmatter = buildEventFrontmatter(plugin, record, false);
+		const frontmatter = managedFrontmatter;
 		const body = buildFallbackBody(record);
 		return `${buildFrontmatterText(frontmatter)}${body}`.trimEnd() + "\n";
 	})();
@@ -642,6 +692,7 @@ async function createOrUpdateOwnedNote(
 	if (existing?.owned && existing.file instanceof TFile) {
 		try {
 			await plugin.app.vault.modify(existing.file, content);
+			await upsertFrontmatterOnly(existing.file, managedFrontmatter, plugin);
 			return { created: false, updated: true, file: existing.file };
 		} catch {
 			return { created: false, updated: false, file: null };
@@ -658,6 +709,7 @@ async function createOrUpdateOwnedNote(
 		if (af instanceof TFile) continue;
 		try {
 			const file = await plugin.app.vault.create(path, content);
+			await upsertFrontmatterOnly(file, managedFrontmatter, plugin);
 			return { created: true, updated: false, file };
 		} catch {
 			continue;
@@ -740,7 +792,7 @@ export const calendarSyncMethods: CalendarSyncMethods = {
 			for (const url of urls) {
 				try {
 					const text = await fetchIcsText(url);
-					const parsed = parseIcsEvents(url, text);
+					const parsed = parseIcsEvents(sanitizeSourceUrlForStorage(url), text);
 					const records = expandRecurringRecords(parsed, range.from, range.to);
 					for (const record of records) {
 						if (!desired.has(record.syncKey)) desired.set(record.syncKey, record);

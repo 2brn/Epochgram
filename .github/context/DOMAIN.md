@@ -80,6 +80,12 @@ Timeline date marker interactions (Verified)
 - Single click/tap on a date marker opens the daily note **only if it exists** (no fallback).
 - Double-click/double-tap on a date marker creates the daily note if missing (even if other records exist for that date), then opens it.
 
+### Calendar sync notes (Verified)
+- Calendar sync creates one markdown note per ICS event and identifies managed notes by YAML sync metadata (`source: ics`, `syncKey`, `owned`).
+- Ownership detection accepts canonical `owned: true` (or truthy string equivalents like `"true"`) together with `syncKey`.
+- Calendar templates support sync and event placeholders including `{{source}}`, `{{syncKey}}`, `{{owned}}`, `{{uid}}`, `{{startIso}}`, `{{endIso}}`, `{{sourceUrl}}`, `{{lastSyncedAt}}`, `{{cancelled}}`, `{{title}}`, `{{date}}`, `{{time}}`, `{{url}}`, `{{location}}`, `{{description}}`, `{{descriptionYaml}}`, `{{recur}}`, `{{status}}`, `{{allDay}}`.
+- Source URL values saved to notes are sanitized by removing query/hash and trimming secret-looking path segments while preserving a non-sensitive path prefix.
+
 ### Date-format rules (Verified)
 - When Obsidian `moment` is available (normal plugin runtime), any *full-date* Moment format is accepted (including week/weekday/day-of-year/time tokens and literals/prefixes like `note_YYYY-MM-DD`).
 - When parsing a filename, Epochgram extracts only the calendar date and normalizes it to the internal `YYYY-MM-DD` key (time components are ignored for indexing).
