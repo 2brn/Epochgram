@@ -1,5 +1,10 @@
 # Epochgram changelog
 
+## [1.8.14] - 2026-08-05
+- Fixed duplicated records after Calendar sync.
+- Unified Calendar sync YAML keys to match template placeholders.
+- Added source URL sanitization to prevent storing secrets while preserving a safe, rewritten format.
+
 ## [1.8.13] - 2026-08-04
 - Fixed Mark context-menu labels so Native menus consistently show Mark items and color subitems.
 - Removed one extra line as a minor cleanup.
