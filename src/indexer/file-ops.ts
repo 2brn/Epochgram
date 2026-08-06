@@ -171,7 +171,7 @@ export async function renameFile(indexer: unknown, oldPath: string, newPath: str
 		}
 		if (typeof s.plugin?.enqueueAiSummariesForFile === "function") {
 			try {
-				void s.plugin.enqueueAiSummariesForFile(newPath, { force: true });
+				void s.plugin.enqueueAiSummariesForFile(newPath);
 			} catch {
 				// ignore
 			}
@@ -193,7 +193,7 @@ export async function renameFile(indexer: unknown, oldPath: string, newPath: str
 		}
 		if (typeof s.plugin?.enqueueAiSummariesForFile === "function") {
 			try {
-				void s.plugin.enqueueAiSummariesForFile(newPath, { force: true });
+				void s.plugin.enqueueAiSummariesForFile(newPath);
 			} catch {
 				// ignore
 			}

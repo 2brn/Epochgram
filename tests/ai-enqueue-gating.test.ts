@@ -44,4 +44,26 @@ describe("AI enqueue gating", () => {
 		expect(plugin.enqueueAiSummariesForFile).toHaveBeenCalledTimes(1);
 		expect(plugin.enqueueAiSummariesForFile).toHaveBeenCalledWith("note.md");
 	});
+
+	it("does not force AI enqueue on rename processing", async () => {
+		const plugin = makePlugin();
+		plugin.settings.summarizeAI = false;
+		plugin.app.vault.getAbstractFileByPath = vi.fn();
+		const indexer = new Indexer(plugin);
+		const oldFile: any = new TFile("note.md", { extension: "md" });
+		const newFile: any = new TFile("renamed-note.md", { extension: "md" });
+
+		await indexer.processFile(oldFile, { reason: "modify" });
+		plugin.enqueueAiSummariesForFile.mockClear();
+		plugin.app.vault.getAbstractFileByPath.mockImplementation((path: string) => {
+			if (path === "renamed-note.md") return newFile;
+			return null;
+		});
+
+		await indexer.renameFile("note.md", "renamed-note.md");
+
+		expect(plugin.enqueueAiSummariesForFile).toHaveBeenCalledTimes(1);
+		expect(plugin.enqueueAiSummariesForFile).toHaveBeenCalledWith("renamed-note.md");
+		expect(plugin.enqueueAiSummariesForFile).not.toHaveBeenCalledWith("renamed-note.md", { force: true });
+	});
 });

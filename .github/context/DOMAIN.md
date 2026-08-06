@@ -260,6 +260,7 @@ Summary generation (Verified)
     - Auto summarize is ON (`summarizeAI === true`), or
     - the entry was explicitly marked as AI-summary-visible (`aiSummaryVisible === true`).
   - Otherwise, fall back to the normal (non-AI) summary.
+- Automatic AI summary enqueue on file create/modify/rename is treated as auto work (not a manual force action), so disabling `summarizeAI` blocks these background enqueues.
 - Editing summaries (Verified in `ui/menus/summary-menu.ts`): saves YAML frontmatter `description` for the file and clears stored AI summary fields for that file so the description becomes the visible summary source immediately.
 
 AI summary context defaults (Verified)

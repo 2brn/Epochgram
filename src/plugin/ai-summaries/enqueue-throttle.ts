@@ -47,6 +47,7 @@ export async function enqueueThrottledJobs(
 	options: { showNotice?: boolean; allowWhenSummarizeAIDisabled?: boolean } | undefined
 ): Promise<void> {
 	if (jobs.length === 0) return;
+	if (!options?.allowWhenSummarizeAIDisabled && !isSummarizeAIEffective(plugin)) return;
 
 	const map = getAiEnqueueThrottleMap(plugin);
 	let state = map.get(filePath);
