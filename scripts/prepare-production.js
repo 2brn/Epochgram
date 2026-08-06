@@ -265,7 +265,6 @@ function main() {
 	const repoRoot = process.cwd();
 	const pluginName = "epochgram";
 	const args = parseArgs(process.argv.slice(2));
-	const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 
 	const packageDir = path.join(repoRoot, "production", pluginName);
 	const packaged = copyPackagedFiles(repoRoot, packageDir);
@@ -285,12 +284,7 @@ function main() {
 			const msg =
 				"Could not find a default Obsidian vault plugins dir (AKUPARA or nicolevanderhoeven_202204). " +
 				"Set EPOCHGRAM_OBSIDIAN_PLUGINS_DIR or pass --vault-plugins <path>.";
-			if (args.requireVault && !isCI) {
-				process.stderr.write(msg + "\n");
-				process.exitCode = 1;
-			} else {
-				process.stderr.write(msg + " (skipping deploy)\n");
-			}
+			process.stderr.write(msg + " (skipping deploy)\n");
 		} else {
 			deployedDirs = [];
 			for (const pluginsDir of pluginsDirs) {

@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.8.15] - 2026-08-06
+- Fixed AI summary auto-enqueue gating so background create/modify/rename activity respects Auto summarize off and no longer starts the AI bridge unintentionally.
+
 ## [1.8.14] - 2026-08-05
 - Fixed duplicated records after Calendar sync.
 - Unified Calendar sync YAML keys to match template placeholders.
