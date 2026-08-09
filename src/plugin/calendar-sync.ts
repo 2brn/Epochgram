@@ -617,12 +617,14 @@ function extractSyncKeyFromFrontmatter(fm: Record<string, unknown>): string {
 	return typeof raw === "string" ? raw.trim() : "";
 }
 
-function isOwnedSyncFile(fm: Record<string, unknown>): boolean {
-	const source = typeof fm.source === "string" ? fm.source.trim().toLowerCase() : "";
+export function isOwnedSyncFile(fm: Record<string, unknown>): boolean {
+	const sourceRaw = typeof fm.source === "string" ? fm.source.trim().toLowerCase() : "";
 	const ownedRaw = fm[FRONTMATTER_OWNED];
 	const owned = ownedRaw === true
 		|| (typeof ownedRaw === "string" && ["true", "1", "yes", "on"].includes(ownedRaw.trim().toLowerCase()));
-	return owned && source === SYNC_SOURCE && extractSyncKeyFromFrontmatter(fm).length > 0;
+	const syncKey = extractSyncKeyFromFrontmatter(fm);
+	const source = sourceRaw.length > 0 ? sourceRaw : null;
+	return owned && syncKey.length > 0 && (source === null || source === SYNC_SOURCE);
 }
 
 function periodToMs(period: CalendarSyncPeriod): number {
@@ -647,6 +649,21 @@ async function collectExistingSyncFiles(plugin: EpochPlugin, folder: string): Pr
 		out.set(syncKey, { file, syncKey, owned: isOwnedSyncFile(fm) });
 	}
 	return out;
+}
+
+export function getMinimalCalendarSyncPatch(managedFrontmatter: Record<string, unknown>): Record<string, unknown> {
+	const requiredKeys = new Set<string>([
+		FRONTMATTER_SYNC_KEY,
+		FRONTMATTER_START,
+		FRONTMATTER_UID,
+		FRONTMATTER_OWNED,
+		FRONTMATTER_LAST_SYNC,
+	]);
+	const requiredPatch: Record<string, unknown> = {};
+	for (const [k, v] of Object.entries(managedFrontmatter)) {
+		if (requiredKeys.has(k)) requiredPatch[k] = v;
+	}
+	return requiredPatch;
 }
 
 function buildEventFrontmatter(plugin: EpochPlugin, record: SyncRecord, templateProvided: boolean): Record<string, unknown> {
@@ -680,6 +697,8 @@ async function createOrUpdateOwnedNote(
 ): Promise<{ created: boolean; updated: boolean; file: TFile | null }> {
 	const templateProvided = templateText.trim().length > 0;
 	const managedFrontmatter = buildEventFrontmatter(plugin, record, templateProvided);
+	const requiredPatch = getMinimalCalendarSyncPatch(managedFrontmatter);
+
 	const content = (() => {
 		if (templateProvided) {
 			return renderTemplate(templateText, record).trimEnd() + "\n";
@@ -692,7 +711,12 @@ async function createOrUpdateOwnedNote(
 	if (existing?.owned && existing.file instanceof TFile) {
 		try {
 			await plugin.app.vault.modify(existing.file, content);
-			await upsertFrontmatterOnly(existing.file, managedFrontmatter, plugin);
+			// If user provided a template, only enforce required sync keys.
+			if (templateProvided) {
+				await upsertFrontmatterOnly(existing.file, requiredPatch, plugin);
+			} else {
+				await upsertFrontmatterOnly(existing.file, managedFrontmatter, plugin);
+			}
 			return { created: false, updated: true, file: existing.file };
 		} catch {
 			return { created: false, updated: false, file: null };
@@ -709,7 +733,12 @@ async function createOrUpdateOwnedNote(
 		if (af instanceof TFile) continue;
 		try {
 			const file = await plugin.app.vault.create(path, content);
-			await upsertFrontmatterOnly(file, managedFrontmatter, plugin);
+			// After creating file, only write required sync keys when user template provided.
+			if (templateProvided) {
+				await upsertFrontmatterOnly(file, requiredPatch, plugin);
+			} else {
+				await upsertFrontmatterOnly(file, managedFrontmatter, plugin);
+			}
 			return { created: true, updated: false, file };
 		} catch {
 			continue;

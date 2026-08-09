@@ -224,6 +224,8 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 				}
 			})();
 			menu.addItem((item: FileMenuItemLike) => {
+				const useLabels = !!pluginState.app.vault?.getConfig?.("nativeMenus");
+				const labelOrIconOnly = (label: string): string => useLabels ? label : "\u00A0";
 				item.setTitle("Epochgram: Mark").setIcon("highlighter").setDisabled(false);
 
 				const submenu = item.setSubmenu?.();
@@ -240,7 +242,6 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 					}
 				};
 
-				const labelOrIconOnly = (label: string): string => label;
 				let activeGroupSubmenu: Menu | null = null;
 				try {
 					menuWithHide.onHide?.(() => {
@@ -249,7 +250,7 @@ export function registerFileMenu(plugin: EpochPlugin): void {
 				} catch { void 0; }
 				submenu.addItem((it: FileMenuItemLike) => {
 					it
-						.setTitle("Clear mark")
+						.setTitle(labelOrIconOnly("Clear mark"))
 						.setIcon("ban")
 						.setDisabled(!hasAnyMark)
 						.onClick(async () => {

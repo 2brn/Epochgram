@@ -60,6 +60,14 @@ type CanvasRootLike = {
 	semanticRelatedPaths?: Set<string>;
 };
 
+function isNativeMenusEnabled(app: MarkMenuPluginLike["app"] | null | undefined): boolean {
+	try {
+		return !!app?.vault?.getConfig?.("nativeMenus");
+	} catch {
+		return false;
+	}
+}
+
 export function addMarkSubmenu(
 	menu: Menu,
 	state: ReturnType<typeof getMenuState>,
@@ -73,7 +81,8 @@ export function addMarkSubmenu(
 		const typedState = state as MarkMenuStateLike;
 		const typedCanvas = canvas as unknown as CanvasRootLike;
 		const typedMenu = menu as MenuLike;
-		const labelOrIconOnly = (label: string): string => label;
+		const useLabels = isNativeMenusEnabled(typedState.plugin?.app);
+		const labelOrIconOnly = (label: string): string => useLabels ? label : "\u00A0";
 
 		const root = typedCanvas.root ?? activeDocument?.body;
 		if (!root) return;
@@ -228,7 +237,7 @@ export function addMarkSubmenu(
 		};
 		submenu.addItem((subItem) => {
 			subItem
-				.setTitle("Clear mark")
+				.setTitle(labelOrIconOnly("Clear mark"))
 				.setIcon("ban")
 					.setDisabled(!hasExplicitAny)
 				.onClick(() => {
