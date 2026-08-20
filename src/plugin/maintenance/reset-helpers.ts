@@ -227,6 +227,48 @@ function reapplyRecurringReviewedDates(indexer: ResetIndexerRuntime, recurringRe
 	return changedFiles;
 }
 
+function collectReviewStates(indexer: ResetIndexerRuntime): Map<string, unknown> {
+	const states = new Map<string, unknown>();
+	const add = (entry: ResetEntryRuntime, path: string, key: string): void => {
+		if (entry.reviewState === "hidden") return;
+		states.set(`${path}|${key}`, entry.reviewState);
+	};
+	for (const [path, data] of Object.entries(indexer.files ?? {})) {
+		const entries: ResetEntryRuntime[] = [];
+		if (data.cdate) entries.push(data.cdate);
+		if (data.namedDate) entries.push(data.namedDate);
+		if (data.dateProp) entries.push(data.dateProp);
+		if (Array.isArray(data.contentDates)) entries.push(...data.contentDates.filter((entry): entry is ResetEntryRuntime => !!entry && typeof entry === "object"));
+		if (data.trackedDates && typeof data.trackedDates === "object") {
+			for (const entriesByDate of Object.values(data.trackedDates as Record<string, unknown>)) {
+				if (Array.isArray(entriesByDate)) entries.push(...entriesByDate.filter((entry): entry is ResetEntryRuntime => !!entry && typeof entry === "object"));
+			}
+		}
+		for (const entry of entries) add(entry, path, reviewCarryKey(entry));
+	}
+	for (const [date, entries] of Object.entries(indexer.index ?? {})) {
+		if (!Array.isArray(entries)) continue;
+		for (const [position, entry] of entries.entries()) {
+			if (!entry || typeof entry !== "object") continue;
+			const path = typeof entry.file === "string" && entry.file ? entry.file : `index-only:${date}:${position}`;
+			const recurring = (entry as { recurring?: unknown }).recurring === true;
+			const entryDate = typeof entry.date === "string" ? entry.date : date;
+			const key = recurring ? `recurring:${entryDate}` : reviewCarryKey(entry);
+			add(entry, path, key);
+		}
+	}
+	return states;
+}
+
+function countNewlyReviewedRecords(before: Map<string, unknown>, indexer: ResetIndexerRuntime): number {
+	const after = collectReviewStates(indexer);
+	let changed = 0;
+	for (const [key, reviewState] of before) {
+		if (reviewState !== "reviewed" && after.get(key) === "reviewed") changed++;
+	}
+	return changed;
+}
+
 export function clearAllMarks(plugin: EpochPlugin): number {
 	const indexer = getResetIndexer(plugin);
 	const paths = getIndexedPaths(indexer);
@@ -301,6 +343,7 @@ export function reviewAllDraftFiles(plugin: EpochPlugin): number {
 	} catch {
 		// ignore
 	}
+	const reviewStatesBefore = collectReviewStates(indexer);
 	const pathSet = new Set<string>(getIndexedPaths(indexer));
 	const idx = indexer.index;
 	if (idx && typeof idx === "object") {
@@ -358,7 +401,6 @@ export function reviewAllDraftFiles(plugin: EpochPlugin): number {
 			// ignore
 		}
 	}
-	let changedOrphans = 0;
 	const liveIndex = indexer.index;
 	if (liveIndex && typeof liveIndex === "object") {
 		for (const list of Object.values(liveIndex)) {
@@ -369,7 +411,6 @@ export function reviewAllDraftFiles(plugin: EpochPlugin): number {
 				if (entry.reviewState === "reviewed") continue;
 				entry.reviewState = "reviewed";
 				if (typeof entry.file === "string" && entry.file) changedFiles.add(entry.file);
-				else changedOrphans++;
 			}
 		}
 	}
@@ -393,8 +434,7 @@ export function reviewAllDraftFiles(plugin: EpochPlugin): number {
 			if (indexer.files?.[p]) changedFiles.add(p);
 		}
 	}
-	if (changedOrphans > 0 && changedFiles.size === 0) return 1;
-	return changedFiles.size;
+	return countNewlyReviewedRecords(reviewStatesBefore, indexer);
 }
 
 export function clearAllPins(plugin: EpochPlugin): number {
