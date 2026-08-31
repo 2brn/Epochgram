@@ -237,6 +237,7 @@ export async function processFileInternal(
 	}
 	let recurLine = 0;
 	let recurValue: string | null = null;
+	let icsSynced = false;
 	try {
 		const datePropertyKey = getYamlDatePropertyKey(s.plugin);
 		const dateLineRegex = buildFrontmatterPropertyLineRegex(datePropertyKey);
@@ -264,10 +265,15 @@ export async function processFileInternal(
 						recurValue = value ? value : null;
 					}
 				}
+
+				if (!icsSynced && /^\s*syncKey\s*:\s*\S/.test(line)) {
+					icsSynced = true;
+				}
 			}
 		}
 		if (key && /^\d{4}-\d{2}-\d{2}$/.test(key)) {
 			fileData.dateProp = s.buildFileDateEntry(file, lines, key, isText, "dateprop");
+			if (icsSynced) fileData.dateProp.icsSynced = true;
 		}
 	} catch {
 		// ignore
@@ -342,6 +348,8 @@ export async function processFileInternal(
 		fileData.dateProp = previousData.dateProp ?? null;
 		fileData.contentDates = previousData.contentDates ?? [];
 		fileData.recur = previousData.recur ?? null;
+		// Freshly derived from this same content, so it's safe to reapply even when preserving the cached entry.
+		if (icsSynced && fileData.dateProp) fileData.dateProp.icsSynced = true;
 	}
 
 	const shouldResetReviewedOnEdit =

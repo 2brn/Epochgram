@@ -114,7 +114,8 @@ export const SUMMARY_ICON_TRACKED_REMOVED = "pen-line";
 export const SUMMARY_ICON_TRACKED_MODIFIED = "pen";
 export const SUMMARY_ICON_NOTE = "";
 export const SUMMARY_ICON_PARSED = "calendar";
-export const SUMMARY_ICON_RECURRING = "refresh-cw";
+export const SUMMARY_ICON_RECURRING = "repeat";
+export const SUMMARY_ICON_ICS_SYNC = "bell";
 export const SUMMARY_ICON_ATTACHMENT = "paperclip";
 export const SUMMARY_ICON_PIN = "pin-fill";
 

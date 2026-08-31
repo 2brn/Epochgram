@@ -85,6 +85,8 @@ export interface DateEntry {
 	fromFrontmatter?: boolean;
 	/** True for synthetic recurring occurrences derived from frontmatter `recur:`. */
 	recurring?: boolean;
+	/** True when a frontmatter-date entry originates from a calendar sync (ICS) note. */
+	icsSynced?: boolean;
 	epochBucket?: EpochBucket;
 	epochStart?: string;
 	epochEnd?: string;

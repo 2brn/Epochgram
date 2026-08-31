@@ -337,6 +337,7 @@ Behavior:
 - Sync window is fixed to `-30` and `+365` days.
 - Recurring ICS events write YAML `recur`.
 - Missing/cancelled events are removed only for syncer-owned files; non-owned files are marked `cancelled: true`.
+- Synced events appear on the timeline with the <img src="images/bell.svg" width="16" height="16" alt=""> icon.
 
 > [!TIP]
 > For multi-day events, use `{{startIso}}-{{endIso}}` in the template to index a date range.
