@@ -1,5 +1,9 @@
 # Epochgram changelog
 
+## [1.8.18] - 2026-08-31
+- Added a dedicated bell icon on the timeline for ICS calendar sync (synced) events, documented in the README.
+- Fixed a caching bug where already-indexed records could lose newly derived flags (e.g. the new sync icon) on reindex/rebuild when file content was unchanged.
+
 ## [1.8.17] - 2026-08-20
 - Fixed Review all to persist first-run recurring records and report the count of records whose state changed.
 
