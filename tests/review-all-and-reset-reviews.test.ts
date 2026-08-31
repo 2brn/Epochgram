@@ -29,7 +29,7 @@ describe("Review all + Reset reviews", () => {
 		};
 
 		const changed = reviewAllDraftFiles(makePluginWithIndexer(indexer));
-		expect(changed).toBe(1);
+		expect(changed).toBe(0);
 		expect(setFileReviewStateForAllRecordsPreserveHidden).toHaveBeenCalledTimes(3);
 		expect(setFileReviewStateForAllRecordsPreserveHidden).toHaveBeenCalledWith("a.md", "reviewed");
 		expect(setFileReviewStateForAllRecordsPreserveHidden).toHaveBeenCalledWith("b.md", "reviewed");
@@ -63,6 +63,21 @@ describe("Review all + Reset reviews", () => {
 		expect(index["2026-01-01"][1].reviewState).toBe("reviewed");
 		expect(setFileReviewStateForAllRecordsPreserveHidden).toHaveBeenCalledWith("a.md", "reviewed");
 		expect(setFileReviewStateForAllRecordsPreserveHidden).toHaveBeenCalledWith("orphan.md", "reviewed");
+	});
+
+	it("Review all counts each record whose review state changes", () => {
+		const index: any = {
+			"2026-01-01": [
+				{ file: "a.md", source: "content", date: "2026-01-01", blockStart: 1, blockEnd: 1, reviewState: "draft" },
+				{ file: "a.md", source: "content", date: "2026-01-01", blockStart: 2, blockEnd: 2, reviewState: "draft" },
+				{ file: "a.md", source: "content", date: "2026-01-01", blockStart: 3, blockEnd: 3, reviewState: "reviewed" }
+			]
+		};
+		const indexer: any = { files: {}, index };
+
+		const changed = reviewAllDraftFiles(makePluginWithIndexer(indexer));
+
+		expect(changed).toBe(2);
 	});
 
 	it("Review all recurring can mark reviewed on first run without prebuilt synthetic recurring index entries", () => {
@@ -146,10 +161,43 @@ describe("Review all + Reset reviews", () => {
 		};
 
 		const changed = reviewAllDraftFiles(makePluginWithIndexer(indexer));
-		expect(changed).toBe(1);
+		expect(changed).toBe(2);
 		expect(files[filePath].recurReviewedDates).toEqual(["2026-03-01", "2026-03-02"]);
 		expect(indexer.refreshSyntheticEntries).toHaveBeenCalledTimes(1);
 		expect(indexer.updateAggregatedEntries).toHaveBeenCalled();
+	});
+
+	it("Review all counts recurring records created during its initial refresh", () => {
+		const filePath = "recur.md";
+		const index: any = {};
+		const indexer: any = {
+			files: {
+				[filePath]: {
+					cdate: null,
+					namedDate: null,
+					dateProp: null,
+					contentDates: [],
+					trackedDates: {},
+					recurHiddenDates: [],
+					recurReviewedDates: []
+				}
+			},
+			index,
+			getIndexedPaths: () => [filePath],
+			refreshSyntheticEntries: () => {
+				index["2026-03-01"] = [{ file: filePath, source: "content", date: "2026-03-01", recurring: true, reviewState: "draft" }];
+				index["2026-03-02"] = [{ file: filePath, source: "content", date: "2026-03-02", recurring: true, reviewState: "draft" }];
+			},
+			setFileReviewStateForAllRecordsPreserveHidden: vi.fn(() => true),
+			setFileReviewStateForAllRecords: vi.fn(() => true),
+			updateAggregatedEntries: vi.fn()
+		};
+
+		const changed = reviewAllDraftFiles(makePluginWithIndexer(indexer));
+
+		expect(changed).toBe(2);
+		expect(index["2026-03-01"][0].reviewState).toBe("reviewed");
+		expect(index["2026-03-02"][0].reviewState).toBe("reviewed");
 	});
 
 	it("Review all rehydrates file reviewState from reviewed date buckets", () => {
@@ -193,7 +241,7 @@ describe("Review all + Reset reviews", () => {
 		};
 
 		const changed = reviewAllDraftFiles(makePluginWithIndexer(indexer));
-		expect(changed).toBe(1);
+		expect(changed).toBe(0);
 		expect(files["todo.md"].contentDates[0].reviewState).toBe("reviewed");
 		expect(updateAggregatedEntries).toHaveBeenCalledWith("todo.md");
 	});

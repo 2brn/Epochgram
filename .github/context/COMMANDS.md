@@ -72,6 +72,7 @@ Commands are registered in `plugin/lifecycle.ts` (export command via `plugin/exp
   - Marks all non-hidden records as Reviewed across all indexed files and index-only records present in date buckets.
   - Also marks recurring synthetic occurrences from affected files as Reviewed (preserving recurring hidden overrides).
   - Does not unhide hidden records.
+  - Reports the number of records whose review state changed.
 
 Maintenance rebuild/reset flows are available in Settings → Indexer (`Index`).
 - Reset does not include dedicated Marks/Pinned options; Topics reset clears both classified topic data and explicit per-file topic terms (index/store only) and does not modify note frontmatter.

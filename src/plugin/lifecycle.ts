@@ -713,7 +713,7 @@ export const lifecycleMethods: LifecycleMethods = {
 						} catch {
 							// ignore
 						}
-						new Notice(`Epochgram: Reviewed ${changed} file${changed === 1 ? "" : "s"}`, 2000);
+						new Notice(`Epochgram: Reviewed ${changed} record${changed === 1 ? "" : "s"}`, 2000);
 					}
 				})();
 			}

@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.8.17] - 2026-08-20
+- Fixed Review all to persist first-run recurring records and report the count of records whose state changed.
+
 ## [1.8.16] - 2026-08-09
 - Fixed auto-populated required properties for calendar event template.
 - Fixed showing only colored circle for Native menus OFF.
