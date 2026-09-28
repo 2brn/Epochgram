@@ -62,6 +62,12 @@ function isEpochEntry(entry: DateEntry | null | undefined): boolean {
 	return file.startsWith("epoch://");
 }
 
+function clearHoverAfterMobileRecordOpen(s: CanvasInteractionState): void {
+	if (s.isPointerDeviceEvent()) return;
+	s.keepHoverUntilPointerMove = false;
+	s.clearHover(true);
+}
+
 async function openEpochEntryTarget(
 	canvas: EpochCanvas,
 	entry: DateEntry,
@@ -192,12 +198,10 @@ export async function handlePointClick(
 	x: number,
 	y: number,
 	ctrlKey: boolean,
-	metaKey: boolean,
-	options?: { preserveHoverOnNonPointer?: boolean }
+	metaKey: boolean
 ): Promise<void> {
 	const s = getEventState(canvas);
 	const interactionState = s as CanvasInteractionState;
-	const preserveHoverOnNonPointer = options?.preserveHoverOnNonPointer === true;
 	const suppressAutoScrollFor = (ms: number) => {
 		try {
 			interactionState.__suppressExternalAutoScrollUntil = nowMs() + ms;
@@ -253,8 +257,8 @@ export async function handlePointClick(
 				s.keepHoverUntilPointerMove = true;
 				s.setHoverSummary(best.dayIndex, best.itemIndex, true);
 				setCssStyles(s.canvas, { cursor: "pointer" });
-			} else if (!preserveHoverOnNonPointer) {
-				s.clearHover();
+			} else {
+				clearHoverAfterMobileRecordOpen(interactionState);
 			}
 			return;
 		}
@@ -289,8 +293,8 @@ export async function handlePointClick(
 					s.keepHoverUntilPointerMove = true;
 					s.setHoverSummary(best.dayIndex, best.itemIndex, true);
 					setCssStyles(s.canvas, { cursor: "pointer" });
-				} else if (!preserveHoverOnNonPointer) {
-					s.clearHover();
+				} else {
+					clearHoverAfterMobileRecordOpen(interactionState);
 				}
 				return;
 			}
@@ -303,8 +307,8 @@ export async function handlePointClick(
 			s.keepHoverUntilPointerMove = true;
 			s.setHoverSummary(best.dayIndex, best.itemIndex, true);
 				setCssStyles(s.canvas, { cursor: "pointer" });
-		} else if (!preserveHoverOnNonPointer) {
-			s.clearHover();
+		} else {
+			clearHoverAfterMobileRecordOpen(interactionState);
 		}
 		return;
 	}
@@ -393,7 +397,7 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 				s.setHoverSummary(best.dayIndex, best.itemIndex, true);
 				setCssStyles(s.canvas, { cursor: "pointer" });
 			} else {
-				s.clearHover();
+				clearHoverAfterMobileRecordOpen(interactionState);
 			}
 			return;
 		}
@@ -414,7 +418,7 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 					s.setHoverSummary(best.dayIndex, best.itemIndex, true);
 					setCssStyles(s.canvas, { cursor: "pointer" });
 				} else {
-					s.clearHover();
+					clearHoverAfterMobileRecordOpen(interactionState);
 				}
 				return;
 			}
@@ -425,7 +429,7 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 			s.keepHoverUntilPointerMove = true;
 			s.setHoverSummary(best.dayIndex, best.itemIndex, true);
 		} else {
-			s.clearHover();
+			clearHoverAfterMobileRecordOpen(interactionState);
 		}
 		return;
 	}
@@ -475,7 +479,7 @@ export async function handleDoublePoint(canvas: EpochCanvas, x: number, y: numbe
 				s.keepHoverUntilPointerMove = true;
 				setCssStyles(s.canvas, { cursor: "pointer" });
 			} else {
-				s.clearHover();
+				clearHoverAfterMobileRecordOpen(interactionState);
 			}
 			return;
 		}
@@ -486,7 +490,7 @@ export async function handleDoublePoint(canvas: EpochCanvas, x: number, y: numbe
 			setCssStyles(s.canvas, { cursor: "pointer" });
 			setCssStyles(s.canvas, { cursor: "pointer" });
 		} else {
-			s.clearHover();
+			clearHoverAfterMobileRecordOpen(interactionState);
 		}
 		return;
 	}

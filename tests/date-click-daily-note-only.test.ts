@@ -110,6 +110,37 @@ describe("TC-025/TC-026 date click behavior", () => {
 		vi.useRealTimers();
 	});
 
+	test("mobile record tap clears the touch hover after opening", async () => {
+		const day = {
+			index: 0,
+			summaryRects: [
+				{
+					x1: 0,
+					y1: 0,
+					x2: 100,
+					y2: 20,
+					itemIndex: 0,
+					entry: { file: "mobile-record.md" }
+				}
+			],
+			hasVisibleDate: false,
+			dateRect: { x1: 0, y1: 0, x2: 100, y2: 20 }
+		} as any;
+		const clearHover = vi.fn();
+		const state = makeBaseState({
+			layouts: [day],
+			isPointerDeviceEvent: () => false,
+			keepHoverUntilPointerMove: true,
+			clearHover
+		});
+
+		await handlePointClick(state as any, 10, 10, false, false);
+
+		expect(state.openEntry).toHaveBeenCalledTimes(1);
+		expect(clearHover).toHaveBeenCalledWith(true);
+		expect(state.keepHoverUntilPointerMove).toBe(false);
+	});
+
 	test("double click on date always creates a new daily note", async () => {
 		const state = makeBaseState({
 			findDayLayoutAtPoint: () => ({ index: 0 } as any),

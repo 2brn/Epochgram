@@ -43,6 +43,9 @@ export interface CanvasEventInternals {
 	lastTapTime: number;
 	lastTapX: number;
 	lastTapY: number;
+	lastTwoFingerTapTime: number;
+	lastTwoFingerTapX: number;
+	lastTwoFingerTapY: number;
 	keepHoverAfterMenu: boolean;
 	entryDragActive?: boolean;
 	entryDragEntry?: DateEntry | null;
@@ -103,6 +106,7 @@ export interface CanvasEventInternals {
 	animateToToday(): void;
 	advanceScrollNav(direction?: number, options?: { wrap?: boolean }): boolean;
 	resetScrollNavToToday(): void;
+	focusActiveFileOrToday(): void;
 	getToday(): Date;
 	getDateForIndex(index: number, today: Date): Date;
 	isPointerDeviceEvent(): boolean;

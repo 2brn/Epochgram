@@ -82,6 +82,7 @@ Manual install
 | **Wheel** or **Pan** | Scroll |
 | **Ctrl/Cmd+Wheel** or **Pinch** | Zoom |
 | **Alt/Option+Wheel/Up/Down** or **Two-Finger-Tap** | Jump to the next/previous similar record |
+| **Two-Finger-Double-Tap** | Focus the open file's record |
 | **Shift+Wheel** | Zoom around the current record |
 | **Alt/Option+Hover** record | Show the file preview |
 | **Drag-N-Drop** record | Change its date |
@@ -509,6 +510,9 @@ similar: [links, tags, title, semantics, topics] # match similarity only by thes
 recur: every day # create recurring records (same repeat:)
 ---
 ```
+
+> [!TIP]
+> When you open a record from the timeline, its file gets a temporary dock pin at that record's date. Click the pin label to open the file, or double-click it to scroll to the record.
 
 ## Settings & Data
 

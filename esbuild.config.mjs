@@ -28,7 +28,10 @@ const WHATS_NEW_REGISTRY_VIRTUAL = "epochgram-whats-new-registry";
 function readGitBlobText(filePath) {
 	const relativePath = path.relative(process.cwd(), filePath).split(path.sep).join("/");
 	try {
-		return childProcess.execFileSync("git", ["show", `HEAD:${relativePath}`], { encoding: "utf8" });
+		return childProcess.execFileSync("git", ["show", `HEAD:${relativePath}`], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"]
+		});
 	} catch {
 		try {
 			return fs.readFileSync(filePath, "utf8");

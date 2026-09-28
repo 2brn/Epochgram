@@ -21,6 +21,8 @@
     - On mobile, this follow-focus scroll can be computed even while the view is collapsed/hidden (using the last known viewport size), so opening the timeline later shows it already positioned.
   - Re-activating an already-open editor leaf for the same file updates highlights but does not auto-scroll the timeline.
   - After interacting with the timeline (click/tap/double-click), Epochgram suppresses that auto-scroll briefly to avoid snapping away from the user’s current viewport.
+  - Opening a timeline record gives the active file a session-only dock pin at that exact selected record date; it never changes the file's YAML `pin` value. Its label and draft styling refresh from the current indexed record after edits.
+  - A two-finger double-tap focuses the active file's timeline record, or Today when no active record can be resolved.
   - Daily notes from the timeline:
     - Single click/tap on a date label opens the first available daily note for that date (base note first, then ` (n)` variants).
     - Double-click / double-tap on a date label always creates a new daily note for that date using the next available ` (n)` variant name.

@@ -1,5 +1,12 @@
 # Epochgram changelog
 
+## [1.8.22] - 2026-09-28
+- Added a two-finger double-tap gesture to focus the open file's timeline record, or Today when no file is open.
+- Added a transient dock pin for the active timeline record at the selected date; its label and styling now refresh when that record changes.
+- Cleared touch hover after opening a record on mobile and made same-label pin double-taps focus the record instead of opening it twice.
+- Fixed a renderer lockup caused by stale indexed records repeatedly triggering a silent refresh.
+- Added README guidance and a What's New page for 1.8.22.
+
 ## [1.8.21] - 2026-09-07
 - Fixed note search highlighting for unquoted multi-word queries.
 

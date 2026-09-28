@@ -49,6 +49,7 @@ type CanvasSetupState = {
 	visibilityRetryTimeout: number | null;
 	animFrame: number | null;
 	touchLongPressTimeout: number | null;
+	pendingPinOpen?: { timer: number; key: string; removeOutsideListener?: () => void } | null;
 	dateOverlayTimer: number | null;
 	dateOverlayEl: HTMLElement | null;
 	pinOverlayEl: HTMLElement | null;
@@ -318,6 +319,15 @@ export const canvasSetupMethods: CanvasSetupMethods = {
 		if (state.touchLongPressTimeout != null) {
 			w.clearTimeout(state.touchLongPressTimeout);
 			state.touchLongPressTimeout = null;
+		}
+		if (state.pendingPinOpen) {
+			w.clearTimeout(state.pendingPinOpen.timer);
+			try {
+				state.pendingPinOpen.removeOutsideListener?.();
+			} catch {
+				// ignore
+			}
+			state.pendingPinOpen = null;
 		}
 		if (state.visibilityRetryTimeout != null) {
 			w.clearTimeout(state.visibilityRetryTimeout);

@@ -87,7 +87,9 @@ import {
 import {
 	suppressNextFocusScrollForPath as suppressNextFocusScrollForPathHelper,
 	setActiveFile as setActiveFileHelper,
-	clearFocusedEpochRange as clearFocusedEpochRangeHelper
+	setActiveFileTimelineEntry as setActiveFileTimelineEntryHelper,
+	clearFocusedEpochRange as clearFocusedEpochRangeHelper,
+	focusActiveFileOrToday as focusActiveFileOrTodayHelper
 } from "./epoch-canvas/active-file";
 import {
 	hasVisibleEntryForFile as hasVisibleEntryForFileHelper,
@@ -160,7 +162,7 @@ export class EpochCanvas {
 	private lastPanY = 0; private lastPanTime = 0; private velocityY = 0; private lastFrameTime: number | null = null;
 	private index: EpochIndex = {};
 	private layouts: DayLayout[] = [];
-	private activeFilePath: string | null = null; private suppressNextFocusHover: string | null = null; private forceNextFocusHover: string | null = null; private lastFileLeaf: WorkspaceLeaf | null = null;
+	private activeFilePath: string | null = null; private activeFileTimelineEntry: DateEntry | null = null; private pendingActiveFileTimelineEntry: DateEntry | null = null; private suppressNextFocusHover: string | null = null; private forceNextFocusHover: string | null = null; private lastFileLeaf: WorkspaceLeaf | null = null;
 	private handleWheel = (e: WheelEvent) => canvasEventHandlers.handleWheel(this, e);
 	private handleMouseDown = (e: MouseEvent) => canvasEventHandlers.handleMouseDown(this, e);
 	private handleMouseMoveWindow = (e: MouseEvent) => canvasEventHandlers.handleMouseMove(this, e);
@@ -230,6 +232,7 @@ export class EpochCanvas {
 	private viewInteractionUntil = 0;
 	private suppressHoverUntil = 0; private suppressHoverUntilPointerMove = false;
 	private lastTapTime = 0; private lastTapX = 0; private lastTapY = 0;
+	private lastTwoFingerTapTime = 0; private lastTwoFingerTapX = 0; private lastTwoFingerTapY = 0;
 	private keepHoverAfterMenu = false;
 	private reviewFilterMode: "reviewed+draft" | "draft" = "reviewed+draft";
 	private showHidden = false; private showDraftOnly = false;
@@ -275,7 +278,7 @@ export class EpochCanvas {
 		clearFocusedEpochRangeHelper(this);
 	}
 	private epochsViewBucket: string | null = null; private epochsViewPrevBucket: string | null = null; private epochsViewBucketAnimStart: number | null = null;
-	private pendingVisibilityDraw = false; private visibilityRetryTimeout: number | null = null; private missingFileRebuildPending = false;
+	private pendingVisibilityDraw = false; private visibilityRetryTimeout: number | null = null; private missingFileRebuildPending = false; private missingFileRebuildAttempted = false;
 	private hoverParent: HoverParent | null = null; private hoverSourceId: string;
 	private hoverPreviewKey: string | null = null; private lastPointerEvent: MouseEvent | null = null;
 	private modKeyActive = false; private previewLockedNotified = false; private previewLockedUntilAltRelease = false;
@@ -389,6 +392,12 @@ export class EpochCanvas {
 	public suppressNextFocusScrollForPath(path: string | null): void { suppressNextFocusScrollForPathHelper(this, path); }
 
 	public setActiveFile(path: string | null, line: number | null = null, options?: { suppressFocus?: boolean }) { setActiveFileHelper(this, path, line, options); }
+
+	public setActiveFileTimelineEntry(entry: DateEntry | null): void {
+		setActiveFileTimelineEntryHelper(this, entry);
+	}
+
+	public focusActiveFileOrToday(): void { focusActiveFileOrTodayHelper(this); }
 
 	public initSize() { this.resize(); }
 

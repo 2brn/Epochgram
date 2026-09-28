@@ -56,6 +56,8 @@ interface CanvasActionsInternals {
 	suppressNextFocusScroll: string | null;
 	forceNextFocusHover: string | null;
 	missingFileRebuildPending: boolean;
+	missingFileRebuildAttempted?: boolean;
+	setActiveFileTimelineEntry?(entry: DateEntry | null): void;
 	refreshIndex(): void;
 	draw(): void;
 	clearHover(force?: boolean): void;
@@ -206,6 +208,7 @@ export async function openEntry(
 	options?: OpenFileOptions
 ): Promise<void> {
 	const state = actionState(canvas);
+	state.setActiveFileTimelineEntry?.(entry);
 	const line = Math.max(0, entry.blockStart ?? 0);
 	if (suppressFocusHover) {
 		state.suppressNextFocusHover = entry.file;
@@ -451,9 +454,13 @@ async function promptTextValue(
 
 export async function triggerMissingFileRebuild(canvas: EpochCanvas): Promise<void> {
 	const state = actionState(canvas);
-	if (state.missingFileRebuildPending) {
+	// A stale entry can be encountered many times in a single draw. One silent
+	// refresh is enough to prune all missing paths; repeating it can redraw into
+	// an unbounded refresh loop if the indexer cannot remove the entry.
+	if (state.missingFileRebuildPending || state.missingFileRebuildAttempted) {
 		return;
 	}
+	state.missingFileRebuildAttempted = true;
 	state.missingFileRebuildPending = true;
 	try {
 		const plugin = state.plugin;

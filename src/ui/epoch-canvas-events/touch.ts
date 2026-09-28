@@ -229,7 +229,7 @@ function scheduleDeferredDateTapOpen(canvas: EpochCanvas, s: TouchEventState, x:
 					return;
 				}
 				clearPendingDateTapOpen(st);
-				void handlePointClick(canvas, x, y, false, false, { preserveHoverOnNonPointer: true });
+				void handlePointClick(canvas, x, y, false, false);
 			} catch {
 				// ignore
 			}
@@ -904,11 +904,13 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 	if (wasPinch) {
 		s.touchMoved = true;
 		s.lastTapTime = 0;
+		s.lastTwoFingerTapTime = 0;
 	}
 	if (wasTwoFinger) {
 		const now = Date.now();
 		const quickTwoFinger = now - s.twoFingerStartTime < 600 && !s.twoFingerMoved;
 		const rect = s.canvas.getBoundingClientRect();
+		const anchorX = s.twoFingerAnchorX;
 		const anchorY = s.twoFingerAnchorY;
 		s.touchMode = null;
 		s.twoFingerStartTime = 0;
@@ -918,25 +920,44 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 		s.dragSource = null;
 		let navigated = false;
 		if (quickTwoFinger) {
-			let direction = 1;
-			const height = rect.height;
-			if (height > 0) {
-				const relativeY = anchorY - rect.top;
-				if (relativeY >= 0 && relativeY < height / 2) {
-					direction = -1;
+			const lastTapAt = Number(s.lastTwoFingerTapTime);
+			const lastTapX = Number(s.lastTwoFingerTapX);
+			const lastTapY = Number(s.lastTwoFingerTapY);
+			const isDoubleTap =
+				Number.isFinite(lastTapAt) &&
+				now - lastTapAt < DOUBLE_TAP_MAX_DELAY &&
+				Math.hypot(anchorX - lastTapX, anchorY - lastTapY) < DOUBLE_TAP_MAX_DIST;
+			if (isDoubleTap) {
+				s.lastTwoFingerTapTime = 0;
+				try {
+					s.focusActiveFileOrToday();
+				} catch {
+					s.resetScrollNavToToday();
 				}
-			}
-			// On mobile, there is often no hover yet (opened file but no pointer). Anchoring
-			// the first scroll-nav step from the viewport edge can jump to the newest/oldest
-			// target instead of moving relative to the user's current view.
-			try {
-				if (!s.isPointerDeviceEvent()) {
-					s.__scrollNavAnchorMode = "center";
+			} else {
+				s.lastTwoFingerTapTime = now;
+				s.lastTwoFingerTapX = anchorX;
+				s.lastTwoFingerTapY = anchorY;
+				let direction = 1;
+				const height = rect.height;
+				if (height > 0) {
+					const relativeY = anchorY - rect.top;
+					if (relativeY >= 0 && relativeY < height / 2) {
+						direction = -1;
+					}
 				}
-			} catch {
-				// ignore
+				// On mobile, there is often no hover yet (opened file but no pointer). Anchoring
+				// the first scroll-nav step from the viewport edge can jump to the newest/oldest
+				// target instead of moving relative to the user's current view.
+				try {
+					if (!s.isPointerDeviceEvent()) {
+						s.__scrollNavAnchorMode = "center";
+					}
+				} catch {
+					// ignore
+				}
+				navigated = s.advanceScrollNav(direction);
 			}
-			navigated = s.advanceScrollNav(direction);
 			hideHoverPreviewHelper(canvas);
 
 			// Some touchpad/touch implementations emit incidental mousemove/pointer updates
@@ -947,6 +968,8 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 			} catch {
 				// ignore
 			}
+		} else {
+			s.lastTwoFingerTapTime = 0;
 		}
 		// Two-finger tap scroll navigation should behave like Alt+Wheel / Alt+UpDown:
 		// if we're already at the boundary (no more targets), keep the current hover/focus
@@ -999,7 +1022,7 @@ export async function handleTouchEnd(canvas: EpochCanvas, event: TouchEvent): Pr
 			if (touchDay) {
 				scheduleDeferredDateTapOpen(canvas, s, x, y);
 			} else {
-				await handlePointClick(canvas, x, y, false, false, { preserveHoverOnNonPointer: true });
+				await handlePointClick(canvas, x, y, false, false);
 			}
 			try {
 				s.__touchHoverPinnedUntil = window.performance.now() + 260;
@@ -1068,6 +1091,7 @@ export function handleTouchCancel(canvas: EpochCanvas, event: TouchEvent): void 
 	void event;
 	try {
 		s.__touchConsumeActionsToken = 0;
+		s.lastTwoFingerTapTime = 0;
 	} catch {
 		// ignore
 	}

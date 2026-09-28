@@ -1,4 +1,5 @@
 import { Platform } from "obsidian";
+import type { DateEntry } from "../../indexer/types";
 import type { EpochCanvas } from "../epoch-canvas";
 
 import { refreshSemanticRelatedForActiveFile } from "./semantic";
@@ -9,6 +10,8 @@ type ActiveFileCanvasState = {
 	focusedEpochRange: unknown;
 	pendingActiveFileFocus?: { path: string | null; line: number | null } | null;
 	activeFilePath: string | null;
+	activeFileTimelineEntry?: DateEntry | null;
+	pendingActiveFileTimelineEntry?: DateEntry | null;
 	scrollNavFile: string | null;
 	scrollNavIndex: number;
 	pendingScrollNavHighlight: unknown;
@@ -28,8 +31,10 @@ type ActiveFileCanvasState = {
 	scheduleVisibilityCheck(): void;
 	clearHover(force?: boolean): void;
 	draw(): void;
+	requestHoverAnimation?(): void;
 	refreshSemanticRelatedForActiveFile(force?: boolean): void;
 	focusFile(path: string, line: number | null, useHoverHighlight: boolean): boolean;
+	resetScrollNavToToday(): void;
 	snapInitialPosition(path: string, line: number | null, options?: { draw?: boolean }): void;
 	isPointerDeviceEvent?(): boolean;
 	__lastKnownCanvasCssWidth?: number;
@@ -59,6 +64,32 @@ export function clearFocusedEpochRange(canvas: EpochCanvas): void {
 	c.focusedEpochRange = null;
 }
 
+export function focusActiveFileOrToday(canvas: EpochCanvas): void {
+	const c = state(canvas);
+	const path = String(c.activeFilePath ?? "");
+	try {
+		if (path && c.focusFile(path, null, false)) return;
+	} catch {
+		// Fall back to Today when the active file cannot be resolved on the timeline.
+	}
+	c.resetScrollNavToToday();
+}
+
+export function setActiveFileTimelineEntry(canvas: EpochCanvas, entry: DateEntry | null): void {
+	const c = state(canvas);
+	const entryPath = typeof entry?.file === "string" ? entry.file : null;
+	if (entryPath && entryPath !== c.activeFilePath) {
+		// Opening another file emits its active-leaf event asynchronously. Keep the
+		// current pin unchanged until that event arrives, otherwise it briefly falls
+		// back to the old file's anchor date.
+		c.pendingActiveFileTimelineEntry = entry;
+		return;
+	}
+	c.pendingActiveFileTimelineEntry = null;
+	c.activeFileTimelineEntry = entry;
+	c.requestHoverAnimation?.();
+}
+
 export function setActiveFile(
 	canvas: EpochCanvas,
 	path: string | null,
@@ -86,6 +117,19 @@ export function setActiveFile(
 	};
 	if (c.pendingActiveFileFocus && c.pendingActiveFileFocus.path !== path) {
 		c.pendingActiveFileFocus = null;
+	}
+	const pendingEntry = c.pendingActiveFileTimelineEntry ?? null;
+	const pendingPath = typeof pendingEntry?.file === "string" ? pendingEntry.file : null;
+	const promotedPendingEntry = !!pendingPath && pendingPath === path;
+	if (promotedPendingEntry) {
+		c.activeFileTimelineEntry = pendingEntry;
+		c.pendingActiveFileTimelineEntry = null;
+	} else if (pendingPath && path && path !== c.activeFilePath) {
+		// A different user-driven file change superseded the pending open.
+		c.pendingActiveFileTimelineEntry = null;
+	}
+	if (c.activeFileTimelineEntry?.file !== path) {
+		c.activeFileTimelineEntry = null;
 	}
 	if (path !== c.activeFilePath) {
 		clearFocusedEpochRange(canvas);
@@ -119,6 +163,9 @@ export function setActiveFile(
 		return;
 	}
 	c.activeFilePath = path;
+	if (promotedPendingEntry) {
+		c.requestHoverAnimation?.();
+	}
 	refreshSemanticRelatedForActiveFile(canvas, true);
 	if (path) {
 		const rootHovered = c.root.matches(":hover");

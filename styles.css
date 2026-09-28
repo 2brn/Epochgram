@@ -480,13 +480,20 @@ body.theme-light .epoch-license-section {
   border-left: 10px solid var(--epoch-pin-fill, var(--text-normal));
 }
 
-.epoch-root .epoch-pin-badge:hover,
 .epoch-root .epoch-pin-badge:focus-visible,
 .epoch-root .epoch-pin-badge:active,
 .epoch-root .epoch-pin-badge.is-menu-hovered {
   background: transparent;
   color: var(--epoch-pin-text, var(--background-primary));
   transform: scale(1.375);
+}
+
+@media (any-hover: hover) and (any-pointer: fine) {
+  .epoch-root .epoch-pin-badge:hover {
+    background: transparent;
+    color: var(--epoch-pin-text, var(--background-primary));
+    transform: scale(1.375);
+  }
 }
 
 .epoch-root .epoch-pin-badge.is-drag-source {
@@ -515,10 +522,27 @@ body.theme-light .epoch-license-section {
   top: 1.5px;
 }
 
-.epoch-root .epoch-pin-badge:hover .epoch-pin-badge-label,
 .epoch-root .epoch-pin-badge:focus-visible .epoch-pin-badge-label,
 .epoch-root .epoch-pin-badge.is-menu-hovered .epoch-pin-badge-label {
   transform: translateY(0.5px) scaleX(1.03) scaleY(1.08);
+}
+
+@media (any-hover: hover) and (any-pointer: fine) {
+  .epoch-root .epoch-pin-badge:hover .epoch-pin-badge-label {
+    transform: translateY(0.5px) scaleX(1.03) scaleY(1.08);
+  }
+}
+
+.epoch-root .epoch-pin-badge.is-touch-unhovered,
+.epoch-root .epoch-pin-badge.is-touch-unhovered:hover,
+.epoch-root .epoch-pin-badge.is-touch-unhovered:active,
+.epoch-root .epoch-pin-badge.is-touch-unhovered:focus-visible {
+  transform: none;
+}
+
+.epoch-root .epoch-pin-badge.is-touch-unhovered .epoch-pin-badge-label,
+.epoch-root .epoch-pin-badge.is-touch-unhovered:hover .epoch-pin-badge-label {
+  transform: none;
 }
 
 .epoch-root .epoch-pin-badge-label.is-justify {
@@ -544,10 +568,14 @@ body.theme-light .epoch-license-section {
     transform: translateY(2px);
   }
 
-  .epoch-root .epoch-pin-badge:hover .epoch-pin-badge-label,
   .epoch-root .epoch-pin-badge:focus-visible .epoch-pin-badge-label,
   .epoch-root .epoch-pin-badge.is-menu-hovered .epoch-pin-badge-label {
     transform: translateY(2px) scaleX(1.03) scaleY(1.08);
+  }
+
+  .epoch-root .epoch-pin-badge.is-touch-unhovered .epoch-pin-badge-label,
+  .epoch-root .epoch-pin-badge.is-touch-unhovered:hover .epoch-pin-badge-label {
+    transform: translateY(2px);
   }
 
   .epoch-control-button:not(.is-active):hover,

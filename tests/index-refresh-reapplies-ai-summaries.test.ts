@@ -11,7 +11,7 @@ function stripAiFields(entry: any): void {
 }
 
 describe("index refresh", () => {
-	it("reapplies saved AI summaries after a refresh", async () => {
+	it("reapplies saved AI summaries after a silent refresh", async () => {
 		const loadSpy = vi
 			.spyOn(summaryStore, "loadEpochSummariesFromDisk")
 			.mockResolvedValue({
@@ -103,7 +103,7 @@ describe("index refresh", () => {
 
 		await indexingMethods.runIndexOperation.call(plugin, "refresh", {
 			skipEnsure: true,
-			suppressNotices: false
+			suppressNotices: true
 		});
 
 		expect(loadSpy).toHaveBeenCalledTimes(1);

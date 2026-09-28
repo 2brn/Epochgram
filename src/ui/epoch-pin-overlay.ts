@@ -3,19 +3,25 @@ import type { DateEntry, FileIndexData, PinMode } from "../indexer/types";
 import type { EpochIndex } from "../indexer/types";
 import type { EpochCanvas } from "./epoch-canvas";
 import type { DayLayout } from "./epoch-canvas-types";
-import { BASE_SPACING, LABEL_OFFSET_X, LONG_PRESS_MS, TIMELINE_X } from "./epoch-canvas-constants";
+import { BASE_SPACING, DOUBLE_TAP_MAX_DELAY, LABEL_OFFSET_X, LONG_PRESS_MS, TIMELINE_X } from "./epoch-canvas-constants";
 import { openEntry } from "./epoch-canvas-actions";
 import { beginAnchorEntryDrag, commitAnchorEntryDrag, updateAnchorEntryDrag } from "./epoch-canvas-events/anchor-dnd";
 import { focusDateWithZoom } from "./epoch-canvas-focus";
 import { getToday } from "./epoch-canvas-helpers";
 import { getEpochMarkColorSet } from "./mark-colors";
 import { getEntryMarkColor, getInheritedMarkColor } from "./summary-rendering/entry-mark-colors";
-import { parseFontSize } from "./epoch-canvas-utils";
+import { parseFontSize, withFontStyle, withFontWeight } from "./epoch-canvas-utils";
 
 type IndexerLike = {
 	getIndexedPaths?: () => string[];
 	getFileIndexData?: (path: string) => FileIndexData | null;
 	index?: EpochIndex;
+};
+
+type PendingPinOpen = {
+	timer: number;
+	key: string;
+	removeOutsideListener?: () => void;
 };
 
 type PinOverlayState = {
@@ -27,10 +33,14 @@ type PinOverlayState = {
 	draw?: () => void;
 	pinOverlayEl: HTMLElement | null;
 	lastPinOverlaySignature: string | null;
+	pendingPinOpen?: PendingPinOpen | null;
+	pinOpenInFlight?: boolean;
+	touchUnhoveredPin?: { file: string; date: string } | null;
 	layouts: DayLayout[];
 	scale: number;
 	offsetY: number;
 	activeFilePath: string | null;
+	activeFileTimelineEntry?: DateEntry | null;
 	semanticRelatedPaths: Set<string> | null;
 	ctx: CanvasRenderingContext2D;
 	keepHoverAfterMenu?: boolean;
@@ -54,6 +64,8 @@ type MenuLike = {
 	hide?: () => void;
 	close?: () => void;
 };
+
+type PinActivationEvent = Event & Pick<MouseEvent, "ctrlKey" | "metaKey">;
 
 type PinRenderItem = {
 	key: string;
@@ -87,7 +99,7 @@ const PIN_BOTTOM_PAD = 4;
 const PIN_DOCK_OPACITY = 0.5;
 const PIN_VISIBLE_OPACITY = 1;
 const PIN_FONT_DELTA_PX = -4;
-const PIN_DOUBLE_TAP_MS = 260;
+const PIN_DOUBLE_TAP_MS = DOUBLE_TAP_MAX_DELAY;
 const PIN_NEAR_OVERLAP_PAD = 4;
 
 function fontMinusPx(font: string, deltaPx: number): string {
@@ -128,6 +140,75 @@ function getAnchorEntry(data: FileIndexData | null | undefined): DateEntry | nul
 function getMode(data: FileIndexData | null | undefined): Exclude<PinMode, "today"> | null {
 	const mode = typeof data?.pinnedFile === "string" ? data.pinnedFile : null;
 	return mode === "date" || mode === "dock" ? mode : null;
+}
+
+function getRefreshedSelectedTimelineEntry(
+	indexer: IndexerLike | undefined,
+	path: string,
+	selectedEntry: DateEntry
+): DateEntry | null {
+	const selectedDate = String(selectedEntry.date || "");
+	if (!selectedDate) return null;
+	const selectedSource = selectedEntry.source;
+	const selectedStart = Number(selectedEntry.blockStart);
+	const selectedEnd = Number(selectedEntry.blockEnd);
+	let closest: DateEntry | null = null;
+	let closestDistance = Number.POSITIVE_INFINITY;
+	for (const entries of Object.values(indexer?.index ?? {})) {
+		if (!Array.isArray(entries)) continue;
+		for (const entry of entries) {
+			if (!entry || entry.file !== path || entry.date !== selectedDate || entry.source !== selectedSource) continue;
+			const entryStart = Number(entry.blockStart);
+			const entryEnd = Number(entry.blockEnd);
+			if (entryStart === selectedStart && entryEnd === selectedEnd) return entry;
+			const distance = Math.abs(entryStart - selectedStart) + Math.abs(entryEnd - selectedEnd);
+			if (distance < closestDistance) {
+				closest = entry;
+				closestDistance = distance;
+			}
+		}
+	}
+	return closest;
+}
+
+function getActiveFileDockEntry(
+	indexer: IndexerLike | undefined,
+	path: string,
+	selectedEntry: DateEntry | null | undefined
+): DateEntry | null {
+	if (selectedEntry?.file === path && selectedEntry.date) {
+		// Keep the clicked record/date, but use its current indexed data so edits
+		// refresh the dock label and review styling without another click.
+		return getRefreshedSelectedTimelineEntry(indexer, path, selectedEntry) ?? selectedEntry;
+	}
+	const anchor = getAnchorEntry(indexer?.getFileIndexData?.(path) ?? null);
+	if (anchor?.date) return anchor;
+
+	let best: DateEntry | null = null;
+	let bestPriority = Number.POSITIVE_INFINITY;
+	let bestDate = Number.NEGATIVE_INFINITY;
+	for (const entries of Object.values(indexer?.index ?? {})) {
+		if (!Array.isArray(entries)) continue;
+		for (const entry of entries) {
+			if (!entry || entry.file !== path || !entry.date) continue;
+			const priority = entry.source === "namedate"
+				? 0
+				: entry.source === "dateprop"
+					? 1
+					: entry.source === "cdate"
+						? 2
+						: entry.source === "content"
+							? 3
+							: 4;
+			const date = parseDateKey(entry.date)?.getTime() ?? Number.NEGATIVE_INFINITY;
+			if (priority < bestPriority || (priority === bestPriority && date > bestDate)) {
+				best = entry;
+				bestPriority = priority;
+				bestDate = date;
+			}
+		}
+	}
+	return best;
 }
 
 function getBackgroundColor(root: HTMLElement): string {
@@ -232,28 +313,30 @@ function computeItems(canvas: EpochCanvas): PinRenderItem[] {
 	const s = state(canvas);
 	const indexer = s.plugin?.indexer;
 	const paths = typeof indexer?.getIndexedPaths === "function" ? indexer.getIndexedPaths() : [];
+	const activePath = String(s.activeFilePath ?? "");
 	const today = getToday();
 	const width = TIMELINE_X - LABEL_OFFSET_X;
 	const background = getBackgroundColor(s.root);
 	const css = s.root.ownerDocument?.defaultView?.getComputedStyle(s.root);
 	const fontMain = fontMinusPx(css?.getPropertyValue("--epoch-font-main").trim() || "12px var(--font-text)", PIN_FONT_DELTA_PX);
+	const fontActive = withFontWeight(fontMain, "700");
 	const visible: PinRenderItem[] = [];
 	const topDocked: PinRenderItem[] = [];
 	const bottomDocked: PinRenderItem[] = [];
+	let hasActiveDockItem = false;
 
-	for (const path of paths) {
-		const data = indexer?.getFileIndexData?.(path) ?? null;
-		const mode = getMode(data);
-		if (!mode) continue;
-		const entry = getAnchorEntry(data);
-		if (!entry?.date) continue;
+	const addItem = (path: string, entry: DateEntry, mode: Exclude<PinMode, "today">, virtual: boolean = false): void => {
+		if (!entry?.date) return;
 		const dayIndex = dayIndexForDate(entry.date, today);
-		if (dayIndex == null) continue;
+		if (dayIndex == null) return;
 		const targetY = dayIndex * BASE_SPACING * s.scale + s.offsetY;
 		const inViewport = targetY >= 0 && targetY <= s.root.clientHeight;
-		if (mode === "date" && !inViewport) continue;
+		if (mode === "date" && !inViewport) return;
+		let font = path === activePath ? fontActive : fontMain;
+		// Mirror timeline records: draft entries use italic text.
+		if (entry.reviewState === "draft") font = withFontStyle(font, "italic");
 		const item: PinRenderItem = {
-			key: `${path}:${mode}:${entry.date}`,
+			key: `${path}:${virtual ? "active-dock" : mode}:${entry.date}`,
 			entry,
 			label: getLabel(entry),
 			dayIndex,
@@ -264,25 +347,41 @@ function computeItems(canvas: EpochCanvas): PinRenderItem[] {
 			width,
 			top: 0,
 			opacity: inViewport ? PIN_VISIBLE_OPACITY : PIN_DOCK_OPACITY,
-			font: fontMain,
+			font,
 			mode,
 			targetY,
 			dock: "none"
 		};
 		if (inViewport) {
 			visible.push(item);
-			continue;
+			return;
 		}
 		if (targetY < 0) {
 			item.dock = "top";
 			topDocked.push(item);
-			continue;
+			return;
 		}
 		if (targetY > s.root.clientHeight) {
 			item.dock = "bottom";
 			bottomDocked.push(item);
-			continue;
 		}
+	};
+
+	for (const path of paths) {
+		const data = indexer?.getFileIndexData?.(path) ?? null;
+		const isActive = !!activePath && path === activePath;
+		const mode = isActive ? "dock" : getMode(data);
+		if (!mode) continue;
+		const entry = isActive ? getActiveFileDockEntry(indexer, path, s.activeFileTimelineEntry) : getAnchorEntry(data);
+		if (!entry?.date) continue;
+		addItem(path, entry, mode, isActive);
+		if (isActive) hasActiveDockItem = true;
+	}
+
+	// The currently opened file gets a transient dock pin, without changing its YAML pin state.
+	if (activePath && !hasActiveDockItem) {
+		const entry = getActiveFileDockEntry(indexer, activePath, s.activeFileTimelineEntry);
+		if (entry) addItem(activePath, entry, "dock", true);
 	}
 
 	positionVisible(visible);
@@ -379,25 +478,158 @@ function createBadgeGhost(canvas: EpochCanvas, button: HTMLButtonElement, item: 
 	}
 }
 
-async function handleOpenOnly(canvas: EpochCanvas, item: PinRenderItem, ev: MouseEvent): Promise<void> {
-	ev.preventDefault();
-	ev.stopPropagation();
-	await openEntry(canvas, item.entry, ev, true);
-	const s = state(canvas);
-	s.keepHoverAfterMenu = false;
-	s.clearHover(true);
+function clearPendingPinOpen(s: PinOverlayState): void {
+	const pending = s.pendingPinOpen;
+	if (!pending) return;
+	window.clearTimeout(pending.timer);
+	try {
+		pending.removeOutsideListener?.();
+	} catch {
+		// ignore
+	}
+	s.pendingPinOpen = null;
 }
 
-function handleFocusOnly(canvas: EpochCanvas, item: PinRenderItem, ev: MouseEvent): void {
+function isPinBadgeTarget(target: EventTarget | null): boolean {
+	try {
+		const element = target as {
+			closest?: (selector: string) => Element | null;
+			parentElement?: { closest?: (selector: string) => Element | null } | null;
+		} | null;
+		return !!(element?.closest?.(".epoch-pin-badge") || element?.parentElement?.closest?.(".epoch-pin-badge"));
+	} catch {
+		return false;
+	}
+}
+
+function addPendingPinOpenOutsideListener(s: PinOverlayState, pending: PendingPinOpen, button: HTMLButtonElement): void {
+	const doc = button.ownerDocument ?? s.root.ownerDocument;
+	if (!doc?.addEventListener) return;
+	const cancelOutsidePin = (ev: Event) => {
+		if (s.pendingPinOpen !== pending || isPinBadgeTarget(ev.target)) return;
+		clearPendingPinOpen(s);
+	};
+	const remove = () => {
+		doc.removeEventListener("pointerdown", cancelOutsidePin, true);
+		doc.removeEventListener("touchstart", cancelOutsidePin, true);
+	};
+	pending.removeOutsideListener = remove;
+	doc.addEventListener("pointerdown", cancelOutsidePin, true);
+	doc.addEventListener("touchstart", cancelOutsidePin, true);
+}
+
+function armPendingPinOpen(
+	canvas: EpochCanvas,
+	item: PinRenderItem,
+	button: HTMLButtonElement,
+	ev: PinActivationEvent,
+	pending: PendingPinOpen
+): void {
+	const s = state(canvas);
+	pending.timer = window.setTimeout(() => {
+		if (s.pendingPinOpen !== pending) return;
+		clearPendingPinOpen(s);
+		void handleOpenOnly(canvas, item, ev, button);
+	}, PIN_DOUBLE_TAP_MS);
+}
+
+function schedulePinOpen(canvas: EpochCanvas, item: PinRenderItem, button: HTMLButtonElement, ev: PinActivationEvent): void {
+	const s = state(canvas);
+	clearPendingPinOpen(s);
+	const pending: PendingPinOpen = { timer: 0, key: item.key };
+	armPendingPinOpen(canvas, item, button, ev, pending);
+	s.pendingPinOpen = pending;
+	addPendingPinOpenOutsideListener(s, pending, button);
+}
+
+function deferPendingPinOpenForTouch(
+	canvas: EpochCanvas,
+	item: PinRenderItem,
+	button: HTMLButtonElement,
+	ev: TouchEvent
+): boolean {
+	const s = state(canvas);
+	const pending = s.pendingPinOpen;
+	if (!pending || pending.key !== item.key) return false;
+	// A second touch can begin just before the single-tap timer fires. Give its
+	// synthetic click the full double-tap window to arrive before opening.
+	window.clearTimeout(pending.timer);
+	armPendingPinOpen(canvas, item, button, ev, pending);
+	return true;
+}
+
+function hasSamePinTarget(
+	value: { file: string; date: string } | null | undefined,
+	item: PinRenderItem
+): boolean {
+	return value?.file === item.entry.file && value?.date === item.entry.date;
+}
+
+function clearTouchUnhoverForPin(s: PinOverlayState, item: PinRenderItem, button: HTMLButtonElement): void {
+	if (!hasSamePinTarget(s.touchUnhoveredPin, item)) return;
+	s.touchUnhoveredPin = null;
+	button.classList.remove("is-touch-unhovered");
+}
+
+function markPinBadgeTouchUnhovered(s: PinOverlayState, item: PinRenderItem, button?: HTMLButtonElement): void {
+	if (!Platform.isMobile) return;
+	s.touchUnhoveredPin = { file: item.entry.file, date: item.entry.date };
+	try {
+		button?.classList.add("is-touch-unhovered");
+	} catch {
+		// ignore
+	}
+}
+
+function clearPinBadgeInteraction(s: PinOverlayState, item: PinRenderItem, button: HTMLButtonElement | null | undefined): void {
+	markPinBadgeTouchUnhovered(s, item, button ?? undefined);
+	if (!button) return;
+	try {
+		button.classList.remove("is-menu-hovered");
+		button.blur();
+	} catch {
+		// ignore
+	}
+}
+
+async function handleOpenOnly(
+	canvas: EpochCanvas,
+	item: PinRenderItem,
+	ev: PinActivationEvent,
+	button?: HTMLButtonElement
+): Promise<void> {
 	ev.preventDefault();
 	ev.stopPropagation();
-	if (Platform.isMobile) {
-		focusDateWithZoom(canvas, item.date, true, false);
-	} else {
-		focusDateWithZoom(canvas, item.date, true, false);
+	const s = state(canvas);
+	// Mark this before opening so a badge recreated by the active-file update
+	// cannot inherit a sticky touch hover.
+	markPinBadgeTouchUnhovered(s, item, button);
+	// Badge buttons are recreated on redraw. Keep the guard on the canvas so
+	// delayed clicks from detached buttons cannot overlap workspace leaf opens.
+	if (s.pinOpenInFlight) {
+		s.keepHoverAfterMenu = false;
+		clearPinBadgeInteraction(s, item, button);
+		s.clearHover(true);
+		return;
 	}
+	s.pinOpenInFlight = true;
+	try {
+		await openEntry(canvas, item.entry, ev as MouseEvent, true);
+	} finally {
+		s.pinOpenInFlight = false;
+		s.keepHoverAfterMenu = false;
+		clearPinBadgeInteraction(s, item, button);
+		s.clearHover(true);
+	}
+}
+
+function handleFocusOnly(canvas: EpochCanvas, item: PinRenderItem, ev: PinActivationEvent, button?: HTMLButtonElement): void {
+	ev.preventDefault();
+	ev.stopPropagation();
+	focusDateWithZoom(canvas, item.date, true, false);
 	const s = state(canvas);
 	s.keepHoverAfterMenu = false;
+	clearPinBadgeInteraction(s, item, button);
 	s.clearHover(true);
 }
 
@@ -492,6 +724,7 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 		button.style.setProperty("--epoch-pin-fill", item.fill);
 		button.style.setProperty("--epoch-pin-text", item.text);
 		if (item.dock !== "none") button.classList.add(`is-${item.dock}`);
+		if (hasSamePinTarget(s.touchUnhoveredPin, item)) button.classList.add("is-touch-unhovered");
 		const label = button.createSpan({ cls: "epoch-pin-badge-label" });
 		label.textContent = item.label;
 		label.style.font = item.font;
@@ -508,7 +741,6 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 		let dragStartX = 0;
 		let dragStartY = 0;
 		let skipClick = false;
-		let singleTapTimer: number | null = null;
 		let activePointerId: number | null = null;
 		const clearPointerDrag = () => {
 			dragArmed = false;
@@ -566,6 +798,7 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 			dragStarted = false;
 		};
 		button.addEventListener("pointerdown", (ev) => {
+			clearTouchUnhoverForPin(s, item, button);
 			if (ev.pointerType && ev.pointerType !== "mouse") return;
 			if (ev.button !== 0) return;
 			if (item.dock !== "none") return;
@@ -586,6 +819,7 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 		});
 		let longPressTimer: number | null = null;
 		let longPressFired = false;
+		let touchTapInProgress = false;
 		let touchStartX = 0;
 		let touchStartY = 0;
 		let touchDragStarted = false;
@@ -597,7 +831,20 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 			}
 		};
 		button.addEventListener("touchstart", (ev) => {
-			if (!ev.touches || ev.touches.length !== 1) return;
+			if (!ev.touches || ev.touches.length !== 1) {
+				touchTapInProgress = false;
+				clearLongPress();
+				clearPendingPinOpen(s);
+				return;
+			}
+			touchTapInProgress = true;
+			clearTouchUnhoverForPin(s, item, button);
+			const pending = s.pendingPinOpen;
+			if (pending?.key === item.key) {
+				deferPendingPinOpenForTouch(canvas, item, button, ev);
+			} else if (pending) {
+				clearPendingPinOpen(s);
+			}
 			clearLongPress();
 			longPressFired = false;
 			touchDragStarted = false;
@@ -608,19 +855,24 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 			longPressTimer = window.setTimeout(() => {
 				longPressTimer = null;
 				longPressFired = true;
+				clearPendingPinOpen(s);
 				touchDragMenu = showPinSummaryMenu(canvas, button, item, t.clientX, t.clientY);
 			}, LONG_PRESS_MS);
 		}, { passive: true });
 		button.addEventListener("touchmove", (ev) => {
 			if (!ev.touches || ev.touches.length !== 1) {
 				clearLongPress();
+				clearPendingPinOpen(s);
 				return;
 			}
 			const t = ev.touches[0];
 			if (!longPressFired) {
 				const dx0 = t.clientX - touchStartX;
 				const dy0 = t.clientY - touchStartY;
-				if (Math.hypot(dx0, dy0) > 12) clearLongPress();
+				if (Math.hypot(dx0, dy0) > 12) {
+					clearLongPress();
+					clearPendingPinOpen(s);
+				}
 				return;
 			}
 			if (!touchDragStarted) {
@@ -656,6 +908,7 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 			}
 		}, { passive: false });
 		button.addEventListener("touchend", (ev) => {
+			touchTapInProgress = false;
 			const wasTouchDragging = touchDragStarted;
 			if (longPressFired) {
 				ev.preventDefault();
@@ -673,6 +926,8 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 			clearLongPress();
 		});
 		button.addEventListener("touchcancel", (ev) => {
+			if (touchTapInProgress) clearPendingPinOpen(s);
+			touchTapInProgress = false;
 			if (longPressFired) {
 				ev.preventDefault();
 				ev.stopPropagation();
@@ -683,6 +938,7 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 			clearLongPress();
 		});
 		button.addEventListener("contextmenu", (ev) => {
+			clearPendingPinOpen(s);
 			ev.preventDefault();
 			ev.stopPropagation();
 			showPinSummaryMenu(canvas, button, item, ev.clientX, ev.clientY);
@@ -700,16 +956,13 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 				ev.stopPropagation();
 				return;
 			}
-			if (singleTapTimer != null) {
-				window.clearTimeout(singleTapTimer);
-				singleTapTimer = null;
-				handleFocusOnly(canvas, item, ev);
+			const pending = s.pendingPinOpen;
+			if (pending?.key === item.key) {
+				clearPendingPinOpen(s);
+				handleFocusOnly(canvas, item, ev, button);
 				return;
 			}
-			singleTapTimer = window.setTimeout(() => {
-				singleTapTimer = null;
-				void handleOpenOnly(canvas, item, ev);
-			}, PIN_DOUBLE_TAP_MS);
+			schedulePinOpen(canvas, item, button, ev);
 		});
 		button.addEventListener("dblclick", (ev) => {
 			ev.preventDefault();
@@ -717,11 +970,8 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 		});
 		button.addEventListener("auxclick", (ev) => {
 			if (ev.button !== 1) return;
-			if (singleTapTimer != null) {
-				window.clearTimeout(singleTapTimer);
-				singleTapTimer = null;
-			}
-			void handleOpenOnly(canvas, item, ev);
+			clearPendingPinOpen(s);
+			void handleOpenOnly(canvas, item, ev, button);
 		});
 	}
 }

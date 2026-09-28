@@ -22,6 +22,7 @@
   - Tracks file stats (and, on mobile, content hashes) for change/no-op detection to avoid unnecessary index rewrites.
 - Indexing: `plugin/indexing.ts` + `indexer/*`
   - Coordinates (re)build and refresh flows (with progress notices).
+  - Silent refreshes still run the full index operation; they only suppress notices.
   - `Indexer` owns per-file derived data and produces serialized index output.
   - After successful rebuild/refresh, Epochgram saves a MiniSearch cache so full-text timeline search can be restored quickly on next startup.
 
@@ -204,6 +205,9 @@ Touch interactions (Verified)
 - When the view is in motion (inertia / animated pan/zoom), a 1-finger touch is treated as “stop momentum” only: the gesture consumes tap/long-press actions so it does not open records, open date labels, toggle Epochs view, or open context menus.
 - While stopping momentum, touch hover feedback is suppressed (no hover/preview flash). The consumed tap still arms the double-tap window so a second tap can trigger the intended double-tap action.
 - Deferred “date label tap opens after a short delay” is canceled as soon as a pan starts, and is also gated against in-flight view motion.
+- A two-finger double-tap focuses the active file's timeline record, falling back to Today when no active record can be resolved.
+- Opening a record retains its exact selected entry in session state and gives the active file a transient dock pin at that selected date; this does not change YAML pin state. The pin resolves against the refreshed index so its label and draft styling update after edits.
+- Automatic rebuild recovery for a missing file is limited to one attempt per canvas, preventing a stale index entry from causing a redraw/rebuild loop.
 
 Timeline zoom-in sampling (Verified)
 - When `scale > SUMMARY_MIN_SCALE`, Epochgram does **not** render dense bars.
