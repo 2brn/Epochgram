@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.8.23] - 2026-09-28
+- Updated `adm-zip` to 0.6.1 and `sharp` to 0.35.5, resolving the affected production dependency advisories.
+
 ## [1.8.22] - 2026-09-28
 - Added a two-finger double-tap gesture to focus the open file's timeline record, or Today when no file is open.
 - Added a transient dock pin for the active timeline record at the selected date; its label and styling now refresh when that record changes.
