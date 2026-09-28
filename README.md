@@ -511,9 +511,6 @@ recur: every day # create recurring records (same repeat:)
 ---
 ```
 
-> [!TIP]
-> When you open a record from the timeline, its file gets a temporary dock pin at that record's date. Click the pin label to open the file, or double-click it to scroll to the record.
-
 ## Settings & Data
 
 <p align="center"><img src="images/settings.gif" height="360" alt="Settings"></p>
