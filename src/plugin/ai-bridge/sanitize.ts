@@ -477,7 +477,7 @@ function resolveSecretPlaceholders(raw: string, lookup: (id: string) => string |
 				return `${prefix}${outQuote}${value}${outQuote}${suffix || ""}`;
 			}
 		}
-		errors.push(`secret placeholder '{{${String(nameRaw)}}}' not found in Secret Storage (Settings > Keychain)`);
+		errors.push(`'${String(nameRaw)}' not found in Secret Storage (Settings > Keychain)`);
 		return _all;
 	});
 }

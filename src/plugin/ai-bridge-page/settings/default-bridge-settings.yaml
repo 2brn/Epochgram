@@ -14,7 +14,7 @@ backend:
   maxRetries: 3
   cloud:
     provider: openai
-    apiKey: "{{your-openai-key-secret}}"
+    apiKey: "{{openai-key}}"
     modelName: gpt-4o-mini
     baseUrl: https://api.openai.com/v1
 

@@ -26,7 +26,7 @@ export function resolveSecretPlaceholders(raw: string, lookup: (id: string) => s
 			const value = lookup(id);
 			if (typeof value === "string" && value.trim().length > 0) return value;
 		}
-		errors?.push(`secret placeholder '{{${String(nameRaw)}}}' not found in Secret Storage (Settings > Keychain)`);
+		errors?.push(`'${String(nameRaw)}' not found in Secret Storage (Settings > Keychain)`);
 		return fullMatch;
 	});
 }

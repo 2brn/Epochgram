@@ -161,10 +161,19 @@ export const AI_BRIDGE_SCRIPT_PART2 = String.raw`
 		applyCloudBackendGlobals(normalized);
 		if (!cloudPolyfillLoadPromise) {
 			cloudPolyfillLoadPromise = (async () => {
+				// The task polyfill lazy-loads Prompt API only when LanguageModel is absent.
+				// macOS Obsidian WebView exposes a native Echo LanguageModel, so load and
+				// verify the configured cloud Prompt API polyfill explicitly first.
+				window.__FORCE_PROMPT_API_POLYFILL__ = true;
 				window.__FORCE_SUMMARIZER_POLYFILL__ = true;
+				await import(BRIDGE_POLYFILL_PROMPT_MODULE_URL);
+				const languageModel = (window && window.LanguageModel) ? window.LanguageModel : null;
+				if (!languageModel || !languageModel.__isPolyfill) throw new Error("Cloud Prompt API polyfill failed to load");
 				await import(BRIDGE_POLYFILL_SUMMARIZER_MODULE_URL);
 				const api = (window && window.Summarizer) ? window.Summarizer : null;
-				if (!api || !api.__isPolyfill) throw new Error("Summarizer polyfill failed to load");
+				if (!api || !api.__isPolyfill || !window.LanguageModel?.__isPolyfill) {
+					throw new Error("Cloud AI polyfills failed to load");
+				}
 				return api;
 			})().catch((err) => {
 				cloudPolyfillLoadPromise = null;

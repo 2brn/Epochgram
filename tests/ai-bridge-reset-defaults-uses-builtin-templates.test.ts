@@ -11,6 +11,7 @@ describe("AI bridge page Reset to defaults", () => {
 		expect(html.includes("settingsYaml")).toBe(true);
 		expect(html.includes("Ignore dates and empty content.")).toBe(true);
 		expect(html.includes("{{filePath}}")).toBe(true);
+		expect(html.includes("{{openai-key}}")).toBe(true);
 		expect(html.includes("maxInputChars: 3000")).toBe(true);
 		expect(html.includes("maxChunkChars: 3000")).toBe(true);
 

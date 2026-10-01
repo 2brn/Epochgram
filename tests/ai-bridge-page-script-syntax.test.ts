@@ -22,17 +22,27 @@ describe("AI bridge page scripts", () => {
 		expect(AI_BRIDGE_SCRIPT_PART2).toContain("maxRetries");
 	});
 
-	it("prefers polyfill Summarizer in cloud mode", () => {
-		expect(AI_BRIDGE_SCRIPT_PART2).toContain("if (!api || !api.__isPolyfill) throw new Error(\"Summarizer polyfill failed to load\")");
+	it("requires cloud Summarizer and Prompt API polyfills", () => {
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("if (!api || !api.__isPolyfill || !window.LanguageModel?.__isPolyfill)");
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("Cloud AI polyfills failed to load");
 	});
 
 	it("preserves backend in fallback summarizer options", () => {
 		expect(AI_BRIDGE_SCRIPT_PART2).toContain("backend: o && o.backend ? o.backend : { mode: \"native\" }");
 	});
 
-	it("forces summarizer polyfill in cloud mode", () => {
+	it("forces cloud prompt and summarizer polyfills before use", () => {
 		expect(AI_BRIDGE_SCRIPT_PART2).toContain("async function ensureCloudSummarizerApi(backend)");
-		expect(AI_BRIDGE_SCRIPT_PART2).toContain("window.__FORCE_SUMMARIZER_POLYFILL__ = true");
+		const forcePromptAt = AI_BRIDGE_SCRIPT_PART2.indexOf("window.__FORCE_PROMPT_API_POLYFILL__ = true");
+		const forceSummarizerAt = AI_BRIDGE_SCRIPT_PART2.indexOf("window.__FORCE_SUMMARIZER_POLYFILL__ = true");
+		const promptImportAt = AI_BRIDGE_SCRIPT_PART2.indexOf("await import(BRIDGE_POLYFILL_PROMPT_MODULE_URL)");
+		const summarizerImportAt = AI_BRIDGE_SCRIPT_PART2.indexOf("await import(BRIDGE_POLYFILL_SUMMARIZER_MODULE_URL)");
+		expect(forcePromptAt).toBeGreaterThan(-1);
+		expect(forceSummarizerAt).toBeGreaterThan(forcePromptAt);
+		expect(promptImportAt).toBeGreaterThan(forceSummarizerAt);
+		expect(summarizerImportAt).toBeGreaterThan(promptImportAt);
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("Cloud Prompt API polyfill failed to load");
+		expect(AI_BRIDGE_SCRIPT_PART2).toContain("!window.LanguageModel?.__isPolyfill");
 	});
 
 	it("passes openai baseUrl into OPENAI_CONFIG", () => {

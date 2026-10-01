@@ -425,7 +425,7 @@ backend: # Optional
   maxRetries: 3 # Required (minimum: 1), applies to native and cloud
   cloud: # Required only when mode: cloud
     provider: openai # gemini | openai
-    apiKey: "{{your-openai-key-secret}}" # Secret Storage key placeholder (Settings > Keychain)
+    apiKey: "{{openai-key}}" # Secret Storage key placeholder (Settings > Keychain)
     modelName: gpt-4o-mini # Optional
     baseUrl: https://api.openai.com/v1 # Required for openai (use local endpoint for LM Studio/Ollama)
 
@@ -480,7 +480,7 @@ epochs:
 ```
 
 > [!TIP]
-> Chrome's built-in Gemini Nano currently officially supports English, Spanish, and Japanese for input and output text. You can still try forcing another output language in the prompt context; for example, I used this context for Ukrainian: `OUTPUT ONLY IN UKRAINIAN!`.
+> Chrome's built-in Gemini Nano currently officially supports English, German, Spanish, French, and Japanese for input and output text. You can still try forcing another output language in the prompt context; for example, I used this context for Ukrainian: `OUTPUT ONLY IN UKRAINIAN!`.
 
 ## AI Summaries & Epochs (Pro, desktop-only)
 

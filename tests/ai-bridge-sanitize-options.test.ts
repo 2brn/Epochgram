@@ -149,13 +149,13 @@ describe("AI bridge sanitizeBridgeOptions", () => {
 			"  maxRetries: 3",
 			"  cloud:",
 			"    provider: openai",
-			"    apiKey: \"{{openadi-key}}\"",
+			"    apiKey: \"{{openai-key}}\"",
 			"    baseUrl: https://api.openai.com/v1"
 		].join("\n"), {
 			secretLookup: () => null
 		});
 		expect(checked.valid).toBe(false);
-		expect(checked.errors.some((e) => e.includes("not found in Secret Storage"))).toBe(true);
+		expect(checked.errors).toContain("'openai-key' not found in Secret Storage (Settings > Keychain)");
 	});
 
 	it("resolves lowercase-dash secret placeholder ids", () => {
@@ -195,6 +195,13 @@ describe("AI bridge sanitizeBridgeOptions", () => {
 			return id === "secret_key" ? "abc123" : null;
 		});
 		expect(resolved).toBe("https://example.com/calendar.ics?key=abc123");
+	});
+
+	it("uses the concise missing-secret error format", () => {
+		const errors: string[] = [];
+		resolveSecretPlaceholders("{{openai-keyd}}", () => null, errors);
+
+		expect(errors).toEqual(["'openai-keyd' not found in Secret Storage (Settings > Keychain)"]);
 	});
 
 	it("rejects unsupported backend provider", () => {
