@@ -3,6 +3,7 @@ import type { DateEntry, FileIndexData, PinMode } from "../indexer/types";
 import type { EpochIndex } from "../indexer/types";
 import type { EpochCanvas } from "./epoch-canvas";
 import type { DayLayout } from "./epoch-canvas-types";
+import { DEFAULT_SETTINGS, type EpochSettings } from "../settings-model";
 import { BASE_SPACING, DOUBLE_TAP_MAX_DELAY, LABEL_OFFSET_X, LONG_PRESS_MS, TIMELINE_X } from "./epoch-canvas-constants";
 import { openEntry } from "./epoch-canvas-actions";
 import { beginAnchorEntryDrag, commitAnchorEntryDrag, updateAnchorEntryDrag } from "./epoch-canvas-events/anchor-dnd";
@@ -10,7 +11,7 @@ import { focusDateWithZoom } from "./epoch-canvas-focus";
 import { getToday } from "./epoch-canvas-helpers";
 import { getEpochMarkColorSet } from "./mark-colors";
 import { getEntryMarkColor, getInheritedMarkColor } from "./summary-rendering/entry-mark-colors";
-import { parseFontSize, withFontStyle, withFontWeight } from "./epoch-canvas-utils";
+import { entryFileName, formatEntrySummary, parseFontSize, withFontStyle, withFontWeight } from "./epoch-canvas-utils";
 
 type IndexerLike = {
 	getIndexedPaths?: () => string[];
@@ -28,6 +29,7 @@ type PinOverlayState = {
 	root: HTMLElement;
 	plugin?: {
 		indexer?: IndexerLike;
+		settings?: Pick<EpochSettings, "filenameWordsCount" | "summaryWordsCount">;
 		__epochInheritedMarkIndexByPath?: Map<string, number> | null;
 	};
 	draw?: () => void;
@@ -245,11 +247,17 @@ function getFillColor(s: PinOverlayState, entry: DateEntry): string {
 	return fallback;
 }
 
-function getLabel(entry: DateEntry): string {
-	const summary = String(entry.summary ?? "").trim();
-	if (summary) return summary;
-	const parts = String(entry.file ?? "").split(/[\\/]/);
-	return parts[parts.length - 1] || entry.file || "";
+function getLabel(
+	entry: DateEntry,
+	settings: Pick<EpochSettings, "filenameWordsCount" | "summaryWordsCount"> | undefined
+): string {
+	const label = formatEntrySummary(entry, {
+		fallbackToFileName: true,
+		includeIcons: false,
+		filenameWordsCount: settings?.filenameWordsCount ?? DEFAULT_SETTINGS.filenameWordsCount,
+		summaryWordsCount: settings?.summaryWordsCount ?? DEFAULT_SETTINGS.summaryWordsCount
+	}).trim();
+	return label || entryFileName(entry).replace(/\.md$/i, "").trim();
 }
 
 function positionVisible(items: PinRenderItem[]): void {
@@ -338,7 +346,7 @@ function computeItems(canvas: EpochCanvas): PinRenderItem[] {
 		const item: PinRenderItem = {
 			key: `${path}:${virtual ? "active-dock" : mode}:${entry.date}`,
 			entry,
-			label: getLabel(entry),
+			label: getLabel(entry, s.plugin?.settings),
 			dayIndex,
 			date: parseDateKey(entry.date) ?? today,
 			fill: getFillColor(s, entry),

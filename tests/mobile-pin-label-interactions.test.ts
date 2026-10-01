@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { Platform, TFile, WorkspaceLeaf } from "obsidian";
+import { SUMMARY_ENTRY_SEPARATOR } from "../src/ui/epoch-canvas-constants";
 import { updatePinOverlay } from "../src/ui/epoch-pin-overlay";
 
 class FakeClassList {
@@ -108,6 +109,10 @@ function makeCanvas(options: {
 	activeFilePath?: string;
 	pinnedFile?: "date" | "dock" | null;
 	reviewState?: "draft" | "reviewed";
+	summary?: string;
+	filenameWordsCount?: number;
+	summaryWordsCount?: number;
+	offsetY?: number;
 } = {}): { canvas: any; badge: FakeBadge; overlay: FakeOverlay; document: FakeDocument; openFile: ReturnType<typeof vi.fn>; clearHover: ReturnType<typeof vi.fn> } {
 	const document = new FakeDocument();
 	const root = {
@@ -118,6 +123,7 @@ function makeCanvas(options: {
 	const overlay = new FakeOverlay(document);
 	const entryPath = options.entryPath ?? "notes/current.md";
 	const activeFilePath = options.activeFilePath ?? entryPath;
+	const summary = options.summary ?? "Current record";
 	const file = new TFile(entryPath);
 	const leaf = new WorkspaceLeaf();
 	const openFile = vi.fn(async () => {});
@@ -128,6 +134,10 @@ function makeCanvas(options: {
 		pinOverlayEl: overlay,
 		lastPinOverlaySignature: null,
 		plugin: {
+			settings: {
+				filenameWordsCount: options.filenameWordsCount ?? 2,
+				summaryWordsCount: options.summaryWordsCount ?? 5
+			},
 			indexer: {
 				getIndexedPaths: () => [file.path],
 				getFileIndexData: (path: string) => path === file.path ? ({
@@ -136,7 +146,7 @@ function makeCanvas(options: {
 						file: file.path,
 						blockStart: 0,
 						blockEnd: 0,
-						summary: "Current record",
+						summary,
 						source: "cdate",
 						reviewState: options.reviewState ?? "reviewed"
 					},
@@ -159,7 +169,7 @@ function makeCanvas(options: {
 		ctx: { save: () => {}, restore: () => {}, measureText: () => ({ width: 20 }), font: "" },
 		layouts: [],
 		scale: 1,
-		offsetY: -1000,
+		offsetY: options.offsetY ?? -1000,
 		activeFilePath,
 		activeFileTimelineEntry: null,
 		semanticRelatedPaths: null,
@@ -197,6 +207,52 @@ describe("mobile pin-label interactions", () => {
 		expect(badge.labels[0]?.style.font).toMatch(/^700 8px /);
 	});
 
+	it("uses the timeline record label for virtual, date, and dock pins", () => {
+		const common = {
+			entryPath: "notes/First Second Third Fourth.md",
+			summary: "one two three four"
+		};
+
+		const { badge: virtualBadge } = makeCanvas({
+			...common,
+			filenameWordsCount: 2,
+			summaryWordsCount: 2
+		});
+		expect(virtualBadge.labels[0]?.textContent).toBe(`First Second...${SUMMARY_ENTRY_SEPARATOR}one two...`);
+
+		const { badge: dateBadge } = makeCanvas({
+			...common,
+			activeFilePath: "notes/active.md",
+			pinnedFile: "date",
+			offsetY: 0,
+			filenameWordsCount: 0,
+			summaryWordsCount: 2
+		});
+		expect(dateBadge.labels[0]?.textContent).toBe("one two...");
+
+		const { badge: dockBadge } = makeCanvas({
+			...common,
+			activeFilePath: "notes/active.md",
+			pinnedFile: "dock",
+			filenameWordsCount: 2,
+			summaryWordsCount: 0
+		});
+		expect(dockBadge.labels[0]?.textContent).toBe("First Second...");
+	});
+
+	it("falls back to the record filename when hiding a duplicate summary", () => {
+		const { badge } = makeCanvas({
+			entryPath: "notes/sine.md",
+			activeFilePath: "notes/active.md",
+			pinnedFile: "date",
+			offsetY: 0,
+			summary: "sine",
+			filenameWordsCount: 0,
+			summaryWordsCount: 2
+		});
+		expect(badge.labels[0]?.textContent).toBe("sine");
+	});
+
 	it("mirrors draft italics for virtual and persisted pin labels", () => {
 		const { badge: virtualBadge } = makeCanvas({ reviewState: "draft" });
 		expect(virtualBadge.labels[0]?.style.font).toMatch(/^italic 700 8px /);
@@ -224,14 +280,14 @@ describe("mobile pin-label interactions", () => {
 		};
 		canvas.activeFileTimelineEntry = selected;
 		updatePinOverlay(canvas);
-		expect(overlay.badges[0]?.labels[0]?.textContent).toBe("Before update");
+		expect(overlay.badges[0]?.labels[0]?.textContent).toBe(`current${SUMMARY_ENTRY_SEPARATOR}Before update`);
 
 		canvas.plugin.indexer.index = {
 			[date]: [{ ...selected, summary: "After update", reviewState: "draft" }]
 		};
 		updatePinOverlay(canvas);
 
-		expect(overlay.badges[0]?.labels[0]?.textContent).toBe("After update");
+		expect(overlay.badges[0]?.labels[0]?.textContent).toBe(`current${SUMMARY_ENTRY_SEPARATOR}After update`);
 		expect(overlay.badges[0]?.labels[0]?.style.font).toMatch(/^italic 700 8px /);
 	});
 
