@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.8.24] - 2026-10-01
+- Fixed date, dock, and active-file pin labels to match timeline text and respect Filename and Summary Length settings, including the filename fallback for duplicate summaries.
+
 ## [1.8.23] - 2026-09-28
 - Updated `adm-zip` to 0.6.1 and `sharp` to 0.35.5, resolving the affected production dependency advisories.
 
