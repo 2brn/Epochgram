@@ -519,7 +519,6 @@ body.theme-light .epoch-license-section {
 
 .epoch-root.is-macos .epoch-pin-badge-label {
   right: 10.5px;
-  top: 1.5px;
 }
 
 .epoch-root .epoch-pin-badge:focus-visible .epoch-pin-badge-label,
@@ -564,20 +563,6 @@ body.theme-light .epoch-license-section {
 }
 
 @media (hover: none), (pointer: coarse) {
-  .epoch-root .epoch-pin-badge-label {
-    transform: translateY(2px);
-  }
-
-  .epoch-root .epoch-pin-badge:focus-visible .epoch-pin-badge-label,
-  .epoch-root .epoch-pin-badge.is-menu-hovered .epoch-pin-badge-label {
-    transform: translateY(2px) scaleX(1.03) scaleY(1.08);
-  }
-
-  .epoch-root .epoch-pin-badge.is-touch-unhovered .epoch-pin-badge-label,
-  .epoch-root .epoch-pin-badge.is-touch-unhovered:hover .epoch-pin-badge-label {
-    transform: translateY(2px);
-  }
-
   .epoch-control-button:not(.is-active):hover,
   .epoch-control-button:not(.is-active):focus-visible,
   .epoch-control-button:not(.is-active):active {

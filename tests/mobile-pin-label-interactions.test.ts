@@ -205,6 +205,7 @@ describe("mobile pin-label interactions", () => {
 	it("uses the active-record font weight for the virtual dock label", () => {
 		const { badge } = makeCanvas();
 		expect(badge.labels[0]?.style.font).toMatch(/^700 8px /);
+		expect(badge.labels[0]?.style.lineHeight).toBe("16px");
 	});
 
 	it("uses the timeline record label for virtual, date, and dock pins", () => {

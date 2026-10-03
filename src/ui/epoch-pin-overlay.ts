@@ -736,6 +736,8 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 		const label = button.createSpan({ cls: "epoch-pin-badge-label" });
 		label.textContent = item.label;
 		label.style.font = item.font;
+		// The font shorthand resets line-height; preserve the badge's centered text line.
+		label.style.lineHeight = `${PIN_HEIGHT}px`;
 		s.ctx.save();
 		s.ctx.font = item.font;
 		const textWidth = s.ctx.measureText(item.label).width;
