@@ -1,5 +1,9 @@
 # Epochgram changelog
 
+## [1.8.26] - 2026-10-03
+- Center pin-label text consistently on mobile and desktop.
+- Increase redshift-from-Today indicator opacity.
+
 ## [1.8.25] - 2026-10-01
 - Fix cloud AI bridge behavior in Obsidian WebView when a native `LanguageModel` is present.
 - Minor wording changes.
