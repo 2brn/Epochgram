@@ -116,6 +116,18 @@ describe("scroll nav uses visible targets when search active", () => {
 		expect((canvas as any).__forcedActiveFileCursorPath).toBeUndefined();
 	});
 
+	test("forced visible navigation ignores an opened record", () => {
+		const focusDateMock = focusMod.focusDate as any;
+		const canvas = makeCanvas({ scrollNavAnchorDayIndex: 0 });
+		const ok = advanceScrollNav(canvas, 1, { wrap: false, forceVisible: true });
+		expect(ok).toBe(true);
+		expect((canvas as any).__scrollNavLastModeKey).toBe("visible");
+		expect(canvas.scrollNavAnchorEntry).toBe(null);
+		expect(focusDateMock).toHaveBeenCalledTimes(1);
+		const focusedDate = focusDateMock.mock.calls[0]?.[1] as Date;
+		expect(focusedDate.getDate()).toBe(2);
+	});
+
 	test("no opened file navigates through all visible records", () => {
 		const focusDateMock = focusMod.focusDate as any;
 		const canvas = makeCanvas({ activeFilePath: null, scrollNavFile: null, searchQuery: "" });

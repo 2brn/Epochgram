@@ -48,7 +48,11 @@ type ScrollNavCanvasState = {
 	offsetY: number;
 };
 
-export function advanceScrollNav(canvas: EpochCanvas, direction: number = 1, options: { wrap?: boolean } = {}): boolean {
+export function advanceScrollNav(
+	canvas: EpochCanvas,
+	direction: number = 1,
+	options: { wrap?: boolean; forceVisible?: boolean } = {}
+): boolean {
 	const c = canvas as unknown as ScrollNavCanvasState;
 	try {
 		c.__suppressExternalAutoScrollUntil = window.performance.now() + 1000;
@@ -64,7 +68,7 @@ export function advanceScrollNav(canvas: EpochCanvas, direction: number = 1, opt
 	const searchActive = String(c.searchQuery || "").trim().length > 0;
 	const epochsViewActive = c.epochsView === true;
 	const hasActiveFile = !!normalizeNonEpochPath(c.activeFilePath ?? null);
-	const useVisibleNav = searchActive || epochsViewActive || !hasActiveFile;
+	const useVisibleNav = options.forceVisible === true || searchActive || epochsViewActive || !hasActiveFile;
 	const openedFile = c.activeFilePath ?? c.scrollNavFile ?? null;
 	if (!useVisibleNav) {
 		if (!openedFile) {

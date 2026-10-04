@@ -434,7 +434,7 @@ export class EpochCanvas {
 
 	private processPendingScrollNavHighlight(): void { processPendingScrollNavHighlightHelper(this); }
 
-	public advanceScrollNav(direction: number = 1, options: { wrap?: boolean } = {}): boolean {
+	public advanceScrollNav(direction: number = 1, options: { wrap?: boolean; forceVisible?: boolean } = {}): boolean {
 		return advanceScrollNavHelper(this, direction, options);
 	}
 

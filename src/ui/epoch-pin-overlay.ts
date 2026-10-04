@@ -8,6 +8,7 @@ import { BASE_SPACING, DOUBLE_TAP_MAX_DELAY, LABEL_OFFSET_X, LONG_PRESS_MS, TIME
 import { openEntry } from "./epoch-canvas-actions";
 import { beginAnchorEntryDrag, commitAnchorEntryDrag, updateAnchorEntryDrag } from "./epoch-canvas-events/anchor-dnd";
 import { focusDateWithZoom } from "./epoch-canvas-focus";
+import { resolveActiveFilePinEntry } from "./active-file-pin-entry";
 import { getToday } from "./epoch-canvas-helpers";
 import { getEpochMarkColorSet } from "./mark-colors";
 import { getEntryMarkColor, getInheritedMarkColor } from "./summary-rendering/entry-mark-colors";
@@ -142,75 +143,6 @@ function getAnchorEntry(data: FileIndexData | null | undefined): DateEntry | nul
 function getMode(data: FileIndexData | null | undefined): Exclude<PinMode, "today"> | null {
 	const mode = typeof data?.pinnedFile === "string" ? data.pinnedFile : null;
 	return mode === "date" || mode === "dock" ? mode : null;
-}
-
-function getRefreshedSelectedTimelineEntry(
-	indexer: IndexerLike | undefined,
-	path: string,
-	selectedEntry: DateEntry
-): DateEntry | null {
-	const selectedDate = String(selectedEntry.date || "");
-	if (!selectedDate) return null;
-	const selectedSource = selectedEntry.source;
-	const selectedStart = Number(selectedEntry.blockStart);
-	const selectedEnd = Number(selectedEntry.blockEnd);
-	let closest: DateEntry | null = null;
-	let closestDistance = Number.POSITIVE_INFINITY;
-	for (const entries of Object.values(indexer?.index ?? {})) {
-		if (!Array.isArray(entries)) continue;
-		for (const entry of entries) {
-			if (!entry || entry.file !== path || entry.date !== selectedDate || entry.source !== selectedSource) continue;
-			const entryStart = Number(entry.blockStart);
-			const entryEnd = Number(entry.blockEnd);
-			if (entryStart === selectedStart && entryEnd === selectedEnd) return entry;
-			const distance = Math.abs(entryStart - selectedStart) + Math.abs(entryEnd - selectedEnd);
-			if (distance < closestDistance) {
-				closest = entry;
-				closestDistance = distance;
-			}
-		}
-	}
-	return closest;
-}
-
-function getActiveFileDockEntry(
-	indexer: IndexerLike | undefined,
-	path: string,
-	selectedEntry: DateEntry | null | undefined
-): DateEntry | null {
-	if (selectedEntry?.file === path && selectedEntry.date) {
-		// Keep the clicked record/date, but use its current indexed data so edits
-		// refresh the dock label and review styling without another click.
-		return getRefreshedSelectedTimelineEntry(indexer, path, selectedEntry) ?? selectedEntry;
-	}
-	const anchor = getAnchorEntry(indexer?.getFileIndexData?.(path) ?? null);
-	if (anchor?.date) return anchor;
-
-	let best: DateEntry | null = null;
-	let bestPriority = Number.POSITIVE_INFINITY;
-	let bestDate = Number.NEGATIVE_INFINITY;
-	for (const entries of Object.values(indexer?.index ?? {})) {
-		if (!Array.isArray(entries)) continue;
-		for (const entry of entries) {
-			if (!entry || entry.file !== path || !entry.date) continue;
-			const priority = entry.source === "namedate"
-				? 0
-				: entry.source === "dateprop"
-					? 1
-					: entry.source === "cdate"
-						? 2
-						: entry.source === "content"
-							? 3
-							: 4;
-			const date = parseDateKey(entry.date)?.getTime() ?? Number.NEGATIVE_INFINITY;
-			if (priority < bestPriority || (priority === bestPriority && date > bestDate)) {
-				best = entry;
-				bestPriority = priority;
-				bestDate = date;
-			}
-		}
-	}
-	return best;
 }
 
 function getBackgroundColor(root: HTMLElement): string {
@@ -380,7 +312,7 @@ function computeItems(canvas: EpochCanvas): PinRenderItem[] {
 		const isActive = !!activePath && path === activePath;
 		const mode = isActive ? "dock" : getMode(data);
 		if (!mode) continue;
-		const entry = isActive ? getActiveFileDockEntry(indexer, path, s.activeFileTimelineEntry) : getAnchorEntry(data);
+		const entry = isActive ? resolveActiveFilePinEntry(indexer, path, s.activeFileTimelineEntry) : getAnchorEntry(data);
 		if (!entry?.date) continue;
 		addItem(path, entry, mode, isActive);
 		if (isActive) hasActiveDockItem = true;
@@ -388,7 +320,7 @@ function computeItems(canvas: EpochCanvas): PinRenderItem[] {
 
 	// The currently opened file gets a transient dock pin, without changing its YAML pin state.
 	if (activePath && !hasActiveDockItem) {
-		const entry = getActiveFileDockEntry(indexer, activePath, s.activeFileTimelineEntry);
+		const entry = resolveActiveFilePinEntry(indexer, activePath, s.activeFileTimelineEntry);
 		if (entry) addItem(activePath, entry, "dock", true);
 	}
 

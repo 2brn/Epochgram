@@ -30,6 +30,7 @@ A Timemap of Your Mind
 ## Table of Contents
 
 - [Get Started](#get-started)
+- [Cheatsheet](#cheatsheet)
 - [Timeline](#timeline)
 - [Examples](#examples)
 - [Filters](#filters)
@@ -82,6 +83,7 @@ Manual install
 | **Wheel** or **Pan** | Scroll |
 | **Ctrl/Cmd+Wheel** or **Pinch** | Zoom |
 | **Alt/Option+Wheel/Up/Down** or **Two-Finger-Tap** | Jump to the next/previous similar record |
+| **Shift+Up/Down** | Jump to the next/previous visible record |
 | **Two-Finger-Double-Tap** | Focus the open file's record |
 | **Shift+Wheel** | Zoom around the current record |
 | **Alt/Option+Hover** record | Show the file preview |

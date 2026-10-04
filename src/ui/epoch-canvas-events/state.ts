@@ -104,7 +104,7 @@ export interface CanvasEventInternals {
 	): Promise<boolean>;
 	createNoteForDate(date: Date, focus?: boolean): Promise<void>;
 	animateToToday(): void;
-	advanceScrollNav(direction?: number, options?: { wrap?: boolean }): boolean;
+	advanceScrollNav(direction?: number, options?: { wrap?: boolean; forceVisible?: boolean }): boolean;
 	resetScrollNavToToday(): void;
 	focusActiveFileOrToday(): void;
 	getToday(): Date;

@@ -16,6 +16,7 @@ type PreviewScrollNavState = ReturnType<typeof canvasState> & {
 	__scrollNavKeyHoldStartAt?: number | null;
 	__scrollNavKeyHoldHandle?: number | null;
 	__scrollNavKeyHoldDirection?: number | null;
+	__scrollNavKeyHoldForceVisible?: boolean;
 };
 
 type HoverParentWithPopover = HoverParent & {
@@ -55,27 +56,38 @@ function stopScrollNavKeyHold(canvas: EpochCanvas): void {
 	}
 	s.__scrollNavKeyHoldHandle = null;
 	s.__scrollNavKeyHoldDirection = null;
+	s.__scrollNavKeyHoldForceVisible = false;
 }
 
-function startScrollNavKeyHold(canvas: EpochCanvas, direction: number): void {
+function advanceScrollNavForKey(s: PreviewScrollNavState, direction: number): void {
+	if (s.__scrollNavKeyHoldForceVisible) {
+		s.advanceScrollNav(direction, { forceVisible: true });
+		return;
+	}
+	s.advanceScrollNav(direction);
+}
+
+function startScrollNavKeyHold(canvas: EpochCanvas, direction: number, forceVisible: boolean = false): void {
 	const s = canvasState(canvas) as PreviewScrollNavState;
 	const existing = s.__scrollNavKeyHoldHandle;
 	s.__scrollNavKeyHoldDirection = direction;
+	s.__scrollNavKeyHoldForceVisible = forceVisible;
 	if (existing != null) return;
 	try {
 		s.__scrollNavKeyHoldHandle = timerHost.setInterval(() => {
 			const dir = Number(s.__scrollNavKeyHoldDirection);
 			if (!Number.isFinite(dir) || dir === 0) return;
-			s.advanceScrollNav(dir);
+			advanceScrollNavForKey(s, dir);
 		}, SCROLL_NAV_HOLD_INTERVAL_MS);
 	} catch {
 		s.__scrollNavKeyHoldHandle = null;
 	}
 }
 
-function scheduleScrollNavKeyHoldStart(canvas: EpochCanvas, direction: number): void {
+function scheduleScrollNavKeyHoldStart(canvas: EpochCanvas, direction: number, forceVisible: boolean = false): void {
 	const s = canvasState(canvas) as PreviewScrollNavState;
 	s.__scrollNavKeyHoldDirection = direction;
+	s.__scrollNavKeyHoldForceVisible = forceVisible;
 	const existingInterval = s.__scrollNavKeyHoldHandle;
 	if (existingInterval != null) return;
 	const existingStart = s.__scrollNavKeyHoldStartHandle;
@@ -86,7 +98,7 @@ function scheduleScrollNavKeyHoldStart(canvas: EpochCanvas, direction: number): 
 			s.__scrollNavKeyHoldStartHandle = null;
 			const dir = Number(s.__scrollNavKeyHoldDirection);
 			if (!Number.isFinite(dir) || dir === 0) return;
-			startScrollNavKeyHold(canvas, dir);
+			startScrollNavKeyHold(canvas, dir, s.__scrollNavKeyHoldForceVisible === true);
 		}, SCROLL_NAV_HOLD_START_DELAY_MS);
 	} catch {
 		s.__scrollNavKeyHoldStartHandle = null;
@@ -311,6 +323,26 @@ export function onWindowKeyDown(canvas: EpochCanvas, event: KeyboardEvent): void
 			s.previewLockedUntilAltRelease = true;
 			s.hoverPreviewKey = null;
 			hideHoverPreview(canvas);
+			return;
+		}
+	}
+
+	if (event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+		let direction: number | null = null;
+		if (event.key === "ArrowUp") {
+			direction = -1;
+		} else if (event.key === "ArrowDown") {
+			direction = 1;
+		}
+		if (direction !== null) {
+			event.preventDefault();
+			if (event.repeat === true) {
+				scheduleScrollNavKeyHoldStart(canvas, direction, true);
+				return;
+			}
+			const s = canvasState(canvas);
+			s.advanceScrollNav(direction, { forceVisible: true });
+			scheduleScrollNavKeyHoldStart(canvas, direction, true);
 			return;
 		}
 	}

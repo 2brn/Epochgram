@@ -2,6 +2,7 @@ import { MS_PER_DAY, BASE_SPACING, FOCUS_ANCHOR_RATIO } from "./epoch-canvas-con
 import type { DateEntry, EpochIndex } from "../indexer/types";
 import type { DayLayout, SummaryRect } from "./epoch-canvas-types";
 import { getEntriesForDate, pickEntryForFile } from "./entry-helpers";
+import { resolveActiveFilePinEntry, type ActiveFilePinIndexer } from "./active-file-pin-entry";
 import type { EpochCanvas } from "./epoch-canvas";
 
 interface FocusCanvasInternals {
@@ -26,6 +27,8 @@ interface FocusCanvasInternals {
 	clearHover(force?: boolean): void;
 	requestHoverAnimation(): void;
 	index: EpochIndex;
+	plugin?: { indexer?: ActiveFilePinIndexer };
+	activeFileTimelineEntry?: DateEntry | null;
 	layouts: DayLayout[];
 	getToday(): Date;
 	getDateForIndex(index: number, today: Date): Date;
@@ -51,6 +54,23 @@ function getFocusInternals(canvas: EpochCanvas): FocusCanvasInternals {
 
 function isRecurringEntry(entry: DateEntry): boolean {
 	return entry.recurring === true;
+}
+
+function getActiveFilePinFocusTarget(
+	canvas: EpochCanvas,
+	state: FocusCanvasInternals,
+	filePath: string
+): { date: Date; ms: number; distance: number; entry: DateEntry } | null {
+	const indexer = state.plugin?.indexer;
+	if (!indexer) return null;
+	const entry = resolveActiveFilePinEntry(indexer, filePath, state.activeFileTimelineEntry);
+	if (!entry) return null;
+	const date = dateKeyToDate(entry.date);
+	if (!date) return null;
+	const ms = date.getTime();
+	const distance = Math.abs(getDayIndexForDate(canvas, date));
+	if (!Number.isFinite(ms) || !Number.isFinite(distance)) return null;
+	return { date, ms, distance, entry };
 }
 
 function scrollScreenRectIntoView(canvas: EpochCanvas, y1: number, y2: number, padding: number): boolean {
@@ -315,26 +335,32 @@ export function focusFile(
 	const state = getFocusInternals(canvas);
 	let best: { date: Date; ms: number; distance: number } | null = null;
 	let bestEntry: DateEntry | null = null;
-	for (const [dateKey, entries] of Object.entries(state.index)) {
-		const nonRecurring = entries.filter((e) => !isRecurringEntry(e));
-		const recurring = entries.filter((e) => isRecurringEntry(e));
-		const matchNonRecurring = nonRecurring.length > 0
-			? pickEntryForFile(canvas, nonRecurring, filePath, null, { bypassAttachmentsFilter: true, bypassDateFilters: true })
-			: null;
-		const matchRecurring = recurring.length > 0
-			? pickEntryForFile(canvas, recurring, filePath, null, { bypassAttachmentsFilter: true, bypassDateFilters: true })
-			: null;
-		if (!matchNonRecurring && !matchRecurring) continue;
-		const date = dateKeyToDate(dateKey);
-		if (!date) continue;
-		const ms = date.getTime();
-		if (!Number.isFinite(ms)) continue;
-		const distance = Math.abs(getDayIndexForDate(canvas, date));
-		if (!Number.isFinite(distance)) continue;
-		const candidate = { date, ms, distance };
-		if (!best || distance < best.distance || (distance === best.distance && ms > best.ms)) {
-			best = candidate;
-			bestEntry = matchNonRecurring ?? matchRecurring;
+	const pinTarget = getActiveFilePinFocusTarget(canvas, state, filePath);
+	if (pinTarget) {
+		best = pinTarget;
+		bestEntry = pinTarget.entry;
+	} else {
+		for (const [dateKey, entries] of Object.entries(state.index)) {
+			const nonRecurring = entries.filter((e) => !isRecurringEntry(e));
+			const recurring = entries.filter((e) => isRecurringEntry(e));
+			const matchNonRecurring = nonRecurring.length > 0
+				? pickEntryForFile(canvas, nonRecurring, filePath, null, { bypassAttachmentsFilter: true, bypassDateFilters: true })
+				: null;
+			const matchRecurring = recurring.length > 0
+				? pickEntryForFile(canvas, recurring, filePath, null, { bypassAttachmentsFilter: true, bypassDateFilters: true })
+				: null;
+			if (!matchNonRecurring && !matchRecurring) continue;
+			const date = dateKeyToDate(dateKey);
+			if (!date) continue;
+			const ms = date.getTime();
+			if (!Number.isFinite(ms)) continue;
+			const distance = Math.abs(getDayIndexForDate(canvas, date));
+			if (!Number.isFinite(distance)) continue;
+			const candidate = { date, ms, distance };
+			if (!best || distance < best.distance || (distance === best.distance && ms > best.ms)) {
+				best = candidate;
+				bestEntry = matchNonRecurring ?? matchRecurring;
+			}
 		}
 	}
 	if (!best || !bestEntry) return false;
@@ -382,26 +408,32 @@ export function snapToFile(
 
 	let best: { date: Date; ms: number; distance: number } | null = null;
 	let bestEntry: DateEntry | null = null;
-	for (const [dateKey, entries] of Object.entries(state.index)) {
-		const nonRecurring = entries.filter((e) => !isRecurringEntry(e));
-		const recurring = entries.filter((e) => isRecurringEntry(e));
-		const matchNonRecurring = nonRecurring.length > 0
-			? pickEntryForFile(canvas, nonRecurring, filePath, null)
-			: null;
-		const matchRecurring = recurring.length > 0
-			? pickEntryForFile(canvas, recurring, filePath, null)
-			: null;
-		if (!matchNonRecurring && !matchRecurring) continue;
-		const date = dateKeyToDate(dateKey);
-		if (!date) continue;
-		const ms = date.getTime();
-		if (!Number.isFinite(ms)) continue;
-		const distance = Math.abs(getDayIndexForDate(canvas, date));
-		if (!Number.isFinite(distance)) continue;
-		const candidate = { date, ms, distance };
-		if (!best || distance < best.distance || (distance === best.distance && ms > best.ms)) {
-			best = candidate;
-			bestEntry = matchNonRecurring ?? matchRecurring;
+	const pinTarget = getActiveFilePinFocusTarget(canvas, state, filePath);
+	if (pinTarget) {
+		best = pinTarget;
+		bestEntry = pinTarget.entry;
+	} else {
+		for (const [dateKey, entries] of Object.entries(state.index)) {
+			const nonRecurring = entries.filter((e) => !isRecurringEntry(e));
+			const recurring = entries.filter((e) => isRecurringEntry(e));
+			const matchNonRecurring = nonRecurring.length > 0
+				? pickEntryForFile(canvas, nonRecurring, filePath, null)
+				: null;
+			const matchRecurring = recurring.length > 0
+				? pickEntryForFile(canvas, recurring, filePath, null)
+				: null;
+			if (!matchNonRecurring && !matchRecurring) continue;
+			const date = dateKeyToDate(dateKey);
+			if (!date) continue;
+			const ms = date.getTime();
+			if (!Number.isFinite(ms)) continue;
+			const distance = Math.abs(getDayIndexForDate(canvas, date));
+			if (!Number.isFinite(distance)) continue;
+			const candidate = { date, ms, distance };
+			if (!best || distance < best.distance || (distance === best.distance && ms > best.ms)) {
+				best = candidate;
+				bestEntry = matchNonRecurring ?? matchRecurring;
+			}
 		}
 	}
 	if (!best) return false;
