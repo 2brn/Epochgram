@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.8.28] - 2026-10-05
+- Fixed Obsidian Sync reverting Reviewed records to Draft by reconciling timestamped review mutations, preserving frontmatter-only and attachment Sync touches, and serializing index writes against Sync reloads.
+
 ## [1.8.27] - 2026-10-04
 - Added **Shift+Up/Down** navigation through visible timeline records, including held-key repeat behavior.
 - Made opened files focus the same record as their transient pin label, even when timeline filters hide the record.
