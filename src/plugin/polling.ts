@@ -2,6 +2,7 @@ import { DEFAULT_SETTINGS } from "../settings";
 import type { PersistedPluginData } from "./state";
 import type { EpochPlugin } from "../main";
 import { normalizeSerializedEpochIndexForDisk } from "../indexer/disk-serialization";
+import { mergeReviewStatesForSync } from "../indexer/review-state-sync";
 import {
 	applyAiSummaries,
 	applyEpochEntriesByDate,
@@ -256,6 +257,13 @@ export const pollingMethods: PollingMethods = {
 				return;
 			}
 			const sanitized = normalizeSerializedEpochIndexForDisk(diskIndex);
+			try {
+				// Keep review mutations made against the same file content when Sync
+				// delivers an older full-index snapshot from another device.
+				mergeReviewStatesForSync(sanitized, this.indexer.toJSON());
+			} catch {
+				// A malformed legacy entry must not block the external reload.
+			}
 			await this.indexer.load(sanitized);
 			try {
 				const loaded = await loadEpochSummariesFromDisk(this);

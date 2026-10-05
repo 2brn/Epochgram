@@ -1,6 +1,7 @@
 import { normalizePath } from "obsidian";
 import type { SerializedEpochIndex } from "../indexer/types";
 import { normalizeSerializedEpochIndexForDisk } from "../indexer/disk-serialization";
+import { mergeReviewStatesForSync } from "../indexer/review-state-sync";
 import type { EpochSettings } from "../settings";
 import type { EpochPlugin } from "../main";
 import { saveEpochSummariesToDisk } from "./ai-summaries/epoch-summaries-store";
@@ -32,6 +33,7 @@ type PersistencePluginState = {
 	vectorsFileStat?: { mtime: number | null; size: number | null };
 	termSimilarityFileStat?: { mtime: number | null; size: number | null };
 	epochSummariesFileStat?: { mtime: number | null; size: number | null };
+	__epochIndexWriteQueue?: Promise<void> | null;
 };
 
 export interface PersistenceMethods {
@@ -60,6 +62,80 @@ export interface PersistenceMethods {
 		current: { mtime?: number; size?: number } | null
 	): boolean;
 	areSettingsEqual(a: EpochSettings, b: EpochSettings): boolean;
+}
+
+type IndexerLoader = {
+	load?: (index: SerializedEpochIndex) => Promise<void> | void;
+	toJSON?: () => SerializedEpochIndex;
+};
+
+async function writeIndexToDiskNow(plugin: EpochPlugin, serialized: SerializedEpochIndex): Promise<void> {
+	await plugin.ensurePluginDir();
+	const adapter = plugin.app.vault.adapter;
+	try {
+		const root = plugin.indexFilePath.split("/").slice(0, -1).join("/");
+		if (root) await adapter.mkdir(root);
+	} catch {
+		// Best-effort; adapter.mkdir may fail if the directory already exists.
+	}
+
+	let next = normalizeSerializedEpochIndexForDisk(serialized);
+	let payload = JSON.stringify(next);
+	const localPayload = payload;
+	let shouldLoadMergedIndex = false;
+
+	const mergeCurrentDiskIndex = (raw: string): void => {
+		if (raw === payload) return;
+		try {
+			const incoming = normalizeSerializedEpochIndexForDisk(JSON.parse(raw) as SerializedEpochIndex);
+			if (!mergeReviewStatesForSync(next, incoming)) return;
+			next = normalizeSerializedEpochIndexForDisk(next);
+			payload = JSON.stringify(next);
+			shouldLoadMergedIndex = true;
+		} catch {
+			// Keep the local index when the on-disk file is incomplete during Sync.
+		}
+	};
+
+	let writeNeeded = true;
+	try {
+		const exists = await adapter.exists(plugin.indexFilePath);
+		if (exists) {
+			// Read twice: an incoming Sync replacement that lands while the first
+			// copy is being reconciled is observed by the final read immediately
+			// before write. There is intentionally no await between that final read
+			// and adapter.write below.
+			for (let attempt = 0; attempt < 2; attempt++) {
+				const current = await adapter.read(plugin.indexFilePath);
+				mergeCurrentDiskIndex(current);
+				if (current === payload) {
+					writeNeeded = false;
+					break;
+				}
+				if (attempt === 1) break;
+			}
+		}
+	} catch {
+		// A failed read must not prevent a local index write.
+	}
+
+	if (writeNeeded) {
+		await adapter.write(plugin.indexFilePath, payload);
+	}
+
+	if (shouldLoadMergedIndex) {
+		const indexer = plugin.indexer as unknown as IndexerLoader;
+		try {
+			const livePayload = typeof indexer.toJSON === "function"
+				? JSON.stringify(normalizeSerializedEpochIndexForDisk(indexer.toJSON()))
+				: localPayload;
+			if (livePayload === localPayload) await indexer.load?.(next);
+		} catch {
+			// The disk write is still valid if the live index changed concurrently.
+		}
+	}
+
+	await plugin.updateIndexFileStat();
 }
 
 export const persistenceMethods: PersistenceMethods = {
@@ -128,8 +204,10 @@ export const persistenceMethods: PersistenceMethods = {
 		if (!options.skipEnsure) {
 			await this.ensureIndexLoaded();
 		}
+		await this.savePluginData();
+		// saveData() yields; capture only after it completes so an external Sync
+		// reload cannot be overwritten by a snapshot taken before that reload.
 		const diskIndex = normalizeSerializedEpochIndexForDisk(this.indexer.toJSON());
-		await this.savePluginData(diskIndex);
 		await this.saveCurrentIndexToDisk(diskIndex);
 		await saveEpochSummariesToDisk(this);
 	},
@@ -167,32 +245,19 @@ export const persistenceMethods: PersistenceMethods = {
 	},
 
 	async writeIndexToDisk(this: EpochPlugin, serialized: SerializedEpochIndex): Promise<void> {
-		await this.ensurePluginDir();
-		const payload = JSON.stringify(serialized);
+		const state = this as EpochPlugin & PersistencePluginState;
+		const previous = state.__epochIndexWriteQueue ?? Promise.resolve();
+		const run = previous
+			.catch(() => {
+				// A failed earlier write must not block later persistence.
+			})
+			.then(() => writeIndexToDiskNow(this, serialized));
+		state.__epochIndexWriteQueue = run;
 		try {
-			const adapter = this.app.vault.adapter;
-			const exists = await adapter.exists(this.indexFilePath);
-			if (exists) {
-				const current = await adapter.read(this.indexFilePath);
-				if (current === payload) {
-					await this.updateIndexFileStat();
-					return;
-				}
-			}
-		} catch {
-			// ignore
+			await run;
+		} finally {
+			if (state.__epochIndexWriteQueue === run) state.__epochIndexWriteQueue = null;
 		}
-		try {
-			const root = this.indexFilePath.split("/").slice(0, -1).join("/");
-			if (root) {
-				await this.app.vault.adapter.mkdir(root);
-			}
-		} catch {
-			// Best-effort; adapter.mkdir may fail if already exists on some backends.
-		}
-		await this.app.vault.adapter.write(this.indexFilePath, payload);
-
-		await this.updateIndexFileStat();
 	},
 
 	async ensurePluginDir(this: EpochPlugin): Promise<void> {

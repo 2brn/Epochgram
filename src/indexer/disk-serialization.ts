@@ -63,7 +63,7 @@ export function normalizeSerializedEpochIndexForDisk(serialized: SerializedEpoch
 	for (const path of filePaths) {
 		const anyData = serialized.files?.[path] as FileIndexRecord | undefined;
 		if (!anyData) continue;
-		
+
 		const cdateValue: FileDateEntry | null | undefined = anyData.cdate !== undefined
 			? stripAiFields(anyData.cdate)
 			: anyData.cdate;
@@ -76,7 +76,7 @@ export function normalizeSerializedEpochIndexForDisk(serialized: SerializedEpoch
 		const contentDatesValue: FileDateEntry[] | undefined = Array.isArray(anyData.contentDates)
 			? anyData.contentDates.map((e) => stripAiFields(e))
 			: anyData.contentDates;
-		
+
 		const trackedDatesValue: Record<string, FileDateEntry[]> = (() => {
 			const tracked = anyData.trackedDates ?? {};
 			const result: Record<string, FileDateEntry[]> = {};
@@ -88,7 +88,7 @@ export function normalizeSerializedEpochIndexForDisk(serialized: SerializedEpoch
 			}
 			return result;
 		})();
-		
+
 		const next: FileIndexRecord = {
 			cdate: cdateValue,
 			namedDate: namedDateValue,
@@ -105,15 +105,18 @@ export function normalizeSerializedEpochIndexForDisk(serialized: SerializedEpoch
 			indexedMtimeMs: anyData.indexedMtimeMs,
 			indexedSize: anyData.indexedSize,
 			contentHash: anyData.contentHash,
+			bodyHash: anyData.bodyHash,
 			embeddingTerm: anyData.embeddingTerm,
 			markColor: anyData.markColor,
 			markColorHex: anyData.markColorHex,
 			pinnedFile: normalizePinMode(anyData.pinnedFile),
 			recur: anyData.recur,
 			recurHiddenDates: anyData.recurHiddenDates,
-			recurReviewedDates: anyData.recurReviewedDates
+			recurHiddenDatesUpdatedAt: anyData.recurHiddenDatesUpdatedAt,
+			recurReviewedDates: anyData.recurReviewedDates,
+			recurReviewedDatesUpdatedAt: anyData.recurReviewedDatesUpdatedAt
 		};
-		
+
 		copySortedUnknownFields(anyData, next, new Set([
 			"cdate",
 			"namedDate",
@@ -130,13 +133,16 @@ export function normalizeSerializedEpochIndexForDisk(serialized: SerializedEpoch
 			"indexedMtimeMs",
 			"indexedSize",
 			"contentHash",
+			"bodyHash",
 			"embeddingTerm",
 			"markColor",
 			"markColorHex",
 			"pinnedFile",
 			"recur",
 			"recurHiddenDates",
-			"recurReviewedDates"
+			"recurHiddenDatesUpdatedAt",
+			"recurReviewedDates",
+			"recurReviewedDatesUpdatedAt"
 		]));
 		nextFiles[path] = next;
 	}

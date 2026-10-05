@@ -9,6 +9,8 @@ export function applyEntryState(
 		if (Array.isArray(prev)) {
 			next.recurHiddenDates = prev.slice();
 		}
+		const updatedAt = Number(previous?.recurHiddenDatesUpdatedAt);
+		if (Number.isFinite(updatedAt) && updatedAt > 0) next.recurHiddenDatesUpdatedAt = updatedAt;
 	} catch {
 		// ignore
 	}
@@ -18,6 +20,8 @@ export function applyEntryState(
 		if (Array.isArray(prev)) {
 			next.recurReviewedDates = prev.slice();
 		}
+		const updatedAt = Number(previous?.recurReviewedDatesUpdatedAt);
+		if (Number.isFinite(updatedAt) && updatedAt > 0) next.recurReviewedDatesUpdatedAt = updatedAt;
 	} catch {
 		// ignore
 	}
@@ -37,32 +41,81 @@ export function applyEntryState(
 	}
 
 	if (next.cdate) {
+		transferReviewStateMetadataSingle(previous?.cdate ?? null, next.cdate);
 		transferAiSingle(previous?.cdate ?? null, next.cdate);
 		transferHiddenSingle(previous?.cdate ?? null, next.cdate);
 		transferReviewedSingle(previous?.cdate ?? null, next.cdate, next);
 	}
 	if (next.namedDate) {
+		transferReviewStateMetadataSingle(previous?.namedDate ?? null, next.namedDate);
 		transferAiSingle(previous?.namedDate ?? null, next.namedDate);
 		transferHiddenSingle(previous?.namedDate ?? null, next.namedDate);
 		transferReviewedSingle(previous?.namedDate ?? null, next.namedDate, next);
 	}
 	if (next.dateProp) {
+		transferReviewStateMetadataSingle(previous?.dateProp ?? null, next.dateProp);
 		transferAiSingle(previous?.dateProp ?? null, next.dateProp);
 		transferHiddenSingle(previous?.dateProp ?? null, next.dateProp);
 		transferReviewedSingle(previous?.dateProp ?? null, next.dateProp, next);
 	}
 	if (Array.isArray(next.contentDates)) {
+		transferReviewStateMetadataArray(previous?.contentDates, next.contentDates, reviewedCarryForwardKey);
 		transferAiArray(previous?.contentDates, next.contentDates);
 		transferHiddenArray(previous?.contentDates, next.contentDates);
 		transferReviewedArray(previous?.contentDates, next.contentDates, next);
 	}
 	if (next.trackedDates) {
+		transferReviewStateMetadataTracked(previous?.trackedDates, next.trackedDates);
 		transferAiTracked(previous?.trackedDates, next.trackedDates);
 		transferHiddenTracked(previous?.trackedDates, next.trackedDates);
 		transferReviewedTracked(previous?.trackedDates, next.trackedDates);
 	}
 
 	applyHighlightState(next);
+}
+
+function reviewStateUpdatedAt(entry: FileDateEntry | null | undefined): number | null {
+	const value = Number(entry?.reviewStateUpdatedAt);
+	return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function transferReviewStateMetadataSingle(
+	previous: FileDateEntry | null | undefined,
+	next: FileDateEntry | null
+): void {
+	if (!previous || !next) return;
+	if (reviewedCarryForwardKey(previous) !== reviewedCarryForwardKey(next)) return;
+	const updatedAt = reviewStateUpdatedAt(previous);
+	if (updatedAt != null) next.reviewStateUpdatedAt = updatedAt;
+}
+
+function transferReviewStateMetadataArray(
+	previous: FileDateEntry[] | undefined,
+	next: FileDateEntry[],
+	keyFor: (entry: FileDateEntry) => string
+): void {
+	if (!Array.isArray(previous) || next.length === 0) return;
+	const updatedAtByKey = new Map<string, number>();
+	for (const entry of previous) {
+		const key = keyFor(entry);
+		const updatedAt = reviewStateUpdatedAt(entry);
+		if (!key || updatedAt == null) continue;
+		const prior = updatedAtByKey.get(key);
+		if (prior == null || updatedAt > prior) updatedAtByKey.set(key, updatedAt);
+	}
+	for (const entry of next) {
+		const updatedAt = updatedAtByKey.get(keyFor(entry));
+		if (updatedAt != null) entry.reviewStateUpdatedAt = updatedAt;
+	}
+}
+
+function transferReviewStateMetadataTracked(
+	previous: Record<string, FileDateEntry[]> | undefined,
+	next: Record<string, FileDateEntry[]>
+): void {
+	const previousEntries = previous ? Object.values(previous).flat() : [];
+	const nextEntries = Object.values(next).flat();
+	transferReviewStateMetadataArray(previousEntries, nextEntries, trackedEntryKey);
 }
 
 function hiddenCarryForwardKey(entry: DateEntry | null | undefined): string {

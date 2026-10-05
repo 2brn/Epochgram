@@ -91,6 +91,8 @@ export interface DateEntry {
 	epochStart?: string;
 	epochEnd?: string;
 	reviewState?: ReviewState;
+	/** Wall-clock time of the last explicit review-state mutation, used to reconcile synced indexes. */
+	reviewStateUpdatedAt?: number;
 	markColor?: number;
 	markColorHex?: string;
     pinned?: boolean;
@@ -123,6 +125,8 @@ export interface FileIndexData {
 	indexedSize?: number;
 	/** Normalized content hash (CRLF->LF) used to detect no-op modifies (e.g., Sync touches). */
 	contentHash?: string;
+	/** Normalized hash of the Markdown body, excluding YAML frontmatter. */
+	bodyHash?: string;
 	/** Optional user-provided term used as the embedding input for Similarity (Pro). */
 	embeddingTerm?: string;
 	markColor?: number;
@@ -135,11 +139,15 @@ export interface FileIndexData {
 	 * Stores date keys (YYYY-MM-DD) that should render with `reviewState: "hidden"` when emitted.
 	 */
 	recurHiddenDates?: string[];
+	/** Timestamp for the complete recurring hidden override set. */
+	recurHiddenDatesUpdatedAt?: number;
 	/**
 	 * Per-file reviewed overrides for synthetic recurring occurrences.
 	 * Stores date keys (YYYY-MM-DD) that should render with `reviewState: "reviewed"` when emitted.
 	 */
 	recurReviewedDates?: string[];
+	/** Timestamp for the complete recurring reviewed override set. */
+	recurReviewedDatesUpdatedAt?: number;
 }
 
 export type StoredFileIndexData = FileIndexData;

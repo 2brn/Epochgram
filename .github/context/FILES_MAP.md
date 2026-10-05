@@ -12,7 +12,7 @@ This is a “what to open first” map of the codebase.
 - `plugin/lifecycle.ts` — Startup: loads data, sets file paths, registers commands/view/menu, kicks off indexing.
 - `plugin/view.ts` — Opens/reveals Epochgram, refreshes it, registers file and folder explorer context-menu items.
 - `plugin/mark-context.ts` — Shared “mark with context” helper: resolves ancestor/seed and applies mark changes so inherited/related marks update consistently across entry menus, file menus, and commands.
-- `plugin/persistence.ts` — Persists plugin payload and writes `epochgram-index.json` (disk-normalized) + `epochgram-summaries.json`; includes `clearEpochJsonFilesAndRebuild()` reset flow.
+- `plugin/persistence.ts` — Persists plugin payload and writes `epochgram-index.json` (disk-normalized, serialized Sync-safe review-state reconciliation) + `epochgram-summaries.json`; includes `clearEpochJsonFilesAndRebuild()` reset flow.
 - `plugin/local-activation-state.ts` — Splits device-local Pro activation state from sync-safe settings; reads/writes local storage and strips activation fields from synced plugin data.
 - `plugin/device-proof.ts` — Generates/persists the local install identity and device keypair used for challenge-response validation.
 - `plugin/pro-feature-state.ts` — Central per-feature entitlement helpers for Pro-only runtime behavior; keeps synced settings intact while unlicensed devices apply runtime-only disablement.
@@ -44,7 +44,8 @@ This is a “what to open first” map of the codebase.
 - `indexer/indexer.ts` — Stable entrypoint exporting `Indexer`.
 - `indexer/indexer-class.ts` — Core indexing implementation and per-file derived data.
 - `indexer/disk-serialization.ts` — Canonical “disk normalization” for `epochgram-index.json` serialization.
-- `indexer/extractor.ts` — Strict date extraction utilities.
+- `indexer/review-state-sync.ts` — Reconciles timestamped review and recurring override state between compatible synced index copies.
+- `indexer/extractor.ts — Strict date extraction utilities.
 - `indexer/types.ts` — Core types (`DateEntry`, `DateSource`, serialization types).
 
 ## tests/

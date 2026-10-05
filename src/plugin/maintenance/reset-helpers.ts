@@ -12,6 +12,7 @@ type ResetEntryRuntime = {
 	trackedChange?: unknown;
 	trackedHash?: unknown;
 	reviewState?: unknown;
+	reviewStateUpdatedAt?: unknown;
 };
 
 type ResetFileRuntime = {
@@ -21,7 +22,9 @@ type ResetFileRuntime = {
 	contentDates?: unknown;
 	trackedDates?: unknown;
 	recurHiddenDates?: unknown;
+	recurHiddenDatesUpdatedAt?: unknown;
 	recurReviewedDates?: unknown;
+	recurReviewedDatesUpdatedAt?: unknown;
 	trackedSnapshot?: unknown;
 	trackedSnapshotDate?: unknown;
 	trackedBaselineSnapshot?: unknown;
@@ -166,6 +169,7 @@ function reapplyReviewedKeysToFileData(indexer: ResetIndexerRuntime, reviewedByP
 			const key = reviewCarryKey(entry);
 			if (!key || !keys.has(key)) continue;
 			entry.reviewState = "reviewed";
+			entry.reviewStateUpdatedAt = Date.now();
 			changed = true;
 		}
 		if (!changed) continue;
@@ -217,6 +221,7 @@ function reapplyRecurringReviewedDates(indexer: ResetIndexerRuntime, recurringRe
 			: [];
 		if (next.length === prev.length && next.every((v, i) => v === prev[i])) continue;
 		data.recurReviewedDates = next;
+		data.recurReviewedDatesUpdatedAt = Date.now();
 		changedFiles++;
 		try {
 			indexer.updateAggregatedEntries?.(path);
@@ -326,6 +331,7 @@ export function resetAllReviewStates(plugin: EpochPlugin): number {
 					if (!entry || typeof entry !== "object") continue;
 					if (entry.reviewState === "reviewed") {
 						entry.reviewState = "draft";
+						entry.reviewStateUpdatedAt = Date.now();
 						if (typeof entry.file === "string" && entry.file) changedFiles.add(entry.file);
 					}
 				}
@@ -388,6 +394,7 @@ export function reviewAllDraftFiles(plugin: EpochPlugin): number {
 					if (entry.reviewState === "hidden") continue;
 					if (entry.reviewState !== "reviewed") {
 						entry.reviewState = "reviewed";
+						entry.reviewStateUpdatedAt = Date.now();
 						fallbackChanged = true;
 					}
 				}
@@ -410,6 +417,7 @@ export function reviewAllDraftFiles(plugin: EpochPlugin): number {
 				if (entry.reviewState === "hidden") continue;
 				if (entry.reviewState === "reviewed") continue;
 				entry.reviewState = "reviewed";
+				entry.reviewStateUpdatedAt = Date.now();
 				if (typeof entry.file === "string" && entry.file) changedFiles.add(entry.file);
 			}
 		}

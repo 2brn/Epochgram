@@ -138,9 +138,10 @@ export async function processFileInternal(
 	})();
 	const isText = isLikelyTextFileExtension(file.extension) && !isEpochgramExportHtml;
 
-	const previousData = options.previous ?? s.files[file.path] ?? createEmptyFileIndex();
-
 	const rawContent = isText ? await s.readFileContent(file, options.reason) : "";
+	// Reading yields to Sync/polling. Resolve the previous state afterwards so a
+	// just-reloaded reviewed index cannot be overwritten by a stale Draft copy.
+	const previousData = options.previous ?? s.files[file.path] ?? createEmptyFileIndex();
 	const normalizedContent = isText ? (normalizeSnapshotValue(rawContent) ?? "") : "";
 	const suppression = resolveFrontmatterSuppressionFlags(s.plugin, file, normalizedContent);
 	if (suppression.noindex) {
@@ -149,10 +150,17 @@ export async function processFileInternal(
 	}
 	const contentHash = isText ? computeTextHash(normalizedContent) : undefined;
 	const previousContentHash = typeof previousData.contentHash === "string" ? String(previousData.contentHash) : null;
+	const previousBodyHash = typeof previousData.bodyHash === "string" && previousData.bodyHash.trim()
+		? String(previousData.bodyHash)
+		: null;
 	const previousSnapshot = typeof previousData.trackedSnapshot === "string" ? normalizeSnapshotValue(previousData.trackedSnapshot) : null;
 	const frontmatterWrite = consumeNoteFrontmatterWritePath(s.plugin, file.path);
 	const bodySnapshot = isText ? (normalizeSnapshotValue(stripYamlFrontmatterBlock(normalizedContent)) ?? "") : "";
-	const frontmatterOnlyChange = isText && previousSnapshot != null && previousSnapshot === bodySnapshot;
+	const bodyHash = isText ? computeTextHash(bodySnapshot) : undefined;
+	const frontmatterOnlyChange = isText && (
+		(previousBodyHash != null && previousBodyHash === bodyHash) ||
+		(previousSnapshot != null && previousSnapshot === bodySnapshot)
+	);
 	const contentUnchanged = isText && (
 		(previousContentHash != null && previousContentHash === contentHash) ||
 		(previousContentHash == null && previousSnapshot != null && previousSnapshot === normalizedContent)
@@ -165,6 +173,8 @@ export async function processFileInternal(
 		noparsed: suppression.noparsed,
 		recur: null,
 		recurHiddenDates: Array.isArray(previousData.recurHiddenDates) ? [...previousData.recurHiddenDates] : [],
+		recurHiddenDatesUpdatedAt: previousData.recurHiddenDatesUpdatedAt,
+		recurReviewedDatesUpdatedAt: previousData.recurReviewedDatesUpdatedAt,
 		trackedDates: cloneTrackedDates(previousData.trackedDates),
 		notracked: suppression.notracked,
 		trackedSnapshot: previousData.trackedSnapshot ?? null,
@@ -179,7 +189,8 @@ export async function processFileInternal(
 			const v = Number(file.stat?.size);
 			return Number.isFinite(v) && v >= 0 ? v : undefined;
 		})(),
-		contentHash
+		contentHash,
+		bodyHash
 	};
 	const useAnchorMdate = (s.plugin as unknown as ProcessFilePluginLike).settings?.anchorMdate === true;
 
@@ -352,15 +363,24 @@ export async function processFileInternal(
 		if (icsSynced && fileData.dateProp) fileData.dateProp.icsSynced = true;
 	}
 
-	const shouldResetReviewedOnEdit =
-		(options.reason === "create" || options.reason === "modify" || options.reason === "track") &&
-		!contentUnchanged &&
-		!frontmatterWrite &&
-		!frontmatterOnlyChange;
+	const isEditEvent = options.reason === "create" || options.reason === "modify" || options.reason === "track";
+	const binarySizeChanged = (() => {
+		if (isText) return false;
+		const previousSize = Number(previousData.indexedSize);
+		const currentSize = Number(file.stat?.size);
+		return Number.isFinite(previousSize) && previousSize >= 0 && Number.isFinite(currentSize) && currentSize >= 0 && previousSize !== currentSize;
+	})();
+	const shouldResetReviewedOnEdit = isEditEvent && (
+		(isText && !contentUnchanged && !frontmatterWrite && !frontmatterOnlyChange) ||
+		(!isText && binarySizeChanged)
+	);
 	if (shouldResetReviewedOnEdit) {
 		const clearReviewed = (entry: FileIndexData["cdate"]): void => {
 			if (!entry) return;
-			if (entry.reviewState === "reviewed") delete entry.reviewState;
+			if (entry.reviewState === "reviewed") {
+				delete entry.reviewState;
+				entry.reviewStateUpdatedAt = Date.now();
+			}
 		};
 		clearReviewed(fileData.cdate);
 		clearReviewed(fileData.namedDate);

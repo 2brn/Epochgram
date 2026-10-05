@@ -158,4 +158,82 @@ describe("ReviewState reset on edit", () => {
 		const data2: any = (indexer as any).files[file.path];
 		expect(String((data2.cdate as any)?.reviewState ?? "")).toBe("reviewed");
 	});
+
+	it("keeps Reviewed for frontmatter-only Sync changes without Track changes", async () => {
+		const ctime = Date.UTC(2025, 0, 1);
+		const file = makeFile("folder/frontmatter-sync.md", ctime);
+
+		contents[file.path] = ["---", "tags: [desktop]", "---", "Body"].join("\n");
+		await indexer.processFile(file, { reason: "modify" });
+		const data: any = (indexer as any).files[file.path];
+		data.cdate.reviewState = "reviewed";
+		(indexer as any).updateAggregatedEntries(file.path);
+
+		contents[file.path] = ["---", "tags: [mobile]", "---", "Body"].join("\n");
+		await indexer.processFile(file, { reason: "modify" });
+
+		const next: any = (indexer as any).files[file.path];
+		expect(next.cdate.reviewState).toBe("reviewed");
+		expect(typeof next.bodyHash).toBe("string");
+	});
+
+	it("keeps Reviewed when Sync touches a binary attachment", async () => {
+		const ctime = Date.UTC(2025, 0, 1);
+		const file = makeFile("folder/photo.png", ctime);
+
+		await indexer.processFile(file, { reason: "modify" });
+		const data: any = (indexer as any).files[file.path];
+		data.cdate.reviewState = "reviewed";
+		(indexer as any).updateAggregatedEntries(file.path);
+
+		await indexer.processFile(file, { reason: "modify" });
+
+		const next: any = (indexer as any).files[file.path];
+		expect(next.cdate.reviewState).toBe("reviewed");
+	});
+
+	it("resets Reviewed when a binary attachment size changes", async () => {
+		const ctime = Date.UTC(2025, 0, 1);
+		const file = makeFile("folder/replaced.pdf", ctime);
+
+		await indexer.processFile(file, { reason: "modify" });
+		const data: any = (indexer as any).files[file.path];
+		data.cdate.reviewState = "reviewed";
+		(indexer as any).updateAggregatedEntries(file.path);
+		(file as any).stat.size = 1024;
+
+		await indexer.processFile(file, { reason: "modify" });
+
+		const next: any = (indexer as any).files[file.path];
+		expect(next.cdate.reviewState).toBeUndefined();
+	});
+
+	it("uses a state reloaded while file content is being read", async () => {
+		const ctime = Date.UTC(2025, 0, 1);
+		const file = makeFile("folder/reload-race.md", ctime);
+		contents[file.path] = "Initial";
+		await indexer.processFile(file, { reason: "modify" });
+
+		let releaseRead: ((value: string) => void) | null = null;
+		pluginStub.app.vault.read.mockImplementationOnce(() => new Promise<string>((resolve) => {
+			releaseRead = resolve;
+		}));
+		const processing = indexer.processFile(file, { reason: "modify" });
+		await Promise.resolve();
+
+		const synced: any = indexer.toJSON();
+		synced.files[file.path].cdate.reviewState = "reviewed";
+		for (const entries of Object.values(synced.dates) as any[]) {
+			for (const entry of entries) {
+				if (entry.file === file.path) entry.reviewState = "reviewed";
+			}
+		}
+		await indexer.load(synced);
+		expect(releaseRead).not.toBeNull();
+		releaseRead?.("Initial");
+		await processing;
+
+		const next: any = (indexer as any).files[file.path];
+		expect(next.cdate.reviewState).toBe("reviewed");
+	});
 });

@@ -96,9 +96,10 @@ Timeline date marker interactions (Verified)
 ## Per-file UI-facing state (Verified)
 Per-file UI-facing state includes:
 - Review state is stored per-record:
-  - Per-entry `reviewState: "reviewed"` is persisted on the underlying stored entry; Draft is the implicit default when no `reviewState` is present.
-  - Synthetic recurring occurrences are virtual; per-occurrence reviewed state is persisted as date keys in `recurReviewedDates`.
-  - Meaningful file create/modify resets only anchor records (`cdate`, `namedDate`, and `dateProp`) to Draft, regardless of pin state. Content, tracked-change, and recurring review states carry forward when their record identity still matches after reprocessing.
+  - Per-entry `reviewState: "reviewed"` is persisted on the underlying stored entry; Draft is the implicit default when no `reviewState` is present. Explicit review-state mutations carry `reviewStateUpdatedAt` for Sync reconciliation.
+  - Synthetic recurring occurrences are virtual; per-occurrence reviewed state is persisted as date keys in `recurReviewedDates`, with timestamps for the complete reviewed/hidden override sets.
+  - Sync reconciliation preserves the newest review mutation for matching file content; legacy timestamp-less copies retain Reviewed/Hidden over an ambiguous Draft rather than silently demoting a record.
+  - Meaningful file create/modify resets only anchor records (`cdate`, `namedDate`, and `dateProp`) to Draft, regardless of pin state. Frontmatter-only Sync edits and unchanged binary attachment touches do not reset reviews; content, tracked-change, and recurring review states carry forward when their record identity still matches after reprocessing.
   - `draft` renders italic in the timeline summaries (unless `settings.simpleMode === true`).
 - Hidden can be applied either:
   - Per-entry/per-day via an entry-level `reviewState: "hidden"` override; the Hide/Show action applies it to all entries from that note for the selected day.

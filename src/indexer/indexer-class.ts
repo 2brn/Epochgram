@@ -608,14 +608,19 @@ export class Indexer {
 		};
 		type StoredFileRuntime = StoredFileIndexData & {
 			recurReviewedDates?: unknown;
+			recurReviewedDatesUpdatedAt?: unknown;
 			contentHash?: unknown;
+			bodyHash?: unknown;
 			embeddingTerm?: unknown;
 			noparsed?: unknown;
 			notracked?: unknown;
 			recurHiddenDates?: unknown;
+			recurHiddenDatesUpdatedAt?: unknown;
 			recur?: RecurRuntime | null;
 			indexedMtimeMs?: unknown;
 			indexedSize?: unknown;
+			anchorUsesMdate?: unknown;
+			markColorHex?: unknown;
 		};
 		const rawData = data as StoredFileRuntime;
 		const recurReviewedDates = (() => {
@@ -633,8 +638,16 @@ export class Indexer {
 				return [];
 			}
 		})();
+		const normalizeReviewStateUpdatedAt = (value: unknown): number | undefined => {
+			const updatedAt = Number(value);
+			return Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : undefined;
+		};
+		const recurReviewedDatesUpdatedAt = normalizeReviewStateUpdatedAt(rawData.recurReviewedDatesUpdatedAt);
+		const recurHiddenDatesUpdatedAt = normalizeReviewStateUpdatedAt(rawData.recurHiddenDatesUpdatedAt);
 		const contentHashRaw = typeof rawData.contentHash === "string" ? String(rawData.contentHash) : "";
 		const contentHash = contentHashRaw.trim() ? contentHashRaw : undefined;
+		const bodyHashRaw = typeof rawData.bodyHash === "string" ? String(rawData.bodyHash) : "";
+		const bodyHash = bodyHashRaw.trim() ? bodyHashRaw : undefined;
 
 		const embeddingTermRaw = typeof rawData.embeddingTerm === "string" ? String(rawData.embeddingTerm) : "";
 		const embeddingTerm = embeddingTermRaw.trim();
@@ -658,6 +671,9 @@ export class Indexer {
 		const markColor = Number.isFinite(markColorRaw)
 			? Math.max(1, Math.min(MAX_MARK_COLORS, Math.floor(markColorRaw)))
 			: undefined;
+		const markColorHexRaw = typeof rawData.markColorHex === "string" ? String(rawData.markColorHex).trim() : "";
+		const markColorHex = markColorHexRaw || undefined;
+		const anchorUsesMdate = rawData.anchorUsesMdate === true;
 		const pinnedFile = normalizePinMode(data.pinnedFile);
 		const noparsed = rawData.noparsed === true;
 		const notracked = rawData.notracked === true;
@@ -712,15 +728,20 @@ export class Indexer {
 			trackedSnapshotDate,
 			trackedBaselineSnapshot,
 			trackedBaselineDate,
+			anchorUsesMdate,
 			indexedMtimeMs,
 			indexedSize,
 			contentHash,
+			bodyHash,
 			embeddingTerm: embeddingTerm || undefined,
 			markColor,
+			markColorHex,
 			pinnedFile,
 			recur,
 			recurHiddenDates,
-			recurReviewedDates
+			recurHiddenDatesUpdatedAt,
+			recurReviewedDates,
+			recurReviewedDatesUpdatedAt
 		};
 	}
 

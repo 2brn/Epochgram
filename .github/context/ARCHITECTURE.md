@@ -17,13 +17,14 @@
   - Stores device-bound Pro activation state in local storage per vault/device (not in synced plugin data).
   - Local activation state now consists of `installId`, `devicePublicKey`, a signed activation certificate envelope, a locally-verified witness, a monotonic `activationGenerationFloor`, and activation timestamps/status fields.
   - Writes the serialized index JSON to `epochgram-index.json` (normalized for disk; excludes epoch entries and AI summary fields via `indexer/disk-serialization.ts:normalizeSerializedEpochIndexForDisk`). Disk normalization also sorts key order (e.g., `files` and nested `trackedDates`) so serialization is deterministic across restarts (reduces no-op rewrites, especially on Android/mobile).
-  - Skips rewriting `epochgram-index.json` when the on-disk contents already match the new serialized payload (prevents mtime-only changes).
+  - Serializes index writes, reconciles review-state mutations against a synced on-disk copy, and re-reads immediately before writing so a stale full-index snapshot cannot demote reviewed records.
+  - Skips rewriting `epochgram-index.json` when the reconciled on-disk contents already match the new serialized payload (prevents mtime-only changes).
   - Writes `epochgram-summaries.json` for epochs + AI summaries.
   - Tracks file stats (and, on mobile, content hashes) for change/no-op detection to avoid unnecessary index rewrites.
 - Indexing: `plugin/indexing.ts` + `indexer/*`
   - Coordinates (re)build and refresh flows (with progress notices).
   - Silent refreshes still run the full index operation; they only suppress notices.
-  - `Indexer` owns per-file derived data and produces serialized index output.
+  - `Indexer` owns per-file derived data and produces serialized index output. Review-state mutations carry timestamps so matching records can be reconciled across devices; Markdown body hashes distinguish frontmatter-only Sync edits from real body edits.
   - After successful rebuild/refresh, Epochgram saves a MiniSearch cache so full-text timeline search can be restored quickly on next startup.
 
 ## Startup Flow (Verified)
@@ -97,7 +98,7 @@
   - Serializes index via `this.indexer.toJSON()`.
   - Saves sync-safe plugin settings via `saveData({ settings })`.
   - Saves device-local Pro activation state separately in local storage.
-  - Writes the index to `epochgram-index.json` in a disk-normalized form (epoch entries and AI summary fields are not persisted there).
+  - Writes the index to `epochgram-index.json` in a disk-normalized form (epoch entries and AI summary fields are not persisted there), reconciling review mutations from a compatible synced copy before writing.
   - Writes `epochgram-summaries.json` containing:
     - `epochsByDate`: extracted epoch entries
     - `aiSummaries`: extracted non-epoch AI summaries (keyed by `file|date|groupType`)

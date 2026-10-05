@@ -1,7 +1,7 @@
 import { TFile } from "obsidian";
 import { MAX_MARK_COLORS } from "../ui/mark-colors";
 import { getEpochMarkColorSet } from "../ui/mark-colors";
-import { isTodayPinMode, normalizePinMode, type DateEntry, type FileIndexData, type FileReviewState } from "./types";
+import { isTodayPinMode, normalizePinMode, type DateEntry, type FileIndexData, type FileReviewState, type ReviewState } from "./types";
 import { expandRecurrenceToDateKeys } from "./recurrence";
 import {
 	applyHighlightState,
@@ -62,6 +62,37 @@ function normalizeFileReviewState(value: unknown): FileReviewState {
 	if (s === "reviewed") return "reviewed";
 	if (s === "draft") return "draft";
 	return "draft";
+}
+
+function setReviewState(entry: DateEntry, next: ReviewState): boolean {
+	const current: ReviewState = entry.reviewState === "hidden"
+		? "hidden"
+		: entry.reviewState === "reviewed"
+			? "reviewed"
+			: "draft";
+	if (current === next) return false;
+	if (next === "draft") delete entry.reviewState;
+	else entry.reviewState = next;
+	entry.reviewStateUpdatedAt = Date.now();
+	return true;
+}
+
+function setRecurHiddenDates(data: FileIndexData, values: unknown): boolean {
+	const next = normalizeDateKeys(values);
+	const previous = normalizeDateKeys(data.recurHiddenDates);
+	if (sameDateKeys(previous, next)) return false;
+	data.recurHiddenDates = next;
+	data.recurHiddenDatesUpdatedAt = Date.now();
+	return true;
+}
+
+function setRecurReviewedDates(data: FileIndexData, values: unknown): boolean {
+	const next = normalizeDateKeys(values);
+	const previous = normalizeDateKeys(data.recurReviewedDates);
+	if (sameDateKeys(previous, next)) return false;
+	data.recurReviewedDates = next;
+	data.recurReviewedDatesUpdatedAt = Date.now();
+	return true;
 }
 
 function isDateKey(value: unknown): boolean {
@@ -187,8 +218,7 @@ export function setEntryReviewState(indexer: unknown, target: DateEntry, reviewS
 				if (desired === "reviewed") set.add(dayKey);
 				else set.delete(dayKey);
 				const changedRecurReviewed = desired === "reviewed" ? !had : had;
-				if (changedRecurReviewed) {
-					data.recurReviewedDates = Array.from(set).sort((a, b) => a.localeCompare(b));
+				if (changedRecurReviewed && setRecurReviewedDates(data, Array.from(set))) {
 					changed = true;
 				}
 			}
@@ -199,8 +229,7 @@ export function setEntryReviewState(indexer: unknown, target: DateEntry, reviewS
 			const raw = data.recurHiddenDates;
 			if (Array.isArray(raw) && raw.length > 0) {
 				const next = raw.map((v) => String(v || "").trim()).filter(Boolean).filter((k) => k !== dayKey);
-				if (next.length !== raw.length) {
-					data.recurHiddenDates = next;
+				if (next.length !== raw.length && setRecurHiddenDates(data, next)) {
 					changed = true;
 				}
 			}
@@ -208,8 +237,7 @@ export function setEntryReviewState(indexer: unknown, target: DateEntry, reviewS
 			// ignore
 		}
 		try {
-			if (desired === "reviewed") target.reviewState = "reviewed";
-			else if (target.reviewState != null) delete target.reviewState;
+			if (setReviewState(target, desired)) changed = true;
 		} catch {
 			// ignore
 		}
@@ -220,23 +248,14 @@ export function setEntryReviewState(indexer: unknown, target: DateEntry, reviewS
 
 	for (const entry of related) {
 		try {
-			if (desired === "draft") {
-				if (entry.reviewState != null) {
-					delete entry.reviewState;
-					changed = true;
-				}
-			} else if (entry.reviewState !== "reviewed") {
-				entry.reviewState = "reviewed";
-				changed = true;
-			}
+			if (setReviewState(entry, desired)) changed = true;
 		} catch {
 			// ignore
 		}
 	}
 
 	try {
-		if (desired === "reviewed") target.reviewState = "reviewed";
-		else if (target.reviewState != null) delete target.reviewState;
+		setReviewState(target, desired);
 	} catch {
 		// ignore
 	}
@@ -266,8 +285,7 @@ export function setEntryHidden(indexer: unknown, target: DateEntry, hidden: bool
 			else set.delete(dayKey);
 			const changed = hidden ? !had : had;
 			if (!changed) return false;
-			data.recurHiddenDates = Array.from(set).sort((a, b) => a.localeCompare(b));
-			return true;
+			return setRecurHiddenDates(data, Array.from(set));
 		} catch {
 			return false;
 		}
@@ -287,28 +305,20 @@ export function setEntryHidden(indexer: unknown, target: DateEntry, hidden: bool
 	if (related.length === 0) {
 		const changedRecurring = updateRecurringHidden();
 		if (!changedRecurring) return false;
-		target.reviewState = hidden ? "hidden" : undefined;
+		setReviewState(target, hidden ? "hidden" : "draft");
 		s.updateAggregatedEntries(target.file);
 		return true;
 	}
 
 	let changed = false;
 	for (const entry of related) {
-		if (hidden) {
-			if (entry.reviewState !== "hidden") {
-				entry.reviewState = "hidden";
-				changed = true;
-			}
-		} else if (entry.reviewState === "hidden") {
-			delete entry.reviewState;
-			changed = true;
-		}
+		if (setReviewState(entry, hidden ? "hidden" : "draft")) changed = true;
 	}
 	const changedRecurring = updateRecurringHidden();
 	if (changedRecurring) changed = true;
 	if (!changed) return false;
 
-	target.reviewState = hidden ? "hidden" : undefined;
+	setReviewState(target, hidden ? "hidden" : "draft");
 	s.updateAggregatedEntries(target.file);
 	return true;
 }
@@ -333,45 +343,18 @@ export function setFileHidden(indexer: unknown, path: string, hidden: boolean): 
 	let changed = false;
 	if (hidden) {
 		for (const entry of entries) {
-			if (entry.reviewState !== "hidden") {
-				entry.reviewState = "hidden";
-				changed = true;
-			}
+			if (setReviewState(entry, "hidden")) changed = true;
 		}
-		const nextHidden = recurringKeys;
-		const prevHidden = normalizeDateKeys(data.recurHiddenDates);
-		if (!sameDateKeys(prevHidden, nextHidden)) {
-			data.recurHiddenDates = nextHidden;
-			changed = true;
-		}
-		const prevReviewed = normalizeDateKeys(data.recurReviewedDates);
-		if (prevReviewed.length > 0) {
-			data.recurReviewedDates = [];
-			changed = true;
-		}
+		if (setRecurHiddenDates(data, recurringKeys)) changed = true;
+		if (setRecurReviewedDates(data, [])) changed = true;
 	}
 
 	if (!hidden) {
 		for (const entry of entries) {
-			if (entry.reviewState === "hidden") {
-				delete entry.reviewState;
-				changed = true;
-			}
+			if (setReviewState(entry, "draft")) changed = true;
 		}
-		for (const entry of entries) {
-			if (entry.reviewState === "reviewed") {
-				delete entry.reviewState;
-				changed = true;
-			}
-		}
-		if (Array.isArray(data.recurHiddenDates) && data.recurHiddenDates.length > 0) {
-			data.recurHiddenDates = [];
-			changed = true;
-		}
-		if (Array.isArray(data.recurReviewedDates) && data.recurReviewedDates.length > 0) {
-			data.recurReviewedDates = [];
-			changed = true;
-		}
+		if (setRecurHiddenDates(data, [])) changed = true;
+		if (setRecurReviewedDates(data, [])) changed = true;
 	}
 
 	if (!changed) return false;
@@ -409,43 +392,17 @@ export function setFileReviewStateForAllRecords(indexer: unknown, path: string, 
 	let changed = false;
 
 	for (const entry of entries) {
-		if (entry.reviewState === "hidden") {
-			delete entry.reviewState;
-			changed = true;
-		}
+		if (entry.reviewState === "hidden" && setReviewState(entry, "draft")) changed = true;
 	}
-	if (Array.isArray(data.recurHiddenDates) && data.recurHiddenDates.length > 0) {
-		data.recurHiddenDates = [];
-		changed = true;
-	}
+	if (setRecurHiddenDates(data, [])) changed = true;
 
 	for (const entry of entries) {
-		if (desired === "draft") {
-			if (entry.reviewState === "reviewed") {
-				delete entry.reviewState;
-				changed = true;
-			}
-			if (entry.reviewState === "hidden") {
-				delete entry.reviewState;
-				changed = true;
-			}
-		} else if (entry.reviewState !== "reviewed") {
-			entry.reviewState = "reviewed";
-			changed = true;
-		}
+		if (setReviewState(entry, desired)) changed = true;
 	}
 	if (desired === "draft") {
-		if (Array.isArray(data.recurReviewedDates) && data.recurReviewedDates.length > 0) {
-			data.recurReviewedDates = [];
-			changed = true;
-		}
-	} else {
-		const nextReviewed = recurringKeys;
-		const prevReviewed = normalizeDateKeys(data.recurReviewedDates);
-		if (!sameDateKeys(prevReviewed, nextReviewed)) {
-			data.recurReviewedDates = nextReviewed;
-			changed = true;
-		}
+		if (setRecurReviewedDates(data, [])) changed = true;
+	} else if (setRecurReviewedDates(data, recurringKeys)) {
+		changed = true;
 	}
 
 	if (!changed) return false;
@@ -468,30 +425,15 @@ export function setFileReviewStateForAllRecordsPreserveHidden(indexer: unknown, 
 	let changed = false;
 	for (const entry of entries) {
 		if (entry.reviewState === "hidden") continue;
-		if (desired === "draft") {
-			if (entry.reviewState === "reviewed") {
-				delete entry.reviewState;
-				changed = true;
-			}
-		} else if (entry.reviewState !== "reviewed") {
-			entry.reviewState = "reviewed";
-			changed = true;
-		}
+		if (setReviewState(entry, desired)) changed = true;
 	}
 
 	if (desired === "draft") {
-		if (Array.isArray(data.recurReviewedDates) && data.recurReviewedDates.length > 0) {
-			data.recurReviewedDates = [];
-			changed = true;
-		}
+		if (setRecurReviewedDates(data, [])) changed = true;
 	} else {
 		const hiddenSet = new Set<string>(normalizeDateKeys(data.recurHiddenDates));
 		const nextReviewed = recurringKeys.filter((k) => !hiddenSet.has(k));
-		const prevReviewed = normalizeDateKeys(data.recurReviewedDates);
-		if (!sameDateKeys(prevReviewed, nextReviewed)) {
-			data.recurReviewedDates = nextReviewed;
-			changed = true;
-		}
+		if (setRecurReviewedDates(data, nextReviewed)) changed = true;
 	}
 
 	if (!changed) return false;
@@ -508,15 +450,9 @@ export function clearFileReviewOverrides(indexer: unknown, path: string): boolea
 	const entries = gatherEntriesSafe(data);
 	let changed = false;
 	for (const entry of entries) {
-		if (entry.reviewState === "reviewed") {
-			delete entry.reviewState;
-			changed = true;
-		}
+		if (entry.reviewState === "reviewed" && setReviewState(entry, "draft")) changed = true;
 	}
-	if (Array.isArray(data.recurReviewedDates) && data.recurReviewedDates.length > 0) {
-		data.recurReviewedDates = [];
-		changed = true;
-	}
+	if (setRecurReviewedDates(data, [])) changed = true;
 	if (!changed) return false;
 	s.updateAggregatedEntries(p);
 	return true;

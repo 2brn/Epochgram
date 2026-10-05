@@ -158,11 +158,12 @@ The plugin reads/writes:
 
 Index no-op detection (Verified)
 - Per-file index data may include `indexedMtimeMs` + `indexedSize` for the last indexed file stat, used to skip reprocessing when deferred resync detects spurious/no-op file events (prevents unnecessary `epochgram-index.json` rewrites on startup).
-- For deferred resync, Epochgram also uses a per-file `contentHash` no-op check for text files (desktop + mobile) to avoid rewrites when content is unchanged.
+- For deferred resync, Epochgram also uses per-file `contentHash` and Markdown-body `bodyHash` checks (desktop + mobile) to avoid rewrites when content is unchanged and to recognize frontmatter-only Sync changes.
 - Metadata-cache `changed` events for the active file join the normal deferred edit-processing queue (not forced), so startup metadata refresh does not bypass no-op guards and active-file property edits can coalesce with nearby typing-triggered work.
 - Normal user-note edit processing (`editor-change` / `vault.modify`) is coalesced by path before `processFile` runs, and successful edit-time reindexing schedules a delayed persist instead of writing managed files immediately per event.
 - Disk normalization for `epochgram-index.json` sorts key order (top-level `files`, nested `trackedDates`, and date keys) so `JSON.stringify` output is deterministic and doesn't flap due to iteration order.
-- When persisting the index, Epochgram compares the new serialized payload with the current on-disk file and skips the write if identical.
+- Review mutations persist a timestamp per record (and per recurring override set). External index reloads and writes reconcile compatible file copies so a stale full-index Sync snapshot cannot replace a newer Reviewed/Hidden/Draft decision.
+- Index writes are serialized; before a write, Epochgram re-reads the synced file and skips the write if the reconciled payload already matches.
 
 Managed-file reload notice (Verified)
 - When managed Epochgram files trigger external reload polling (`epochgram-index.json`, plugin `data.json`, vectors/topics files), Epochgram shows a short notice with the reload reason (for example, managed file modified/created/deleted/renamed).
