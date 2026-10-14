@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.8.29] - 2026-10-14
+- Show the date overlay when hovering or touch-holding pin labels, including while the pin context menu is open.
+
 ## [1.8.28] - 2026-10-05
 - Fixed Obsidian Sync reverting Reviewed records to Draft by reconciling timestamped review mutations, preserving frontmatter-only and attachment Sync touches, and serializing index writes against Sync reloads.
 
