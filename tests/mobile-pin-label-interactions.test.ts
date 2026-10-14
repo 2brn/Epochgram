@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { Platform, TFile, WorkspaceLeaf } from "obsidian";
-import { SUMMARY_ENTRY_SEPARATOR } from "../src/ui/epoch-canvas-constants";
+import { LONG_PRESS_MS, SUMMARY_ENTRY_SEPARATOR } from "../src/ui/epoch-canvas-constants";
+import { updateDateOverlay } from "../src/ui/epoch-canvas/overlay";
 import { updatePinOverlay } from "../src/ui/epoch-pin-overlay";
 
 class FakeClassList {
@@ -113,6 +114,7 @@ function makeCanvas(options: {
 	filenameWordsCount?: number;
 	summaryWordsCount?: number;
 	offsetY?: number;
+	date?: string;
 } = {}): { canvas: any; badge: FakeBadge; overlay: FakeOverlay; document: FakeDocument; openFile: ReturnType<typeof vi.fn>; clearHover: ReturnType<typeof vi.fn> } {
 	const document = new FakeDocument();
 	const root = {
@@ -128,11 +130,31 @@ function makeCanvas(options: {
 	const leaf = new WorkspaceLeaf();
 	const openFile = vi.fn(async () => {});
 	leaf.openFile = openFile;
-	const clearHover = vi.fn();
-	const canvas: any = {
+	const dateOverlayEl = {
+		style: { transition: "" },
+		offsetTop: 0,
+		offsetHeight: 20,
+		textContent: "",
+		classList: new FakeClassList()
+	};
+	let canvas: any;
+	const clearHover = vi.fn(() => {
+		canvas.hoverDateIndex = null;
+		canvas.hoverSummary = null;
+		canvas.animDateIndex = null;
+		canvas.animSummary = null;
+		canvas.hoverTarget = 0;
+	});
+	canvas = {
 		root,
 		pinOverlayEl: overlay,
 		lastPinOverlaySignature: null,
+		dateOverlayEl,
+		dateOverlayTimer: null,
+		lastDateOverlayHoverKey: "",
+		lastDateOverlayValue: "",
+		lastOverlayOffsetY: options.offsetY ?? -1000,
+		lastOverlayScale: 1,
 		plugin: {
 			settings: {
 				filenameWordsCount: options.filenameWordsCount ?? 2,
@@ -142,7 +164,7 @@ function makeCanvas(options: {
 				getIndexedPaths: () => [file.path],
 				getFileIndexData: (path: string) => path === file.path ? ({
 					cdate: {
-						date: todayKey(),
+						date: options.date ?? todayKey(),
 						file: file.path,
 						blockStart: 0,
 						blockEnd: 0,
@@ -176,6 +198,11 @@ function makeCanvas(options: {
 		clearHover,
 		keepHoverAfterMenu: false,
 		getToday: () => new Date(),
+		getDateForIndex: (index: number, today: Date) => {
+			const date = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+			date.setDate(date.getDate() - index);
+			return date;
+		},
 		getTodayOffset: () => 80,
 		cancelFocusClear: () => {},
 		requestHoverAnimation: () => {},
@@ -292,6 +319,36 @@ describe("mobile pin-label interactions", () => {
 		expect(overlay.badges[0]?.labels[0]?.style.font).toMatch(/^italic 700 8px /);
 	});
 
+	it("updates the date overlay while hovering a pin label", () => {
+		const date = "2026-01-02";
+		const { canvas, badge } = makeCanvas({ date });
+
+		badge.dispatch("mousemove", { buttons: 0 });
+
+		expect(canvas.dateOverlayEl.textContent).toBe(date);
+		expect(canvas.dateOverlayEl.classList.contains("is-visible")).toBe(true);
+
+		badge.dispatch("mouseleave", {});
+		expect(canvas.hoverDateIndex).toBeNull();
+	});
+
+	it("updates the date overlay while long-pressing a pin label", async () => {
+		Platform.isMobile = true;
+		vi.useFakeTimers();
+		const date = "2026-01-02";
+		const { canvas, badge } = makeCanvas({ date });
+		const showSummaryMenu = vi.fn(() => ({ onHide: vi.fn() }));
+		canvas.showSummaryMenu = showSummaryMenu;
+
+		badge.dispatch("touchstart", { touches: [{ clientX: 10, clientY: 10 }] });
+		expect(canvas.dateOverlayEl.textContent).toBe(date);
+		expect(canvas.dateOverlayEl.classList.contains("is-visible")).toBe(true);
+
+		await vi.advanceTimersByTimeAsync(LONG_PRESS_MS);
+		expect(showSummaryMenu).toHaveBeenCalledTimes(1);
+		expect(canvas.dateOverlayEl.classList.contains("is-visible")).toBe(true);
+	});
+
 	it("turns a same-label second touch into focus instead of a delayed open", async () => {
 		Platform.isMobile = true;
 		vi.useFakeTimers();
@@ -318,6 +375,20 @@ describe("mobile pin-label interactions", () => {
 
 		await vi.advanceTimersByTimeAsync(400);
 		expect(openFile).not.toHaveBeenCalled();
+	});
+
+	it("updates the date overlay when a second pin tap focuses its date", () => {
+		Platform.isMobile = true;
+		vi.useFakeTimers();
+		const date = "2026-01-02";
+		const { canvas, badge } = makeCanvas({ date });
+
+		badge.dispatch("click", interactionEvent());
+		badge.dispatch("click", interactionEvent());
+		updateDateOverlay(canvas);
+
+		expect(canvas.dateOverlayEl.textContent).toBe(date);
+		expect(canvas.dateOverlayEl.classList.contains("is-visible")).toBe(true);
 	});
 
 	it("cancels a pending pin open when the next touch is outside a pin", async () => {

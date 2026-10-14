@@ -515,7 +515,12 @@ export class EpochCanvas {
 		await triggerMissingFileRebuildAction(this);
 	}
 
-	private showSummaryMenu(entry: DateEntry, clientX: number, clientY: number) { return showSummaryMenuAction(this, entry, clientX, clientY); }
+	private showSummaryMenu(
+		entry: DateEntry,
+		clientX: number,
+		clientY: number,
+		options?: { onHide?: () => void }
+	) { return showSummaryMenuAction(this, entry, clientX, clientY, options); }
 
 	private showDateMenu(dayIndex: number, clientX: number, clientY: number) { showDateMenuAction(this, dayIndex, clientX, clientY); }
 

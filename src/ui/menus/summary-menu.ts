@@ -20,10 +20,17 @@ import { addEditTopic } from "./summary-menu/topic-menu";
 type MenuDomLike = HTMLElement & { addClass?: (name: string) => void };
 type MenuWithDom = Menu & { dom?: MenuDomLike; containerEl?: MenuDomLike };
 type CanvasMarksLike = EpochCanvas & { inheritedMarkSourceByPath?: Map<string, string> };
+type SummaryMenuOptions = { onHide?: () => void };
 
 const activeDocument: Document = typeof window !== "undefined" ? window.document : ({} as Document);
 
-export function showSummaryMenu(canvas: EpochCanvas, entry: DateEntry, clientX: number, clientY: number): Menu {
+export function showSummaryMenu(
+	canvas: EpochCanvas,
+	entry: DateEntry,
+	clientX: number,
+	clientY: number,
+	options: SummaryMenuOptions = {}
+): Menu {
 	const state = getMenuState(canvas);
 	const menu = new Menu();
 	const addMenuClass = (className: string) => {
@@ -48,6 +55,11 @@ export function showSummaryMenu(canvas: EpochCanvas, entry: DateEntry, clientX: 
 
 		state.keepHoverAfterMenu = false;
 		state.clearHover(true);
+		try {
+			options.onHide?.();
+		} catch {
+			// ignore
+		}
 	});
 
 	if (addEpochMenuIfApplicable(menu, state, canvas, entry)) {

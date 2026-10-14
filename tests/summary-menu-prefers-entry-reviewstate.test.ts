@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
 let capturedReviewState: any = null;
+let capturedMenuState: any = null;
 
 vi.mock("../src/ui/menus/menu-state", () => {
 	return {
 		getMenuState: () => {
-			return {
+			capturedMenuState = {
 				keepHoverAfterMenu: false,
-				clearHover() {},
+				clearHover: vi.fn(),
 				hasProAccess: () => true,
 				refreshIndex() {},
 				plugin: {
@@ -17,6 +18,7 @@ vi.mock("../src/ui/menus/menu-state", () => {
 					}
 				}
 			};
+			return capturedMenuState;
 		}
 	};
 });
@@ -65,5 +67,15 @@ describe("Summary menu review state selection", () => {
 		showSummaryMenu(canvas, entry, 10, 10);
 
 		expect(capturedReviewState).toBe("hidden");
+	});
+
+	it("runs an onHide callback alongside its hover cleanup", () => {
+		const onHide = vi.fn();
+		const menu: any = showSummaryMenu({}, { file: "note.md", reviewState: "reviewed" } as any, 10, 10, { onHide });
+
+		menu.hide();
+
+		expect(capturedMenuState.clearHover).toHaveBeenCalledWith(true);
+		expect(onHide).toHaveBeenCalledTimes(1);
 	});
 });

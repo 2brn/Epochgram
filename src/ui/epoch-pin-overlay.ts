@@ -7,7 +7,8 @@ import { DEFAULT_SETTINGS, type EpochSettings } from "../settings-model";
 import { BASE_SPACING, DOUBLE_TAP_MAX_DELAY, LABEL_OFFSET_X, LONG_PRESS_MS, TIMELINE_X } from "./epoch-canvas-constants";
 import { openEntry } from "./epoch-canvas-actions";
 import { beginAnchorEntryDrag, commitAnchorEntryDrag, updateAnchorEntryDrag } from "./epoch-canvas-events/anchor-dnd";
-import { focusDateWithZoom } from "./epoch-canvas-focus";
+import { focusDate, focusDateWithZoom } from "./epoch-canvas-focus";
+import { updateDateOverlay } from "./epoch-canvas/overlay";
 import { resolveActiveFilePinEntry } from "./active-file-pin-entry";
 import { getToday } from "./epoch-canvas-helpers";
 import { getEpochMarkColorSet } from "./mark-colors";
@@ -47,7 +48,8 @@ type PinOverlayState = {
 	semanticRelatedPaths: Set<string> | null;
 	ctx: CanvasRenderingContext2D;
 	keepHoverAfterMenu?: boolean;
-	showSummaryMenu?(entry: DateEntry, clientX: number, clientY: number): unknown;
+	keepHoverUntilPointerMove?: boolean;
+	showSummaryMenu?(entry: DateEntry, clientX: number, clientY: number, options?: { onHide?: () => void }): unknown;
 	clearHover(force?: boolean): void;
 	canvas: HTMLCanvasElement;
 };
@@ -63,7 +65,6 @@ type DragGhostLike = {
 };
 
 type MenuLike = {
-	onHide?: (cb: () => void) => void;
 	hide?: () => void;
 	close?: () => void;
 };
@@ -532,6 +533,20 @@ function clearPinBadgeInteraction(s: PinOverlayState, item: PinRenderItem, butto
 	}
 }
 
+function showPinDateHover(canvas: EpochCanvas, item: PinRenderItem): void {
+	// Pin badges sit above the canvas, so their mouse events never reach the
+	// canvas hover handler. Reuse the normal date-hover state for the overlay.
+	focusDate(canvas, item.date, true, false, true);
+	updateDateOverlay(canvas);
+}
+
+function clearPinDateHover(canvas: EpochCanvas): void {
+	const s = state(canvas);
+	if (s.keepHoverAfterMenu) return;
+	s.keepHoverUntilPointerMove = false;
+	s.clearHover();
+}
+
 async function handleOpenOnly(
 	canvas: EpochCanvas,
 	item: PinRenderItem,
@@ -566,11 +581,13 @@ async function handleOpenOnly(
 function handleFocusOnly(canvas: EpochCanvas, item: PinRenderItem, ev: PinActivationEvent, button?: HTMLButtonElement): void {
 	ev.preventDefault();
 	ev.stopPropagation();
-	focusDateWithZoom(canvas, item.date, true, false);
 	const s = state(canvas);
 	s.keepHoverAfterMenu = false;
 	clearPinBadgeInteraction(s, item, button);
+	// Clear the previous target before focusing the pin's date. Clearing afterward
+	// would immediately discard the new date hover, so the date overlay could not update.
 	s.clearHover(true);
+	focusDateWithZoom(canvas, item.date, true, false);
 }
 
 function showPinSummaryMenu(canvas: EpochCanvas, button: HTMLButtonElement, item: PinRenderItem, clientX: number, clientY: number): MenuLike | null {
@@ -609,14 +626,9 @@ function showPinSummaryMenu(canvas: EpochCanvas, button: HTMLButtonElement, item
 			clearMenuHoverNow();
 		}, delayMs);
 	};
-	const menu = s.showSummaryMenu(item.entry, clientX, clientY) as MenuLike | null | undefined;
-	try {
-		menu?.onHide?.(() => {
-			clearMenuHover(90);
-		});
-	} catch {
-		// ignore
-	}
+	const menu = s.showSummaryMenu(item.entry, clientX, clientY, {
+		onHide: () => clearMenuHover(90)
+	}) as MenuLike | null | undefined;
 	try {
 		if (doc) {
 			const onOutside = (ev: Event) => {
@@ -678,6 +690,16 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 		const shouldJustify = textWidth > 0 && textWidth <= textMaxWidth;
 		label.classList.toggle("is-justify", shouldJustify);
 		label.classList.toggle("is-left", !shouldJustify);
+		button.addEventListener("mouseenter", () => {
+			showPinDateHover(canvas, item);
+		});
+		button.addEventListener("mousemove", (ev) => {
+			if (ev.buttons) return;
+			showPinDateHover(canvas, item);
+		});
+		button.addEventListener("mouseleave", () => {
+			clearPinDateHover(canvas);
+		});
 		let dragArmed = false;
 		let dragStarted = false;
 		let dragStartX = 0;
@@ -777,8 +799,12 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 				touchTapInProgress = false;
 				clearLongPress();
 				clearPendingPinOpen(s);
+				clearPinDateHover(canvas);
 				return;
 			}
+			// Badge touches do not reach the canvas touch handler. Establish the same
+			// date hover immediately so it stays visible through a long-press menu.
+			showPinDateHover(canvas, item);
 			touchTapInProgress = true;
 			clearTouchUnhoverForPin(s, item, button);
 			const pending = s.pendingPinOpen;
@@ -814,6 +840,7 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 				if (Math.hypot(dx0, dy0) > 12) {
 					clearLongPress();
 					clearPendingPinOpen(s);
+					clearPinDateHover(canvas);
 				}
 				return;
 			}
