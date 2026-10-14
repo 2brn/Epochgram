@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.8.30] - 2026-10-14
+- Upgrade Transformers to remove the vulnerable transitive `sprintf-js` dependency.
+
 ## [1.8.29] - 2026-10-14
 - Show the date overlay when hovering or touch-holding pin labels, including while the pin context menu is open.
 

@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-epochgram",
-	"version": "1.8.29",
+	"version": "1.8.30",
 	"description": "An AI-powered timeline plugin for Obsidian",
 	"main": "main.js",
 	"scripts": {
@@ -36,7 +36,7 @@
 		"vitest": "^4.1.6"
 	},
 	"dependencies": {
-		"@huggingface/transformers": "^4.1.0",
+		"@huggingface/transformers": "^4.3.1",
 		"chrono-node": "^2.9.0",
 		"diff": "^5.2.0",
 		"minisearch": "^7.2.0",
