@@ -52,18 +52,20 @@ function getFocusInternals(canvas: EpochCanvas): FocusCanvasInternals {
 	return canvas as unknown as FocusCanvasInternals;
 }
 
-function isRecurringEntry(entry: DateEntry): boolean {
-	return entry.recurring === true;
-}
+type FileFocusTarget = { date: Date; ms: number; distance: number; entry: DateEntry };
 
-function getActiveFilePinFocusTarget(
+function getSelectedTimelineEntryFocusTarget(
 	canvas: EpochCanvas,
 	state: FocusCanvasInternals,
 	filePath: string
-): { date: Date; ms: number; distance: number; entry: DateEntry } | null {
+): FileFocusTarget | null {
+	// A dock pin is an anchor fallback for an opened file. Only an entry explicitly
+	// opened from the timeline should override the nearest visible record.
+	const selectedEntry = state.activeFileTimelineEntry;
+	if (!selectedEntry || selectedEntry.file !== filePath || !selectedEntry.date) return null;
 	const indexer = state.plugin?.indexer;
 	if (!indexer) return null;
-	const entry = resolveActiveFilePinEntry(indexer, filePath, state.activeFileTimelineEntry);
+	const entry = resolveActiveFilePinEntry(indexer, filePath, selectedEntry);
 	if (!entry) return null;
 	const date = dateKeyToDate(entry.date);
 	if (!date) return null;
@@ -71,6 +73,27 @@ function getActiveFilePinFocusTarget(
 	const distance = Math.abs(getDayIndexForDate(canvas, date));
 	if (!Number.isFinite(ms) || !Number.isFinite(distance)) return null;
 	return { date, ms, distance, entry };
+}
+
+function getNearestVisibleFileFocusTarget(
+	canvas: EpochCanvas,
+	state: FocusCanvasInternals,
+	filePath: string
+): FileFocusTarget | null {
+	let best: FileFocusTarget | null = null;
+	for (const dateKey of Object.keys(state.index)) {
+		const date = dateKeyToDate(dateKey);
+		if (!date) continue;
+		const entry = pickEntryForFile(canvas, getEntriesForDate(canvas, date), filePath, null);
+		if (!entry) continue;
+		const ms = date.getTime();
+		const distance = Math.abs(getDayIndexForDate(canvas, date));
+		if (!Number.isFinite(ms) || !Number.isFinite(distance)) continue;
+		if (!best || distance < best.distance || (distance === best.distance && ms > best.ms)) {
+			best = { date, ms, distance, entry };
+		}
+	}
+	return best;
 }
 
 function scrollScreenRectIntoView(canvas: EpochCanvas, y1: number, y2: number, padding: number): boolean {
@@ -333,41 +356,15 @@ export function focusFile(
 	useHoverHighlight: boolean
 ): boolean {
 	const state = getFocusInternals(canvas);
-	let best: { date: Date; ms: number; distance: number } | null = null;
-	let bestEntry: DateEntry | null = null;
-	const pinTarget = getActiveFilePinFocusTarget(canvas, state, filePath);
-	if (pinTarget) {
-		best = pinTarget;
-		bestEntry = pinTarget.entry;
-	} else {
-		for (const [dateKey, entries] of Object.entries(state.index)) {
-			const nonRecurring = entries.filter((e) => !isRecurringEntry(e));
-			const recurring = entries.filter((e) => isRecurringEntry(e));
-			const matchNonRecurring = nonRecurring.length > 0
-				? pickEntryForFile(canvas, nonRecurring, filePath, null, { bypassAttachmentsFilter: true, bypassDateFilters: true })
-				: null;
-			const matchRecurring = recurring.length > 0
-				? pickEntryForFile(canvas, recurring, filePath, null, { bypassAttachmentsFilter: true, bypassDateFilters: true })
-				: null;
-			if (!matchNonRecurring && !matchRecurring) continue;
-			const date = dateKeyToDate(dateKey);
-			if (!date) continue;
-			const ms = date.getTime();
-			if (!Number.isFinite(ms)) continue;
-			const distance = Math.abs(getDayIndexForDate(canvas, date));
-			if (!Number.isFinite(distance)) continue;
-			const candidate = { date, ms, distance };
-			if (!best || distance < best.distance || (distance === best.distance && ms > best.ms)) {
-				best = candidate;
-				bestEntry = matchNonRecurring ?? matchRecurring;
-			}
-		}
-	}
-	if (!best || !bestEntry) return false;
-	const dayIndex = getDayIndexForDate(canvas, best.date);
+	const target =
+		getSelectedTimelineEntryFocusTarget(canvas, state, filePath) ??
+		getNearestVisibleFileFocusTarget(canvas, state, filePath);
+	if (!target) return false;
+	const { date, entry: bestEntry } = target;
+	const dayIndex = getDayIndexForDate(canvas, date);
 	const shouldScroll = !isDateVisible(canvas, dayIndex);
-	const scrolled = focusDate(canvas, best.date, useHoverHighlight, shouldScroll);
-	const layout = findLayoutForDate(canvas, best.date);
+	const scrolled = focusDate(canvas, date, useHoverHighlight, shouldScroll);
+	const layout = findLayoutForDate(canvas, date);
 	let highlighted = false;
 	if (layout) {
 		highlighted = focusSummaryForEntry(canvas, layout, bestEntry, useHoverHighlight);
@@ -406,39 +403,13 @@ export function snapToFile(
 		return false;
 	}
 
-	let best: { date: Date; ms: number; distance: number } | null = null;
-	let bestEntry: DateEntry | null = null;
-	const pinTarget = getActiveFilePinFocusTarget(canvas, state, filePath);
-	if (pinTarget) {
-		best = pinTarget;
-		bestEntry = pinTarget.entry;
-	} else {
-		for (const [dateKey, entries] of Object.entries(state.index)) {
-			const nonRecurring = entries.filter((e) => !isRecurringEntry(e));
-			const recurring = entries.filter((e) => isRecurringEntry(e));
-			const matchNonRecurring = nonRecurring.length > 0
-				? pickEntryForFile(canvas, nonRecurring, filePath, null)
-				: null;
-			const matchRecurring = recurring.length > 0
-				? pickEntryForFile(canvas, recurring, filePath, null)
-				: null;
-			if (!matchNonRecurring && !matchRecurring) continue;
-			const date = dateKeyToDate(dateKey);
-			if (!date) continue;
-			const ms = date.getTime();
-			if (!Number.isFinite(ms)) continue;
-			const distance = Math.abs(getDayIndexForDate(canvas, date));
-			if (!Number.isFinite(distance)) continue;
-			const candidate = { date, ms, distance };
-			if (!best || distance < best.distance || (distance === best.distance && ms > best.ms)) {
-				best = candidate;
-				bestEntry = matchNonRecurring ?? matchRecurring;
-			}
-		}
-	}
-	if (!best) return false;
+	const target =
+		getSelectedTimelineEntryFocusTarget(canvas, state, filePath) ??
+		getNearestVisibleFileFocusTarget(canvas, state, filePath);
+	if (!target) return false;
 
-	const dayIndex = getDayIndexForDate(canvas, best.date);
+	const { date, entry: bestEntry } = target;
+	const dayIndex = getDayIndexForDate(canvas, date);
 	const worldY = dayIndex * BASE_SPACING;
 	const s = Number.isFinite(state.scale) && state.scale > 0 ? state.scale : 1;
 	const anchorY = rect.height * FOCUS_ANCHOR_RATIO;

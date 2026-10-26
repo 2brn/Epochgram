@@ -9,16 +9,32 @@ const pinEntry = {
 	source: "cdate" as const
 };
 
+const recurringEntry = {
+	date: "2025-01-02",
+	file: pinEntry.file,
+	blockStart: 1,
+	blockEnd: 1,
+	summary: "Recurring record",
+	source: "content" as const,
+	recurring: true
+};
+
 vi.mock("../src/ui/entry-helpers", () => ({
-	getEntriesForDate: vi.fn(() => []),
-	pickEntryForFile: vi.fn(() => null)
+	getEntriesForDate: vi.fn((canvas: any, date: Date) => {
+		const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+		return Array.isArray(canvas.index?.[key]) ? canvas.index[key] : [];
+	}),
+	pickEntryForFile: vi.fn((_canvas: any, entries: any, filePath: string) => {
+		const list = Array.isArray(entries) ? entries : [];
+		return list.find((entry) => entry?.file === filePath) ?? null;
+	})
 }));
 
 import { focusFile, snapToFile } from "../src/ui/epoch-canvas-focus";
 import * as entryHelpers from "../src/ui/entry-helpers";
 
-function makeCanvas(): any {
-	const index = { "2020-01-01": [pinEntry] };
+function makeCanvas(options: { index?: Record<string, any[]>; activeFileTimelineEntry?: any } = {}): any {
+	const index = options.index ?? { "2020-01-01": [pinEntry] };
 	return {
 		index,
 		plugin: {
@@ -31,7 +47,7 @@ function makeCanvas(): any {
 				})
 			}
 		},
-		activeFileTimelineEntry: null,
+		activeFileTimelineEntry: options.activeFileTimelineEntry ?? null,
 		layouts: [],
 		scale: 1,
 		offsetY: 0,
@@ -67,8 +83,8 @@ describe("active-file pin focus", () => {
 		vi.clearAllMocks();
 	});
 
-	test("auto-scrolls to the active pin when timeline filters reject its record", () => {
-		const canvas = makeCanvas();
+	test("keeps an explicitly selected timeline record as the active focus target", () => {
+		const canvas = makeCanvas({ activeFileTimelineEntry: pinEntry });
 
 		expect(focusFile(canvas, pinEntry.file, null, false)).toBe(true);
 		expect(entryHelpers.pickEntryForFile).not.toHaveBeenCalled();
@@ -77,12 +93,25 @@ describe("active-file pin focus", () => {
 		expect(canvas.scrollNavAnchorEntry).toBe(pinEntry);
 	});
 
-	test("uses the active pin for initial timeline positioning", () => {
-		const canvas = makeCanvas();
+	test("keeps an explicitly selected timeline record for initial positioning", () => {
+		const canvas = makeCanvas({ activeFileTimelineEntry: pinEntry });
 
 		expect(snapToFile(canvas, pinEntry.file, null, { draw: false })).toBe(true);
 		expect(entryHelpers.pickEntryForFile).not.toHaveBeenCalled();
 		expect(canvas.offsetY).not.toBe(0);
 		expect(canvas.scrollNavAnchorEntry).toBe(pinEntry);
+	});
+
+	test("initial positioning prefers the nearest visible recurrence over the cdate anchor", () => {
+		const canvas = makeCanvas({
+			index: {
+				[pinEntry.date]: [pinEntry],
+				[recurringEntry.date]: [recurringEntry]
+			}
+		});
+
+		expect(snapToFile(canvas, pinEntry.file, null, { draw: false })).toBe(true);
+		expect(entryHelpers.pickEntryForFile).toHaveBeenCalled();
+		expect(canvas.scrollNavAnchorEntry).toBe(recurringEntry);
 	});
 });

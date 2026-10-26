@@ -41,9 +41,7 @@
   - When Epochgram is opened on startup, it may run a short-lived refocus loop to snap the currently-open file to the focus anchor; these refocus attempts suppress hover/highlight so startup doesn’t repeatedly retrigger hover animations.
   - When Epochgram is opened on startup, it may run a short-lived refocus loop to snap the currently-open file to the focus anchor; these refocus attempts suppress hover/highlight so startup doesn’t repeatedly retrigger hover animations. The loop cancels as soon as the user interacts with the timeline (click/pan/zoom/scroll-nav) to avoid “snap back” fights.
   - Canvas resize now preserves the current world anchor at the Today focus ratio (for both live and target offsets), reducing startup/post-resize position drift.
-  - When focusing/snapping the timeline view to the currently-open file (startup refocus / initial snap):
-    - If a visible on-screen record matches the editor cursor line, that record is preferred.
-    - Otherwise, Epochgram selects the file's record date that is nearest to Today (applies to both recurring and non-recurring matches).
+  - When focusing/snapping the timeline view to the currently-open file (startup refocus / initial snap), Epochgram selects that file's visible record date nearest to Today regardless of source (anchors, content dates, recurring occurrences, tracked changes, or pins). A record explicitly opened from the timeline remains the session target.
   - On `file-open`, if the opened file is indexable but missing from the current index, Epochgram opportunistically indexes it and refreshes views.
   - On startup, Epochgram may open a dedicated What's New view tab (`epochgram-whats-new`) when a new eligible embedded page exists and the user is not opted out.
     - The view renders bundled markdown content from the build-time registry embedded into `main.js`.

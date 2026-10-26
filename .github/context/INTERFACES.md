@@ -15,7 +15,7 @@
   - When `summarizeAI` (Auto summarize) or `generateEpochs` is switched on in settings, the local AI bridge HTTP server starts immediately on desktop instead of waiting for the first queued AI job.
   - Opening Epochgram always targets the right/sidebar leaf and falls back to a tab leaf only when a right leaf is unavailable.
   - When the view opens, the timeline snaps to an open Markdown file’s best matching record (prefers the most recently active Markdown leaf when available); otherwise it snaps to Today.
-    - Snapping targets the record whose date is nearest to Today for that file (for both recurring and non-recurring matches). Cursor line does not affect which record is chosen.
+    - Snapping targets the visible record whose date is nearest to Today for that file, regardless of source (anchors, content dates, recurring occurrences, tracked changes, or pins). Cursor line does not affect which record is chosen; a record explicitly opened from the timeline remains the session target.
   - For a short, bounded startup window, Epochgram will also try to refocus to a *newly opened* default note (e.g., Daily note / New note created by other plugins) if it appears after the initial snap.
   - When the active Markdown file changes (primarily via the `file-open` event), the timeline auto-scrolls to keep that file’s best matching record visible.
     - On mobile, this follow-focus scroll can be computed even while the view is collapsed/hidden (using the last known viewport size), so opening the timeline later shows it already positioned.

@@ -1,5 +1,9 @@
 # Epochgram changelog
 
+## [1.8.31] - 2026-10-26
+- Fixed startup and active-file timeline snapping to select the opened file's nearest visible record to Today across anchors, content dates, recurring occurrences, tracked changes, and pins.
+- Preserved exact session focus when a record is opened directly from the timeline.
+
 ## [1.8.30] - 2026-10-14
 - Upgrade Transformers to remove the vulnerable transitive `sprintf-js` dependency.
 
