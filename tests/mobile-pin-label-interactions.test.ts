@@ -49,6 +49,7 @@ class FakeDocument {
 
 class FakeBadge {
 	ownerDocument: FakeDocument | null = null;
+	parentElement: FakeOverlay | null = null;
 	readonly classList = new FakeClassList();
 	readonly labels: Array<{ classList: FakeClassList; style: Record<string, unknown>; textContent: string }> = [];
 	readonly style: Record<string, unknown> & { setProperty: (name: string, value: string) => void } = {
@@ -67,6 +68,9 @@ class FakeBadge {
 
 	removeAttribute(): void {}
 	setAttribute(): void {}
+	remove(): void {
+		this.parentElement?.removeChild(this);
+	}
 
 	addEventListener(name: string, listener: (event: any) => void): void {
 		const listeners = this.listeners.get(name) ?? [];
@@ -84,15 +88,46 @@ class FakeOverlay {
 
 	constructor(private readonly document: FakeDocument) {}
 
-	replaceChildren(): void {
+	get children(): FakeBadge[] {
+		return this.badges;
+	}
+
+	get lastElementChild(): FakeBadge | null {
+		return this.badges[this.badges.length - 1] ?? null;
+	}
+
+	replaceChildren(...badges: FakeBadge[]): void {
+		for (const badge of this.badges) badge.parentElement = null;
 		this.badges.length = 0;
+		for (const badge of badges) this.appendChild(badge);
+	}
+
+	appendChild(badge: FakeBadge): FakeBadge {
+		this.removeChild(badge);
+		this.badges.push(badge);
+		badge.parentElement = this;
+		return badge;
+	}
+
+	insertBefore(badge: FakeBadge, before: FakeBadge | null): FakeBadge {
+		this.removeChild(badge);
+		const index = before ? this.badges.indexOf(before) : -1;
+		if (index < 0) this.badges.push(badge);
+		else this.badges.splice(index, 0, badge);
+		badge.parentElement = this;
+		return badge;
+	}
+
+	removeChild(badge: FakeBadge): void {
+		const index = this.badges.indexOf(badge);
+		if (index >= 0) this.badges.splice(index, 1);
+		if (badge.parentElement === this) badge.parentElement = null;
 	}
 
 	createEl(): FakeBadge {
 		const badge = new FakeBadge();
 		badge.ownerDocument = this.document;
-		this.badges.push(badge);
-		return badge;
+		return this.appendChild(badge);
 	}
 }
 
@@ -330,6 +365,38 @@ describe("mobile pin-label interactions", () => {
 
 		badge.dispatch("mouseleave", {});
 		expect(canvas.hoverDateIndex).toBeNull();
+	});
+
+	it.each([
+		["date", false, 0],
+		["dock", false, -1000],
+		["date", true, 0],
+		["dock", true, -1000]
+	] as const)("keeps a hovered %s pin badge mounted while opening an inactive file on mobile=%s", async (pinnedFile, mobile, offsetY) => {
+		Platform.isMobile = mobile;
+		vi.useFakeTimers();
+		const { canvas, badge, overlay, openFile, clearHover } = makeCanvas({
+			entryPath: "notes/pinned.md",
+			activeFilePath: "notes/other.md",
+			pinnedFile,
+			offsetY
+		});
+		openFile.mockImplementation(async () => {
+			canvas.activeFilePath = "notes/pinned.md";
+			updatePinOverlay(canvas);
+		});
+
+		badge.dispatch("mouseenter", {});
+		const hoverDateIndex = canvas.hoverDateIndex;
+		badge.dispatch("click", interactionEvent());
+		await vi.advanceTimersByTimeAsync(301);
+
+		expect(openFile).toHaveBeenCalledTimes(1);
+		expect(overlay.badges[0]).toBe(badge);
+		if (!mobile) {
+			expect(canvas.hoverDateIndex).toBe(hoverDateIndex);
+			expect(clearHover).not.toHaveBeenCalledWith(true);
+		}
 	});
 
 	it("updates the date overlay while long-pressing a pin label", async () => {

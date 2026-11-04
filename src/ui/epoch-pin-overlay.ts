@@ -39,6 +39,7 @@ type PinOverlayState = {
 	lastPinOverlaySignature: string | null;
 	pendingPinOpen?: PendingPinOpen | null;
 	pinOpenInFlight?: boolean;
+	pinBadgeControllers?: Map<string, PinBadgeController>;
 	touchUnhoveredPin?: { file: string; date: string } | null;
 	layouts: DayLayout[];
 	scale: number;
@@ -70,6 +71,12 @@ type MenuLike = {
 };
 
 type PinActivationEvent = Event & Pick<MouseEvent, "ctrlKey" | "metaKey">;
+
+type PinBadgeController = {
+	button: HTMLButtonElement;
+	update(item: PinRenderItem): void;
+	destroy(): void;
+};
 
 type PinRenderItem = {
 	key: string;
@@ -277,7 +284,10 @@ function computeItems(canvas: EpochCanvas): PinRenderItem[] {
 		// Mirror timeline records: draft entries use italic text.
 		if (entry.reviewState === "draft") font = withFontStyle(font, "italic");
 		const item: PinRenderItem = {
-			key: `${path}:${virtual ? "active-dock" : mode}:${entry.date}`,
+			// A pin's persisted/active mode can change when opening its file, but it
+			// still represents the same label. Keep its DOM identity stable so hover
+			// and touch interaction state do not reset during that transition.
+			key: `${path}:${entry.date}`,
 			entry,
 			label: getLabel(entry, s.plugin?.settings),
 			dayIndex,
@@ -345,7 +355,19 @@ export function getPinBadgeRects(canvas: EpochCanvas): PinBadgeRect[] {
 
 function buildSignature(items: PinRenderItem[]): string {
 	return items
-		.map((item) => [item.key, item.top, item.opacity, item.label, item.fill, item.text, item.dock, item.font].join("|"))
+		.map((item) => [
+			item.key,
+			item.entry.source,
+			item.entry.blockStart,
+			item.entry.blockEnd,
+			item.top,
+			item.opacity,
+			item.label,
+			item.fill,
+			item.text,
+			item.dock,
+			item.font
+		].join("|"))
 		.join(";");
 }
 
@@ -559,22 +581,34 @@ async function handleOpenOnly(
 	// Mark this before opening so a badge recreated by the active-file update
 	// cannot inherit a sticky touch hover.
 	markPinBadgeTouchUnhovered(s, item, button);
-	// Badge buttons are recreated on redraw. Keep the guard on the canvas so
-	// delayed clicks from detached buttons cannot overlap workspace leaf opens.
+	// Keep the guard on the canvas so delayed clicks cannot overlap workspace
+	// leaf opens while an active-file redraw is in progress.
+	const preservePointerHover = !Platform.isMobile && !!button;
 	if (s.pinOpenInFlight) {
 		s.keepHoverAfterMenu = false;
 		clearPinBadgeInteraction(s, item, button);
-		s.clearHover(true);
+		if (preservePointerHover) {
+			s.keepHoverUntilPointerMove = true;
+		} else {
+			s.clearHover(true);
+		}
 		return;
 	}
 	s.pinOpenInFlight = true;
+	if (preservePointerHover) s.keepHoverUntilPointerMove = true;
 	try {
 		await openEntry(canvas, item.entry, ev as MouseEvent, true);
 	} finally {
 		s.pinOpenInFlight = false;
 		s.keepHoverAfterMenu = false;
 		clearPinBadgeInteraction(s, item, button);
-		s.clearHover(true);
+		if (preservePointerHover) {
+			// Opening an inactive file redraws its pin as the active dock pin. Keep
+			// the bridged canvas hover until the pointer actually moves or leaves it.
+			s.keepHoverUntilPointerMove = true;
+		} else {
+			s.clearHover(true);
+		}
 	}
 }
 
@@ -649,6 +683,48 @@ function showPinSummaryMenu(canvas: EpochCanvas, button: HTMLButtonElement, item
 	return menu ?? null;
 }
 
+function updatePinBadgePresentation(
+	s: PinOverlayState,
+	button: HTMLButtonElement,
+	label: HTMLSpanElement,
+	item: PinRenderItem
+): void {
+	button.style.left = `${item.left}px`;
+	button.style.top = `${item.top}px`;
+	button.style.width = `${item.width}px`;
+	button.style.height = `${PIN_HEIGHT}px`;
+	button.style.opacity = `${item.opacity}`;
+	button.style.setProperty("--epoch-pin-fill", item.fill);
+	button.style.setProperty("--epoch-pin-text", item.text);
+	button.classList.toggle("is-top", item.dock === "top");
+	button.classList.toggle("is-bottom", item.dock === "bottom");
+	button.classList.toggle("is-touch-unhovered", hasSamePinTarget(s.touchUnhoveredPin, item));
+	label.textContent = item.label;
+	label.style.font = item.font;
+	// The font shorthand resets line-height; preserve the badge's centered text line.
+	label.style.lineHeight = `${PIN_HEIGHT}px`;
+	s.ctx.save();
+	s.ctx.font = item.font;
+	const textWidth = s.ctx.measureText(item.label).width;
+	s.ctx.restore();
+	const textMaxWidth = Math.max(0, item.width - 17);
+	const shouldJustify = textWidth > 0 && textWidth <= textMaxWidth;
+	label.classList.toggle("is-justify", shouldJustify);
+	label.classList.toggle("is-left", !shouldJustify);
+}
+
+function reconcilePinBadgeChildren(overlay: HTMLElement, controllers: Iterable<PinBadgeController>): void {
+	const buttons = [...controllers].map(controller => controller.button);
+	for (let index = 0; index < buttons.length; index++) {
+		const button = buttons[index];
+		const current = overlay.children[index] ?? null;
+		if (current !== button) overlay.insertBefore(button, current);
+	}
+	while (overlay.children.length > buttons.length) {
+		overlay.lastElementChild?.remove();
+	}
+}
+
 export function updatePinOverlay(canvas: EpochCanvas): void {
 	const s = state(canvas);
 	const overlay = s.pinOverlayEl;
@@ -657,39 +733,30 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 	const signature = buildSignature(items);
 	if (signature === s.lastPinOverlaySignature) return;
 	s.lastPinOverlaySignature = signature;
+	const previousControllers = s.pinBadgeControllers ?? new Map<string, PinBadgeController>();
 	if (items.length === 0) {
+		for (const controller of previousControllers.values()) controller.destroy();
+		s.pinBadgeControllers = new Map();
 		overlay.replaceChildren();
 		return;
 	}
-	overlay.replaceChildren();
-	for (const item of items) {
+	if (!s.pinBadgeControllers) overlay.replaceChildren();
+	const nextControllers = new Map<string, PinBadgeController>();
+	for (const initialItem of items) {
+		const existing = previousControllers.get(initialItem.key);
+		if (existing) {
+			existing.update(initialItem);
+			nextControllers.set(initialItem.key, existing);
+			continue;
+		}
+		let item = initialItem;
 		const button = overlay.createEl("button", { cls: "epoch-pin-badge" });
 		button.type = "button";
 		button.draggable = false;
 		button.removeAttribute("title");
 		button.setAttribute("aria-hidden", "true");
-		button.style.left = `${item.left}px`;
-		button.style.top = `${item.top}px`;
-		button.style.width = `${item.width}px`;
-		button.style.height = `${PIN_HEIGHT}px`;
-		button.style.opacity = `${item.opacity}`;
-		button.style.setProperty("--epoch-pin-fill", item.fill);
-		button.style.setProperty("--epoch-pin-text", item.text);
-		if (item.dock !== "none") button.classList.add(`is-${item.dock}`);
-		if (hasSamePinTarget(s.touchUnhoveredPin, item)) button.classList.add("is-touch-unhovered");
 		const label = button.createSpan({ cls: "epoch-pin-badge-label" });
-		label.textContent = item.label;
-		label.style.font = item.font;
-		// The font shorthand resets line-height; preserve the badge's centered text line.
-		label.style.lineHeight = `${PIN_HEIGHT}px`;
-		s.ctx.save();
-		s.ctx.font = item.font;
-		const textWidth = s.ctx.measureText(item.label).width;
-		s.ctx.restore();
-		const textMaxWidth = Math.max(0, item.width - 17);
-		const shouldJustify = textWidth > 0 && textWidth <= textMaxWidth;
-		label.classList.toggle("is-justify", shouldJustify);
-		label.classList.toggle("is-left", !shouldJustify);
+		updatePinBadgePresentation(s, button, label, item);
 		button.addEventListener("mouseenter", () => {
 			showPinDateHover(canvas, item);
 		});
@@ -942,5 +1009,22 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 			clearPendingPinOpen(s);
 			void handleOpenOnly(canvas, item, ev, button);
 		});
+		nextControllers.set(initialItem.key, {
+			button,
+			update(nextItem) {
+				item = nextItem;
+				updatePinBadgePresentation(s, button, label, item);
+			},
+			destroy() {
+				clearPointerDrag();
+				clearLongPress();
+				if (s.pendingPinOpen?.key === item.key) clearPendingPinOpen(s);
+			}
+		});
 	}
+	for (const [key, controller] of previousControllers) {
+		if (!nextControllers.has(key)) controller.destroy();
+	}
+	s.pinBadgeControllers = nextControllers;
+	reconcilePinBadgeChildren(overlay, nextControllers.values());
 }
