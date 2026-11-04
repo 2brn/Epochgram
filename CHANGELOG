@@ -1,5 +1,8 @@
 # Epochgram changelog
 
+## [1.8.32] - 2026-11-04
+- Preserved `pin: date` and `pin: dock` label hover state when opening an unopened note, on desktop and mobile.
+
 ## [1.8.31] - 2026-10-26
 - Fixed startup and active-file timeline snapping to select the opened file's nearest visible record to Today across anchors, content dates, recurring occurrences, tracked changes, and pins.
 - Preserved exact session focus when a record is opened directly from the timeline.
