@@ -1,5 +1,10 @@
 # Epochgram changelog
 
+## [1.8.33] - 2026-11-14
+- Refined AI bridge defaults to preserve named projects, concrete actions, task status, and milestones with shorter prompts and unchanged input/output limits.
+- Unified record, epoch, and reduction fallback contexts with the bundled YAML defaults, removing duplicate hard-coded prompts.
+- Fixed local builds to include edited bridge defaults while preserving consistent line endings.
+
 ## [1.8.32] - 2026-11-04
 - Preserved `pin: date` and `pin: dock` label hover state when opening an unopened note, on desktop and mobile.
 
