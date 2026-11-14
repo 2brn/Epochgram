@@ -9,7 +9,8 @@ describe("AI bridge page Reset to defaults", () => {
 		// Built-in defaults are embedded for initial load and the Reset button.
 		expect(html.includes("const BUILTIN_DEFAULTS")).toBe(true);
 		expect(html.includes("settingsYaml")).toBe(true);
-		expect(html.includes("Ignore dates and empty content.")).toBe(true);
+		expect(html.includes("Keep exact names from text or paths, not categories.")).toBe(true);
+		expect(html.includes("Merge by named subject; preserve names, facts and status.")).toBe(true);
 		expect(html.includes("{{filePath}}")).toBe(true);
 		expect(html.includes("{{openai-key}}")).toBe(true);
 		expect(html.includes("maxInputChars: 3000")).toBe(true);

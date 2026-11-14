@@ -6,7 +6,7 @@ import type { EpochJobMode } from "./epochs-types";
 import { computeAiSummaryInputHash, isLikelyTextFilePath } from "../../utils";
 import { isTopicSimilarityEnabled } from "../similarity/config";
 import { getAiSummaryTuning } from "./bridge-settings";
-import { buildEpochContext } from "./contexts";
+import { buildEpochContext, buildIntermediateReduceContext } from "./contexts";
 import { buildRelatedSummariesForFiles } from "./related";
 import {
 	EPOCH_BUCKET_ORDER,
@@ -786,7 +786,7 @@ export async function buildEpochJobsForDateKeys(
 					source: "epoch",
 					input: chunks[i],
 					related,
-					context: buildEpochContext(bucket, start, end, related),
+					context: buildIntermediateReduceContext(),
 					inputHash,
 					createdAt: Date.now(),
 					epochBucket: bucket,

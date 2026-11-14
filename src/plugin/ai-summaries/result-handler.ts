@@ -3,7 +3,7 @@ import type { EpochPlugin } from "../../main";
 import type { FileDateEntry } from "../../indexer/types";
 import { sanitizeSummaryText } from "../../utils";
 import type { AiBridgeServer, AiSummaryJob } from "../ai-bridge";
-import { buildEpochReduceContext, buildReduceContext } from "./contexts";
+import { buildEpochReduceContext, buildIntermediateReduceContext, buildReduceContext } from "./contexts";
 import { getAiSummaryTuning } from "./bridge-settings";
 import { getIndexerInternals, resolveTargetEntries } from "./indexer";
 import { schedulePersist } from "./persistence";
@@ -375,7 +375,7 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 			const epochStart = g.epochStart ?? extras.epochStart ?? job.date;
 			const epochEnd = g.epochEnd ?? extras.epochEnd ?? epochStart;
 			const related = String(g.related ?? extras.related ?? "");
-			const epochReduceContext = buildEpochReduceContext(epochBucket, epochStart, epochEnd, related);
+			const epochReduceContext = buildIntermediateReduceContext();
 			const reduceJobs: AiSummaryJob[] = [];
 			for (let i = 0; i < reduceChunks.length; i++) {
 				reduceJobs.push({
@@ -585,8 +585,8 @@ export function handleBridgeResult(plugin: EpochPlugin, job: AiSummaryJob, resul
 				blockEnd: job.blockEnd,
 				source: job.source,
 				input: reduceChunks[i],
-					related: g.related ?? extras.related,
-					context: buildReduceContext(job.filePath, representative, nextDepth, String(g.related ?? extras.related ?? "")),
+				related: g.related ?? extras.related,
+				context: buildIntermediateReduceContext(),
 				reduce: true,
 				reduceDepth: nextDepth,
 				inputHash: job.inputHash,

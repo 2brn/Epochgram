@@ -94,7 +94,8 @@ const bridgeDefaultSettingsYamlInlinePlugin = {
 		build.onLoad({ filter: /.*/, namespace: "epochgram-bridge-default-settings-yaml-inline" }, async () => {
 			let yamlText = "";
 			try {
-				yamlText = readGitBlobText(BRIDGE_DEFAULT_SETTINGS_YAML_FILE);
+				// Include local prompt edits while keeping bundles stable across line endings.
+				yamlText = (await fs.promises.readFile(BRIDGE_DEFAULT_SETTINGS_YAML_FILE, "utf8")).replace(/\r\n?/g, "\n");
 			} catch {
 				yamlText = "";
 			}

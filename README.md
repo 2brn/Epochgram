@@ -412,9 +412,8 @@ On first use of native summarization, a user gesture may be required to download
 
 ```yaml
 sharedContext: | # Shared instructions across all summarization jobs
-  Ignore dates and empty content.
-  Group by topics, compress, remove duplicates and metaphrases.
-  Order by frequency.
+  Use only input facts. Keep exact names from text or paths, not categories.
+  Omit dates, filler, duplicates.
 
 format: plain-text # Output format: markdown | plain-text
 preference: capability # Model preference: auto | speed | capability
@@ -435,8 +434,7 @@ maxRelatedChars: 300 # Related-context size limit
 
 reduce:
   context: | # Recursive reduction instructions
-    Recursive summary reduction.
-    Preserve dominant topics and recurring entities.
+    Merge by named subject; preserve names, facts and status.
 
   type: tldr # Reduction summary type: key-points | tldr | teaser | headline
   length: long # Summary length: short | medium | long
@@ -445,11 +443,8 @@ reduce:
 
 records:
   context: | # Per-record summarization instructions
-    File:
-    {{filePath}}
-    
-    Preserve facts, entities, terminology, and concrete topics.
-    Remove repetition, filler, boilerplate, and metaphrases.
+    File: {{filePath}}
+    Keep subject names, key facts, decisions and task status. Omit boilerplate.
 
   type: tldr # Summary type: key-points | tldr | teaser | headline
   length: short # Summary length: short | medium | long
@@ -460,9 +455,8 @@ records:
 epochs:
   - period: day-2weeks # Supported  periods/ranges: day | 2days | 4days | week | 2weeks | month | 3months | 6months | year | day-year
     context: | # Epoch summarization instructions
-      Short-term activity summary.
-      Recent events, actions, tasks, places, people, projects.
-      Output max 12 words, nouns only.
+      Name specific projects or events with actions and status.
+      Output max 12 words; not category lists.
 
     type: tldr # Summary type: key-points | tldr | teaser | headline
     length: short # Summary length: short | medium | long
@@ -471,9 +465,8 @@ epochs:
 
   - period: month-year
     context: |
-      Broad period summary.
-      Long-term themes, domains, projects, interests, recurring topics.
-      Output max 12 words, nouns only.
+      Name main projects or subjects with status and milestones.
+      Output max 12 words; not broad themes.
 
     type: tldr
     length: medium 

@@ -1,19 +1,3 @@
-export const DEFAULT_SUMMARY_CONTEXT_TEMPLATE =
-	"Ignore dates\n" +
-	"Ignore empty content\n" +
-	"Treat the input as the only source of facts; do not add new information\n\n" +
-	"{{filePath}}\n\n" +
-	"Related context:\n" +
-	"{{related}}";
-
-export const DEFAULT_EPOCH_CONTEXT_TEMPLATE =
-	"Ignore dates\n" +
-	"Ignore empty content\n" +
-	"Treat the input as the only source of facts; do not add new information\n" +
-	"Ouput max 7 words per line\n\n" +
-	"Related context:\n" +
-	"{{related}}";
-
 function toTemplateValue(value: unknown): string {
 	if (value == null) return "";
 	if (typeof value === "string") return value;

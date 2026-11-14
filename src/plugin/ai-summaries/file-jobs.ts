@@ -3,7 +3,7 @@ import type { FileDateEntry, FileIndexData } from "../../indexer/types";
 import type { AiSummaryJob } from "../ai-bridge";
 import { computeAiSummaryInputHash, isLikelyTextFilePath } from "../../utils";
 import { extractFrontmatterDescription } from "../../indexer/summarizer";
-import { buildPerCallContext } from "./contexts";
+import { buildIntermediateReduceContext, buildPerCallContext } from "./contexts";
 import { getAiSummaryTuning } from "./bridge-settings";
 import { getIndexerInternals, getLinesForFile } from "./indexer";
 import { buildRelatedSummariesAllDates, getRelatedScoredForFile } from "./related";
@@ -221,6 +221,7 @@ export async function buildJobsForFile(
 				id: mkId(),
 				...baseJob,
 				input: chunks[i],
+				context: buildIntermediateReduceContext(),
 				reduce: true,
 				reduceDepth: 0,
 				groupId,

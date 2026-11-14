@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_EPOCH_CONTEXT_TEMPLATE, DEFAULT_SUMMARY_CONTEXT_TEMPLATE, renderAiContextTemplate } from "../src/plugin/ai-context-templates";
-import { buildPerCallContext } from "../src/plugin/ai-summaries/contexts";
+import { renderAiContextTemplate } from "../src/plugin/ai-context-templates";
+import { buildEpochContext, buildPerCallContext } from "../src/plugin/ai-summaries/contexts";
 
 describe("AI context templates", () => {
 	it("renders {{related}} when provided", () => {
-		const out = renderAiContextTemplate(DEFAULT_SUMMARY_CONTEXT_TEMPLATE, {
+		const out = renderAiContextTemplate("File: {{filePath}}\nRelated context:\n{{related}}", {
 			filePath: "note.md",
 			date: "2026-01-04",
 			related: "- Other note: some summary"
@@ -21,9 +21,10 @@ describe("AI context templates", () => {
 		expect(out.includes("{{related}}")).toBe(false);
 	});
 
-	it("default epoch context includes Related context", () => {
-		expect(DEFAULT_EPOCH_CONTEXT_TEMPLATE.includes("Related context:"))
-			.toBe(true);
+	it("does not append related text unless the YAML template requests it", () => {
+		const related = "An unrelated note should not inflate the fallback";
+		expect(buildEpochContext("day", "2026-01-04", "2026-01-04", related)).not.toContain(related);
+		expect(buildPerCallContext("note.md", { date: "2026-01-04" } as any, related)).not.toContain(related);
 	});
 
 	it("does not special-case legacy placeholders at render time", () => {

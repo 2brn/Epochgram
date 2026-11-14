@@ -5,6 +5,19 @@ import { validateBridgeOptionsYaml } from "../ai-bridge/sanitize";
 
 const PERIOD_ORDER = ["day", "2days", "4days", "week", "2weeks", "month", "3months", "6months", "year"] as const;
 
+let defaultBridgeSettings: BridgeResolvedSettings | null = null;
+
+export function getDefaultBridgeSettings(): BridgeResolvedSettings {
+	// Parse the bundled YAML once, not once per record/chunk. It is also the
+	// source of job.context fallbacks; no separate prompt literals live in TS.
+	if (!defaultBridgeSettings) {
+		const checked = validateBridgeOptionsYaml("");
+		if (!checked.valid) throw new Error(`Invalid default bridge settings: ${checked.errors.join("; ")}`);
+		defaultBridgeSettings = checked.resolved;
+	}
+	return defaultBridgeSettings;
+}
+
 function requirePositiveInteger(value: unknown, key: string): number {
 	if (typeof value === "number" && Number.isFinite(value)) {
 		const normalized = Math.floor(value);
@@ -25,7 +38,7 @@ function getStoredResolvedBridgeSettings(plugin: EpochPlugin): BridgeResolvedSet
 			return resolved as unknown as BridgeResolvedSettings;
 		}
 	}
-	return validateBridgeOptionsYaml("").resolved;
+	return getDefaultBridgeSettings();
 }
 
 function periodCoversBucket(period: string, bucket: EpochBucket): boolean {
@@ -40,7 +53,7 @@ function periodCoversBucket(period: string, bucket: EpochBucket): boolean {
 	return bucketIndex >= startIndex && bucketIndex <= endIndex;
 }
 
-function getEpochRuleForBucket(resolved: BridgeResolvedSettings, bucket: EpochBucket): BridgeEpochRule | null {
+export function getEpochRuleForBucket(resolved: BridgeResolvedSettings, bucket: EpochBucket): BridgeEpochRule | null {
 	const rules = Array.isArray(resolved.epochs) ? resolved.epochs : [];
 	for (const rule of rules) {
 		if (!rule || typeof rule !== "object") continue;

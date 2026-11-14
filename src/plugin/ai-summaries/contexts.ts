@@ -1,9 +1,6 @@
 import type { EpochBucket, FileDateEntry } from "../../indexer/types";
-import {
-	DEFAULT_EPOCH_CONTEXT_TEMPLATE,
-	DEFAULT_SUMMARY_CONTEXT_TEMPLATE,
-	renderAiContextTemplate
-} from "../ai-context-templates";
+import { renderAiContextTemplate } from "../ai-context-templates";
+import { getDefaultBridgeSettings, getEpochRuleForBucket } from "./bridge-settings";
 
 function redactDatesFromPromptText(text: string): string {
 	const raw = String(text ?? "");
@@ -16,37 +13,28 @@ function redactDatesFromPromptText(text: string): string {
 }
 
 export function buildEpochContext(bucket: EpochBucket, start: string, end: string, related: string = ""): string {
-	return renderAiContextTemplate(DEFAULT_EPOCH_CONTEXT_TEMPLATE, {
-		filePath: "",
-		bucket,
-		start,
-		end,
-		related
-	});
+	const template = getEpochRuleForBucket(getDefaultBridgeSettings(), bucket)?.context ?? "";
+	return renderAiContextTemplate(template, { related }).trim();
 }
 
 export function buildEpochReduceContext(bucket: EpochBucket, start: string, end: string, related: string = ""): string {
-	return renderAiContextTemplate(DEFAULT_EPOCH_CONTEXT_TEMPLATE, {
-		filePath: "",
-		bucket,
-		start,
-		end,
-		related
-	});
+	return buildEpochContext(bucket, start, end, related);
+}
+
+export function buildIntermediateReduceContext(): string {
+	return String(getDefaultBridgeSettings().reduce?.context ?? "").trim();
 }
 
 export function buildPerCallContext(filePath: string, entry: FileDateEntry, related: string = ""): string {
-	return renderAiContextTemplate(DEFAULT_SUMMARY_CONTEXT_TEMPLATE, {
-		filePath: redactDatesFromPromptText(filePath),
-		date: entry?.date ?? "",
+	const path = redactDatesFromPromptText(filePath);
+	const fileName = (path.split(/[\\/]/).pop() || path).replace(/\.md$/i, "");
+	return renderAiContextTemplate(getDefaultBridgeSettings().records?.context ?? "", {
+		filePath: path,
+		fileName,
 		related
-	});
+	}).trim();
 }
 
 export function buildReduceContext(filePath: string, entry: FileDateEntry, depth: number, related: string = ""): string {
-	return renderAiContextTemplate(DEFAULT_SUMMARY_CONTEXT_TEMPLATE, {
-		filePath: redactDatesFromPromptText(filePath),
-		date: entry?.date ?? "",
-		related
-	});
+	return buildPerCallContext(filePath, entry, related);
 }

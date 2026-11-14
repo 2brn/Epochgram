@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Indexer } from "../src/indexer/indexer";
 import { TFile } from "obsidian";
 import { buildJobsForFile } from "../src/plugin/ai-summaries/file-jobs";
+import { validateBridgeOptionsYaml } from "../src/plugin/ai-bridge/sanitize";
 
 function makeFile(path: string, ctime: number): TFile {
 	const name = path.split("/").pop() ?? path;
@@ -73,6 +74,7 @@ describe("AI summary input chunking", () => {
 			expect(String(job.groupId ?? "")).toBe(groupId);
 			expect(job.reduce).toBe(true);
 			expect(job.reduceDepth).toBe(0);
+			expect(job.context).toBe(validateBridgeOptionsYaml("").resolved.reduce?.context?.trim());
 			expect(job.chunkCount).toBe(jobs.length);
 			expect(job.chunkIndex).toBe(i);
 		}
