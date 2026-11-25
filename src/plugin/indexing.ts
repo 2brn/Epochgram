@@ -103,10 +103,9 @@ export const indexingMethods: IndexingMethods = {
 		try {
 			const disk = await this.loadIndexFromDisk();
 			await this.indexer.load(disk);
-			if (disk) {
-				if (!await loadTimelineSearchCache(this)) hydrateTimelineSearchIndexFromLoadedState(this);
-				// A valid cache may still be stale after a failed write or cross-device sync.
-				scheduleTimelineSearchRebuild(this);
+			if (disk && !await loadTimelineSearchCache(this)) {
+				hydrateTimelineSearchIndexFromLoadedState(this);
+				if (Platform.isDesktop) scheduleTimelineSearchRebuild(this);
 			}
 			bumpTimelineSearchIndexVersion(this);
 			await this.updateIndexFileStat();

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Platform } from "obsidian";
 import { makeReviewPlugin } from "./helpers/review-plugin";
 import { persistenceMethods } from "../src/plugin/persistence";
 import { pollingMethods } from "../src/plugin/polling";
@@ -7,8 +8,10 @@ import { scheduleTimelineSearchRebuild } from "../src/plugin/search-rebuild-sche
 import { hydrateTimelineSearchIndexFromLoadedState } from "../src/plugin/timeline-search-hydration";
 import { TimelineSearchIndex } from "../src/search/timeline-search-index";
 const matches = (p: any, text: string) => p.timelineSearchIndex.searchFileIds({ includeText: text, exactPhrases: [], excludedPhrases: [], excludeTokens: [] });
+const originalDesktop = Platform.isDesktop;
+const originalMobile = Platform.isMobile;
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => { vi.clearAllTimers(); vi.restoreAllMocks(); vi.useRealTimers(); });
+afterEach(() => { Platform.isDesktop = originalDesktop; Platform.isMobile = originalMobile; vi.clearAllTimers(); vi.restoreAllMocks(); vi.useRealTimers(); });
 async function setup() {
 	const p = await makeReviewPlugin({ "note.md": "Intro words filling the summary and more words before the body-only uniqueneedle" });
 	Object.assign(p, persistenceMethods, pollingMethods, searchMethods);
@@ -17,15 +20,27 @@ async function setup() {
 	return { p, cleanups };
 }
 describe("search recovery after startup and sync", () => {
-	it("rebuilds a syntactically valid but stale search cache after startup", async () => {
+	it.each([true, false])("reuses a valid search cache without a startup rebuild (desktop=%s)", async desktop => {
+		Platform.isDesktop = desktop; Platform.isMobile = !desktop;
 		const { p } = await setup(); const old = new TimelineSearchIndex();
+		const rebuild = vi.spyOn(p, "rebuildTimelineSearchIndex");
 		old.upsert({ id: "note.md", kind: "file", path: "note.md", basename: "note", directory: "", meta: "", content: "staleonly" });
 		const serialized = old.serialize(); p.stored.set(`${p.pluginDirPath}/search.json`, typeof serialized === "string" ? serialized : JSON.stringify(serialized));
 		expect(await p.initializeIndex()).toBe(true);
 		expect(matches(p, "staleonly").has("note.md")).toBe(true);
 		await vi.advanceTimersByTimeAsync(2501);
-		expect(matches(p, "uniqueneedle").has("note.md")).toBe(true);
-		expect(matches(p, "staleonly").size).toBe(0);
+		expect(rebuild).not.toHaveBeenCalled();
+		expect(matches(p, "staleonly").has("note.md")).toBe(true);
+	});
+	it.each([[true, "missing"], [true, "invalid"], [false, "missing"], [false, "invalid"]] as const)("schedules fallback only on desktop (desktop=%s, cache=%s)", async (desktop, cache) => {
+		Platform.isDesktop = desktop; Platform.isMobile = !desktop;
+		const { p } = await setup();
+		if (cache === "invalid") p.stored.set(`${p.pluginDirPath}/search.json`, "not valid JSON");
+		const rebuild = vi.spyOn(p, "rebuildTimelineSearchIndex");
+		expect(await p.initializeIndex()).toBe(true);
+		await vi.advanceTimersByTimeAsync(2501);
+		expect(rebuild).toHaveBeenCalledTimes(desktop ? 1 : 0);
+		if (desktop) expect(matches(p, "uniqueneedle").has("note.md")).toBe(true);
 	});
 	it("keeps body-only matches available during a review-only external reload", async () => {
 		const { p } = await setup();
