@@ -1,24 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("utils", () => ({
-	canonicalizeTopicTerm: (value: string) => String(value || ""),
-	isNoTopicSentinel: () => false,
-	normalizeIsoDatePrefix: (value: string) => String(value || ""),
-	parseTopicTerm: (value: string) => ({ operator: null, term: String(value || "") })
-}));
-
-vi.mock("../src/ui/epoch-canvas-utils", () => ({
-	getEpochRangeFromEntry: () => null
-}));
-
-vi.mock("../src/plugin/pro-feature-state", () => ({
-	getEffectiveZeroShotMinScore: () => 0,
-	isSummarizeAIEffective: () => false
-}));
-
-vi.mock("../src/plugin/similarity/config", () => ({
-	isTopicSimilarityEnabled: () => false
-}));
+import { describe, expect, it } from "vitest";
 
 import { matchesSearch } from "../src/ui/entry-helpers/search";
 

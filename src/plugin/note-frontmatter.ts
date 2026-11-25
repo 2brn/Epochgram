@@ -1,6 +1,7 @@
 import * as YAML from "yaml";
 import { TFile } from "obsidian";
 import { readFrontmatterProperty } from "./frontmatter-keys";
+import { matchYamlFrontmatterBlock } from "../utils";
 
 type FrontmatterRecord = Record<string, unknown>;
 
@@ -27,7 +28,6 @@ function parseFrontmatterRecord(raw: string): FrontmatterRecord | null {
 }
 
 type FrontmatterApiPluginLike = {
-	__epochNoteFrontmatterWritePaths?: Set<string>;
 	app?: {
 		fileManager?: {
 			processFrontMatter?: (file: TFile, handler: (frontmatter: FrontmatterRecord) => void) => Promise<void>;
@@ -85,8 +85,8 @@ function findFrontmatterBounds(lines: string[]): { start: number; end: number } 
 	const first = String(lines[0] ?? "").replace(/^\uFEFF/, "").trim();
 	if (first !== "---") return null;
 	for (let i = 1; i < lines.length; i++) {
-		const t = String(lines[i] ?? "").trim();
-		if (t === "---" || t === "...") {
+		const t = String(lines[i] ?? "");
+		if (/^(?:---|\.\.\.)[ \t]*$/.test(t)) {
 			return { start: 0, end: i };
 		}
 	}
@@ -112,8 +112,7 @@ function escapeRegexLiteral(value: string): string {
 
 function hasPropertyInFrontmatterText(rawText: string, key: string): boolean {
 	try {
-		const text = String(rawText ?? "");
-		const match = text.match(/^[\uFEFF]?---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+		const match = matchYamlFrontmatterBlock(rawText);
 		if (!match) return false;
 		const lineRegex = new RegExp(`^\\s*${escapeRegexLiteral(key)}\\s*:`, "i");
 		return String(match[1] ?? "")
@@ -183,7 +182,7 @@ function upsertYamlProperty(raw: string, propertyKey: string, value: unknown): s
 export function readYamlPropertyFromText(rawText: string, key: string): string {
 	try {
 		const text = String(rawText ?? "");
-		const match = text.match(/^[\uFEFF]?---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+		const match = matchYamlFrontmatterBlock(text);
 		if (!match) return "";
 		const frontmatter = parseFrontmatterRecord(String(match[1] ?? ""));
 		if (String(key ?? "").trim().toLowerCase() === "pin") {
@@ -238,8 +237,7 @@ async function readCurrentYamlPropertyValue(plugin: unknown, file: TFile, key: s
 	}
 	try {
 		const raw = await (plugin as FrontmatterApiPluginLike).app?.vault?.read?.(file);
-		const text = String(raw ?? "");
-		const match = text.match(/^[\uFEFF]?---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+		const match = matchYamlFrontmatterBlock(String(raw ?? ""));
 		if (!match) return null;
 		const frontmatter = parseFrontmatterRecord(String(match[1] ?? ""));
 		return readFrontmatterProperty(frontmatter, key);
@@ -267,32 +265,6 @@ async function updateYamlPropertyWithObsidianApi(plugin: unknown, file: TFile, k
 	return changed;
 }
 
-function markFrontmatterWritePath(plugin: unknown, path: string): void {
-	try {
-		const state = plugin as FrontmatterApiPluginLike;
-		if (!(state.__epochNoteFrontmatterWritePaths instanceof Set)) {
-			state.__epochNoteFrontmatterWritePaths = new Set<string>();
-		}
-		const p = String(path || "").trim();
-		if (p) state.__epochNoteFrontmatterWritePaths.add(p);
-	} catch {
-		// ignore
-	}
-}
-
-export function consumeNoteFrontmatterWritePath(plugin: unknown, path: string): boolean {
-	try {
-		const state = plugin as FrontmatterApiPluginLike;
-		const p = String(path || "").trim();
-		if (!p || !(state.__epochNoteFrontmatterWritePaths instanceof Set)) return false;
-		const had = state.__epochNoteFrontmatterWritePaths.has(p);
-		if (had) state.__epochNoteFrontmatterWritePaths.delete(p);
-		return had;
-	} catch {
-		return false;
-	}
-}
-
 export async function getYamlPropertyForFile(plugin: unknown, file: TFile, key: string): Promise<string> {
 	return await readCurrentYamlProperty(plugin, file, key);
 }
@@ -304,7 +276,6 @@ export async function setYamlPropertyForFile(plugin: unknown, file: TFile, key: 
 		? prevValue === value
 		: normalizeComparableValue(prevValue) === normalized;
 	if (same) return false;
-	markFrontmatterWritePath(plugin, file.path);
 	const isPin = String(key ?? "").trim().toLowerCase() === "pin";
 
 	try {

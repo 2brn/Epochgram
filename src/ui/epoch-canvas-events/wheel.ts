@@ -328,19 +328,6 @@ export function handleWheel(canvas: EpochCanvas, event: WheelEvent): void {
 		}
 		return;
 	}
-	if (s.epochsView && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
-		resetScrollNavTargetState(canvas);
-		s.viewInteractionUntil = now + 140;
-		const dominantDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
-		applyWheelPan(s, dominantDelta);
-		s.suppressHoverUntil = now + 180;
-		s.suppressHoverUntilPointerMove = true;
-		s.keepHoverUntilPointerMove = false;
-		s.clearHover(true);
-		s.draw();
-		s.requestHoverAnimation();
-		return;
-	}
 	if (event.ctrlKey || event.metaKey || (event.shiftKey && !event.altKey && !event.metaKey)) {
 		s.animatingView = false;
 		state.animatingWheelPan = false;

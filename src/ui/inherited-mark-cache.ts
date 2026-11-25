@@ -1,6 +1,6 @@
 function normalizeNonEpochPath(value: unknown): string {
 	const p = typeof value === "string" ? String(value || "").trim() : "";
-	if (!p || p.startsWith("epoch://")) return "";
+	if (!p) return "";
 	return p;
 }
 

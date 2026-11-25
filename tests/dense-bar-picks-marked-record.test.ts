@@ -15,7 +15,7 @@ function baseArgs(overrides: Partial<any> = {}): any {
 		inheritedMarkIndexByPath: null,
 		showHidden: false,
 		activeFilePath: null,
-		semanticRelatedPaths: null,
+		relatedPaths: null,
 		...overrides
 	};
 }

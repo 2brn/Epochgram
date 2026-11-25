@@ -4,7 +4,6 @@ import { dist, mid } from "../epoch-canvas-utils";
 import { hideHoverPreview as hideHoverPreviewHelper } from "../epoch-canvas-hover";
 import {
 	LONG_PRESS_MS,
-	LONG_PRESS_TOGGLE_VIEW_MS,
 	MIN_SCALE,
 	MAX_SCALE,
 	INERTIA_BOOST,
@@ -314,9 +313,6 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 		s.animatingView = false;
 		s.animatingWheelZoom = false;
 	}
-	if (s.epochsView) {
-		s.touchHadMultipleTouches = event.touches.length > 1;
-	}
 
 	if (s.keepHoverAfterMenu) {
 		s.keepHoverAfterMenu = false;
@@ -426,10 +422,7 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 		} catch {
 			// ignore
 		}
-		const longPressDelay =
-			findTouchSummaryEntryAtPoint(s, x0, y0) || findTouchDayLayoutAtPoint(s, x0, y0)
-				? LONG_PRESS_MS
-				: LONG_PRESS_TOGGLE_VIEW_MS;
+		const longPressDelay = LONG_PRESS_MS;
 
 		s.touchLongPressTimeout = window.setTimeout(() => {
 			try {
@@ -528,7 +521,6 @@ export function handleTouchStart(canvas: EpochCanvas, event: TouchEvent): void {
 			} catch {
 				// ignore
 			}
-			s.toggleEmptyAreaView();
 		}, longPressDelay);
 	} else if (event.touches.length === 2) {
 		if (s.touchLongPressTimeout != null) {

@@ -120,8 +120,6 @@ export interface CanvasHoverInternals {
 	previewLockedUntilAltRelease: boolean;
 	isPointerDeviceEvent(): boolean;
 	isDragging: boolean;
-	requirePro(feature: string): boolean;
-	hasProAccess(): boolean;
 	getDateForIndex(index: number, today: Date): Date;
 	getToday(): Date;
 	getFileForDate(date: Date): TFile | null;

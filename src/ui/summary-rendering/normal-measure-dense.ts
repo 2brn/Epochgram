@@ -20,9 +20,6 @@ export function computeNeedsDenseByWidthFast(args: {
 	rowHeight: number;
 	fontSmall: string;
 	activeFilePath: string | null;
-	pathsWithEmbeddingTerm?: Set<string> | null;
-	pathsWithClassifiedTerm?: Set<string> | null;
-	termSimilarPaths?: Set<string> | null;
 	compactMinWidthRatio?: number;
 }): boolean {
 	const { ctx } = args;

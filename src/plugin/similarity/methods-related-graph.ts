@@ -17,7 +17,7 @@ import {
 	getEffectiveSimilarityUseLinks,
 	getEffectiveSimilarityUseTags,
 	getEffectiveTitleSimilarityThreshold
-} from "../pro-feature-state";
+} from "./config";
 
 export const methodsRelatedGraph: Pick<SimilarityMethods, "getGraphRelatedPathsForFile"> = {
 	async getGraphRelatedPathsForFile(this: EpochPlugin, filePath: string): Promise<Set<string>> {

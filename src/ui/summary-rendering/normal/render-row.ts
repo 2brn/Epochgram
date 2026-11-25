@@ -1,12 +1,13 @@
 import type { CanvasIconCache } from "../../canvas-icon-cache";
 import type { RenderRow } from "../normal-measure";
 import { mixFont, withFontWeight } from "../../epoch-canvas-utils";
-import { HOVER_BG_PAD, SUMMARY_PLACEHOLDER_STROKE_WIDTH } from "../../epoch-canvas-constants";
+import { SUMMARY_PLACEHOLDER_STROKE_WIDTH } from "../../epoch-canvas-constants";
 import { drawSummaryIcons } from "../../summary-rendering-icons";
 import { parseFontPx } from "../text";
 import { ellipsizeToWidth } from "./ellipsis";
 import { getHoverFontStrForRow } from "./hover-font";
 import { splitPlusNPrefix } from "../plusn";
+import { reviewSummaryOpacity } from "../../review-style";
 
 type TextMetricsWithBoxes = TextMetrics & {
 	actualBoundingBoxAscent?: number;
@@ -287,7 +288,6 @@ export function renderNormalRow(args: {
 		rowT
 	} = args;
 
-	const clipWidth = Math.max(0, clipRight - xStart);
 	const isHoverTarget = r.isHoverTarget === true;
 	const hoverT = isHoverTarget ? Math.max(0, Math.min(1, rowT)) : 0;
 	const isHoverActive = isHoverTarget && hoverT > 0.001;
@@ -317,54 +317,12 @@ export function renderNormalRow(args: {
 
 	if (!renderAsPlaceholder) {
 		ctx.save();
-
-		// Subtle always-on tag highlight (no extra glyph): tint the row background.
-		// Keep the tint tightly clipped to the row rect so it never bleeds into adjacent items.
-		if (r.tagTint && hasAnyText) {
-			const rowH = Math.max(0, yRectBottom - yRectTop);
-			const insetY = rowH >= 4 ? 0.5 : 0;
-			const bgY = yRectTop + insetY;
-			const bgH = Math.max(0, rowH - insetY * 2);
-			const bgPadX = Math.max(2, Math.min(HOVER_BG_PAD, Math.round(rowH * 0.2)));
-			const bgX = Math.max(xStart, rowX - bgPadX);
-
-			// Track hover/unhover animation: approximate width changes by scaling the pre-measured
-			// max line width by the current mixed font px.
-			const basePx = parseFontPx(r.summaryFont);
-			let scaleW = 1;
-			if (hoverT > 0.001) {
-				const hoverFontStr = r.hoverFontStr || getHoverFontStrForRow(r, fontSmallHover);
-				const mixed = mixFont(r.summaryFont, hoverFontStr, hoverT);
-				const mixedPx = parseFontPx(mixed);
-				if (Number.isFinite(basePx) && basePx > 0 && Number.isFinite(mixedPx) && mixedPx > 0) {
-					scaleW = mixedPx / basePx;
-				}
-			}
-			scaleW = Math.max(0.85, Math.min(1.35, scaleW));
-			const effectiveTextW = r.maxLineWidth > 0 ? r.maxLineWidth * scaleW : 0;
-			const effectiveDisplayW = leadingIconsWidth + (effectiveTextW > 0 ? textGap + effectiveTextW : 0);
-			const bgRight = Math.min(clipRight, rowX + Math.max(0, effectiveDisplayW) + bgPadX);
-			const bgW = Math.max(0, bgRight - bgX);
-
-			if (bgW > 0.5 && bgH > 0.5) {
-				ctx.save();
-				ctx.beginPath();
-				ctx.rect(xStart, yRectTop, clipWidth, rowH);
-				ctx.clip();
-				ctx.globalAlpha *= r.hiddenAlpha;
-				ctx.globalAlpha *= 0.03;
-				ctx.fillStyle = r.baseColor;
-				roundedRectPath(ctx, bgX, bgY, bgW, bgH, Math.min(6, bgH / 2));
-				ctx.fill();
-				ctx.restore();
-			}
-		}
+		ctx.globalAlpha *= reviewSummaryOpacity(r.entry);
 
 		if (leadingIconsVisible) {
 			const effectiveLeadingMetrics = r.leadingIconMetrics;
 			const iconX = rowX;
 			ctx.save();
-			ctx.globalAlpha *= r.hiddenAlpha;
 			drawSummaryIcons(
 				ctx,
 				iconCache,
@@ -405,7 +363,6 @@ export function renderNormalRow(args: {
 			ctx.font = fontStr;
 			ctx.textAlign = "left";
 			ctx.textBaseline = "top";
-			ctx.globalAlpha *= r.hiddenAlpha;
 
 			const textHeight = linesToRender.length * rowLineHeight;
 			let yTextTop = yItemCenter - textHeight / 2;
@@ -459,7 +416,7 @@ export function renderNormalRow(args: {
 	}
 
 	ctx.save();
-	ctx.globalAlpha *= r.hiddenAlpha;
+	ctx.globalAlpha *= reviewSummaryOpacity(r.entry);
 	ctx.strokeStyle = r.baseColor;
 	const baseStroke = SUMMARY_PLACEHOLDER_STROKE_WIDTH;
 	ctx.lineWidth = baseStroke;

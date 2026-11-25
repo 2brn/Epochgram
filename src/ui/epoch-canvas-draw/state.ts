@@ -26,18 +26,12 @@ export interface CanvasDrawState {
     velocityY?: number;
     viewInteractionUntil?: number;
     iconCache: CanvasIconCache;
-    showHidden: boolean;
     showAttachments: boolean;
-    showTrackedChanges: boolean;
+    showDraftsOnly?: boolean;
     showContentDates: boolean;
-    showDraftOnly?: boolean;
     showPropDates?: boolean;
-    epochsView?: boolean;
     activeFilePath: string | null;
-    focusedEpochRange?: { start: string; end: string } | null;
-    semanticRelatedPaths?: Set<string> | null;
-    semanticRelatedTermPaths?: Set<string> | null;
-    semanticRelatedActiveTerm?: string | null;
+    relatedPaths?: Set<string> | null;
     keepHoverAfterMenu?: boolean;
     __touchHoverPinnedUntil?: number;
     pendingVisibilityDraw: boolean;
@@ -45,8 +39,6 @@ export interface CanvasDrawState {
     suppressNextFocusHover: string | null;
     forceNextFocusHover: string | null;
     searchQuery?: string;
-    pathsWithEmbeddingTerm?: Set<string> | null;
-    pathsWithClassifiedTerm?: Set<string> | null;
     wrapFadeCache?: Map<string, unknown>;
     packAnimating?: boolean;
     __ellipsisNowLast?: number;
@@ -54,37 +46,14 @@ export interface CanvasDrawState {
     __ellipsisSettleUntil?: number;
     __globalDenseMode?: boolean;
     __globalCompactMode?: boolean;
-    epochPackAlphaByIndex?: Map<number, number> | null;
-    epochPackCenterCache?: Map<number, {
-        offset: number;
-        lastAt: number;
-        appearAt: number;
-        moveUntil?: number;
-        height?: number;
-    }>;
-    __epochPackSig?: string;
-    __epochIndexCacheRef?: Record<string, DateEntry[]>;
-    __epochIndexCacheTodayKey?: string;
-    __epochIndexCacheByBucket?: Map<string, number[]>;
     __entryIndexCacheRef?: Record<string, DateEntry[]>;
     __entryIndexCacheTodayKey?: string;
     __entryIndexCacheFilterKey?: string;
     __entryIndexCacheAll?: number[];
-    __epochPackInstantAppearOnce?: boolean;
-    __epochPackBaselineShift?: number;
-    __epochPackBaselineShiftTarget?: number;
-    __epochPackBaselineShiftMoveUntil?: number;
-    __epochPackBaselineShiftLastAt?: number;
-    __epochPackBaselineAnchorIndex?: number | null;
-    __epochPackBaselineAnchorLockUntil?: number;
-    epochPackLastScale?: number;
-    epochPackZoomUntil?: number;
-    epochPackBucketAnimating?: boolean;
     inheritedMarkSourceByPath?: Map<string, string> | null;
     plugin: {
         settings: {
             enableAnimation?: boolean;
-            generateEpochs?: boolean;
             filenameWordsCount?: number;
             summaryWordsCount?: number;
             compactModeMinWidthPercent?: number;

@@ -1,7 +1,6 @@
 import {
 	BASE_SPACING,
 	SUMMARY_COLUMN_GAP,
-	SUMMARY_HIDDEN_ALPHA,
 	SUMMARY_MARGIN,
 	SUMMARY_MAX_COL_WIDTH,
 	SUMMARY_MIN_SCALE,
@@ -12,7 +11,6 @@ import {
 	entrySummaryComponents,
 	formatEntrySummary,
 	truncateHard,
-	withFontStyle,
 	withFontWeight
 } from "../epoch-canvas-utils";
 import { formatDate } from "utils";
@@ -20,6 +18,7 @@ import { getSummaryIconMetrics } from "../summary-rendering-icons";
 import { getEntryMarkColor, getInheritedMarkColor } from "./entry-mark-colors";
 import { parseFontPx, wrapText } from "./text";
 import { splitPlusNPrefix } from "./plusn";
+import { reviewSummaryFont } from "../review-style";
 
 import type { NormalMeasureArgs, RenderColumn, RenderRow } from "./normal-measure-types";
 
@@ -41,9 +40,7 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 		animSummary,
 		outgoingSummaries,
 		activeFilePath,
-		relatedDateRange,
-		semanticRelatedPaths,
-		showHidden,
+		relatedPaths,
 		filenameWordsCount,
 		summaryWordsCount,
 		fontSmall,
@@ -52,9 +49,6 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 		colRelated,
 		markColors,
 		inheritedMarkIndexByPath,
-		pathsWithEmbeddingTerm,
-		pathsWithClassifiedTerm,
-		termSimilarPaths,
 		getEntryTitle,
 		decorateTitle,
 		decorateTextToWrap,
@@ -68,17 +62,6 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 	ctx.font = withFontWeight(fontSmall, "700");
 	const ellWBold = ctx.measureText("ΓÇª").width;
 	ctx.restore();
-
-	const isRelatedDate = (dateKey: string): boolean => {
-		const r = relatedDateRange;
-		if (!r) return false;
-		const start = r.start;
-		const end = r.end;
-		if (!start || !end) return false;
-		const lo = start <= end ? start : end;
-		const hi = start <= end ? end : start;
-		return dateKey >= lo && dateKey <= hi;
-	};
 
 	const halfSpan = Math.max(rowHeight / 2, (BASE_SPACING * scale) / 2 - SUMMARY_MARGIN);
 	const bandHeight = Math.max(rowHeight, halfSpan * 2);
@@ -166,18 +149,14 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 			const isHoverIncoming = isIncomingHoverTarget;
 
 			const isActiveEntry = !!(activeFilePath && entry.file === activeFilePath);
-			const isRelatedEntry = isRelatedDate(entry.date);
-			const isSemanticRelatedEntry = !!(semanticRelatedPaths && semanticRelatedPaths.has(entry.file));
+			const isRelatedEntry = !!relatedPaths?.has(entry.file);
 			const isPinnedEntry = entry.pinned === true;
-			const isHiddenEntry = entry.reviewState === "hidden";
-			const hiddenVisible = showHidden && isHiddenEntry;
 			const markColor = getEntryMarkColor(entry, markColors, colHighlight);
 			const inheritedColor = getInheritedMarkColor(entry, markColors, colHighlight, inheritedMarkIndexByPath);
 			let baseSummaryColor = colTextBase;
 			if (markColor) baseSummaryColor = markColor;
 			else if (inheritedColor) baseSummaryColor = inheritedColor;
-			else if (isActiveEntry || isRelatedEntry || isSemanticRelatedEntry) baseSummaryColor = colRelated;
-			const hiddenAlpha = hiddenVisible ? SUMMARY_HIDDEN_ALPHA : 1;
+			else if (isActiveEntry || isRelatedEntry) baseSummaryColor = colRelated;
 			const summaryColor = baseSummaryColor;
 			const hoverSummaryColor = summaryColor;
 
@@ -185,12 +164,6 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 			const summaryBase = summaryComponents.base;
 			const iconIds = summaryComponents.iconIds.slice().filter((id) => id !== "tag");
 
-			const hasOwnTerm =
-				!!(!entry.file.startsWith("epoch://") && pathsWithEmbeddingTerm instanceof Set && pathsWithEmbeddingTerm.has(entry.file));
-			const hasInferredTerm =
-				!!(!entry.file.startsWith("epoch://") && pathsWithClassifiedTerm instanceof Set && pathsWithClassifiedTerm.has(entry.file));
-			const isTermSimilar = !!(termSimilarPaths instanceof Set && termSimilarPaths.has(entry.file));
-			const tagTint = hasOwnTerm || hasInferredTerm || isTermSimilar;
 			const leadingIconIds = iconIds;
 			const leadingIconMetrics = getSummaryIconMetrics(leadingIconIds.length, rowHeight);
 			const tagIconMetrics = getSummaryIconMetrics(0, rowHeight);
@@ -198,10 +171,7 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 			const todayKey = formatDate(new Date());
 			const isTodayEntry = entry.date === todayKey;
 			const needsBoldFont = isActiveEntry || (isPinnedEntry && isTodayEntry);
-			const isDraft = entry.reviewState === "draft";
-			const disableDraftItalics = false;
-			let summaryFont = needsBoldFont ? withFontWeight(fontSmall, "700") : fontSmall;
-			if (isDraft && !disableDraftItalics) summaryFont = withFontStyle(summaryFont, "italic");
+			const summaryFont = reviewSummaryFont(entry, needsBoldFont ? withFontWeight(fontSmall, "700") : fontSmall);
 
 			const suffixReserve = 0;
 			const rightEdge = xStart + rightWidth;
@@ -228,13 +198,10 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 					isActiveEntry,
 					summaryFont,
 					needsBoldFont,
-					isDraft: isDraft && !disableDraftItalics,
 					padY,
 					baseColor: summaryColor,
 					hoverSummaryColor,
-					hiddenAlpha,
 					leadingIconIds: [],
-					tagTint,
 					hasTagIcon: false,
 					leadingIconMetrics: getSummaryIconMetrics(0, rowHeight),
 					tagIconMetrics: getSummaryIconMetrics(0, rowHeight),
@@ -313,15 +280,12 @@ export function buildNormalColumns(args: NormalMeasureArgs): {
 				isActiveEntry,
 				summaryFont,
 				needsBoldFont,
-				isDraft: isDraft && !disableDraftItalics,
 				padY,
 				baseColor: summaryColor,
 				hoverSummaryColor,
 				plusNBadgeColor,
 				plusNBadgeBold,
-				hiddenAlpha,
 				leadingIconIds,
-				tagTint,
 				hasTagIcon: false,
 				leadingIconMetrics,
 				tagIconMetrics,

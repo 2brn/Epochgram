@@ -11,7 +11,6 @@ interface SearchControlViewLike {
 	searchControlLayoutRaf: number | null;
 	searchControlRefreshRaf: number | null;
 	searchQuery: string;
-	showEpochsView: boolean;
 	computeTimelineSearchResultCountAllDates?(qTrim: string): number | null;
 }
 
@@ -79,7 +78,7 @@ export function epochViewUpdateSearchControl(view: unknown): void {
 	if (!el) return;
 	try {
 		if (state.searchControlIconEl) {
-			setIcon(state.searchControlIconEl, state.showEpochsView ? "hourglass" : "search");
+			setIcon(state.searchControlIconEl, "search");
 		}
 	} catch {
 		// ignore

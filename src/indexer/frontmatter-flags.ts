@@ -1,7 +1,7 @@
 import type { TFile } from "obsidian";
+import { matchYamlFrontmatterBlock } from "../utils";
 
 export interface FrontmatterSuppressionFlags {
-	notracked: boolean;
 	noparsed: boolean;
 	noindex: boolean;
 }
@@ -25,9 +25,7 @@ function scanYamlFrontmatterHasKey(raw: string, key: string): boolean {
 	try {
 		const input = String(raw ?? "");
 		if (!input) return false;
-		const normalized = input.replace(/^\uFEFF/, "");
-		if (!/^---\r?\n/.test(normalized)) return false;
-		const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/m.exec(normalized);
+		const m = matchYamlFrontmatterBlock(input);
 		if (!m) return false;
 		const body = String(m[1] ?? "");
 		const re = new RegExp(`^\\s*${String(key).replace(/[-/\\^$*+?.()|[\\]{}]/g, "\\$&")}\\s*:`, "i");
@@ -45,7 +43,7 @@ export function resolveFrontmatterSuppressionFlags(
 	fileOrPath: TFile | string,
 	rawText?: string
 ): FrontmatterSuppressionFlags {
-	const out: FrontmatterSuppressionFlags = { notracked: false, noparsed: false, noindex: false };
+	const out: FrontmatterSuppressionFlags = { noparsed: false, noindex: false };
 	try {
 		const pluginState = plugin as PluginLikeForFrontmatterFlags;
 		const file =
@@ -54,14 +52,12 @@ export function resolveFrontmatterSuppressionFlags(
 				: fileOrPath;
 		const cache = pluginState?.app?.metadataCache?.getFileCache?.(file);
 		const fm = cache?.frontmatter ?? null;
-		out.notracked = hasOwn(fm, "notracked");
 		out.noparsed = hasOwn(fm, "noparsed") || hasOwn(fm, "nodates");
 		out.noindex = hasOwn(fm, "noindex");
 	} catch {
 		// ignore
 	}
 
-	if (!out.notracked && rawText) out.notracked = scanYamlFrontmatterHasKey(rawText, "notracked");
 	if (!out.noparsed && rawText) {
 		out.noparsed = scanYamlFrontmatterHasKey(rawText, "noparsed") || scanYamlFrontmatterHasKey(rawText, "nodates");
 	}

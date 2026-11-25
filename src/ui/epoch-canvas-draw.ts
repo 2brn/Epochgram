@@ -10,7 +10,6 @@ import {
 } from "./epoch-canvas-constants";
 import { drawHoverOverlay } from "./epoch-canvas-draw/draw-hover-overlay";
 import { drawVisibleDays } from "./epoch-canvas-draw/draw-days";
-import { resolveEpochBucketState } from "./epoch-canvas-draw/epoch-bucket";
 import { getDrawState } from "./epoch-canvas-draw/state";
 import { focusFirstFilteredTimelineRecord } from "./epoch-canvas/scroll-nav";
 import {
@@ -260,23 +259,13 @@ export function drawCanvas(canvas: EpochCanvas): void {
         ? Math.min(SUMMARY_FONT_ZOOM_MAX, 1 + (s.scale - 1) * SUMMARY_FONT_ZOOM_RATE)
         : 1;
     const effectiveBoost = zoomBoost;
-    const bucketState = resolveEpochBucketState(canvas, Date.now(), h);
-    const epochsViewActive = bucketState.epochsViewActive;
 
     const recordOpacity = 1;
-    const fontSmallBase = s.getCssValue(css, epochsViewActive ? "--epoch-font-epochs-view" : "--epoch-font-small");
-    const fontSmallHoverRaw = s.getCssValue(css, epochsViewActive ? "--epoch-font-epochs-view-hover" : "--epoch-font-small-hover");
+    const fontSmallBase = s.getCssValue(css, "--epoch-font-small");
+    const fontSmallHoverRaw = s.getCssValue(css, "--epoch-font-small-hover");
     const fontSmall = s.scaleFont(fontSmallBase, effectiveBoost);
     const fontSmallHover = s.scaleFont(fontSmallHoverRaw, effectiveBoost);
 
-    const fontEpochLine1Base = epochsViewActive
-        ? s.getCssValue(css, "--epoch-font-epochs-view-line1")
-        : fontSmallBase;
-    const fontEpochLine1HoverRaw = epochsViewActive
-        ? s.getCssValue(css, "--epoch-font-epochs-view-line1-hover")
-        : fontSmallHoverRaw;
-    const fontEpochLine1 = s.scaleFont(fontEpochLine1Base, effectiveBoost);
-    const fontEpochLine1Hover = s.scaleFont(fontEpochLine1HoverRaw, effectiveBoost);
     const colSummaryHoverBg = (() => {
         const isTransparent = (bg: string): boolean => {
             const v = String(bg || "").trim();
@@ -329,8 +318,6 @@ export function drawCanvas(canvas: EpochCanvas): void {
         fontMainHover,
         fontSmall,
         fontSmallHover,
-        fontEpochLine1: epochsViewActive ? fontEpochLine1 : undefined,
-        fontEpochLine1Hover: epochsViewActive ? fontEpochLine1Hover : undefined,
         colLine,
         colTextBase,
         colTextHover,
@@ -338,17 +325,13 @@ export function drawCanvas(canvas: EpochCanvas): void {
         colSummaryHoverBg,
         colRelated,
         colHighlight,
-        epochsViewActive,
-        epochBucket: bucketState.epochBucket,
-        prevEpochBucket: bucketState.prevEpochBucket,
-        bucketFadeT: bucketState.bucketFadeT,
         recordOpacity
     });
 
     s.layouts = dayResult.layouts;
     s.hoverOverlay = dayResult.hoverOverlay;
 
-    if (s.hoverOverlay && (epochsViewActive || s.scale >= SUMMARY_MIN_SCALE) && s.hoverAnim > 0) {
+    if (s.hoverOverlay && s.scale >= SUMMARY_MIN_SCALE && s.hoverAnim > 0) {
         ctx.save();
         ctx.globalAlpha *= recordOpacity;
         drawHoverOverlay({
@@ -357,8 +340,7 @@ export function drawCanvas(canvas: EpochCanvas): void {
             hoverAnim: s.hoverAnim,
             hoverTarget: Number(s.hoverTarget ?? 0),
             colSummaryHoverBg,
-            iconCache: s.iconCache,
-            epochsViewActive
+            iconCache: s.iconCache
         });
         ctx.restore();
     }

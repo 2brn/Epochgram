@@ -30,7 +30,6 @@ describe("Frontmatter dateprop", () => {
 		contents = {};
 		pluginStub = {
 			settings: {
-				trackChanges: false,
 				summaryWordsCount: 8,
 				parseDatesInFrontmatter: true
 			},
@@ -249,7 +248,7 @@ describe("Frontmatter dateprop", () => {
 		expect(((indexer as any).index["2026-05-23"] ?? []).some((e: any) => e.file === file.path && e.source === "content" && e.fromFrontmatter === true)).toBe(true);
 	});
 
-	it("preserves AI summaries during move-to-file", async () => {
+	it("updates the YAML anchor date and refreshes views", async () => {
 		const file = makeFile("2026-05-18.md");
 		let raw = ["---", "date: 2026-05-18", "---", "Body"].join("\n");
 

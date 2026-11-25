@@ -29,10 +29,8 @@ describe("Frontmatter suppression flags", () => {
 		contents = {};
 		pluginStub = {
 			settings: {
-				trackChanges: true,
 				summaryWordsCount: 8
 			},
-			hasProAccess: () => true,
 			app: {
 				vault: {
 					read: vi.fn(async (target: TFile) => contents[target.path] ?? ""),
@@ -47,40 +45,6 @@ describe("Frontmatter suppression flags", () => {
 			}
 		};
 		indexer = new Indexer(pluginStub);
-	});
-
-	it("notracked suppresses tracked-change indexing", async () => {
-		const path = "folder/notracked.md";
-		const file1 = makeFile(path, Date.UTC(2026, 2, 1), Date.UTC(2026, 2, 1));
-		contents[path] = [
-			"---",
-			"notracked: 1",
-			"---",
-			"First version"
-		].join("\n");
-
-		(pluginStub.app.metadataCache.getFileCache as any).mockImplementation(() => ({
-			frontmatter: { notracked: "1" },
-			tags: []
-		}));
-
-		await indexer.processFile(file1, { reason: "modify" });
-
-		const file2 = makeFile(path, Date.UTC(2026, 2, 1), Date.UTC(2026, 2, 2));
-		contents[path] = [
-			"---",
-			"notracked: true",
-			"---",
-			"Second version with changes"
-		].join("\n");
-
-		await indexer.processFile(file2, { reason: "modify" });
-
-		const fileData = (indexer as any).files[path];
-		expect(Object.keys(fileData?.trackedDates ?? {})).toEqual([]);
-
-		const allEntries = Object.values((indexer as any).index ?? {}).flat();
-		expect(allEntries.some((e: any) => e && e.file === path && e.source === "tracked")).toBe(false);
 	});
 
 	it.each(["noparsed", "nodates"])("%s suppresses parsed content-date indexing", async (flag) => {

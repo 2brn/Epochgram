@@ -46,9 +46,6 @@ interface CanvasAnimateState {
 }
 
 type CanvasAnimatePluginSettings = {
-	inertiaDecay?: number;
-	inertiaBoost?: number;
-	inertiaMinVelocity?: number;
 	enableAnimation?: boolean;
 };
 
@@ -62,7 +59,6 @@ type CanvasAnimateStateExt = CanvasAnimateState & {
 	hoverSummary?: unknown;
 	hoverDateIndex?: number | null;
 	__globalDenseMode?: boolean | null;
-	epochsView?: boolean;
 	animatingWheelPan?: boolean;
 	animatingWheelZoom?: boolean;
 	wheelZoomDir?: number;
@@ -148,20 +144,7 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 	const s = state(canvas);
 	s.animFrame = null;
 
-	const inertia = (() => {
-		try {
-			const settings = s.plugin?.settings;
-			const decayRaw = Number(settings?.inertiaDecay);
-			const boostRaw = Number(settings?.inertiaBoost);
-			const minVelRaw = Number(settings?.inertiaMinVelocity);
-			const decay = Number.isFinite(decayRaw) && decayRaw > 0 && decayRaw < 1 ? decayRaw : INERTIA_DECAY;
-			const boost = Number.isFinite(boostRaw) && boostRaw > 0 ? boostRaw : INERTIA_BOOST;
-			const minVel = Number.isFinite(minVelRaw) && minVelRaw >= 0 ? minVelRaw : INERTIA_MIN_VELOCITY;
-			return { decay, boost, minVel };
-		} catch {
-			return { decay: INERTIA_DECAY, boost: INERTIA_BOOST, minVel: INERTIA_MIN_VELOCITY };
-		}
-	})();
+	const inertia = { decay: INERTIA_DECAY, boost: INERTIA_BOOST, minVel: INERTIA_MIN_VELOCITY };
 
 	const animationsEnabled = (() => {
 		try {
@@ -241,7 +224,6 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 	s.lastFrameTime = now;
 
 	const target = s.hoverTarget;
-	const epochsViewActive = s.epochsView === true;
 	const globalDenseMode: boolean | null = (() => {
 		const v = s.__globalDenseMode;
 		return typeof v === "boolean" ? v : null;
@@ -256,7 +238,7 @@ export function runCanvasAnimation(canvas: EpochCanvas): void {
 	const hasDateHoverOrOutgoing = (s.animDateIndex != null) || (Array.isArray(outgoingDates) && outgoingDates.length > 0);
 	const outgoingSummaries = s.outgoingSummaries;
 	const hasSummaryHoverOrOutgoing = (s.animSummary != null) || (Array.isArray(outgoingSummaries) && outgoingSummaries.length > 0);
-	const instantHover = !epochsViewActive && !hasDateHoverOrOutgoing && hasSummaryHoverOrOutgoing && (
+	const instantHover = !hasDateHoverOrOutgoing && hasSummaryHoverOrOutgoing && (
 		globalDenseMode === true ||
 		(Number.isFinite(s.scale) && s.scale < SUMMARY_MIN_SCALE) ||
 		(globalDenseMode == null && Number.isFinite(s.scale) && s.scale <= DENSE_INSTANT_HOVER_SCALE_THRESHOLD)

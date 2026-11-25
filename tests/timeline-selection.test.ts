@@ -1,131 +1,31 @@
 import { describe, expect, it } from "vitest";
 import type { DateEntry } from "../src/indexer/types";
 import { selectTimelineEntries, pickTimelineEntryForFile } from "../src/ui/epoch-canvas-utils";
-
-const makeEntry = (overrides: Partial<DateEntry> = {}): DateEntry => ({
-	date: overrides.date ?? "2025-01-01",
-	file: overrides.file ?? "note.md",
-	blockStart: overrides.blockStart ?? 0,
-	blockEnd: overrides.blockEnd ?? overrides.blockStart ?? 0,
-	summary: overrides.summary ?? "summary",
-	source: overrides.source ?? "content",
-	pinned: overrides.pinned,
-	trackedChange: overrides.trackedChange,
-	trackedTime: overrides.trackedTime,
-	fileMtimeMs: overrides.fileMtimeMs,
-	reviewState: overrides.reviewState,
-	...overrides,
-});
-
+const entry = (overrides: Partial<DateEntry> = {}): DateEntry => ({ date: "2025-01-01", file: "note.md", blockStart: 0, blockEnd: 0, summary: "summary", source: "content", ...overrides });
 describe("timeline selection", () => {
-	it("prefers the most recent tracked entry for a file", () => {
-		const entries = [
-			makeEntry({
-				summary: "newer",
-				source: "tracked",
-				blockStart: 0,
-				trackedTime: "2025-01-01T12:00:00.000Z"
-			}),
-			makeEntry({
-				summary: "older",
-				source: "tracked",
-				blockStart: 50,
-				trackedTime: "2025-01-01T08:00:00.000Z"
-			})
-		];
-		const selected = selectTimelineEntries(entries);
-		expect(selected).toHaveLength(1);
-		expect(selected[0]?.summary).toBe("newer");
+	it("selects the first parsed record per file", () => {
+		const first = entry({ summary: "first" }), second = entry({ summary: "second", blockStart: 10 });
+		expect(selectTimelineEntries([first, second])).toEqual([first]);
+		expect(pickTimelineEntryForFile([first, second])).toBe(first);
 	});
-
-	it("falls back to the first parsed date entry when no tracked entry exists", () => {
-		const entries = [
-			makeEntry({ summary: "earlier", source: "content", blockStart: 0 }),
-			makeEntry({ summary: "later", source: "content", blockStart: 10 })
-		];
-		const selected = selectTimelineEntries(entries);
-		expect(selected).toHaveLength(1);
-		expect(selected[0]?.summary).toBe("earlier");
+	it("prefers filename dates to creation dates", () => {
+		const named = entry({ source: "namedate" });
+		expect(pickTimelineEntryForFile([entry({ source: "cdate" }), named])).toBe(named);
 	});
-
-	it("prefers named dates over created dates when neither tracked nor parsed dates exist", () => {
-		const entries = [
-			makeEntry({ summary: "created", source: "cdate" }),
-			makeEntry({ summary: "named", source: "namedate" })
-		];
-		const selected = selectTimelineEntries(entries);
-		expect(selected).toHaveLength(1);
-		expect(selected[0]?.summary).toBe("named");
+	it("keeps other files and orders records by newest mtime", () => {
+		const old = entry({ file: "old.md", fileMtimeMs: 100 }), recent = entry({ file: "recent.md", fileMtimeMs: 200 });
+		expect(selectTimelineEntries([old, recent, { ...old, blockStart: 5 }])).toEqual([recent, old]);
 	});
-
-	it("keeps one entry per file while preserving other files", () => {
-		const entries = [
-			makeEntry({ file: "a.md", summary: "first", source: "tracked", blockStart: 0 }),
-			makeEntry({ file: "a.md", summary: "second", source: "tracked", blockStart: 5 }),
-			makeEntry({ file: "b.md", summary: "content", source: "content" })
-		];
-		const selected = selectTimelineEntries(entries);
-		expect(selected).toHaveLength(2);
-		expect(selected.find(entry => entry.file === "a.md")?.summary).toBe("second");
-		expect(selected.find(entry => entry.file === "b.md")?.summary).toBe("content");
+	it("prioritizes content over anchors before sorting by mtime", () => {
+		const content = entry({ file: "content.md", fileMtimeMs: 100 }), anchor = entry({ file: "anchor.md", source: "cdate", fileMtimeMs: 500 });
+		expect(selectTimelineEntries([anchor, content])).toEqual([content, anchor]);
 	});
-
-	it("orders selected entries by newest file mtime first", () => {
-		const entries = [
-			makeEntry({ file: "older.md", summary: "older", source: "content", fileMtimeMs: 100 }),
-			makeEntry({ file: "newer.md", summary: "newer", source: "content", fileMtimeMs: 200 })
-		];
-		const selected = selectTimelineEntries(entries);
-		expect(selected).toHaveLength(2);
-		expect(selected.map((entry) => entry.file)).toEqual(["newer.md", "older.md"]);
+	it("prioritizes pinned records over other records of the same file", () => {
+		const pinned = entry({ pinned: true, blockStart: 5 });
+		expect(pickTimelineEntryForFile([entry(), pinned])).toBe(pinned);
 	});
-
-	it("prefers source priority before mdate when ordering selected entries", () => {
-		const entries = [
-			makeEntry({ file: "content-new.md", source: "content", fileMtimeMs: 500 }),
-			makeEntry({ file: "tracked-old.md", source: "tracked", fileMtimeMs: 100 })
-		];
-		const selected = selectTimelineEntries(entries);
-		expect(selected).toHaveLength(2);
-		expect(selected.map((entry) => entry.file)).toEqual(["tracked-old.md", "content-new.md"]);
-	});
-
-	it("pickTimelineEntryForFile mirrors per-file selection", () => {
-		const entries = [
-			makeEntry({
-				summary: "newer",
-				source: "tracked",
-				blockStart: 0,
-				trackedTime: "2025-01-01T12:00:00.000Z"
-			}),
-			makeEntry({
-				summary: "older",
-				source: "tracked",
-				blockStart: 5,
-				trackedTime: "2025-01-01T08:00:00.000Z"
-			})
-		];
-		const selected = pickTimelineEntryForFile(entries);
-		expect(selected?.summary).toBe("newer");
-	});
-
-	it("prefers pinned entries over tracked entries for the same file", () => {
-		const entries = [
-			makeEntry({ file: "same.md", summary: "tracked", source: "tracked", blockStart: 0, pinned: false }),
-			makeEntry({ file: "same.md", summary: "pinned", source: "content", blockStart: 5, pinned: true })
-		];
-		const selected = selectTimelineEntries(entries);
-		expect(selected).toHaveLength(1);
-		expect(selected[0]?.summary).toBe("pinned");
-	});
-
-	it("prefers reviewed recurring content over draft non-recurring content for the same file", () => {
-		const entries = [
-			makeEntry({ file: "same.md", summary: "draft", source: "content", blockStart: 0, recurring: false, reviewState: "draft" as any }),
-			makeEntry({ file: "same.md", summary: "recurring reviewed", source: "content", blockStart: 5, recurring: true, reviewState: "reviewed" as any })
-		];
-		const selected = selectTimelineEntries(entries);
-		expect(selected).toHaveLength(1);
-		expect(selected[0]?.summary).toBe("recurring reviewed");
+	it("prefers ordinary content over recurring occurrences", () => {
+		const content = entry(), recurring = entry({ recurring: true, blockStart: 5 });
+		expect(pickTimelineEntryForFile([recurring, content])).toBe(content);
 	});
 });

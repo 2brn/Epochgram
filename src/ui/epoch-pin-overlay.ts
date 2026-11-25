@@ -1,4 +1,7 @@
 import { Platform } from "obsidian";
+import { reviewSummaryFont, reviewSummaryOpacity } from "./review-style";
+import { hasHiddenOnlyToken, isReviewVisible } from "./entry-helpers/shared";
+import { parseTimelineQuery } from "./timeline-search";
 import type { DateEntry, FileIndexData, PinMode } from "../indexer/types";
 import type { EpochIndex } from "../indexer/types";
 import type { EpochCanvas } from "./epoch-canvas";
@@ -13,7 +16,7 @@ import { resolveActiveFilePinEntry } from "./active-file-pin-entry";
 import { getToday } from "./epoch-canvas-helpers";
 import { getEpochMarkColorSet } from "./mark-colors";
 import { getEntryMarkColor, getInheritedMarkColor } from "./summary-rendering/entry-mark-colors";
-import { entryFileName, formatEntrySummary, parseFontSize, withFontStyle, withFontWeight } from "./epoch-canvas-utils";
+import { entryFileName, formatEntrySummary, parseFontSize, withFontWeight } from "./epoch-canvas-utils";
 
 type IndexerLike = {
 	getIndexedPaths?: () => string[];
@@ -46,7 +49,9 @@ type PinOverlayState = {
 	offsetY: number;
 	activeFilePath: string | null;
 	activeFileTimelineEntry?: DateEntry | null;
-	semanticRelatedPaths: Set<string> | null;
+	relatedPaths: Set<string> | null;
+	showDraftsOnly?: boolean;
+	searchQuery?: string;
 	ctx: CanvasRenderingContext2D;
 	keepHoverAfterMenu?: boolean;
 	keepHoverUntilPointerMove?: boolean;
@@ -183,7 +188,7 @@ function getFillColor(s: PinOverlayState, entry: DateEntry): string {
 	const inherited = getInheritedMarkColor(entry, markColors, highlight, s.plugin?.__epochInheritedMarkIndexByPath ?? null);
 	if (inherited) return inherited;
 	if (entry.file === s.activeFilePath) return highlight;
-	if (s.semanticRelatedPaths?.has(entry.file)) return highlight;
+	if (s.relatedPaths?.has(entry.file)) return highlight;
 	return fallback;
 }
 
@@ -262,6 +267,7 @@ function computeItems(canvas: EpochCanvas): PinRenderItem[] {
 	const indexer = s.plugin?.indexer;
 	const paths = typeof indexer?.getIndexedPaths === "function" ? indexer.getIndexedPaths() : [];
 	const activePath = String(s.activeFilePath ?? "");
+	const hiddenOnly = hasHiddenOnlyToken(parseTimelineQuery(s.searchQuery ?? ""));
 	const today = getToday();
 	const width = TIMELINE_X - LABEL_OFFSET_X;
 	const background = getBackgroundColor(s.root);
@@ -274,15 +280,13 @@ function computeItems(canvas: EpochCanvas): PinRenderItem[] {
 	let hasActiveDockItem = false;
 
 	const addItem = (path: string, entry: DateEntry, mode: Exclude<PinMode, "today">, virtual: boolean = false): void => {
-		if (!entry?.date) return;
+		if (!entry?.date || !isReviewVisible(entry, s.showDraftsOnly === true, hiddenOnly)) return;
 		const dayIndex = dayIndexForDate(entry.date, today);
 		if (dayIndex == null) return;
 		const targetY = dayIndex * BASE_SPACING * s.scale + s.offsetY;
 		const inViewport = targetY >= 0 && targetY <= s.root.clientHeight;
 		if (mode === "date" && !inViewport) return;
-		let font = path === activePath ? fontActive : fontMain;
-		// Mirror timeline records: draft entries use italic text.
-		if (entry.reviewState === "draft") font = withFontStyle(font, "italic");
+		const font = reviewSummaryFont(entry, path === activePath ? fontActive : fontMain);
 		const item: PinRenderItem = {
 			// A pin's persisted/active mode can change when opening its file, but it
 			// still represents the same label. Keep its DOM identity stable so hover
@@ -297,7 +301,7 @@ function computeItems(canvas: EpochCanvas): PinRenderItem[] {
 			left: 0,
 			width,
 			top: 0,
-			opacity: inViewport ? PIN_VISIBLE_OPACITY : PIN_DOCK_OPACITY,
+			opacity: (inViewport ? PIN_VISIBLE_OPACITY : PIN_DOCK_OPACITY) * reviewSummaryOpacity(entry),
 			font,
 			mode,
 			targetY,

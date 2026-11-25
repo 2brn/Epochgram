@@ -22,7 +22,6 @@ type ScrollNavCanvasState = {
 	layouts: LayoutLike[];
 	activeFilePath?: string | null;
 	scrollNavFile?: string | null;
-	clearFocusedEpochRange(): void;
 	animateToToday(): void;
 };
 
@@ -103,7 +102,6 @@ export function hasVisibleEntryForFile(
 
 export function resetScrollNavToToday(canvas: EpochCanvas): void {
 	const c = canvas as unknown as ScrollNavCanvasState;
-	c.clearFocusedEpochRange();
 	resetScrollNavTargetState(canvas);
 	const filePath = c.activeFilePath ?? null;
 	c.scrollNavFile = filePath;

@@ -1,100 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
-
-import {
-	epochViewSetReviewFilterMode,
-	epochViewSetShowAttachments,
-	epochViewSetShowContentDates,
-	epochViewSetShowEpochsView,
-	epochViewSetShowPropDates,
-	epochViewSetShowTrackedChanges
-} from "../src/ui/epoch-view/filters";
-
-function createView(overrides: Record<string, any> = {}): any {
-	const plugin: any = {
-		settings: {
-			timelineFilters: {},
-			parseDatesInFrontmatter: false
-		},
-		viewPreferences: {},
-		saveSettings: vi.fn(async () => {})
-	};
-
-	const canvas: any = {
-		setReviewFilterMode: vi.fn(),
-		setShowAttachments: vi.fn(),
-		setShowTrackedChanges: vi.fn(),
-		setShowContentDates: vi.fn(),
-		setShowPropDates: vi.fn(),
-		setEpochsView: vi.fn()
-	};
-
-	const view: any = {
-		plugin,
-		canvas,
-		reviewFilterMode: "reviewed+draft",
-		showAttachments: false,
-		showTrackedChanges: true,
-		showContentDates: true,
-		showPropDates: false,
-		showEpochsView: false,
-		isPro: () => true,
-		isEpochsEnabled: () => true,
-		hasSyncedEpochEntries: true,
-		refreshSyncedEpochAvailability: vi.fn(),
-		scheduleSearchControlRefresh: vi.fn(),
-		...overrides
-	};
-
-	return view;
+import { epochViewSetShowAttachments, epochViewSetShowContentDates, epochViewSetShowPropDates, epochViewSyncPreferencesFromPlugin } from "../src/ui/epoch-view/filters";
+function view(): any {
+	return { plugin: { settings: { timelineFilters: {}, parseDatesInFrontmatter: true }, viewPreferences: {}, saveSettings: vi.fn(async () => {}) }, canvas: { setShowAttachments: vi.fn(), setShowContentDates: vi.fn(), setShowPropDates: vi.fn() }, showAttachments: false, showContentDates: true, showPropDates: true, scheduleSearchControlRefresh: vi.fn() };
 }
-
 describe("timeline filters persistence", () => {
-	it("persists non-drafts filters into settings.timelineFilters", () => {
-		const view = createView({ showAttachments: false, showTrackedChanges: false });
-
-		epochViewSetReviewFilterMode(view, "draft");
-		epochViewSetShowAttachments(view, true);
-		epochViewSetShowTrackedChanges(view, true);
-
-		expect(view.plugin.settings.timelineFilters.showDraftsOnly).toBeUndefined();
-		expect(view.plugin.settings.timelineFilters.showAttachments).toBe(true);
-		expect(view.plugin.settings.timelineFilters.showTrackedChanges).toBe(true);
-		expect(view.plugin.saveSettings).toHaveBeenCalledTimes(2);
+	it("persists attachment visibility", () => {
+		const v = view(); epochViewSetShowAttachments(v, true);
+		expect(v.plugin.settings.timelineFilters).toEqual({ showAttachments: true, showParsed: true });
+		expect(v.plugin.saveSettings).toHaveBeenCalledOnce();
 	});
-
-	it("does not persist session-only filters (epochs view)", () => {
-		const view = createView();
-		epochViewSetShowEpochsView(view, true);
-
-		expect(view.plugin.settings.timelineFilters.showEpochsView).toBeUndefined();
-		// may have been called by other persisted setters, but these two should not trigger it.
-		expect(view.plugin.saveSettings).toHaveBeenCalledTimes(0);
+	it("enforces parsed/frontmatter nesting", () => {
+		const v = view(); v.showContentDates = false; v.showPropDates = false;
+		epochViewSetShowPropDates(v, true);
+		expect(v.showContentDates).toBe(true); expect(v.showPropDates).toBe(true);
+		v.plugin.saveSettings.mockClear(); epochViewSetShowContentDates(v, false);
+		expect(v.showContentDates).toBe(false); expect(v.showPropDates).toBe(false);
+		expect(v.plugin.settings.timelineFilters.showParsed).toBe(false); expect(v.plugin.saveSettings).toHaveBeenCalledOnce();
 	});
-
-	it("enforces parsed/frontmatter nesting when persisting", () => {
-		const view = createView({
-			showContentDates: false,
-			showPropDates: false,
-			plugin: {
-				settings: {
-					timelineFilters: {},
-					parseDatesInFrontmatter: true
-				},
-				viewPreferences: {},
-				saveSettings: vi.fn(async () => {})
-			}
-		});
-
-		epochViewSetShowPropDates(view, true);
-		expect(view.showContentDates).toBe(true);
-		expect(view.showPropDates).toBe(true);
-		expect(view.plugin.settings.timelineFilters.showParsed).toBe(true);
-
-		view.plugin.saveSettings.mockClear();
-		epochViewSetShowContentDates(view, false);
-		expect(view.showContentDates).toBe(false);
-		expect(view.showPropDates).toBe(false);
-		expect(view.plugin.settings.timelineFilters.showParsed).toBe(false);
-		expect(view.plugin.saveSettings).toHaveBeenCalledTimes(1);
+	it("syncs preferences without writing settings", () => {
+		const v = view(); epochViewSyncPreferencesFromPlugin(v, { showAttachments: true, showParsed: false });
+		expect(v.showAttachments).toBe(true); expect(v.showContentDates).toBe(false); expect(v.plugin.saveSettings).not.toHaveBeenCalled();
 	});
 });

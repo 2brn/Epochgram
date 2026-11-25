@@ -12,6 +12,32 @@ type TimelineSearchDoc = {
 
 type AnyRecord = Record<string, unknown>
 
+const SEARCH_FIELDS = ['path', 'basename', 'directory', 'meta', 'content']
+const STORED_FIELDS = ['kind', ...SEARCH_FIELDS]
+
+function currentDocument(id: string, value: AnyRecord): TimelineSearchDoc {
+	return { id, kind: 'file', path: asText(value.path), basename: asText(value.basename), directory: asText(value.directory), content: asText(value.content), meta: asText(value.meta) }
+}
+
+/** Reject other cache schemas instead of importing their fields or migrating documents. */
+function isCurrentSearchPayload(value: unknown): boolean {
+	const data = asRecord(value)
+	const keys = ['documentCount', 'nextId', 'documentIds', 'fieldIds', 'fieldLength', 'averageFieldLength', 'storedFields', 'dirtCount', 'index', 'serializationVersion']
+	if (data.serializationVersion !== 2 || Object.keys(data).some(key => !keys.includes(key))) return false
+	const fields = asRecord(data.fieldIds)
+	if (Object.keys(fields).length !== SEARCH_FIELDS.length || SEARCH_FIELDS.some((field, index) => fields[field] !== index)) return false
+	const documents = asRecord(data.documentIds), stored = asRecord(data.storedFields)
+	if (Object.keys(documents).length !== data.documentCount || Object.keys(stored).length !== data.documentCount) return false
+	for (const [id, raw] of Object.entries(stored)) {
+		const doc = asRecord(raw)
+		if (typeof documents[id] !== 'string' || doc.kind !== 'file' || Object.keys(doc).some(key => !STORED_FIELDS.includes(key)) || STORED_FIELDS.some(key => typeof doc[key] !== 'string')) return false
+	}
+	if (!Array.isArray(data.index) || !Array.isArray(data.averageFieldLength)) return false
+	if (data.averageFieldLength.length !== SEARCH_FIELDS.length && !(data.documentCount === 0 && data.averageFieldLength.length === 0)) return false
+	if (Object.values(asRecord(data.fieldLength)).some(lengths => !Array.isArray(lengths) || lengths.length !== SEARCH_FIELDS.length)) return false
+	return data.index.every(record => Array.isArray(record) && record.length === 2 && typeof record[0] === 'string' && Object.keys(asRecord(record[1])).every(field => /^[0-4]$/.test(field)))
+}
+
 function asRecord(v: unknown): AnyRecord {
 	return v && (typeof v === 'object' || typeof v === 'function') ? (v as AnyRecord) : {}
 }
@@ -219,7 +245,9 @@ export class TimelineSearchIndex {
 			const ctor = asRecord(this.getMiniSearchCtor())
 			const loadJSON: unknown = ctor.loadJSON ?? this.getMiniSearchStatic('loadJSON')
 			if (typeof loadJSON !== 'function') return false
-			const json = typeof serialized === 'string' ? serialized : JSON.stringify(serialized)
+			const payload: unknown = typeof serialized === 'string' ? JSON.parse(serialized) : serialized
+			if (!isCurrentSearchPayload(payload)) return false
+			const json = JSON.stringify(payload)
 			const loaded: unknown = loadJSON.call(Object.keys(ctor).length > 0 ? ctor : MiniSearch, json, {
 				fields: ['path', 'basename', 'directory', 'meta', 'content'],
 				storeFields: ['kind', 'path', 'basename', 'directory', 'meta', 'content'],
@@ -246,6 +274,8 @@ export class TimelineSearchIndex {
 	}
 
 	upsert(doc: TimelineSearchDoc): boolean {
+		if (doc.kind !== 'file') return false
+		doc = currentDocument(doc.id, asRecord(doc))
 		if (!this.initialized) this.clear()
 		try {
 			const existingRaw = this.mini.getStoredFields(doc.id)
@@ -259,7 +289,7 @@ export class TimelineSearchIndex {
 					asText(existing.meta) === doc.meta &&
 					asText(existing.content) === doc.content
 				if (same) return false
-				this.mini.remove({ id: doc.id, ...existing } as TimelineSearchDoc)
+				this.mini.remove(currentDocument(doc.id, existing))
 				this.mini.add(doc)
 				return true
 			}
@@ -282,7 +312,7 @@ export class TimelineSearchIndex {
 			const storedRaw = this.mini.getStoredFields(id)
 			if (storedRaw) {
 				const stored = asRecord(storedRaw)
-				this.mini.remove({ id, ...stored } as TimelineSearchDoc)
+				this.mini.remove(currentDocument(id, stored))
 				return true
 			}
 		} catch {

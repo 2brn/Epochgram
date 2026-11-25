@@ -203,7 +203,7 @@ export function startStartupDefaultNoteRefocus(view: unknown): void {
 				return;
 			}
 			// On mobile, skip focusing until we know a cursor line; otherwise we can "guess" a
-			// tracked-change entry and cause an unexpected jump.
+			// different entry and cause an unexpected jump.
 			if (Platform.isMobile && line == null) {
 				state.startupRefocusTimer = window.setTimeout(tick, 250);
 				return;

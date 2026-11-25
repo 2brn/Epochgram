@@ -5,6 +5,7 @@ type TagLike = { tag?: string };
 type FrontmatterLike = { tags?: string | string[] };
 type FileCacheLike = {
 	links?: Array<{ link?: string }>;
+	frontmatterLinks?: Array<{ link?: string }>;
 	tags?: TagLike[];
 	frontmatter?: FrontmatterLike;
 };
@@ -63,9 +64,9 @@ export function getDirectLinkedPaths(plugin: EpochPlugin, filePath: string): Set
 			const f = plugin.app.vault.getAbstractFileByPath(filePath);
 			if (f instanceof TFile) {
 				const cache = mc?.getFileCache?.(f);
-				if (cache) {
+				if (cache && typeof mc.getFirstLinkpathDest === "function") {
 					outgoingFromFileCache = true;
-					const rawLinks = Array.isArray(cache.links) ? cache.links : [];
+					const rawLinks = [...(cache.links ?? []), ...(cache.frontmatterLinks ?? [])];
 					for (const link of rawLinks) {
 						const raw = typeof link?.link === "string" ? String(link.link) : "";
 						if (!raw) continue;

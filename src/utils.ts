@@ -264,26 +264,21 @@ export function parseDateFromDailyNoteFormat(text: string, format: string): stri
 }
 
 // Title-similarity (Jaro–Winkler) constants.
-// Kept here so both semantic related notes and mark inheritance can share the same behavior.
+// Kept here so both related notes and mark inheritance can share the same behavior.
 export const NOTE_TITLE_SIMILARITY_MAX_LEN_DIFF = 14;
 const NOTE_TITLE_SIMILARITY_WINKLER_P = 0.1;
 const NOTE_TITLE_SIMILARITY_WINKLER_MAX_PREFIX = 8;
 
-// Topic editing:
-// Use a sentinel value to represent an explicit per-file "no topic" override.
-// This lets users exclude a note from inferred topic grouping (distinct note)
-// while still keeping the topic system enabled globally.
-const NO_TOPIC_SENTINEL = "__epoch_no_topic__";
-
-export function isNoTopicSentinel(term: string): boolean {
-	return String(term || "").trim() === NO_TOPIC_SENTINEL;
+export function matchYamlFrontmatterBlock(text: string): RegExpMatchArray | null {
+	return String(text ?? "").match(/^[\uFEFF]?---[ \t]*\r?\n(?:([\s\S]*?)\r?\n)?(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/);
 }
 
 export function stripYamlFrontmatterBlock(text: string): string {
 	const raw = String(text ?? "");
 	if (!raw) return "";
 	try {
-		return raw.replace(/^[\uFEFF]?---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+		const match = matchYamlFrontmatterBlock(raw);
+		return match ? raw.slice(match[0].length) : raw;
 	} catch {
 		return raw;
 	}
@@ -392,44 +387,6 @@ export function frontmatterToIndexTokens(frontmatter: unknown, options?: { exclu
 	return out;
 }
 
-type ParsedTopicTerm =
-	| { kind: "none"; raw: ""; name: "" }
-	| { kind: "no-topic"; raw: string; name: "" }
-	| { kind: "auto"; raw: string; name: string };
-
-export function canonicalizeTopicTerm(rawTerm: string): string {
-	const raw = String(rawTerm ?? "").trim();
-	if (!raw) return "";
-	if (isNoTopicSentinel(raw)) return NO_TOPIC_SENTINEL;
-	return raw;
-}
-
-export function parseTopicTerm(rawTerm: string): ParsedTopicTerm {
-	const raw0 = String(rawTerm ?? "").trim();
-	if (!raw0) return { kind: "none", raw: "", name: "" };
-	if (isNoTopicSentinel(raw0)) return { kind: "no-topic", raw: NO_TOPIC_SENTINEL, name: "" };
-	const raw = canonicalizeTopicTerm(raw0);
-	if (!raw) return { kind: "none", raw: "", name: "" };
-	return { kind: "auto", raw, name: raw };
-}
-
-function topicSortKey(term: string): string {
-	const parsed = parseTopicTerm(term);
-	if (parsed.kind === "none" || parsed.kind === "no-topic") return "";
-	return String(parsed.name).toLowerCase();
-}
-
-export function sortTopicTermsIgnorePrefix(a: string, b: string): number {
-	const ka = topicSortKey(a);
-	const kb = topicSortKey(b);
-	if (ka !== kb) return ka.localeCompare(kb);
-	return String(a || "").localeCompare(String(b || ""));
-}
-
-export function isAutoTopicTerm(term: string): boolean {
-	return parseTopicTerm(term).kind === "auto";
-}
-
 function hashFNV1a(raw: string): string {
 	let h = 2166136261;
 	for (let i = 0; i < raw.length; i++) {
@@ -442,18 +399,6 @@ function hashFNV1a(raw: string): string {
 export function computeTextHash(raw: string): string {
 	const s = String(raw ?? "");
 	return hashFNV1a(`${s.length}\n${s}`);
-}
-
-export function computeAiSummaryInputHash(
-	filePath: string,
-	entryDate: string,
-	inputText: string,
-	maxChars: number = 6000
-): string {
-	const meta = `file:${filePath}\ndate:${entryDate}\n`;
-	const limit = Number.isFinite(maxChars) ? Math.max(0, Math.floor(maxChars)) : 6000;
-	const clipped = String(inputText ?? "").slice(0, limit);
-	return hashFNV1a(meta + clipped);
 }
 
 export function formatDate(d: Date): string {
@@ -501,21 +446,10 @@ export function isLikelyTextFileExtension(extRaw: string): boolean {
 	return LIKELY_TEXT_EXTENSIONS.has(ext);
 }
 
-function isEpochgramExportHtmlPath(pathRaw: string): boolean {
-	const p = String(pathRaw || "").trim();
-	if (!p) return false;
-	const base = p.split("/").pop() || p;
-	const leaf = String(base || "").trim().toLowerCase();
-	return leaf.startsWith("epochgram-") && (leaf.endsWith(".html") || leaf.endsWith(".htm"));
-}
-
 export function isLikelyTextFilePath(pathRaw: string): boolean {
 	const p = String(pathRaw || "").trim();
 	if (!p) return false;
 	const base = p.split("/").pop() || p;
-	// Epochgram exports: keep searchable by filename/path, but treat as non-text so
-	// AI summaries / epochs / vectors never try to consume the HTML body.
-	if (isEpochgramExportHtmlPath(p)) return false;
 	const dot = base.lastIndexOf(".");
 	const ext = dot >= 0 ? base.slice(dot + 1) : "";
 	return isLikelyTextFileExtension(ext);
@@ -527,7 +461,6 @@ export function normalizeTitleForSimilarity(raw: string): string {
 	// Remove common date patterns from note titles so daily-note naming
 	// conventions don't skew title-based similarity.
 	// Examples: 2025-12-31, 2025/12/31, 2025.12.31, 31-12-2025, 31122025
-	// (This only affects title-similarity; embeddings still use content.)
 	try {
 		// yyyy-mm-dd (or with / . _)
 		s = s.replace(/\b\d{4}[-/._]\d{1,2}[-/._]\d{1,2}\b/g, " ");

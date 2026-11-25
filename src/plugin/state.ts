@@ -1,15 +1,11 @@
-import type { EpochSettings } from "../settings";
-
 export interface EpochViewPreferences {
-	showDraftsOnly: boolean;
 	showAttachments: boolean;
-	showTrackedChanges: boolean;
 	showParsed: boolean;
-	showEpochsView: boolean;
+	showDraftsOnly?: boolean;
 }
 
 export interface PersistedPluginData {
-	settings?: Partial<EpochSettings>;
+	settings?: unknown;
 }
 
 export interface FileStatSnapshot {

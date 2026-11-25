@@ -85,19 +85,15 @@ export function createFilterToggle(params: {
 export function createFilterButton(params: {
 	container: HTMLElement;
 	registerDomEvent: RegisterDomEvent;
-	isPro: () => boolean;
-	notifyProFeature?: (message: string) => void;
 	config: {
 		label: string;
 		tooltip: string;
 		icon?: string;
 		onToggle: () => void;
 		getValue: () => boolean;
-		requiresPro?: boolean;
-		proMessage?: string;
 	};
 }): HTMLElement {
-	const { container, registerDomEvent, isPro, notifyProFeature, config } = params;
+	const { container, registerDomEvent, config } = params;
 	const button = container.createDiv("graph-controls-button epoch-control-button epoch-filter-button");
 	button.setAttribute("role", "button");
 	button.setAttribute("tabindex", "0");
@@ -110,12 +106,6 @@ export function createFilterButton(params: {
 
 	const activate = () => {
 		if (button.classList.contains("is-disabled")) return;
-		if (config.requiresPro && !isPro()) {
-			if (config.proMessage && notifyProFeature) {
-				notifyProFeature(config.proMessage);
-			}
-			return;
-		}
 		config.onToggle();
 	};
 

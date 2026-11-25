@@ -1,19 +1,2 @@
-export type RebuildSelection = {
-	index: boolean;
-	semantics: boolean;
-	topics: boolean;
-	aiSummaries: boolean;
-	epochs: boolean;
-};
-
-export type ResetSelection = {
-	settings: boolean;
-	search: boolean;
-	dataFiles: boolean;
-	reviewState: boolean;
-	semantics: boolean;
-	topics: boolean;
-	trackedChanges: boolean;
-	aiSummaries: boolean;
-	epochs: boolean;
-};
+export interface RebuildSelection { index: boolean; search: boolean; }
+export interface ResetSelection { settings: boolean; search: boolean; dataFiles: boolean; reviews?: boolean; }

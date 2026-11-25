@@ -11,17 +11,12 @@ import { openSearchModal } from "./epoch-view/search-modal";
 import { clearStartupRefocusTimer, startStartupDefaultNoteRefocus } from "./epoch-view/startup-refocus";
 import { epochViewOnClose, epochViewOnOpen } from "./epoch-view/lifecycle";
 import {
-	epochViewCycleReviewFilterMode,
-	epochViewSetReviewFilterMode,
 	epochViewSetShowAttachments,
+	epochViewSetShowDraftsOnly,
 	epochViewSetShowContentDates,
-	epochViewSetShowEpochsView,
 	epochViewSetShowPropDates,
-	epochViewSetShowTrackedChanges,
 	epochViewSyncPreferencesFromPlugin,
-	epochViewUpdateFilterButtons,
-	epochViewUpdateProUiState,
-	epochViewUpdateReviewFilterButtonUi
+	epochViewUpdateFilterButtons
 } from "./epoch-view/filters";
 import {
 	epochViewLayoutSearchControl,
@@ -33,8 +28,6 @@ import { epochViewSnapToBestTimelineSearchMatch } from "./epoch-view/search-snap
 import "../../styles.css";
 
 type EpochViewPluginLike = {
-	settings?: { generateEpochs?: boolean };
-	hasProAccess?: () => boolean;
 	indexer?: { index?: Record<string, DateEntry[]> };
 	__epochTimelineSearchFocusToken?: number;
 };
@@ -62,19 +55,14 @@ export class EpochView extends ItemView {
 	private filtersExpanded = false;
 	private buttonSettings: HTMLElement | null = null;
 	private filtersPanelEl: HTMLElement | null = null;
-	private buttonReview: HTMLElement | null = null;
-	private buttonEdits: HTMLElement | null = null;
 	private buttonAttachments: HTMLElement | null = null;
-	private reviewFilterMode: "reviewed+draft" | "draft" = "reviewed+draft";
+	private buttonDrafts: HTMLElement | null = null;
+	private showDraftsOnly = false;
 	private showAttachments = false;
-	private showTrackedChanges = true;
 	private showContentDates = true;
 	private showPropDates = false;
-	private showEpochsView = false;
-	private buttonEpochs: HTMLElement | null = null;
 	private controlsEl: HTMLElement | null = null;
 	private activeFilePath: string | null = null;
-	private hasSyncedEpochEntries = false;
 	private openedAt = 0;
 	private startupRefocusDone = false;
 	private startupRefocusTimer: number | null = null;
@@ -168,9 +156,7 @@ export class EpochView extends ItemView {
 		this.openSearchModal();
 	}
 
-	public toggleReviewedOnly(): void {
-		this.cycleReviewFilterMode();
-	}
+	public toggleDraftsOnly(): void { this.setShowDraftsOnly(!this.showDraftsOnly); }
 
 	public toggleContentDates(): void {
 		this.setShowContentDates(!this.showContentDates);
@@ -178,14 +164,6 @@ export class EpochView extends ItemView {
 
 	public toggleAttachments(): void {
 		this.setShowAttachments(!this.showAttachments);
-	}
-
-	public toggleTrackedChanges(): void {
-		this.setShowTrackedChanges(!this.showTrackedChanges);
-	}
-
-	public toggleEpochsView(): void {
-		this.setShowEpochsView(!this.showEpochsView);
 	}
 
 	private shouldSuppressExternalAutoScroll(): boolean {
@@ -302,7 +280,7 @@ export class EpochView extends ItemView {
 			}
 		};
 		// Prefer the active leaf's file, so closing the last tab (MarkdownView.file -> null)
-		// immediately clears semantic highlights. workspace.getActiveFile() can return the
+		// immediately clears related highlights. workspace.getActiveFile() can return the
 		// last active file even when the current leaf has no file.
 		try {
 			const leaf = (this.app.workspace as unknown as { activeLeaf?: WorkspaceLeaf | null }).activeLeaf;
@@ -337,41 +315,6 @@ export class EpochView extends ItemView {
 		return startStartupDefaultNoteRefocus(this);
 	}
 
-	private isPro(): boolean {
-		return !!this.plugin?.hasProAccess?.();
-	}
-
-	private isEpochsEnabled(): boolean {
-		return this.plugin?.settings?.generateEpochs === true;
-	}
-
-	private refreshSyncedEpochAvailability(): void {
-		const index = this.plugin?.indexer?.index;
-		// During rebuild/refresh flows, the in-memory index can be temporarily empty or unset.
-		// Do not treat that transient state as "epochs unavailable" (it can cause epochs view
-		// to flip back to normal a few seconds after the user turns it on).
-		if (!index || typeof index !== "object") return;
-		const lists = Object.values(index);
-		if (lists.length === 0) return;
-
-		let sawAnyEntries = false;
-		let found = false;
-		for (const list of lists) {
-			if (!Array.isArray(list) || list.length === 0) continue;
-			sawAnyEntries = true;
-			if (list.some((e) => e && String(e.file || "").startsWith("epoch://"))) {
-				found = true;
-				break;
-			}
-		}
-		if (!sawAnyEntries) return;
-		this.hasSyncedEpochEntries = found;
-	}
-
-	private updateProUiState() {
-		epochViewUpdateProUiState(this);
-	}
-
 	constructor(leaf: WorkspaceLeaf, plugin: EpochViewPluginLike) {
 		super(leaf);
 		this.plugin = plugin;
@@ -402,8 +345,7 @@ export class EpochView extends ItemView {
 		if (!this.canvas) return;
 		this.canvas.refreshIndex();
 		this.maybeFocusTimelineSearchAfterRebuild();
-		this.refreshSyncedEpochAvailability();
-		this.updateProUiState();
+		this.updateFilterButtons();
 		this.scheduleSearchControlRefresh();
 	}
 
@@ -411,32 +353,12 @@ export class EpochView extends ItemView {
 		return epochViewOnClose(this);
 	}
 
-	syncPreferencesFromPlugin(preferences: { showDraftsOnly?: boolean; showAttachments: boolean; showTrackedChanges?: boolean; showParsed?: boolean; showEpochsView?: boolean }): void {
+	syncPreferencesFromPlugin(preferences: { showAttachments: boolean; showParsed?: boolean; showDraftsOnly?: boolean }): void {
 		epochViewSyncPreferencesFromPlugin(this, preferences);
 	}
 
 	private updateFilterButtons() {
 		epochViewUpdateFilterButtons(this);
-	}
-
-	private updateReviewFilterButtonUi(mode: "reviewed+draft" | "draft"): void {
-		epochViewUpdateReviewFilterButtonUi(this, mode);
-	}
-
-	private setShowEpochsView(value: boolean) {
-		epochViewSetShowEpochsView(this, value);
-	}
-
-	private cycleReviewFilterMode(): void {
-		epochViewCycleReviewFilterMode(this);
-	}
-
-	private setReviewFilterMode(mode: "reviewed+draft" | "draft") {
-		epochViewSetReviewFilterMode(this, mode);
-	}
-
-	private setShowTrackedChanges(value: boolean) {
-		epochViewSetShowTrackedChanges(this, value);
 	}
 
 	private setShowContentDates(value: boolean) {
@@ -446,6 +368,8 @@ export class EpochView extends ItemView {
 	private setShowPropDates(value: boolean) {
 		epochViewSetShowPropDates(this, value);
 	}
+
+	private setShowDraftsOnly(value: boolean): void { epochViewSetShowDraftsOnly(this, value); }
 
 	private setShowAttachments(value: boolean) {
 		epochViewSetShowAttachments(this, value);

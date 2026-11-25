@@ -4,17 +4,15 @@ import { Indexer } from "../src/indexer/indexer";
 import { computeTextHash } from "../src/utils";
 import { normalizeSnapshotValue } from "../src/indexer/snapshot-helpers";
 
-describe("Indexer live editor for modify", () => {
+describe("Indexer live editor",  () => {
 	let indexer: Indexer;
 	let pluginStub: any;
 
 	beforeEach(() => {
 		pluginStub = {
 			settings: {
-				trackChanges: false,
 				summaryWordsCount: 8
 			},
-			hasProAccess: () => true,
 			app: {
 				vault: {
 					read: vi.fn(async () => "DISK CONTENT")
@@ -46,7 +44,14 @@ describe("Indexer live editor for modify", () => {
 		});
 	};
 
-	it("prefers active editor buffer for modify reason", async () => {
+	it("falls back to the vault if the active editor has been detached", async () => {
+		const file = makeFile("notes/A.md", Date.UTC(2026, 4, 5));
+		pluginStub.app.workspace.getActiveViewOfType.mockReturnValue({ file, editor: { getValue: () => { throw new Error("detached"); } } });
+		await expect(indexer.processFile(file, { reason: "modify" })).resolves.toBeUndefined();
+		expect(pluginStub.app.vault.read).toHaveBeenCalledWith(file);
+	});
+
+	it.each(["modify", "rebuild"] as const)("prefers active editor buffer for %s reason", async reason => {
 		const ctime = Date.UTC(2026, 4, 5);
 		const file = makeFile("notes/A.md", ctime);
 		const liveContent = "Live body with [[B]]";
@@ -58,7 +63,7 @@ describe("Indexer live editor for modify", () => {
 			}
 		});
 
-		await indexer.processFile(file, { reason: "modify" });
+		await indexer.processFile(file, { reason });
 
 		expect(pluginStub.app.vault.read).not.toHaveBeenCalled();
 		const data = (indexer as any).files[file.path];

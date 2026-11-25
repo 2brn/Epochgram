@@ -1,9 +1,9 @@
 {
 	"id": "epochgram",
 	"name": "Epochgram",
-	"version": "1.8.33",
+	"version": "2.0.0",
 	"minAppVersion": "1.12.4",
-	"description": "A timemap of your mind. Epochgram turns your notes into an AI-powered interactive timeline.",
+	"description": "Turn your notes, dates, and calendars into a free interactive timeline.",
 	"author": "Andriy Babets",
 	"authorUrl": "https://www.epochgram.com",
 	"isDesktopOnly": false

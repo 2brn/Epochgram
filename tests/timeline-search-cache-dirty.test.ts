@@ -18,9 +18,9 @@ function makeAdapter(initial: Record<string, string> = {}) {
 }
 
 describe("timeline search cache", () => {
-	it("does not write epochgram-search.json when cache is not dirty", async () => {
+	it("does not write search.json when cache is not dirty", async () => {
 		const configDir = "config";
-		const cachePath = `${configDir}/epochgram-search.json`;
+		const cachePath = `${configDir}/plugins/epochgram/search.json`;
 
 		const adapter = makeAdapter({ [cachePath]: JSON.stringify({ a: 1 }) });
 		const plugin: any = {
@@ -34,7 +34,7 @@ describe("timeline search cache", () => {
 
 	it("writes once when dirty, then clears dirty", async () => {
 		const configDir = "config";
-		const cachePath = `${configDir}/epochgram-search.json`;
+		const cachePath = `${configDir}/plugins/epochgram/search.json`;
 
 		const adapter = makeAdapter({ [cachePath]: JSON.stringify({ a: 1 }) });
 		const plugin: any = {
@@ -45,6 +45,7 @@ describe("timeline search cache", () => {
 		markTimelineSearchIndexDirty(plugin);
 		await saveTimelineSearchCache(plugin);
 		expect(adapter.write).toHaveBeenCalledTimes(1);
+		expect(adapter.write).toHaveBeenCalledWith(cachePath, JSON.stringify({ a: 2 }));
 
 		await saveTimelineSearchCache(plugin);
 		expect(adapter.write).toHaveBeenCalledTimes(1);
@@ -52,7 +53,7 @@ describe("timeline search cache", () => {
 
 	it("does not write for no-op upsert and no-op remove", async () => {
 		const configDir = "config";
-		const cachePath = `${configDir}/epochgram-search.json`;
+		const cachePath = `${configDir}/plugins/epochgram/search.json`;
 
 		const index = new TimelineSearchIndex();
 		const doc = {

@@ -24,12 +24,10 @@ vi.mock("../src/ui/epoch-canvas", () => {
 
 		snapInitialPosition = vi.fn();
 		initSize = vi.fn();
-		setReviewFilterMode = vi.fn();
-		setShowTrackedChanges = vi.fn();
+		setShowDraftsOnly = vi.fn();
 		setShowContentDates = vi.fn();
 		setShowPropDates = vi.fn();
 		setShowAttachments = vi.fn();
-		setEpochsView = vi.fn();
 		setSearchQuery = vi.fn();
 		refreshStyles = vi.fn();
 		setActiveFile = vi.fn();

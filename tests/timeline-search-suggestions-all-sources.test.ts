@@ -107,7 +107,7 @@ describe("timeline search suggestions (all sources)", () => {
 			canvas: {
 				index: {
 					"2026-01-04": [
-						{ date: "2026-01-04", file: "A.md", blockStart: 10, blockEnd: 10, summary: "", aiSummary: "SpecialTerm", aiSummaryVisible: true, source: "content" }
+						{ date: "2026-01-04", file: "A.md", blockStart: 10, blockEnd: 10, summary: "SpecialTerm", source: "content" }
 					]
 				},
 				showAttachments: true,

@@ -43,7 +43,7 @@ type ScrollNavFocusState = {
 	draw?: () => void;
 };
 
-const DATE_SOURCES: ReadonlySet<DateSource> = new Set(["cdate", "namedate", "dateprop", "content", "tracked", "epoch"]);
+const DATE_SOURCES: ReadonlySet<DateSource> = new Set(["cdate", "namedate", "dateprop", "content"]);
 
 function asScrollNavFocusState(canvas: EpochCanvas): ScrollNavFocusState {
 	return canvas as unknown as ScrollNavFocusState;

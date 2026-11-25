@@ -1,11 +1,6 @@
 import { normalizePath, TFile } from "obsidian";
 import type { EpochPlugin } from "../main";
 
-type PluginDataPaths = {
-	vectorsFilePath?: string;
-	termSimilarityFilePath?: string;
-};
-
 type VaultConfigLike = {
 	getConfig?: (key: string) => unknown;
 	config?: {
@@ -19,7 +14,7 @@ type VaultConfigLike = {
 
 export interface ExclusionMethods {
 	isPluginDataFile(path: string): boolean;
-	getManagedFileType(path: string): "index" | "data" | "vectors" | "termSimilarity" | null;
+	getManagedFileType(path: string): "index" | "data" | null;
 	shouldIndexFile(file: TFile): boolean;
 	shouldIndexPath(path: string): boolean;
 	isExcludedPath(path: string): boolean;
@@ -35,20 +30,14 @@ export interface ExclusionMethods {
 export const exclusionMethods: ExclusionMethods = {
 	isPluginDataFile(this: EpochPlugin, path: string): boolean {
 		const normalized = normalizePath(path);
-		const pluginData = this as EpochPlugin & PluginDataPaths;
 		if (normalized === this.indexFilePath) return true;
-		if (normalized === normalizePath(String(pluginData.vectorsFilePath || ""))) return true;
-		if (normalized === normalizePath(String(pluginData.termSimilarityFilePath || ""))) return true;
 		return normalized.startsWith(`${this.pluginDirPath}/`);
 	},
 
-	getManagedFileType(this: EpochPlugin, path: string): "index" | "data" | "vectors" | "termSimilarity" | null {
+	getManagedFileType(this: EpochPlugin, path: string): "index" | "data" | null {
 		const normalized = normalizePath(path);
-		const pluginData = this as EpochPlugin & PluginDataPaths;
 		if (normalized === this.indexFilePath) return "index";
 		if (normalized === this.dataFilePath) return "data";
-		if (normalized === normalizePath(String(pluginData.vectorsFilePath || ""))) return "vectors";
-		if (normalized === normalizePath(String(pluginData.termSimilarityFilePath || ""))) return "termSimilarity";
 		return null;
 	},
 
@@ -86,7 +75,7 @@ export const exclusionMethods: ExclusionMethods = {
 		}
 		this.excludedFiltersSignature = signature;
 		this.excludedFilterMatchers = this.compileExcludedMatchers(filters);
-		if (this.indexReady || this.indexLoadPromise) {
+		if (this.indexReady) {
 			void this.ensureExcludedSync();
 		}
 		return true;

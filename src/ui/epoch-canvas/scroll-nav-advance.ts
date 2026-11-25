@@ -13,7 +13,6 @@ import {
 	normalizeNonEpochPath
 } from "./scroll-nav-marks";
 import { computeScrollNavTargets, computeVisibleScrollNavEntryTargets } from "./scroll-nav-targets";
-import { advanceScrollNavEpochsView } from "./scroll-nav-advance-epochs";
 import { advanceScrollNavVisibleDays } from "./scroll-nav-advance-visible-days";
 import { advanceScrollNavSimilar } from "./scroll-nav-advance-similar";
 import { advanceScrollNavEntries } from "./scroll-nav-advance-entries";
@@ -21,17 +20,15 @@ import { resetScrollNavTargetState } from "./scroll-nav-reset";
 
 type ScrollNavCanvasState = {
 	__suppressExternalAutoScrollUntil?: number;
-	clearFocusedEpochRange(): void;
 	pendingScrollNavHighlight: { dayIndex?: number; date?: Date } | null;
 	searchQuery?: string;
-	epochsView?: boolean;
 	activeFilePath?: string | null;
 	scrollNavFile?: string | null;
 	root: HTMLElement;
 	scrollNavAnchorEntry?: unknown;
-	semanticRelatedBasePath?: string;
-	semanticRelatedScored?: Array<{ path?: string }>;
-	semanticRelatedPaths?: Set<string>;
+	relatedBasePath?: string;
+	relatedScored?: Array<{ path?: string }>;
+	relatedPaths?: Set<string>;
 	__scrollNavLastModeKey?: string;
 	__scrollNavAnchorMode?: string | null;
 	__scrollNavAnchorDayIndex?: number | null;
@@ -59,16 +56,14 @@ export function advanceScrollNav(
 	} catch {
 		// ignore
 	}
-	c.clearFocusedEpochRange();
 	const prevPending = c.pendingScrollNavHighlight ?? null;
 	if (prevPending) {
 		c.pendingScrollNavHighlight = null;
 	}
 	const wrap = options.wrap === true;
 	const searchActive = String(c.searchQuery || "").trim().length > 0;
-	const epochsViewActive = c.epochsView === true;
 	const hasActiveFile = !!normalizeNonEpochPath(c.activeFilePath ?? null);
-	const useVisibleNav = options.forceVisible === true || searchActive || epochsViewActive || !hasActiveFile;
+	const useVisibleNav = options.forceVisible === true || searchActive || !hasActiveFile;
 	const openedFile = c.activeFilePath ?? c.scrollNavFile ?? null;
 	if (!useVisibleNav) {
 		if (!openedFile) {
@@ -126,7 +121,7 @@ export function advanceScrollNav(
 				const v = normalizeMarkColorIndex(raw);
 				if (!v) continue;
 				if (!groupSet.has(v)) continue;
-				if (!p || p.startsWith("epoch://")) continue;
+				if (!p) continue;
 				add(p);
 			}
 		}
@@ -134,16 +129,16 @@ export function advanceScrollNav(
 		return Array.from(out);
 	})();
 	try {
-		const base = String(c.semanticRelatedBasePath ?? c.activeFilePath ?? "");
+		const base = String(c.relatedBasePath ?? c.activeFilePath ?? "");
 		if (base && base === String(similarRootFile)) {
-			const scored = Array.isArray(c.semanticRelatedScored) ? c.semanticRelatedScored : null;
+			const scored = Array.isArray(c.relatedScored) ? c.relatedScored : null;
 			if (scored && scored.length > 0) {
 				for (const s of scored) {
 					const p = s?.path;
 					if (typeof p === "string" && p) relatedList.push(p);
 				}
-			} else if (c.semanticRelatedPaths instanceof Set) {
-				for (const p of c.semanticRelatedPaths) {
+			} else if (c.relatedPaths instanceof Set) {
+				for (const p of c.relatedPaths) {
 					if (typeof p === "string" && p) relatedList.push(p);
 				}
 			}
@@ -184,7 +179,7 @@ export function advanceScrollNav(
 		return out;
 	})();
 	const isSimilarNav = !useVisibleNav && extraPaths.length > 0;
-	const modeKey = epochsViewActive ? "epochs" : useVisibleNav ? "visible" : isSimilarNav ? "similar" : "entry";
+	const modeKey = useVisibleNav ? "visible" : isSimilarNav ? "similar" : "entry";
 	try {
 		const prevMode = String(c.__scrollNavLastModeKey || "");
 		if (prevMode && prevMode !== modeKey) {
@@ -209,10 +204,7 @@ export function advanceScrollNav(
 		? { dayIndex: typeof prevPending.dayIndex === "number" ? prevPending.dayIndex : undefined, date: prevPending.date }
 		: {};
 
-	if (epochsViewActive) {
-		return advanceScrollNavEpochsView({ canvas, c, direction, wrap, prevPending, rect });
-	}
-	if (useVisibleNav && !epochsViewActive) {
+	if (useVisibleNav) {
 		return advanceScrollNavVisibleDays({ canvas, c, direction, wrap, prevPending, rect });
 	}
 	if (isSimilarNav) {

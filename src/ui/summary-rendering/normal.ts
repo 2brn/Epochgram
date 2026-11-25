@@ -1,3 +1,4 @@
+import { reviewSummaryFont } from "../review-style";
 import type { DateEntry } from "../../indexer/types";
 import type { CanvasIconCache } from "../canvas-icon-cache";
 import { buildNormalColumns } from "./normal-measure";
@@ -11,13 +12,12 @@ import {
 	HOVER_HIT_PAD,
 	SUMMARY_MARGIN,
 	SUMMARY_MIN_SCALE,
-	SUMMARY_HIDDEN_ALPHA,
 	SUMMARY_RECORD_SAFE_MARGIN,
 	TOUCH_HIT_PAD
 } from "../epoch-canvas-constants";
 import { getEntryMarkColor, getInheritedMarkColor } from "./entry-mark-colors";
 import { formatPlusNPrefix } from "./plusn";
-import { entryFileName, formatEntrySummary, withFontStyle, withFontWeight } from "../epoch-canvas-utils";
+import { entryFileName, formatEntrySummary, withFontWeight } from "../epoch-canvas-utils";
 import { ellipsizeToWidth } from "./normal/ellipsis";
 import type { SummaryRect } from "../epoch-canvas-types";
 import type { RenderRow } from "./normal-measure";
@@ -30,7 +30,7 @@ type PlusNBadgeCache = {
 	entries: DateEntry[];
 	visibleCount: number;
 	activeFilePath: string | null;
-	semanticRelatedPaths: Set<string> | null | undefined;
+	relatedPaths: Set<string> | null | undefined;
 	markColors: string[] | undefined;
 	inheritedMarkIndexByPath: Map<string, number> | null | undefined;
 	colHighlight: string;
@@ -46,7 +46,7 @@ export function getCompactPlusNBadgeDecoration(args: {
 	entries: DateEntry[];
 	visibleCount: number;
 	activeFilePath: string | null;
-	semanticRelatedPaths: Set<string> | null | undefined;
+	relatedPaths: Set<string> | null | undefined;
 	markColors: string[] | undefined;
 	inheritedMarkIndexByPath: Map<string, number> | null | undefined;
 	colHighlight: string;
@@ -61,7 +61,7 @@ export function getCompactPlusNBadgeDecoration(args: {
 		cached.entries === args.entries &&
 		cached.visibleCount === args.visibleCount &&
 		cached.activeFilePath === args.activeFilePath &&
-		cached.semanticRelatedPaths === args.semanticRelatedPaths &&
+		cached.relatedPaths === args.relatedPaths &&
 		cached.markColors === args.markColors &&
 		cached.inheritedMarkIndexByPath === args.inheritedMarkIndexByPath &&
 		cached.colHighlight === args.colHighlight &&
@@ -73,7 +73,7 @@ export function getCompactPlusNBadgeDecoration(args: {
 	let activeHidden: DateEntry | null = null;
 	let anyMark: string | null = null;
 	let anyInherited: string | null = null;
-	let hasSemantic = false;
+	let hasRelated = false;
 	if (args.activeFilePath) {
 		for (let i = 0; i < hiddenEntries.length; i++) {
 			const e = hiddenEntries[i];
@@ -95,23 +95,21 @@ export function getCompactPlusNBadgeDecoration(args: {
 			const c = getInheritedMarkColor(e, args.markColors, args.colHighlight, args.inheritedMarkIndexByPath);
 			if (c) anyInherited = c;
 		}
-		if (!hasSemantic && args.semanticRelatedPaths && args.semanticRelatedPaths.has(e.file)) {
-			hasSemantic = true;
-		}
-		if (anyMark && anyInherited && hasSemantic) break;
+		if (args.relatedPaths?.has(e.file)) hasRelated = true;
+		if (anyMark && anyInherited && hasRelated) break;
 	}
 	const activeMark = activeHidden ? getEntryMarkColor(activeHidden, args.markColors, args.colHighlight) : null;
 	const activeInherited = activeHidden
 		? getInheritedMarkColor(activeHidden, args.markColors, args.colHighlight, args.inheritedMarkIndexByPath)
 		: null;
-	const color = activeMark || activeInherited || anyMark || anyInherited || (activeHidden || hasSemantic ? args.colRelated : null);
+	const color = activeMark || activeInherited || anyMark || anyInherited || (activeHidden || hasRelated ? args.colRelated : null);
 	const bold = activeHidden != null;
 
 	plusNBadgeCacheByDay.set(args.dayIndex, {
 		entries: args.entries,
 		visibleCount: args.visibleCount,
 		activeFilePath: args.activeFilePath,
-		semanticRelatedPaths: args.semanticRelatedPaths,
+		relatedPaths: args.relatedPaths,
 		markColors: args.markColors,
 		inheritedMarkIndexByPath: args.inheritedMarkIndexByPath,
 		colHighlight: args.colHighlight,
@@ -144,9 +142,7 @@ export interface NormalSummaryRenderArgs {
 	prevAnimSummary?: { dayIndex: number; itemIndex: number } | null;
 	outgoingSummaries?: Array<{ dayIndex: number; itemIndex: number; t: number }> | null;
 	activeFilePath: string | null;
-	relatedDateRange?: { start: string; end: string } | null;
-	semanticRelatedPaths?: Set<string> | null;
-	showHidden: boolean;
+	relatedPaths?: Set<string> | null;
 	filenameWordsCount: number;
 	summaryWordsCount: number;
 	iconCache: CanvasIconCache;
@@ -158,9 +154,6 @@ export interface NormalSummaryRenderArgs {
 	colRelated: string;
 	markColors?: string[];
 	inheritedMarkIndexByPath?: Map<string, number> | null;
-	pathsWithEmbeddingTerm?: Set<string> | null;
-	pathsWithClassifiedTerm?: Set<string> | null;
-	termSimilarPaths?: Set<string> | null;
 	wrapFadeCache?: Map<string, unknown> | null;
 	getEntryTitle: (entry: DateEntry) => string | null;
 }
@@ -184,9 +177,7 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 		animSummary,
 		outgoingSummaries,
 		activeFilePath,
-		relatedDateRange,
-		semanticRelatedPaths,
-		showHidden,
+		relatedPaths,
 		filenameWordsCount,
 		summaryWordsCount,
 		iconCache,
@@ -198,18 +189,6 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 		inheritedMarkIndexByPath,
 		wrapFadeCache,
 	} = args;
-	const disableDraftItalics = false;
-
-		const isRelatedDate = (dateKey: string): boolean => {
-			const r = relatedDateRange;
-			if (!r) return false;
-			const start = r.start;
-			const end = r.end;
-			if (!start || !end) return false;
-			const lo = start <= end ? start : end;
-			const hi = start <= end ? end : start;
-			return dateKey >= lo && dateKey <= hi;
-		};
 	const visibleRowIndexRange = (() => {
 		if (!(scale > SUMMARY_MIN_SCALE)) return null;
 		if (!(entries.length >= 120)) return null;
@@ -265,7 +244,7 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 				entries,
 				visibleCount,
 				activeFilePath,
-				semanticRelatedPaths,
+				relatedPaths,
 				markColors,
 				inheritedMarkIndexByPath,
 				colHighlight,
@@ -327,15 +306,13 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 					// Mirror normal hover height logic for a single-line row.
 					const hoveredEntry = visibleEntries[hoveredEntryIndex];
 					if (hoveredEntry) {
-						let font = args.fontSmall;
+						let font = reviewSummaryFont(hoveredEntry, args.fontSmall);
 						const isActiveEntry = !!(activeFilePath && hoveredEntry.file === activeFilePath);
-						const isDraft = hoveredEntry.reviewState === "draft";
 						if (isActiveEntry) font = withFontWeight(font, "700");
-						if (isDraft && !disableDraftItalics) font = withFontStyle(font, "italic");
 						const baseFont = font;
 						const needsBoldFont = isActiveEntry;
 						const hoverFontStr = getHoverFontStrForRow(
-							{ summaryFont: baseFont, needsBoldFont, isDraft: isDraft && !disableDraftItalics },
+							{ summaryFont: baseFont, needsBoldFont },
 							args.fontSmallHover
 						);
 						const hoverLineHeight = Math.max(12, Math.round(parseFontPx(hoverFontStr) * 1.25));
@@ -384,11 +361,9 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 					const yItemCenter = isAnchor ? (baseYRectTop + baseYRectBottom) / 2 : (yRectTop + yRectBottom) / 2;
 					const yCenter = yItemCenter;
 
-					let font = args.fontSmall;
+					let font = reviewSummaryFont(entry, args.fontSmall);
 					const isActiveEntry = !!(activeFilePath && entry.file === activeFilePath);
-					const isDraft = entry.reviewState === "draft";
 					if (isActiveEntry) font = withFontWeight(font, "700");
-					if (isDraft && !disableDraftItalics) font = withFontStyle(font, "italic");
 					ctx.font = font;
 					const rawTitle = args.getEntryTitle(entry) || entryFileName(entry);
 					const title = String(rawTitle || "")
@@ -421,32 +396,10 @@ export function renderNormalDaySummaries(args: NormalSummaryRenderArgs): DaySumm
 						isActiveEntry,
 						summaryFont: font,
 						needsBoldFont: isActiveEntry,
-						isDraft,
 						padY: 4,
-						baseColor: (() => {
-							const isRelatedEntry = isRelatedDate(entry.date);
-							const isSemanticRelatedEntry = !!(semanticRelatedPaths && semanticRelatedPaths.has(entry.file));
-							const markColor = getEntryMarkColor(entry, markColors, colHighlight);
-							const inheritedColor = getInheritedMarkColor(entry, markColors, colHighlight, inheritedMarkIndexByPath);
-							if (markColor) return markColor;
-							if (inheritedColor) return inheritedColor;
-							if (isActiveEntry || isRelatedEntry || isSemanticRelatedEntry) return colRelated;
-							return colTextBase;
-						})(),
-						// Match normal (non-compact) behavior: hover changes size/packing, not color.
-						hoverSummaryColor: (() => {
-							const isRelatedEntry = isRelatedDate(entry.date);
-							const isSemanticRelatedEntry = !!(semanticRelatedPaths && semanticRelatedPaths.has(entry.file));
-							const markColor = getEntryMarkColor(entry, markColors, colHighlight);
-							const inheritedColor = getInheritedMarkColor(entry, markColors, colHighlight, inheritedMarkIndexByPath);
-							if (markColor) return markColor;
-							if (inheritedColor) return inheritedColor;
-							if (isActiveEntry || isRelatedEntry || isSemanticRelatedEntry) return colRelated;
-							return colTextBase;
-						})(),
-						hiddenAlpha: entry.reviewState === "hidden" && showHidden ? SUMMARY_HIDDEN_ALPHA : 1,
+						baseColor: getEntryMarkColor(entry, markColors, colHighlight) || getInheritedMarkColor(entry, markColors, colHighlight, inheritedMarkIndexByPath) || (isActiveEntry || relatedPaths?.has(entry.file) ? colRelated : colTextBase),
+						hoverSummaryColor: getEntryMarkColor(entry, markColors, colHighlight) || getInheritedMarkColor(entry, markColors, colHighlight, inheritedMarkIndexByPath) || (isActiveEntry || relatedPaths?.has(entry.file) ? colRelated : colTextBase),
 						leadingIconIds: [],
-						tagTint: false,
 						hasTagIcon: false,
 						leadingIconMetrics: getSummaryIconMetrics(0, rowH),
 						tagIconMetrics: getSummaryIconMetrics(0, rowH),

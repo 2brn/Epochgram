@@ -6,8 +6,6 @@ export interface CanvasMenuState {
 	keepHoverAfterMenu: boolean;
 	clearHover(force?: boolean): void;
 	refreshIndex(): void;
-	hasProAccess(): boolean;
-	requirePro(feature: string): boolean;
 }
 
 export function getMenuState(canvas: EpochCanvas): CanvasMenuState {

@@ -1,541 +1,107 @@
 import type { TFile } from "obsidian";
 import type { ProcessOptions } from "./indexer";
 import { normalizePinMode, type FileIndexData } from "./types";
-import { cloneTrackedDates, createEmptyFileIndex } from "./file-index-factory";
+import { createEmptyFileIndex } from "./file-index-factory";
 import { normalizeDateFromTimestamp, parseAnyDate } from "./extractor";
 import { applyEntryState } from "./entry-state";
+import { resetReviewedAnchors } from "./review-state";
 import { normalizeSnapshotValue } from "./snapshot-helpers";
-import { computeTextHash, frontmatterToIndexTokens, isLikelyTextFileExtension, stripYamlFrontmatterBlock } from "../utils";
+import { computeTextHash, frontmatterToIndexTokens, isLikelyTextFilePath, stripYamlFrontmatterBlock } from "../utils";
 import type { IndexerPipeline } from "./pipeline";
-import { removeEntriesForFile } from "./indexer-utils";
 import { markTimelineSearchIndexDirty, scheduleTimelineSearchCacheSave } from "../plugin/timeline-search-cache";
 import { parseRecurrenceFrontmatter } from "./recurrence";
 import { resolveFrontmatterSuppressionFlags } from "./frontmatter-flags";
-import { isTrackChangesConfigured } from "../plugin/pro-feature-state";
-import { isTopicSimilarityEnabled } from "../plugin/similarity/config";
-import {
-	buildFrontmatterPropertyLineRegex,
-	getYamlDatePropertyKey,
-} from "../plugin/frontmatter-keys";
-import { consumeNoteFrontmatterWritePath, readYamlPropertyFromText } from "../plugin/note-frontmatter";
+import { buildFrontmatterPropertyLineRegex, getYamlDatePropertyKey } from "../plugin/frontmatter-keys";
+import { readYamlPropertyFromText } from "../plugin/note-frontmatter";
 import { findMarkColorIndexForCss } from "../ui/mark-colors";
 
 function normalizeYamlMarkHex(value: unknown): string {
-	const raw = typeof value === "string"
-		? value.trim()
-		: typeof value === "number"
-			? String(value).trim()
-			: "";
-	if (!raw) return "";
+	const raw = typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
 	const hex = raw.startsWith("#") ? raw : `#${raw}`;
-	if (!/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(hex)) return "";
-	return hex.toLowerCase();
+	return /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(hex) ? hex.toLowerCase() : "";
 }
 
-function isDateKey(value: string): boolean {
-	return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
-}
-
-type TimelineSearchRecord = {
-	id: string;
-	kind: string;
-	path: string;
-	basename: string;
-	directory: string;
-	content: string;
-	meta: string;
-};
-
-type TimelineSearchIndexLike = {
-	removeById?: (path: string) => boolean;
-	upsert?: (record: TimelineSearchRecord) => boolean;
-};
-
-type ProcessFilePluginLike = {
-	settings?: { anchorMdate?: boolean; similarityZeroShotMinScore?: number };
-	timelineSearchIndex?: TimelineSearchIndexLike;
-	indexer?: { getFileEmbeddingTerm?: (path: string) => string };
-	termSimilarityLoaded?: boolean;
-	termSimilarityIndex?: { files?: Record<string, { term?: string; score?: number }> };
-	app?: { metadataCache?: { getFileCache?: (file: TFile) => FileCacheLike | null }, workspace?: { containerEl?: HTMLElement } };
-};
-
-type FileCacheLike = {
-	tags?: Array<{ tag?: string }>;
-	frontmatter?: Record<string, unknown>;
-};
-
-function collectDates(data: FileIndexData | null | undefined): string[] {
-	const out = new Set<string>();
-	if (!data) return [];
-	const add = (d: unknown) => {
-		const v = typeof d === "string" ? d : "";
-		if (isDateKey(v)) out.add(v);
-	};
-	const getDateValue = (entry: unknown): string | null => {
-		if (!entry || typeof entry !== "object") return null;
-		const date = (entry as { date?: unknown }).date;
-		return typeof date === "string" ? date : null;
-	};
-	add(data.cdate?.date);
-	add(data.namedDate?.date);
-	add(data.dateProp?.date);
-	for (const e of data.contentDates ?? []) add(getDateValue(e));
-	for (const k of Object.keys(data.trackedDates ?? {})) add(k);
-	return Array.from(out);
-}
-
-function removeFileFromIndexingPipeline(s: IndexerPipeline, path: string, previous: FileIndexData | null | undefined): void {
-	let timelineMutated = false;
-	try {
-		const timelineSearchIndex = (s.plugin as unknown as ProcessFilePluginLike).timelineSearchIndex;
-		timelineMutated = timelineSearchIndex?.removeById?.(path) === true;
-	} catch {
-		// ignore
-	}
-	if (timelineMutated) {
-		try {
-			markTimelineSearchIndexDirty(s.plugin);
-		} catch {
-			// ignore
-		}
-		try {
-			scheduleTimelineSearchCacheSave(s.plugin);
-		} catch {
-			// ignore
-		}
-	}
-
-	const affectedDates = collectDates(previous);
-	delete s.files[path];
-	removeEntriesForFile(s.index, path);
-	delete s.latestLines[path];
-
-	if (affectedDates.length > 0 && typeof s.plugin?.enqueueEpochsForDateKeys === "function") {
-		try {
-			void s.plugin.enqueueEpochsForDateKeys(affectedDates, { force: false, showNotice: false });
-		} catch {
-			// ignore
-		}
-	}
-}
-
-export async function processFileInternal(
-	s: IndexerPipeline,
-	file: TFile,
-	options: ProcessOptions = {}
-): Promise<void> {
-	const isMd = file.extension === "md";
-	const isEpochgramExportHtml = (() => {
-		try {
-			const ext = String(file.extension || "").toLowerCase();
-			if (ext !== "html" && ext !== "htm") return false;
-			const base = String(file.basename || "").toLowerCase();
-			return base.startsWith("epochgram-");
-		} catch {
-			return false;
-		}
-	})();
-	const isText = isLikelyTextFileExtension(file.extension) && !isEpochgramExportHtml;
-
+export async function processFileInternal(s: IndexerPipeline, file: TFile, options: ProcessOptions = {}): Promise<void> {
+	const isText = isLikelyTextFilePath(file.path);
 	const rawContent = isText ? await s.readFileContent(file, options.reason) : "";
-	// Reading yields to Sync/polling. Resolve the previous state afterwards so a
-	// just-reloaded reviewed index cannot be overwritten by a stale Draft copy.
-	const previousData = options.previous ?? s.files[file.path] ?? createEmptyFileIndex();
-	const normalizedContent = isText ? (normalizeSnapshotValue(rawContent) ?? "") : "";
-	const suppression = resolveFrontmatterSuppressionFlags(s.plugin, file, normalizedContent);
+	const previous = options.previous ?? s.files[file.path] ?? createEmptyFileIndex();
+	const normalized = normalizeSnapshotValue(rawContent) ?? "";
+	const suppression = resolveFrontmatterSuppressionFlags(s.plugin, file, normalized);
 	if (suppression.noindex) {
-		removeFileFromIndexingPipeline(s, file.path, previousData);
+		if (s.plugin.timelineSearchIndex?.removeById?.(file.path)) { markTimelineSearchIndexDirty(s.plugin); scheduleTimelineSearchCacheSave(s.plugin); }
+		delete s.files[file.path]; delete s.latestLines[file.path];
+		s.updateAggregatedEntries(file.path, { skipSort: options.skipSort });
 		return;
 	}
-	const contentHash = isText ? computeTextHash(normalizedContent) : undefined;
-	const previousContentHash = typeof previousData.contentHash === "string" ? String(previousData.contentHash) : null;
-	const previousBodyHash = typeof previousData.bodyHash === "string" && previousData.bodyHash.trim()
-		? String(previousData.bodyHash)
-		: null;
-	const previousSnapshot = typeof previousData.trackedSnapshot === "string" ? normalizeSnapshotValue(previousData.trackedSnapshot) : null;
-	const frontmatterWrite = consumeNoteFrontmatterWritePath(s.plugin, file.path);
-	const bodySnapshot = isText ? (normalizeSnapshotValue(stripYamlFrontmatterBlock(normalizedContent)) ?? "") : "";
-	const bodyHash = isText ? computeTextHash(bodySnapshot) : undefined;
-	const frontmatterOnlyChange = isText && (
-		(previousBodyHash != null && previousBodyHash === bodyHash) ||
-		(previousSnapshot != null && previousSnapshot === bodySnapshot)
-	);
-	const contentUnchanged = isText && (
-		(previousContentHash != null && previousContentHash === contentHash) ||
-		(previousContentHash == null && previousSnapshot != null && previousSnapshot === normalizedContent)
-	);
-	const fileData: FileIndexData = {
-		cdate: null,
-		namedDate: null,
-		dateProp: null,
-		contentDates: [],
-		noparsed: suppression.noparsed,
-		recur: null,
-		recurHiddenDates: Array.isArray(previousData.recurHiddenDates) ? [...previousData.recurHiddenDates] : [],
-		recurHiddenDatesUpdatedAt: previousData.recurHiddenDatesUpdatedAt,
-		recurReviewedDatesUpdatedAt: previousData.recurReviewedDatesUpdatedAt,
-		trackedDates: cloneTrackedDates(previousData.trackedDates),
-		notracked: suppression.notracked,
-		trackedSnapshot: previousData.trackedSnapshot ?? null,
-		trackedSnapshotDate: previousData.trackedSnapshotDate ?? null,
-		trackedBaselineSnapshot: previousData.trackedBaselineSnapshot ?? null,
-		trackedBaselineDate: previousData.trackedBaselineDate ?? null,
-		indexedMtimeMs: (() => {
-			const v = Number(file.stat?.mtime);
-			return Number.isFinite(v) && v > 0 ? v : undefined;
-		})(),
-		indexedSize: (() => {
-			const v = Number(file.stat?.size);
-			return Number.isFinite(v) && v >= 0 ? v : undefined;
-		})(),
-		contentHash,
-		bodyHash
+	const contentHash = isText ? computeTextHash(normalized) : undefined;
+	const bodyHash = isText ? computeTextHash(stripYamlFrontmatterBlock(normalized)) : undefined;
+	const data: FileIndexData = {
+		...createEmptyFileIndex(), noparsed: suppression.noparsed, recur: null,
+		indexedMtimeMs: file.stat?.mtime, indexedSize: file.stat?.size, contentHash, bodyHash
 	};
-	const useAnchorMdate = (s.plugin as unknown as ProcessFilePluginLike).settings?.anchorMdate === true;
-
-	const rawLines = isText ? rawContent.split(/\r?\n/) : [];
-	const lines = isText ? rawLines : [];
-	const explicitPinRaw = isText ? readYamlPropertyFromText(rawContent, "pin") : "";
-	const explicitPinMode = normalizePinMode(explicitPinRaw);
-	const explicitMarkRaw = isText ? readYamlPropertyFromText(rawContent, "mark") : "";
-	const explicitMarkText = String(explicitMarkRaw || "").trim();
-	const explicitMarkHex = normalizeYamlMarkHex(explicitMarkRaw);
-	// Avoid keeping all file contents in memory across a whole vault.
-	// We only populate latestLines temporarily so aggregated entries can compute summaries,
-	// then drop it unless this is an on-demand operation.
+	const lines = isText ? rawContent.split(/\r?\n/) : [];
+	if (isText) s.latestLines[file.path] = lines;
+	else delete s.latestLines[file.path];
+	const useMdate = s.plugin.settings?.anchorMdate === true;
+	const ctime = Number(file.stat?.ctime), mtime = Number(file.stat?.mtime);
+	const timestamp = useMdate && Number.isFinite(mtime) && mtime > 0 ? mtime : Number.isFinite(ctime) && ctime > 0 ? ctime : mtime;
+	data.cdate = s.buildFileDateEntry(file, lines, normalizeDateFromTimestamp(timestamp), isText, "cdate");
+	data.anchorUsesMdate = useMdate;
+	data.pinnedFile = normalizePinMode(isText ? readYamlPropertyFromText(rawContent, "pin") : null);
 	if (isText) {
-		s.latestLines[file.path] = lines;
-	} else {
-		delete s.latestLines[file.path];
+		const hex = normalizeYamlMarkHex(readYamlPropertyFromText(rawContent, "mark"));
+		data.markColorHex = hex;
+		data.markColor = hex ? findMarkColorIndexForCss(hex, s.plugin.app?.workspace?.containerEl ?? null) ?? undefined : undefined;
 	}
-	const ctime = Number(file.stat?.ctime);
-	const mtime = Number(file.stat?.mtime);
-	const anchorTimestamp =
-		useAnchorMdate && Number.isFinite(mtime) && mtime > 0
-			? mtime
-			: Number.isFinite(ctime) && ctime > 0
-				? ctime
-				: mtime;
-	fileData.cdate = s.buildFileDateEntry(
-		file,
-		lines,
-		normalizeDateFromTimestamp(anchorTimestamp),
-		isText,
-		"cdate"
-	);
-	fileData.anchorUsesMdate = useAnchorMdate;
-	if (explicitPinMode) {
-		fileData.pinnedFile = explicitPinMode;
-	}
-	if (explicitMarkHex) {
-		fileData.markColorHex = explicitMarkHex;
-		try {
-			const root = (s.plugin as unknown as { app?: { workspace?: { containerEl?: HTMLElement } } }).app?.workspace?.containerEl ?? null;
-			const markIndex = findMarkColorIndexForCss(explicitMarkHex, root ?? null);
-			fileData.markColor = markIndex ?? undefined;
-		} catch {
-			fileData.markColor = undefined;
-		}
-	} else if (isText && explicitMarkText) {
-		// Unsupported non-empty YAML mark clears explicit mark state instead of forcing a default color.
-		fileData.markColorHex = "";
-		fileData.markColor = undefined;
-	} else if (isText) {
-		// Mark state is frontmatter-driven: missing/empty `mark` clears the color.
-		fileData.markColorHex = "";
-		fileData.markColor = undefined;
-	}
-	let recurLine = 0;
-	let recurValue: string | null = null;
+	let recurValue: string | null = null, recurLine = 0, dateKey: string | null = null;
 	let icsSynced = false;
-	try {
-		const datePropertyKey = getYamlDatePropertyKey(s.plugin);
-		const dateLineRegex = buildFrontmatterPropertyLineRegex(datePropertyKey);
-		let key: string | null = null;
-		const firstLine = String(rawLines[0] ?? "").replace(/^\uFEFF/, "").trim();
-		if (firstLine === "---") {
-			for (let i = 1; i < rawLines.length; i++) {
-				const line = String(rawLines[i] ?? "");
-				const trimmed = line.trim();
-				if (trimmed === "---" || trimmed === "...") break;
-
-				if (!key) {
-					const m = line.match(dateLineRegex);
-					if (m) {
-						const value = String(m[1] ?? "").trim().replace(/^['"]|['"]$/g, "");
-						if (value) key = parseAnyDate(value);
-					}
-				}
-
-				if (!recurValue) {
-					const m = line.match(/^\s*(repeat|recur)\s*:\s*(.+?)\s*$/i);
-					if (m) {
-						recurLine = i;
-						const value = String(m[2] ?? "").trim().replace(/^['"]|['"]$/g, "");
-						recurValue = value ? value : null;
-					}
-				}
-
-				if (!icsSynced && /^\s*syncKey\s*:\s*\S/.test(line)) {
-					icsSynced = true;
-				}
-			}
+	const dateRegex = buildFrontmatterPropertyLineRegex(getYamlDatePropertyKey(s.plugin));
+	if (String(lines[0] ?? "").replace(/^\uFEFF/, "").trim() === "---") {
+		for (let i = 1; i < lines.length; i++) {
+			const line = lines[i];
+			if (/^(?:---|\.\.\.)[ \t]*$/.test(line)) break;
+			const dateMatch = line.match(dateRegex);
+			if (!dateKey && dateMatch) dateKey = parseAnyDate(dateMatch[1].trim().replace(/^['"]|['"]$/g, ""));
+			const recurMatch = line.match(/^\s*(repeat|recur)\s*:\s*(.+?)\s*$/i);
+			if (!recurValue && recurMatch) { recurLine = i; recurValue = recurMatch[2].trim().replace(/^['"]|['"]$/g, ""); }
+			if (/^\s*syncKey\s*:\s*\S/.test(line)) icsSynced = true;
 		}
-		if (key && /^\d{4}-\d{2}-\d{2}$/.test(key)) {
-			fileData.dateProp = s.buildFileDateEntry(file, lines, key, isText, "dateprop");
-			if (icsSynced) fileData.dateProp.icsSynced = true;
-		}
-	} catch {
-		// ignore
 	}
-
+	if (dateKey) {
+		data.dateProp = s.buildFileDateEntry(file, lines, dateKey, isText, "dateprop");
+		if (icsSynced) data.dateProp.icsSynced = true;
+	}
 	const named = s.buildNamedDateEntries(file, lines, isText);
-	fileData.namedDate = named.anchor;
-
-	// Parse `repeat:` once anchor candidates are available.
-	try {
-		const fallbackStart = (() => {
-			const nd = fileData.namedDate?.date;
-			const dp = fileData.dateProp?.date;
-			const cd = fileData.cdate?.date;
-			return typeof nd === "string" && nd
-				? nd
-				: typeof dp === "string" && dp
-					? dp
-					: typeof cd === "string" && cd
-						? cd
-						: null;
-		})();
-		fileData.recur = parseRecurrenceFrontmatter({ rawValue: recurValue, line: recurLine, fallbackStartDateKey: fallbackStart });
-	} catch {
-		fileData.recur = null;
-	}
-
-	if (isText) {
-		if (!suppression.noparsed) {
-			const content = s.buildContentDates(file, lines);
-			fileData.contentDates = named.rangeEntries.length > 0 ? [...named.rangeEntries, ...content] : content;
-		} else {
-			fileData.contentDates = named.rangeEntries.length > 0 ? [...named.rangeEntries] : [];
-		}
-	} else {
-		fileData.contentDates = named.rangeEntries.length > 0 ? [...named.rangeEntries] : [];
-	}
-
-	if (suppression.notracked) {
-		fileData.trackedDates = {};
-	} else if (isTrackChangesConfigured(s.plugin) && isMd && !options.skipTrackedUpdate) {
-		s.updateTrackedDates(file, fileData, lines);
-	}
-
-	if (!isMd) {
-		fileData.trackedDates = {};
-		fileData.trackedSnapshot = null;
-		fileData.trackedSnapshotDate = null;
-		fileData.trackedBaselineSnapshot = null;
-		fileData.trackedBaselineDate = null;
-	}
-
-	applyEntryState(previousData, fileData);
-
-	// Preserve cdate when the file was already indexed. cdate is derived from
-	// file.stat.ctime which is device-specific after sync (mobile gets the sync
-	// timestamp, desktop keeps the original). Re-computing it would cause
-	// cross-device index divergence even when the file hasn't changed.
-	const previousAnchorUsesMdate = (previousData as FileIndexData & { anchorUsesMdate?: boolean }).anchorUsesMdate === true;
-	if (
-		previousData.cdate !== null &&
-		previousData.cdate !== undefined &&
-		previousAnchorUsesMdate === useAnchorMdate
-	) {
-		fileData.cdate = previousData.cdate;
-	}
-
-	// When content is unchanged, also preserve the other parsed date fields to
-	// avoid spurious diff from ctime/metadata-cache timing differences.
-	if (contentUnchanged && options.reason !== "rename") {
-		fileData.namedDate = previousData.namedDate ?? null;
-		fileData.dateProp = previousData.dateProp ?? null;
-		fileData.contentDates = previousData.contentDates ?? [];
-		fileData.recur = previousData.recur ?? null;
-		// Freshly derived from this same content, so it's safe to reapply even when preserving the cached entry.
-		if (icsSynced && fileData.dateProp) fileData.dateProp.icsSynced = true;
-	}
-
-	const isEditEvent = options.reason === "create" || options.reason === "modify" || options.reason === "track";
-	const binarySizeChanged = (() => {
-		if (isText) return false;
-		const previousSize = Number(previousData.indexedSize);
-		const currentSize = Number(file.stat?.size);
-		return Number.isFinite(previousSize) && previousSize >= 0 && Number.isFinite(currentSize) && currentSize >= 0 && previousSize !== currentSize;
-	})();
-	const shouldResetReviewedOnEdit = isEditEvent && (
-		(isText && !contentUnchanged && !frontmatterWrite && !frontmatterOnlyChange) ||
-		(!isText && binarySizeChanged)
-	);
-	if (shouldResetReviewedOnEdit) {
-		const clearReviewed = (entry: FileIndexData["cdate"]): void => {
-			if (!entry) return;
-			if (entry.reviewState === "reviewed") {
-				delete entry.reviewState;
-				entry.reviewStateUpdatedAt = Date.now();
-			}
-		};
-		clearReviewed(fileData.cdate);
-		clearReviewed(fileData.namedDate);
-		clearReviewed(fileData.dateProp);
-	}
-
-	s.files[file.path] = fileData;
-	// MiniSearch: index file for timeline search.
-	try {
-		const pluginRuntime = s.plugin as unknown as ProcessFilePluginLike;
-		const timelineSearchIndex = pluginRuntime.timelineSearchIndex;
-		if (timelineSearchIndex && typeof timelineSearchIndex.upsert === "function") {
-			const directory = (() => {
-				try {
-					const p = typeof file.parent?.path === "string" ? String(file.parent.path) : "";
-					return p;
-				} catch {
-					return "";
-				}
-			})();
-			const basename = String(file.basename || "");
-			const metaParts: string[] = [];
-			metaParts.push(`ext:${String(file.extension || "")}`);
-			try {
-				const mc = Number(fileData.markColor ?? NaN);
-				if (Number.isFinite(mc)) metaParts.push(`mark:${String(Math.floor(mc))}`);
-			} catch {
-				// ignore
-			}
-			try {
-				if (normalizePinMode(fileData.pinnedFile)) metaParts.push("pinned");
-			} catch {
-				// ignore
-			}
-			try {
-				const getFileEmbeddingTerm = pluginRuntime.indexer?.getFileEmbeddingTerm;
-				const term = typeof getFileEmbeddingTerm === "function" ? String(getFileEmbeddingTerm(file.path) || "") : "";
-				if (term) metaParts.push(term);
-			} catch {
-				// ignore
-			}
-			try {
-				if (isTopicSimilarityEnabled(s.plugin)) {
-					const zeroShotMinRaw = Number(pluginRuntime.settings?.similarityZeroShotMinScore ?? 0);
-					const zeroShotMin = Number.isFinite(zeroShotMinRaw) ? Math.max(0, Math.min(1, zeroShotMinRaw)) : 0;
-					const storeLoaded = pluginRuntime.termSimilarityLoaded === true && !!pluginRuntime.termSimilarityIndex && typeof pluginRuntime.termSimilarityIndex === "object";
-					if (storeLoaded && zeroShotMin > 0 && zeroShotMin < 1) {
-						const rec = pluginRuntime.termSimilarityIndex?.files?.[file.path];
-						const inferred = typeof rec?.term === "string" ? String(rec.term).trim() : "";
-						const score = Number(rec?.score ?? 0);
-						if (inferred && Number.isFinite(score) && score >= zeroShotMin) {
-							metaParts.push(inferred);
-						}
-					}
-				}
-			} catch {
-				// ignore
-			}
-			try {
-				const cache = pluginRuntime.app?.metadataCache?.getFileCache?.(file);
-				const tags: string[] = [];
-				const aliases: string[] = [];
-				const addTag = (t: unknown) => {
-					const v = typeof t === "string" ? t.trim() : "";
-					if (v) tags.push(v);
-				};
-				const addAlias = (a: unknown) => {
-					const v = typeof a === "string" ? a.trim() : "";
-					if (v) aliases.push(v);
-				};
-				for (const t of cache?.tags ?? []) addTag(t?.tag);
-				const fm = cache?.frontmatter ?? null;
-				if (fm) {
-					const fmTags = fm.tags;
-					if (typeof fmTags === "string") {
-						for (const seg of fmTags.split(/[,\n]/g)) addTag(seg);
-					} else if (Array.isArray(fmTags)) {
-						for (const seg of fmTags) addTag(seg);
-					}
-					const fmAliases = fm.aliases;
-					if (typeof fmAliases === "string") {
-						for (const seg of fmAliases.split(/[,\n]/g)) addAlias(seg);
-					} else if (Array.isArray(fmAliases)) {
-						for (const seg of fmAliases) addAlias(seg);
-					}
-					for (const tok of frontmatterToIndexTokens(fm)) metaParts.push(tok);
-				}
-				for (const t of Array.from(new Set(tags))) metaParts.push(t);
-				for (const a of Array.from(new Set(aliases))) metaParts.push(a);
-			} catch {
-				// ignore
-			}
-			const timelineMutated = timelineSearchIndex.upsert({
-				id: file.path,
-				kind: "file",
-				path: file.path,
-				basename,
-				directory,
-				content: stripYamlFrontmatterBlock(normalizedContent),
-				meta: metaParts.join("\n")
-			});
-			if (timelineMutated) {
-				try {
-					markTimelineSearchIndexDirty(s.plugin);
-				} catch {
-					// ignore
-				}
-				try {
-					scheduleTimelineSearchCacheSave(s.plugin);
-				} catch {
-					// ignore
-				}
+	data.namedDate = named.anchor;
+	data.recur = parseRecurrenceFrontmatter({ rawValue: recurValue, line: recurLine, fallbackStartDateKey: data.namedDate?.date ?? data.dateProp?.date ?? data.cdate?.date ?? null });
+	data.contentDates = [...named.rangeEntries, ...(isText && !suppression.noparsed ? s.buildContentDates(file, lines) : [])];
+	applyEntryState(previous, data);
+	const edit = options.reason === "modify" || options.reason === "create";
+	const bodyChanged = isText && previous.bodyHash != null && previous.bodyHash !== bodyHash;
+	const binaryChanged = !isText && previous.indexedSize != null && previous.indexedSize !== data.indexedSize;
+	if (edit && (bodyChanged || binaryChanged)) resetReviewedAnchors(data);
+	if (previous.cdate && !useMdate && previous.anchorUsesMdate !== true) data.cdate.date = previous.cdate.date;
+	s.files[file.path] = data;
+	const search = s.plugin.timelineSearchIndex;
+	if (search?.upsert) {
+		const meta = [`ext:${file.extension}`];
+		if (data.markColor != null) meta.push(`mark:${data.markColor}`);
+		if (data.pinnedFile) meta.push("pinned");
+		const cache = s.plugin.app?.metadataCache?.getFileCache?.(file);
+		for (const tag of cache?.tags ?? []) if (tag.tag) meta.push(tag.tag);
+		if (cache?.frontmatter) {
+			meta.push(...frontmatterToIndexTokens(cache.frontmatter));
+			for (const key of ["tags", "aliases"]) {
+				const raw: unknown = cache.frontmatter[key];
+				const values = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(/[,\n]/g) : [];
+				for (const value of values) if (typeof value === "string" && value.trim()) meta.push(value.trim());
 			}
 		}
-	} catch {
-		// ignore
-	}
-	s.updateAggregatedEntries(file.path, { skipSort: options.skipSort === true });
-	// Drop cached lines after aggregation to prevent runaway memory usage.
-	if (isText) {
-		const reason = options.reason;
-		const shouldKeep = reason === "track" || reason === "open";
-		if (!shouldKeep) {
-			delete s.latestLines[file.path];
-		} else {
-			// Keep only a small prefix to bound memory on huge notes.
-			const MAX_KEEP_LINES = 2000;
-			if (lines.length > MAX_KEEP_LINES) {
-				s.latestLines[file.path] = lines.slice(0, MAX_KEEP_LINES);
-			}
+		if (search.upsert({ id: file.path, kind: "file", path: file.path, basename: file.basename, directory: file.parent?.path ?? "", content: stripYamlFrontmatterBlock(normalized), meta: meta.join("\n") })) {
+			markTimelineSearchIndexDirty(s.plugin); scheduleTimelineSearchCacheSave(s.plugin);
 		}
 	}
-	const shouldEnqueueAi =
-		options.reason === "modify" ||
-		options.reason === "create" ||
-		options.reason === "track";
-	if (shouldEnqueueAi && typeof s.plugin?.enqueueAiSummariesForFile === "function") {
-		try {
-			// run in background; do not block indexing
-			void s.plugin.enqueueAiSummariesForFile(file.path);
-		} catch {
-			// ignore
-		}
-	}
-
-	if (shouldEnqueueAi && typeof s.plugin?.enqueueEpochsForDateKeys === "function") {
-		try {
-			const touched = new Set<string>();
-			for (const d of collectDates(previousData)) touched.add(d);
-			for (const d of collectDates(fileData)) touched.add(d);
-			if (touched.size > 0) {
-				void s.plugin.enqueueEpochsForDateKeys(Array.from(touched), { force: false, showNotice: false });
-			}
-		} catch {
-			// ignore
-		}
-	}
+	s.updateAggregatedEntries(file.path, { skipSort: options.skipSort });
+	if (isText && options.reason === "open") s.latestLines[file.path] = lines.slice(0, 2000);
+	else delete s.latestLines[file.path];
 }

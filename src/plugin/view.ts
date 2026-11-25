@@ -7,7 +7,7 @@ export interface ViewMethods {
 	openEpochView(options?: { skipSnap?: boolean; activate?: boolean }): Promise<void>;
 	openTimelineSearch(): Promise<void>;
 	ensureEpochViewLeaf(): Promise<void>;
-	refreshEpochViews(options?: { forceSemanticRelated?: boolean }): void;
+	refreshEpochViews(options?: { forceRelated?: boolean }): void;
 	registerFileMenu(): void;
 }
 
@@ -28,7 +28,7 @@ export const viewMethods: ViewMethods = {
 		await ensureEpochViewLeaf(this);
 	},
 
-	refreshEpochViews(this: EpochPlugin, options?: { forceSemanticRelated?: boolean }): void {
+	refreshEpochViews(this: EpochPlugin, options?: { forceRelated?: boolean }): void {
 		refreshEpochViews(this, options ?? {});
 	},
 

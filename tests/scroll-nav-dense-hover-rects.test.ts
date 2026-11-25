@@ -68,7 +68,7 @@ function makeCanvas(): any {
 		offsetY: -5 * 48,
 		scale: 1,
 		activeFilePath: "a.md",
-		semanticRelatedScored: [{ path: "b.md" }, { path: "c.md" }],
+		relatedScored: [{ path: "b.md" }, { path: "c.md" }],
 		clearFocusedEpochRange: vi.fn(),
 		requestHoverAnimation: vi.fn(),
 		focusFile: vi.fn(),

@@ -1,5 +1,5 @@
 import { HOVER_EXTRA_GAP, HOVER_BG_PAD, SUMMARY_MIN_SCALE } from "../epoch-canvas-constants";
-import { withFontStyle, withFontWeight } from "../epoch-canvas-utils";
+import { getHoverFontStrForRow } from "./normal/hover-font";
 import { estimateDenseBarPartitionCount } from "./dense-height";
 import { parseFontPx, wrapTextGreedyWithFirstLineWidth } from "./text";
 import { formatPlusNPrefix } from "./plusn";
@@ -10,7 +10,6 @@ import { buildNormalColumns } from "./normal-measure-build";
 export function measureNormalDaySummariesHeight(args: NormalMeasureArgs): number {
 	const { entries, xStart, rightWidth } = args;
 	if (!entries.length) return 0;
-	const disableDraftItalics = false;
 
 	let entriesToMeasure = entries;
 	// Zoom-in compact mode renders only the first N rows.
@@ -60,13 +59,7 @@ export function measureNormalDaySummariesHeight(args: NormalMeasureArgs): number
 			if (textModeEnabled && r.isHoverIncoming && hoverT > 0) {
 				const hasAnyText = r.lines.some((l) => l.length > 0);
 				if (hasAnyText) {
-					let hoverFontStr = fontSmallHover;
-					if (r.needsBoldFont) hoverFontStr = withFontWeight(hoverFontStr, "700");
-					if (r.isDraft && !disableDraftItalics) hoverFontStr = withFontStyle(hoverFontStr, "italic");
-					const baseFontPx = parseFontPx(r.summaryFont);
-					const hoverFontPx = parseFontPx(hoverFontStr);
-					// Never shrink on hover (notably today+pinned rows).
-					if (Number.isFinite(baseFontPx) && Number.isFinite(hoverFontPx) && hoverFontPx + 0.01 < baseFontPx) hoverFontStr = r.summaryFont;
+					const hoverFontStr = getHoverFontStrForRow(r, fontSmallHover);
 
 					const textGap = r.leadingIconMetrics.textGap;
 					const textStartX = col.x + r.leadingIconMetrics.iconsWidth + textGap;

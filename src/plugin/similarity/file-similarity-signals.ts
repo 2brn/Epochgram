@@ -1,13 +1,11 @@
 import { TFile } from "obsidian";
 
-export type SimilaritySignalName = "links" | "tags" | "titles" | "semantics" | "topics";
+export type SimilaritySignalName = "links" | "tags" | "titles";
 
 export const SIGNAL_LINKS = 1 << 0;
 export const SIGNAL_TAGS = 1 << 1;
 export const SIGNAL_TITLE = 1 << 2;
-export const SIGNAL_SEMANTICS = 1 << 3;
-export const SIGNAL_TOPICS = 1 << 4;
-export const SIGNAL_ALL = SIGNAL_LINKS | SIGNAL_TAGS | SIGNAL_TITLE | SIGNAL_SEMANTICS | SIGNAL_TOPICS;
+export const SIGNAL_ALL = SIGNAL_LINKS | SIGNAL_TAGS | SIGNAL_TITLE;
 
 type FrontmatterLike = {
 	similar?: unknown;
@@ -39,18 +37,14 @@ function normalizeSignalName(raw: unknown): SimilaritySignalName | "" {
 	if (!normalized) return "";
 	if (normalized === "links") return "links";
 	if (normalized === "tags") return "tags";
-	if (normalized === "titles") return "titles";
-	if (normalized === "semantics") return "semantics";
-	if (normalized === "topics") return "topics";
+	if (normalized === "title" || normalized === "titles") return "titles";
 	return "";
 }
 
 export function signalNameToMask(name: SimilaritySignalName): number {
 	if (name === "links") return SIGNAL_LINKS;
 	if (name === "tags") return SIGNAL_TAGS;
-	if (name === "titles") return SIGNAL_TITLE;
-	if (name === "semantics") return SIGNAL_SEMANTICS;
-	return SIGNAL_TOPICS;
+	return SIGNAL_TITLE;
 }
 
 function maskFromSimilarList(values: unknown[]): number {

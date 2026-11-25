@@ -1,21 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { sanitizeSummaryText } from "../src/utils";
-import { formatEpochSummaryForIndex } from "../src/plugin/epoch-summary-format";
 import { makeSummary } from "../src/indexer/summarizer";
-import { formatAiSummaryOutput } from "../src/plugin/ai-summary-format";
 
 describe("Summary sanitization", () => {
 	it("strips Unicode replacement character (U+FFFD)", () => {
 		const input = "a\uFFFD b\uFFFDc";
 		const out = sanitizeSummaryText(input);
 		expect(out).toBe("a bc");
-		expect(out).not.toContain("\uFFFD");
-	});
-
-	it("strips U+FFFD from epoch summaries", () => {
-		const input = "* hello\uFFFDworld";
-		const out = formatEpochSummaryForIndex(input);
-		expect(out).toBe("Helloworld");
 		expect(out).not.toContain("\uFFFD");
 	});
 
@@ -50,9 +41,4 @@ describe("Summary sanitization", () => {
 		expect(out).toBe("[ ] Завершити...");
 	});
 
-	it("strips trailing '.' from AI summary output", () => {
-		const input = "Line one.\nLine two...\nLine three.\n";
-		const out = formatAiSummaryOutput(input);
-		expect(out).toBe("Line one\nLine two...\nLine three");
-	});
 });

@@ -2,8 +2,6 @@ import { addIcon } from "obsidian";
 
 import { EPOCHGRAM_LOGO_ICON } from "./epochgramLogoSvg";
 
-export const AI_BRIDGE_GLYPH = "⌀";
-
 // --- Other icons --- //
 
 const HIGHLIGHTER_OFF_ICON = `

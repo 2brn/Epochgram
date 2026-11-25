@@ -15,14 +15,10 @@ export function computeDenseState(params: {
 	entriesByIndex: Map<number, DateEntry[]>;
 	renderIndices: number[];
 	w: number;
-	epochsViewActive: boolean;
 	scale: number;
 	rowHeight: number;
 	fontSmall: string;
 	activeFilePath: string | null;
-	pathsWithEmbeddingTerm: Set<string> | null;
-	pathsWithClassifiedTerm: Set<string> | null;
-	termSimilarPaths: Set<string> | null;
 }): {
 	perDayDenseByIndex: Map<number, boolean>;
 	denseBarHeightByIndex: Map<number, number>;
@@ -37,25 +33,21 @@ export function computeDenseState(params: {
 		entriesByIndex,
 		renderIndices,
 		w,
-		epochsViewActive,
 		scale,
 		rowHeight,
 		fontSmall,
-		activeFilePath,
-		pathsWithEmbeddingTerm,
-		pathsWithClassifiedTerm,
-		termSimilarPaths
+		activeFilePath
 	} = params;
 
 	const perDayDenseByIndex = new Map<number, boolean>();
 	const denseBarHeightByIndex = new Map<number, number>();
 	const rightWidthForText = w - (TIMELINE_X + SUMMARY_OFFSET_X) - SUMMARY_RIGHT_MARGIN;
-	const canRenderTextSummaries = (!epochsViewActive) && (scale >= SUMMARY_MIN_SCALE) && (rightWidthForText > SUMMARY_MIN_WIDTH);
+	const canRenderTextSummaries = (scale >= SUMMARY_MIN_SCALE) && (rightWidthForText > SUMMARY_MIN_WIDTH);
 	const xStart = TIMELINE_X + SUMMARY_OFFSET_X;
 	let globalDenseMode = false;
 	let globalCompactMode = false;
 
-	if (!epochsViewActive && scale > SUMMARY_MIN_SCALE && rightWidthForText > SUMMARY_MIN_WIDTH) {
+	if (scale > SUMMARY_MIN_SCALE && rightWidthForText > SUMMARY_MIN_WIDTH) {
 		let quickRenderableRows = 0;
 		for (const i of renderIndices) {
 			const entries = entriesByIndex.get(i) ?? [];
@@ -65,7 +57,7 @@ export function computeDenseState(params: {
 		globalCompactMode = quickRenderableRows >= SUMMARY_DENSE_GLOBAL_THRESHOLD;
 	}
 
-	if (!epochsViewActive && scale <= SUMMARY_MIN_SCALE) {
+	if (scale <= SUMMARY_MIN_SCALE) {
 		let quickRenderableRows = 0;
 		for (const i of renderIndices) {
 			const entries = entriesByIndex.get(i) ?? [];
@@ -94,10 +86,7 @@ export function computeDenseState(params: {
 					scale,
 					rowHeight,
 					fontSmall,
-					activeFilePath,
-					pathsWithEmbeddingTerm,
-					pathsWithClassifiedTerm,
-					termSimilarPaths
+					activeFilePath
 				});
 				if (dense) perDayDenseByIndex.set(i, true);
 			}

@@ -1,6 +1,6 @@
 import { flattenForSummary } from "./flattener";
 import { SUMMARY_SEPARATOR_SYMBOL } from "../ui/epoch-canvas-constants";
-import { sanitizeSummaryText } from "../utils";
+import { matchYamlFrontmatterBlock, sanitizeSummaryText, stripYamlFrontmatterBlock } from "../utils";
 import { buildFrontmatterPropertyLineRegex } from "../plugin/frontmatter-keys";
 
 const SUMMARY_MAX_CHARS = 8000;
@@ -10,9 +10,7 @@ export function extractFrontmatterDescription(raw: string, propertyKey: string):
         const input = String(raw ?? "");
         if (!input) return "";
         const lineRegex = buildFrontmatterPropertyLineRegex(propertyKey);
-        const normalized = input.replace(/^\uFEFF/, "");
-        if (!/^---\r?\n/.test(normalized)) return "";
-        const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/m.exec(normalized);
+        const m = matchYamlFrontmatterBlock(input);
         if (!m) return "";
         const fm = String(m[1] ?? "");
         const lines = fm.split(/\r?\n/g);
@@ -75,8 +73,7 @@ function findPreferredMarkdownSummaryStart(raw: string, descriptionPropertyKey?:
     }
 
     // Best-effort: ignore YAML frontmatter when deciding the start; keep code content.
-    const text = text0
-        .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/m, "")
+    const text = stripYamlFrontmatterBlock(text0)
         .replace(/```([^`][\s\S]*?)```/g, (_, inner: string) => inner)
         .replace(/```/g, "")
         .replace(/~~~([\s\S]*?)~~~/g, (_, inner: string) => inner);

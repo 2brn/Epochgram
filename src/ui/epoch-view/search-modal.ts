@@ -1,17 +1,16 @@
 import type { App } from "obsidian";
-import type { DateEntry, EpochBucket } from "../../indexer/types";
+import type { DateEntry } from "../../indexer/types";
 
 import { TimelineSearchModal } from "../modals/timeline-search-modal";
 import type { EpochCanvas } from "../epoch-canvas";
 import { openEntry as openEntryAction } from "../epoch-canvas-actions";
 import { getEntryTitle } from "../epoch-canvas-helpers";
-import { SUMMARY_SEPARATOR_SYMBOL } from "../epoch-canvas-constants";
 import { dateKeyToDate, getSourcePriority } from "../epoch-canvas-focus";
-import { entryFileName, formatEntrySummary, getEpochRangeFromEntry } from "../epoch-canvas-utils";
+import { entryFileName, formatEntrySummary } from "../epoch-canvas-utils";
 import { buildMiniSearchQueryParts } from "../entry-helpers";
 import { parseTimelineQuery } from "../timeline-search";
 import { matchesSearch } from "../entry-helpers/search";
-import { hasCurrentOnlyToken } from "../entry-helpers/shared";
+import { hasCurrentOnlyToken, hasHiddenOnlyToken, isReviewVisible } from "../entry-helpers/shared";
 
 type SearchWorkspaceLike = {
 	getActiveFile?: () => { path?: string } | null;
@@ -41,9 +40,8 @@ type SearchPluginLike = {
 };
 
 type SearchCanvasLike = {
+	showDraftsOnly?: boolean;
 	index?: Record<string, DateEntry[]>;
-	epochsView?: boolean;
-	epochsViewBucket?: EpochBucket | null;
 	__indexVersion?: number;
 	__timelineSearchSuggestKeysVersion?: number;
 	__timelineSearchSuggestDateKeys?: string[];
@@ -109,19 +107,10 @@ export function openSearchModal(view: SearchViewLike): void {
 		const canvas = view.canvas;
 		const index = canvas.index ?? null;
 		if (!index || typeof index !== "object") return [];
+		const reviewVisible = (entry: DateEntry) => isReviewVisible(entry, canvas.showDraftsOnly === true, hasHiddenOnlyToken(parsed));
 
 		const labelForEntry = (entry: DateEntry, fallbackPath: string): string => {
 			try {
-				const isEpoch = String(entry.file ?? "").startsWith("epoch://");
-				if (isEpoch) {
-					const r = getEpochRangeFromEntry(entry);
-					if (r?.start && r?.end) {
-						const summary = String(entry.summary ?? "").trim();
-						const aiSummary = String(entry.aiSummary ?? "").trim();
-						const text = summary || aiSummary;
-						return text ? `${r.start} - ${r.end} ${SUMMARY_SEPARATOR_SYMBOL} ${text}` : `${r.start} - ${r.end}`;
-					}
-				}
 				const rawTitle = getEntryTitle(canvas as unknown as EpochCanvas, entry) || entryFileName(entry);
 				const title =
 					String(rawTitle || "")
@@ -189,7 +178,7 @@ export function openSearchModal(view: SearchViewLike): void {
 				for (const entry of rawEntries) {
 					const fp = String(entry?.file ?? "");
 					if (!fp) continue;
-					if (!wanted.has(fp)) continue;
+					if (!wanted.has(fp) || !reviewVisible(entry)) continue;
 					const priority = getSourcePriority(entry.source);
 					const prev = bestByPath.get(fp);
 					if (!prev || priority < prev.priority || (priority === prev.priority && ms > prev.ms)) {
@@ -246,44 +235,13 @@ export function openSearchModal(view: SearchViewLike): void {
 		const currentOnlyActivePath = (() => {
 			if (!hasCurrentOnlyToken(parsed)) return "";
 			const raw = String(view.plugin.app?.workspace?.getActiveFile?.()?.path ?? "").trim();
-			if (!raw || raw.startsWith("epoch://")) return "";
+			if (!raw) return "";
 			return raw;
 		})();
 		const queryCanvas = ({
 			...(canvas as unknown as Record<string, unknown>),
 			searchQuery: q,
 		} as unknown) as EpochCanvas;
-		const epochsViewActive = canvas.epochsView === true;
-		const currentEpochBucket =
-			typeof canvas.epochsViewBucket === "string"
-				? canvas.epochsViewBucket
-				: typeof canvas.epochsViewBucket === "number"
-					? String(canvas.epochsViewBucket)
-					: "";
-		const normalizeEpochBucket = (value: unknown): string => {
-			if (typeof value === "string") return value;
-			if (typeof value === "number") return String(value);
-			return "";
-		};
-		const isEpochPathAllowed = (filePath: string, epochBucket?: unknown): boolean => {
-			const fp = String(filePath || "");
-			const isEpoch = fp.startsWith("epoch://");
-			if (!isEpoch) return true;
-			if (!epochsViewActive) return false;
-			if (!currentEpochBucket) return true;
-			return normalizeEpochBucket(epochBucket) === currentEpochBucket;
-		};
-		const hiddenOnly = (() => {
-			try {
-				const toks = String(parsed?.fuzzyText || "")
-					.split(/\s+/g)
-					.map((t) => String(t || "").trim().toLowerCase())
-					.filter(Boolean);
-				return toks.includes("!hidden") || toks.includes("$hidden");
-			} catch {
-				return false;
-			}
-		})();
 
 		const pushPathBucket = (paths: string[]): void => {
 			if (paths.length === 0) return;
@@ -294,7 +252,7 @@ export function openSearchModal(view: SearchViewLike): void {
 				if (excludeFiles.has(fp)) continue;
 				const best = bestByPath.get(fp);
 				if (!best?.entry) continue;
-				if (!isEpochPathAllowed(fp, best.entry.epochBucket)) continue;
+				if (qTrim && !matchesSearch(queryCanvas, best.entry)) continue;
 				excludeFiles.add(fp);
 				out.push({ entry: best.entry, label: labelForEntry(best.entry, fp) });
 			}
@@ -308,7 +266,7 @@ export function openSearchModal(view: SearchViewLike): void {
 				if (parsed?.dateRange && (dateKey < parsed.dateRange.start || dateKey > parsed.dateRange.end)) {
 					continue;
 				}
-				const rawEntries = index[dateKey];
+				const rawEntries = index[dateKey]?.filter(reviewVisible);
 				if (!Array.isArray(rawEntries) || rawEntries.length === 0) continue;
 				const ordered = rawEntries
 					.filter((e) => !!e)
@@ -318,7 +276,6 @@ export function openSearchModal(view: SearchViewLike): void {
 					if (out.length >= limit) break;
 					const fp = String(e.file ?? "");
 					if (!fp) continue;
-					if (!isEpochPathAllowed(fp, e.epochBucket)) continue;
 					if (excludeFiles.has(fp)) continue;
 					excludeFiles.add(fp);
 					out.push({ entry: e, label: labelForEntry(e, fp) });
@@ -335,7 +292,7 @@ export function openSearchModal(view: SearchViewLike): void {
 				if (parsed?.dateRange && (dateKey < parsed.dateRange.start || dateKey > parsed.dateRange.end)) {
 					continue;
 				}
-				const rawEntries = index[dateKey];
+				const rawEntries = index[dateKey]?.filter(reviewVisible);
 				if (!Array.isArray(rawEntries) || rawEntries.length === 0) continue;
 				const ordered = rawEntries
 					.filter((e) => !!e)
@@ -345,22 +302,14 @@ export function openSearchModal(view: SearchViewLike): void {
 					if (out.length >= limit) break;
 					const fp = String(e.file ?? "");
 					if (!fp) continue;
-					const isEpoch = fp.startsWith("epoch://");
-					if (!isEpochPathAllowed(fp, e.epochBucket)) continue;
-					if (epochsViewActive && isEpoch && currentEpochBucket) {
-						const b = String(e.epochBucket ?? "");
-						if (b !== currentEpochBucket) continue;
-					}
 					if (excludeFiles.has(fp)) continue;
-					if (hiddenOnly && e.reviewState !== "hidden") continue;
 					let ok = false;
 					try {
 						ok = matchesSearch(queryCanvas, e) === true;
 					} catch {
 						ok = false;
 					}
-					const includeEpochContext = epochsViewActive && isEpoch && (!currentEpochBucket || String(e.epochBucket ?? "") === currentEpochBucket);
-					if (!ok && !includeEpochContext) continue;
+					if (!ok) continue;
 					excludeFiles.add(fp);
 					out.push({ entry: e, label: labelForEntry(e, fp) });
 				}
@@ -398,14 +347,14 @@ export function openSearchModal(view: SearchViewLike): void {
 		}
 
 		// Non-empty fallback: if MiniSearch ranked results are empty (e.g. token-only queries
-		// like "$hidden" / "$marked"), use query-matched entry scanning across all files.
+		// like "$marked"), use query-matched entry scanning across all files.
 		if (qTrim && out.length < limit) {
 			pushQueryMatchedEntriesBucket();
 		}
 
 		if (!qTrim) {
 			const recentPaths = collectRecentPaths();
-			// Empty query buckets: history -> active -> last-open (all files, no timeline filter gating).
+			// Empty query buckets respect review visibility, across all record sources.
 			pushPathBucket(recentPaths);
 
 			// Empty query fallback: mdate/recent records.

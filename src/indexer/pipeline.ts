@@ -23,10 +23,8 @@ export interface IndexerPipeline {
 		isMd: boolean
 	): { anchor: FileDateEntry | null; rangeEntries: FileDateEntry[] };
 	buildContentDates(file: TFile, lines: string[]): FileDateEntry[];
-	updateTrackedDates(file: TFile, data: FileIndexData, lines: string[]): void;
 	updateAggregatedEntries(filePath: string, options?: { skipSort?: boolean }): void;
 
 	buildMergedDates(data: FileIndexData): FileDateEntry[];
 	today(): Date;
-	isDateBefore(a: string | null | undefined, b: string | null | undefined): boolean;
 }

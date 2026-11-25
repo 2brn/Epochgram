@@ -5,7 +5,6 @@ import {
 	SUMMARY_ICON_ATTACHMENT,
 	SUMMARY_ICON_PARSED,
 	SUMMARY_ICON_RECURRING,
-	SUMMARY_ICON_TRACKED_MODIFIED,
 	SUMMARY_ICON_PIN
 } from "../src/ui/epoch-canvas-constants";
 
@@ -15,11 +14,8 @@ const makeEntry = (overrides: Partial<DateEntry> = {}): DateEntry => ({
 	blockStart: overrides.blockStart ?? 0,
 	blockEnd: overrides.blockEnd ?? overrides.blockStart ?? 0,
 	summary: overrides.summary ?? "",
-	source: overrides.source ?? "tracked",
-	hidden: overrides.hidden,
-	pinned: overrides.pinned,
-		trackedChange: overrides.trackedChange ?? "modified",
-		trackedTime: overrides.trackedTime
+	source: overrides.source ?? "cdate",
+	pinned: overrides.pinned
 });
 
 describe("entry summary icons", () => {
@@ -32,8 +28,8 @@ describe("entry summary icons", () => {
 			vi.useRealTimers();
 		});
 
-	it("shows only the pin icon for pinned tracked entries", () => {
-		const entry = makeEntry({ pinned: true, trackedChange: "modified" });
+	it("shows only the pin icon for pinned anchor entries", () => {
+		const entry = makeEntry({ pinned: true });
 		const { iconIds } = entrySummaryComponents(entry);
 		expect(iconIds).toEqual([SUMMARY_ICON_PIN]);
 	});
@@ -62,14 +58,6 @@ describe("entry summary icons", () => {
 		expect(entrySummaryComponents(Object.assign(makeEntry({ source: "content", file: "note.md" }), { recurring: true }) as any).iconIds).toEqual([
 		SUMMARY_ICON_RECURRING
 	]);
-		expect(entrySummaryComponents(makeEntry({ source: "tracked", trackedChange: "modified" })).iconIds).toEqual([
-		SUMMARY_ICON_TRACKED_MODIFIED
-	]);
-		expect(
-		entrySummaryComponents(
-			makeEntry({ source: "epoch" as any, file: "epoch://day/2026-03-06-2026-03-06" } as any)
-		).iconIds.length
-	).toBeGreaterThan(0);
 	});
 
 	it("renders attachment icon for anchored attachments", () => {

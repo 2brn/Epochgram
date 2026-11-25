@@ -1,10 +1,11 @@
 import type { DateEntry } from "../../indexer/types";
+import { isEntryHidden } from "../../indexer/review-state";
+import { SUMMARY_HIDDEN_ALPHA } from "../review-style";
 import type { HoverOverlay, SummaryRect } from "../epoch-canvas-types";
 import {
 	SUMMARY_DENSE_BAR_MAX_HEIGHT,
 	SUMMARY_DENSE_BAR_MIN_HEIGHT,
 	SUMMARY_DENSE_HEIGHT_FALLBACK_REF_COUNT,
-	SUMMARY_HIDDEN_ALPHA,
 	HOVER_HIT_PAD,
 	TOUCH_HIT_PAD
 } from "../epoch-canvas-constants";
@@ -48,7 +49,7 @@ export type DenseBarVisual = {
 	barHeight: number;
 	centerY: number;
 	color: string;
-	allHiddenVisible: boolean;
+	opacity?: number;
 	hasActiveEntry: boolean;
 	activeItemIndex: number;
 	primaryEntry: DateEntry;
@@ -74,9 +75,8 @@ export type DenseBarComputeArgs = {
 	colRelated: string;
 	markColors?: string[];
 	inheritedMarkIndexByPath?: Map<string, number> | null;
-	showHidden: boolean;
 	activeFilePath: string | null;
-	semanticRelatedPaths?: Set<string> | null;
+	relatedPaths?: Set<string> | null;
 };
 
 export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual | null {
@@ -96,9 +96,8 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 		colRelated,
 		markColors,
 		inheritedMarkIndexByPath,
-		showHidden,
 		activeFilePath,
-		semanticRelatedPaths
+		relatedPaths
 	} = args;
 
 	if (!entries.length) return null;
@@ -109,8 +108,7 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 	let activeIndex: number = -1;
 	let anyMarkedEntry: DateEntry | null = null;
 	let anyInheritedColor: string | null = null;
-	let hasSemantic = false;
-	let hiddenVisibleCount = 0;
+	let hasRelated = false;
 
 	if (activeFilePath) {
 		if (cache.lastActiveFilePath === activeFilePath && cache.lastActiveIndex >= 0 && cache.lastActiveIndex < entries.length) {
@@ -169,25 +167,8 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 		}
 	}
 
-	if (semanticRelatedPaths) {
-		for (let idx = 0; idx < entries.length; idx++) {
-			const entry = entries[idx];
-			if (!entry) continue;
-			if (semanticRelatedPaths.has(entry.file)) {
-				hasSemantic = true;
-				break;
-			}
-		}
-	}
-
-	if (showHidden) {
-		for (let idx = 0; idx < entries.length; idx++) {
-			if (String(entries[idx]?.reviewState ?? "") === "hidden") hiddenVisibleCount++;
-		}
-	}
-
+	if (relatedPaths) hasRelated = entries.some(entry => relatedPaths.has(entry.file));
 	const hasActive = !!activeEntry;
-	const allHiddenVisible = showHidden && hiddenVisibleCount === entries.length;
 	const firstEntry = entries[0];
 	if (!firstEntry) return null;
 	let primaryEntry = activeEntry ?? firstEntry;
@@ -239,7 +220,7 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 		color = anyMark;
 	} else if (anyInherited) {
 		color = anyInherited;
-	} else if (hasActive || hasSemantic) {
+	} else if (hasActive || hasRelated) {
 		color = colRelated;
 	}
 
@@ -251,7 +232,7 @@ export function computeDenseBarVisual(args: DenseBarComputeArgs): DenseBarVisual
 		barHeight,
 		centerY,
 		color,
-		allHiddenVisible,
+		opacity: entries.every(isEntryHidden) ? SUMMARY_HIDDEN_ALPHA : 1,
 		hasActiveEntry: hasActive,
 		activeItemIndex: activeIndex,
 		primaryEntry,
@@ -344,10 +325,8 @@ export function buildDenseSummaryRects(
 
 export function drawDenseBarBase(ctx: CanvasRenderingContext2D, visual: DenseBarVisual): void {
 	ctx.save();
+	ctx.globalAlpha *= visual.opacity ?? 1;
 	ctx.fillStyle = visual.color;
-	if (visual.allHiddenVisible) {
-		ctx.globalAlpha *= SUMMARY_HIDDEN_ALPHA;
-	}
 	const pc = Number(visual.partitionCount);
 	const prh = Number(visual.partitionRowHeight);
 	const psh = Number(visual.partitionStrokeHeight);
@@ -389,10 +368,7 @@ export function drawDenseBarHover(
 	const isPartitioned = Number.isFinite(pc) && pc > 1 && Number.isFinite(prh) && prh > 0 && Number.isFinite(psh) && psh > 0;
 
 	ctx.save();
-	if (visual.allHiddenVisible) {
-		ctx.globalAlpha *= SUMMARY_HIDDEN_ALPHA;
-	}
-	ctx.globalAlpha *= alphaBoost;
+	ctx.globalAlpha *= alphaBoost * (visual.opacity ?? 1);
 	ctx.fillStyle = visual.color;
 	if (isPartitioned) {
 		const rows = Math.max(1, Math.floor(pc));
@@ -432,9 +408,8 @@ interface DenseSummaryArgs {
 	colRelated: string;
 	markColors?: string[];
 	inheritedMarkIndexByPath?: Map<string, number> | null;
-	showHidden: boolean;
 	activeFilePath: string | null;
-	semanticRelatedPaths?: Set<string> | null;
+	relatedPaths?: Set<string> | null;
 	animSummary: { dayIndex: number; itemIndex: number } | null;
 	hoverAnim: number;
 }
@@ -457,9 +432,8 @@ export function renderDenseDaySummary(args: DenseSummaryArgs): DaySummaryRenderR
 		colRelated,
 		markColors,
 		inheritedMarkIndexByPath,
-		showHidden,
 		activeFilePath,
-		semanticRelatedPaths,
+		relatedPaths,
 		animSummary,
 		hoverAnim
 	} = args;
@@ -484,9 +458,8 @@ export function renderDenseDaySummary(args: DenseSummaryArgs): DaySummaryRenderR
 		colRelated,
 		markColors,
 		inheritedMarkIndexByPath,
-		showHidden,
 		activeFilePath,
-		semanticRelatedPaths
+		relatedPaths
 	});
 	if (!visual) {
 		return { summaryRects: [], hoverOverlay: null };

@@ -2,12 +2,11 @@ import { Platform } from "obsidian";
 import type { DateEntry } from "../../indexer/types";
 import type { EpochCanvas } from "../epoch-canvas";
 
-import { refreshSemanticRelatedForActiveFile } from "./semantic";
+import { refreshRelatedForActiveFile } from "./related";
 
 type ActiveFileCanvasState = {
 	index?: Record<string, unknown[]>;
 	suppressNextFocusScroll: string | null;
-	focusedEpochRange: unknown;
 	pendingActiveFileFocus?: { path: string | null; line: number | null } | null;
 	activeFilePath: string | null;
 	activeFileTimelineEntry?: DateEntry | null;
@@ -21,9 +20,6 @@ type ActiveFileCanvasState = {
 	showContentDates: boolean;
 	showPropDates: boolean;
 	showAttachments: boolean;
-	showDraftOnly: boolean;
-	showHidden: boolean;
-	reviewFilterMode: string;
 	root: HTMLElement;
 	suppressNextFocusHover: string | null;
 	forceNextFocusHover: string | null;
@@ -32,7 +28,7 @@ type ActiveFileCanvasState = {
 	clearHover(force?: boolean): void;
 	draw(): void;
 	requestHoverAnimation?(): void;
-	refreshSemanticRelatedForActiveFile(force?: boolean): void;
+	refreshRelatedForActiveFile(force?: boolean): void;
 	focusFile(path: string, line: number | null, useHoverHighlight: boolean): boolean;
 	resetScrollNavToToday(): void;
 	snapInitialPosition(path: string, line: number | null, options?: { draw?: boolean }): void;
@@ -56,12 +52,6 @@ function hasFileEntryRecord(value: unknown): value is FileEntryRecord {
 export function suppressNextFocusScrollForPath(canvas: EpochCanvas, path: string | null): void {
 	const c = state(canvas);
 	c.suppressNextFocusScroll = path;
-}
-
-export function clearFocusedEpochRange(canvas: EpochCanvas): void {
-	const c = state(canvas);
-	if (!c.focusedEpochRange) return;
-	c.focusedEpochRange = null;
 }
 
 export function focusActiveFileOrToday(canvas: EpochCanvas): void {
@@ -131,9 +121,6 @@ export function setActiveFile(
 	if (c.activeFileTimelineEntry?.file !== path) {
 		c.activeFileTimelineEntry = null;
 	}
-	if (path !== c.activeFilePath) {
-		clearFocusedEpochRange(canvas);
-	}
 	const suppressFocusFlag = !!path && c.suppressNextFocusScroll === path;
 	const shouldResetScrollNav = path == null || hasIndexedEntryForPath(path);
 	if (c.activeFilePath !== path) {
@@ -158,15 +145,15 @@ export function setActiveFile(
 	const suppressFocus = options?.suppressFocus === true || !!suppressFocusFlag;
 	if (c.activeFilePath === path) {
 		// If the canvas pre-initialized activeFilePath (e.g. view opened after a file was
-		// already active), we still need to compute semantic-related highlights.
-		refreshSemanticRelatedForActiveFile(canvas, false);
+		// already active), we still need to compute related highlights.
+		refreshRelatedForActiveFile(canvas, false);
 		return;
 	}
 	c.activeFilePath = path;
 	if (promotedPendingEntry) {
 		c.requestHoverAnimation?.();
 	}
-	refreshSemanticRelatedForActiveFile(canvas, true);
+	refreshRelatedForActiveFile(canvas, true);
 	if (path) {
 		const rootHovered = c.root.matches(":hover");
 		const pointerCapable = (() => {

@@ -61,8 +61,6 @@ interface CanvasActionsInternals {
 	refreshIndex(): void;
 	draw(): void;
 	clearHover(force?: boolean): void;
-	requirePro(feature: string): boolean;
-	hasProAccess(): boolean;
 }
 
 function actionState(canvas: EpochCanvas): CanvasActionsInternals {

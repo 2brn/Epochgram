@@ -15,24 +15,19 @@ describe("timeline search count cache", () => {
 			},
 			searchQuery: "!similar",
 			showAttachments: true,
-			showTrackedChanges: true,
-			showHidden: false,
-			showDraftOnly: false,
 			showContentDates: true,
 			showPropDates: false,
-			epochsView: false,
 			activeFilePath: "A.md",
-			semanticRelatedPaths: new Set(["A.md", "B.md"]),
-			semanticRelatedTermPaths: new Set<string>(),
-			semanticRelatedRequestId: 1
+			relatedPaths: new Set(["A.md", "B.md"]),
+			relatedRequestId: 1
 		};
 
 		const countBefore = computeTimelineSearchResultCountAllDates(canvas, "!similar", cache);
 		expect(countBefore).toBe(2);
 
 		canvas.activeFilePath = "C.md";
-		canvas.semanticRelatedPaths = new Set(["C.md"]);
-		canvas.semanticRelatedRequestId = 2;
+		canvas.relatedPaths = new Set(["C.md"]);
+		canvas.relatedRequestId = 2;
 
 		const countAfter = computeTimelineSearchResultCountAllDates(canvas, "!similar", cache);
 		expect(countAfter).toBe(1);

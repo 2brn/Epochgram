@@ -1,27 +1,24 @@
 import { Notice, Platform, TFile } from 'obsidian'
+import { TimelineSearchIndex } from '../search/timeline-search-index'
 import type { EpochPlugin } from '../main'
 import { normalizeSnapshotValue } from '../indexer/snapshot-helpers'
 import { frontmatterToIndexTokens, isLikelyTextFileExtension, stripYamlFrontmatterBlock } from '../utils'
 import { deleteTimelineSearchCache, markTimelineSearchIndexDirty, saveTimelineSearchCache } from './timeline-search-cache'
 import { clearEpochProgress, consumeCancelRequested, setEpochProgress } from './progress'
 import { isUserEditingMarkdown } from './notice-utils'
-import { isTopicSimilarityEnabled } from './similarity/config'
 
 type SearchPluginState = {
+	__epochUnloaded?: boolean
 	timelineSearchRebuildStartedAt?: number
 	lastTimelineSearchProgressNoticeAt?: number
 	__epochTimelineSearchFocusToken?: number
 	__timelineSearchIndexVersion?: number
 	__epochCancelRequestedAt?: { search?: unknown }
-	termSimilarityLoaded?: boolean
-	termSimilarityIndex?: { files?: Record<string, { term?: string; score?: number }> }
-	settings?: { similarityZeroShotMinScore?: number }
 }
 
 type ErrorLike = { code?: unknown; message?: unknown }
 
 type IndexFileDataLike = {
-	reviewState?: unknown
 	markColor?: unknown
 	pinnedFile?: unknown
 }
@@ -40,6 +37,8 @@ export interface SearchMethods {
 
 export const searchMethods: SearchMethods = {
 	async rebuildTimelineSearchIndex(this: EpochPlugin): Promise<void> {
+			if ((this as EpochPlugin & SearchPluginState).__epochUnloaded) return
+			if ((this as EpochPlugin & SearchPluginState).timelineSearchRebuildStartedAt) return
 			try {
 				const state = this as EpochPlugin & SearchPluginState
 				if (typeof state.timelineSearchRebuildStartedAt !== 'number' || !(state.timelineSearchRebuildStartedAt > 0)) {
@@ -110,11 +109,9 @@ export const searchMethods: SearchMethods = {
 			// ignore
 		}
 
-		try {
-			this.timelineSearchIndex?.clear?.()
-		} catch {
-			// ignore
-		}
+		const previousSearch = this.timelineSearchIndex
+		const previousVersion = (this as EpochPlugin & SearchPluginState).__timelineSearchIndexVersion ?? 0
+		const rebuiltSearch = new TimelineSearchIndex()
 
 		const paths: string[] = (() => {
 			try {
@@ -145,6 +142,7 @@ export const searchMethods: SearchMethods = {
 			let scanned = 0
 			const total = paths.length
 			for (const path of paths) {
+				if ((this as EpochPlugin & SearchPluginState).__epochUnloaded) return
 				scanned++
 				if (Platform.isDesktop) {
 					try {
@@ -159,26 +157,15 @@ export const searchMethods: SearchMethods = {
 				maybeShowProgress(scanned, total)
 
 			const p = String(path || '')
-			if (!p || p.startsWith('epoch://')) continue
+			if (!p) continue
 
 			const abs = this.app.vault.getAbstractFileByPath(p)
 			if (!(abs instanceof TFile)) continue
 			if (!this.shouldIndexFile(abs)) continue
 
-			const isEpochgramExportHtml = (() => {
-				try {
-					const ext = String(abs.extension || '').toLowerCase()
-					if (ext !== 'html' && ext !== 'htm') return false
-					const base = String(abs.basename || '').toLowerCase()
-					return base.startsWith('epochgram-')
-				} catch {
-					return false
-				}
-			})()
-
 			let content = ''
 			try {
-				if (isLikelyTextFileExtension(abs.extension) && !isEpochgramExportHtml) {
+				if (isLikelyTextFileExtension(abs.extension)) {
 					const raw = await this.app.vault.read(abs)
 					content = stripYamlFrontmatterBlock(String(normalizeSnapshotValue(raw) ?? ''))
 				}
@@ -193,40 +180,9 @@ export const searchMethods: SearchMethods = {
 					typeof this.indexer?.getFileIndexData === 'function'
 						? this.indexer.getFileIndexData(p)
 						: null
-				const reviewState = typeof d?.reviewState === 'string' ? d.reviewState.trim() : ''
-				if (reviewState) metaParts.push(`review:${reviewState}`)
 				const markColor = d?.markColor
 				if (typeof markColor === 'number' && Number.isFinite(markColor)) metaParts.push(`mark:${markColor}`)
-				if (d?.pinnedFile === true) metaParts.push('pinned')
-			} catch {
-				// ignore
-			}
-			try {
-				if (typeof this.indexer?.getFileEmbeddingTerm === 'function') {
-					const term = String(this.indexer.getFileEmbeddingTerm(p) || '').trim()
-					if (term) metaParts.push(term)
-				}
-			} catch {
-				// ignore
-			}
-			try {
-				const state = this as EpochPlugin & SearchPluginState
-				if (isTopicSimilarityEnabled(this)) {
-					const zeroShotMinRaw = Number(state.settings?.similarityZeroShotMinScore ?? 0)
-					const zeroShotMin = Number.isFinite(zeroShotMinRaw) ? Math.max(0, Math.min(1, zeroShotMinRaw)) : 0
-					const storeLoaded =
-						state.termSimilarityLoaded === true &&
-						!!state.termSimilarityIndex &&
-						typeof state.termSimilarityIndex === 'object'
-					if (storeLoaded && zeroShotMin > 0 && zeroShotMin < 1) {
-						const rec = state.termSimilarityIndex?.files?.[p]
-						const inferred = typeof rec?.term === 'string' ? rec.term.trim() : ''
-						const score = Number(rec?.score ?? 0)
-						if (inferred && Number.isFinite(score) && score >= zeroShotMin) {
-							metaParts.push(inferred)
-						}
-					}
-				}
+				if (d?.pinnedFile) metaParts.push('pinned')
 			} catch {
 				// ignore
 			}
@@ -247,7 +203,7 @@ export const searchMethods: SearchMethods = {
 			}
 
 			try {
-				this.timelineSearchIndex.upsert({
+				rebuiltSearch.upsert({
 					id: p,
 					kind: 'file',
 					path: p,
@@ -261,6 +217,12 @@ export const searchMethods: SearchMethods = {
 			}
 		}
 
+		if ((this as EpochPlugin & SearchPluginState).__epochUnloaded) return
+		if (consumeCancelRequested(this, 'search')) throw new Error('EPOCH_CANCELLED')
+		// Do not replace edits or a reset that happened while files were being read.
+		if (this.timelineSearchIndex !== previousSearch || ((this as EpochPlugin & SearchPluginState).__timelineSearchIndexVersion ?? 0) !== previousVersion) return
+		this.timelineSearchIndex = rebuiltSearch
+		clearEpochProgress(this, 'search')
 		try {
 			markTimelineSearchIndexDirty(this)
 		} catch {
@@ -272,6 +234,7 @@ export const searchMethods: SearchMethods = {
 			// ignore
 		}
 
+		if ((this as EpochPlugin & SearchPluginState).__epochUnloaded) return
 		try {
 			// If a timeline search query is active, request the view to refocus the first matching
 			// record after rebuild (same behavior as pressing Enter in the search modal).

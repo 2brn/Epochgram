@@ -53,7 +53,7 @@ function makeCanvas(options: {
 		},
 		activeFilePath: options.activeFilePath,
 		activeFileTimelineEntry: options.activeFileTimelineEntry ?? null,
-		semanticRelatedPaths: null,
+		relatedPaths: null,
 		scale: 1,
 		offsetY: options.offsetY ?? -1_000
 	};

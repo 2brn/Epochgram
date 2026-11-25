@@ -81,20 +81,17 @@ export interface CanvasEventInternals {
 	layouts: DayLayout[];
 	hoverPreviewKey: string | null;
 	previewLockedUntilAltRelease: boolean;
-	epochsView: boolean;
 	pendingScrollNavHighlight: { dayIndex: number; entry: DateEntry; date: Date; attempts: number; startedAt: number } | null;
 	touchHadMultipleTouches: boolean;
 	draw(): void;
 	updateHover(x: number, y: number): void;
 	clearHover(force?: boolean): void;
 	setHoverSummary(dayIndex: number, itemIndex: number, immediate?: boolean): void;
-	exitEpochsViewAndFocusEpoch(entry: DateEntry): void;
 	requestHoverAnimation(): void;
 	findSummaryEntryAtPoint(x: number, y: number): DateEntry | null;
 	findDayLayoutAtPoint(x: number, y: number): DayLayout | null;
 	showSummaryMenu(entry: DateEntry, clientX: number, clientY: number): unknown;
 	showDateMenu(dayIndex: number, clientX: number, clientY: number): void;
-	toggleEmptyAreaView(): void;
 	openEntry(entry: DateEntry, ev?: MouseEvent, suppressFocusHover?: boolean): Promise<void>;
 	openDateNote(
 		date: Date,

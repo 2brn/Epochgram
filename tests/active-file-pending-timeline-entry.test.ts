@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+vi.mock("../src/ui/epoch-canvas/related", () => ({ refreshRelatedForActiveFile: vi.fn() }));
 import {
 	setActiveFile,
 	setActiveFileTimelineEntry
@@ -15,7 +16,6 @@ function makeCanvas(): any {
 		pendingActiveFileTimelineEntry: null,
 		pendingActiveFileFocus: null,
 		suppressNextFocusScroll: "new.md",
-		focusedEpochRange: null,
 		index: {},
 		scrollNavFile: null,
 		scrollNavIndex: -1,
@@ -25,15 +25,10 @@ function makeCanvas(): any {
 		showContentDates: true,
 		showPropDates: true,
 		showAttachments: true,
-		showDraftOnly: false,
-		showHidden: false,
-		reviewFilterMode: "reviewed+draft",
 		root: { matches: () => false },
 		suppressNextFocusHover: null,
 		forceNextFocusHover: null,
 		requestHoverAnimation: vi.fn(),
-		refreshSemanticRelatedForActiveFile: vi.fn(),
-		isEpochsViewActive: () => false,
 		focusFile: vi.fn(() => false),
 		resetScrollNavToToday: vi.fn(),
 		snapInitialPosition: vi.fn(),

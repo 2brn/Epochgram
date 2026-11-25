@@ -3,56 +3,22 @@ export interface EpochSettings {
 	enableAnimation: boolean;
 	compactModeMinWidthPercent: number;
 	searchResultsLimit: number;
-	trackChanges: boolean;
 	anchorMdate?: boolean;
-	claimKeyPreview?: string;
-	installId?: string;
-	devicePublicKey?: string;
-	activationEnvelope?: string;
-	activationWitness?: string;
-	activationGenerationFloor?: number;
-	activationStatus?: string;
-	activationError?: string;
-	lastValidationAt?: string;
-	lastValidatedAt?: string;
-	timelineFilters?: {
-		showDraftsOnly?: boolean;
-		showAttachments?: boolean;
-		showTrackedChanges?: boolean;
-		showParsed?: boolean;
-	};
+	timelineFilters?: { showAttachments?: boolean; showParsed?: boolean };
 	parseDatesInFrontmatter?: boolean;
 	yamlDateProperty: string;
 	yamlDescriptionProperty: string;
 	filenameWordsCount: number;
 	summaryWordsCount: number;
-	summarizeAI: boolean;
-	generateEpochs: boolean;
-	openAiBridgeOnStartup: boolean;
-	openAiBridgeInObsidianWebViewer: boolean;
 	calendarSyncIcsUrls?: string[];
 	calendarSyncPeriod?: "manual" | "startup" | "1m" | "5m" | "15m" | "1h" | "6h" | "24h";
 	calendarSyncFolder?: string;
 	calendarSyncTemplatePath?: string;
-	// Pro-only similarity tuning (undefined => defaults)
 	similarityUseLinks?: boolean;
 	similarityUseTags?: boolean;
 	similarityTitleJwThreshold?: number;
-	completedMigrations?: string[];
 	whatsNewShownVersions?: string[];
 	whatsNewOptOut?: boolean;
-	// Advanced similarity models (undefined/empty => defaults)
-	similarityEmbeddingModelId?: string;
-	similarityZeroShotModelId?: string;
-	similarityThreshold: number;
-	similarityZeroShotMinScore?: number;
-	aiBridgeOptions?: {
-		settingsYaml?: string;
-	};
-	aiBridgeServer?: {
-		token: string;
-		port?: number;
-	};
 }
 
 export const DEFAULT_SETTINGS: EpochSettings = {
@@ -60,45 +26,20 @@ export const DEFAULT_SETTINGS: EpochSettings = {
 	enableAnimation: true,
 	compactModeMinWidthPercent: 30,
 	searchResultsLimit: 7,
-	trackChanges: false,
 	anchorMdate: true,
-	timelineFilters: {
-		showDraftsOnly: false,
-		showAttachments: false,
-		showTrackedChanges: false,
-		showParsed: true
-	},
-	completedMigrations: [],
-	whatsNewShownVersions: [],
-	whatsNewOptOut: false,
+	timelineFilters: { showAttachments: false, showParsed: true },
 	parseDatesInFrontmatter: false,
 	yamlDateProperty: "date",
 	yamlDescriptionProperty: "description",
 	filenameWordsCount: 2,
 	summaryWordsCount: 5,
-	summarizeAI: false,
-	generateEpochs: false,
-	openAiBridgeOnStartup: false,
-	openAiBridgeInObsidianWebViewer: false,
 	calendarSyncIcsUrls: [],
 	calendarSyncPeriod: "manual",
 	calendarSyncFolder: "",
 	calendarSyncTemplatePath: "",
-	similarityEmbeddingModelId: undefined,
-	similarityZeroShotModelId: undefined,
-	similarityThreshold: 0,
+	similarityUseLinks: true,
+	similarityUseTags: true,
 	similarityTitleJwThreshold: 1,
-	similarityZeroShotMinScore: 0,
-	aiBridgeOptions: undefined,
-	aiBridgeServer: undefined,
-	claimKeyPreview: "",
-	installId: "",
-	devicePublicKey: "",
-	activationEnvelope: "",
-	activationWitness: "",
-	activationGenerationFloor: 0,
-	activationStatus: "inactive",
-	activationError: "",
-	lastValidationAt: "",
-	lastValidatedAt: ""
+	whatsNewShownVersions: [],
+	whatsNewOptOut: false
 };

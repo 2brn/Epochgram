@@ -17,7 +17,7 @@ describe("Edit summary menus write YAML description", () => {
 		vi.clearAllMocks();
 	});
 
-	it("record context menu writes YAML description and clears file summary state", async () => {
+	it("record context menu writes YAML description", async () => {
 		vi.mocked(promptEditSummary).mockResolvedValue("Frontmatter summary");
 		const menu = new Menu();
 		const entry: any = {
@@ -47,7 +47,6 @@ describe("Edit summary menus write YAML description", () => {
 		await item.onClickCb();
 
 		expect(plugin.setYamlDescriptionForPath).toHaveBeenCalledWith("folder/note.md", "Frontmatter summary");
-		expect(plugin.indexer.clearFileSummaryState).toHaveBeenCalledWith("folder/note.md");
 		expect(plugin.persistIndex).toHaveBeenCalledWith({ skipEnsure: true });
 		expect(state.refreshIndex).toHaveBeenCalled();
 	});

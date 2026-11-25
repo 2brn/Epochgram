@@ -1,259 +1,28 @@
 const fs = require("fs");
 const path = require("path");
 
-function parseArgs(argv) {
-	const args = {
-		deployVault: false,
-		requireVault: false,
-		vaultPluginsDir: null
-	};
-	for (let i = 0; i < argv.length; i++) {
-		const a = argv[i];
-		if (a === "--deploy-vault") {
-			args.deployVault = true;
-			continue;
-		}
-		if (a === "--require-vault") {
-			args.requireVault = true;
-			continue;
-		}
-		if (a === "--vault-plugins" || a === "--plugins-dir") {
-			args.vaultPluginsDir = argv[i + 1] || null;
-			i++;
-			continue;
-		}
-		if (a.startsWith("--vault-plugins=")) {
-			args.vaultPluginsDir = a.slice("--vault-plugins=".length) || null;
-			continue;
-		}
-		if (a.startsWith("--plugins-dir=")) {
-			args.vaultPluginsDir = a.slice("--plugins-dir=".length) || null;
-			continue;
-		}
-	}
-	return args;
+// Packaging is local only. Vault deployment must copy the three plugin files explicitly.
+if (process.argv.length > 2) throw new Error("Packaging does not accept vault deployment options.");
+const repoRoot = path.resolve(__dirname, "..");
+const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "manifest.json"), "utf8"));
+if (!/^[a-z0-9-]+$/.test(manifest.id)) throw new Error("Invalid plugin id");
+const productionDir = path.join(repoRoot, "production");
+const packageDir = path.join(productionDir, manifest.id);
+const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
+const readmeImages = [...new Set(readme.match(/images\/[^"')\s>]+/g) || [])].sort();
+if (readmeImages.some(rel => rel.includes("..") || rel.includes("\\"))) throw new Error("Invalid README image path");
+const packagedFiles = ["main.js", "manifest.json", "styles.css", "README.md", "LICENSE", ...readmeImages];
+for (const rel of packagedFiles) {
+	if (!fs.statSync(path.join(repoRoot, rel)).isFile()) throw new Error(`Missing package file: ${rel}`);
 }
-
-function ensureDir(p) {
-	fs.mkdirSync(p, { recursive: true });
+for (const dir of [productionDir, packageDir]) {
+	if (fs.existsSync(dir) && fs.lstatSync(dir).isSymbolicLink()) throw new Error(`Refusing symlink: ${dir}`);
 }
-
-function copyFileIfExists(src, dst) {
-	if (!fs.existsSync(src)) return false;
-	ensureDir(path.dirname(dst));
-	fs.copyFileSync(src, dst);
-	return true;
+fs.rmSync(packageDir, { recursive: true, force: true });
+fs.mkdirSync(packageDir, { recursive: true });
+for (const rel of packagedFiles) {
+	const destination = path.join(packageDir, rel);
+	fs.mkdirSync(path.dirname(destination), { recursive: true });
+	fs.copyFileSync(path.join(repoRoot, rel), destination);
 }
-
-function getReadmeImageFiles(repoRoot) {
-	const readmePath = path.join(repoRoot, "README.md");
-	if (!fs.existsSync(readmePath)) return [];
-
-	let raw;
-	try {
-		raw = fs.readFileSync(readmePath, "utf8");
-	} catch {
-		return [];
-	}
-
-	const files = new Set();
-	const re = /images\/([^"')\s>]+)/gi;
-	for (const match of raw.matchAll(re)) {
-		const rel = match[1];
-		if (!rel) continue;
-		if (rel.includes("..")) continue;
-		if (rel.includes("\\")) continue;
-		const lower = rel.toLowerCase();
-		if (lower.endsWith(".zip")) continue;
-		files.add(rel);
-	}
-
-	return [...files].sort();
-}
-
-function normalizePath(p) {
-	if (!p || typeof p !== "string") return null;
-	return path.resolve(p);
-}
-
-function isDirectory(p) {
-	try {
-		return fs.existsSync(p) && fs.statSync(p).isDirectory();
-	} catch {
-		return false;
-	}
-}
-
-function findDefaultVaultPluginsDirs(repoRoot) {
-	const found = [];
-	const seen = new Set();
-	const addIfDir = (candidate) => {
-		const normalized = normalizePath(candidate);
-		if (!normalized) return;
-		if (!isDirectory(normalized)) return;
-		const key = normalized.toLowerCase();
-		if (seen.has(key)) return;
-		seen.add(key);
-		found.push(normalized);
-	};
-
-	// 1) Explicit override
-	const envOverride = normalizePath(process.env.EPOCHGRAM_OBSIDIAN_PLUGINS_DIR);
-	if (envOverride && isDirectory(envOverride)) return [envOverride];
-
-	// 2) Check Docs/Obsidian/AKUPARA on all drives
-	const driveLetters = "CDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-	for (const letter of driveLetters) {
-		const candidate = path.join(`${letter}:\\`, "Docs", "Obsidian", "AKUPARA", ".obsidian", "plugins");
-		addIfDir(candidate);
-	}
-
-	return found;
-}
-
-function replaceDir(dstDir, options = {}) {
-	const preserve = Array.isArray(options.preserve) ? options.preserve : [];
-	const preserved = new Map();
-	const isSelfDir = (() => {
-		try {
-			return path.resolve(dstDir) === path.resolve(process.cwd());
-		} catch {
-			return false;
-		}
-	})();
-	if (fs.existsSync(dstDir) && preserve.length > 0) {
-		for (const name of preserve) {
-			try {
-				const p = path.join(dstDir, name);
-				if (fs.existsSync(p) && fs.statSync(p).isFile()) {
-					preserved.set(name, fs.readFileSync(p));
-				}
-			} catch {
-				// ignore
-			}
-		}
-	}
-	// If deploying into the repo directory itself (common when developing inside a vault plugin dir),
-	// never delete the directory. Just overwrite the packaged files in-place.
-	if (fs.existsSync(dstDir) && !isSelfDir) {
-		fs.rmSync(dstDir, { recursive: true, force: true });
-	}
-	ensureDir(dstDir);
-	if (preserved.size > 0) {
-		for (const [name, buf] of preserved.entries()) {
-			try {
-				fs.writeFileSync(path.join(dstDir, name), buf);
-			} catch {
-				// ignore
-			}
-		}
-	}
-}
-
-function copyPackagedFiles(repoRoot, outDir, options = {}) {
-	replaceDir(outDir, options);
-
-	const copiedFiles = [];
-	const maybeCopy = (rel) => {
-		const ok = copyFileIfExists(path.join(repoRoot, rel), path.join(outDir, rel));
-		if (ok) copiedFiles.push(rel);
-	};
-
-	// Core plugin files
-	maybeCopy("manifest.json");
-	maybeCopy("main.js");
-	maybeCopy("styles.css");
-	maybeCopy("README.md");
-	maybeCopy("CHANGELOG");
-	maybeCopy("versions.json");
-	maybeCopy("LICENSE");
-
-	// README image assets (used by README.md on GitHub and in packaged plugin)
-	const readmeImages = getReadmeImageFiles(repoRoot);
-	if (readmeImages.length > 0) {
-		const imagesSrcDir = path.join(repoRoot, "images");
-		const imagesDstDir = path.join(outDir, "images");
-		let imagesCopied = 0;
-		for (const rel of readmeImages) {
-			const ok = copyFileIfExists(path.join(imagesSrcDir, rel), path.join(imagesDstDir, rel));
-			if (!ok) continue;
-			copiedFiles.push(`images/${rel}`);
-			imagesCopied++;
-		}
-		if (imagesCopied === 0) {
-			try {
-				fs.rmSync(imagesDstDir, { recursive: true, force: true });
-			} catch {
-				// ignore
-			}
-		}
-	}
-
-	return { copiedFiles };
-}
-
-function touchHotReloadFile(dir) {
-	if (!dir) return false;
-	try {
-		ensureDir(dir);
-		const p = path.join(dir, ".hotreload");
-		const stamp = new Date().toISOString() + "\n";
-		fs.writeFileSync(p, stamp);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-function main() {
-	const repoRoot = process.cwd();
-	const pluginName = "epochgram";
-	const args = parseArgs(process.argv.slice(2));
-
-	const packageDir = path.join(repoRoot, "production", pluginName);
-	const packaged = copyPackagedFiles(repoRoot, packageDir);
-	const packagedFiles = packaged.copiedFiles;
-
-	let deployedDir = null;
-	let deployedFiles = null;
-	let deployedDirs = null;
-	if (args.deployVault || args.requireVault) {
-		const explicitPluginsDir = normalizePath(args.vaultPluginsDir);
-		const pluginsDirs = explicitPluginsDir && isDirectory(explicitPluginsDir)
-			? [explicitPluginsDir]
-			: findDefaultVaultPluginsDirs(repoRoot);
-
-		if (!pluginsDirs || pluginsDirs.length === 0) {
-			const msg =
-				"Could not find a default Obsidian vault plugins dir (AKUPARA or nicolevanderhoeven_202204). " +
-				"Set EPOCHGRAM_OBSIDIAN_PLUGINS_DIR or pass --vault-plugins <path>.";
-			process.stderr.write(msg + " (skipping deploy)\n");
-		} else {
-			deployedDirs = [];
-			for (const pluginsDir of pluginsDirs) {
-				const dir = path.join(pluginsDir, pluginName);
-				const deployed = copyPackagedFiles(repoRoot, dir, { preserve: ["data.json"] });
-				const files = deployed.copiedFiles;
-				touchHotReloadFile(dir);
-				deployedDirs.push({ dir, files });
-			}
-			// Back-compat: keep single-dir fields when only one deploy target exists.
-			if (deployedDirs.length === 1) {
-				deployedDir = deployedDirs[0].dir;
-				deployedFiles = deployedDirs[0].files;
-			}
-		}
-	}
-    
-	const summary = {
-		packageDir: path.relative(repoRoot, packageDir).replace(/\\/g, "/"),
-		packagedFiles,
-		deployedDir: deployedDir ? deployedDir : null,
-		deployedFiles,
-		deployedDirs: deployedDirs
-	};
-
-	process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
-}
-
-main();
+process.stdout.write(JSON.stringify({ packageDir: path.relative(repoRoot, packageDir), packagedFiles }, null, 2) + "\n");

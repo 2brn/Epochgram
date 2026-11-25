@@ -1,7 +1,5 @@
 import type { EpochPlugin } from "../main";
 import { MAX_MARK_COLORS, normalizeMarkColorIndex } from "../ui/mark-colors";
-import { hasSimilarityAccess } from "./pro-feature-state";
-import { embeddingsSimilarityEnabled } from "./similarity/config";
 import {
 	computeTargetsForMarkMenuAction,
 	getMarkCenterPathForGroupActions,
@@ -24,11 +22,9 @@ type MarkContextPluginLike = EpochPlugin & {
 	clearInheritedMarksCache?: () => void;
 	recomputeInheritedMarksNow?: (reason: string) => Promise<void>;
 	scheduleInheritedMarkRecompute?: (reason: string) => void;
-	queueVectorUpdate?: (path: string) => void;
 	persistIndex?: (options?: { skipEnsure?: boolean }) => Promise<void>;
 	persist?: (options?: { skipEnsure?: boolean }) => Promise<void>;
 	refreshEpochViews?: () => void;
-	getSemanticRelatedPathsForFile?: (path: string) => Promise<unknown>;
 	getGraphRelatedPathsForFile?: (path: string) => Promise<unknown>;
 	shouldIndexFile?: (file: unknown) => boolean;
 	indexer: MarkContextIndexerLike;
@@ -36,7 +32,7 @@ type MarkContextPluginLike = EpochPlugin & {
 
 function normalizeNonEpochPath(value: unknown): string {
 	const p = typeof value === "string" ? String(value || "").trim() : "";
-	if (!p || p.startsWith("epoch://")) return "";
+	if (!p) return "";
 	return p;
 }
 
@@ -83,22 +79,6 @@ async function isEntrySimilarToActiveFile(plugin: MarkContextPluginLike, activeF
 	const entry = normalizeNonEpochPath(entryPath);
 	if (!active || !entry) return false;
 	if (active === entry) return true;
-
-	try {
-		const hasPro = hasSimilarityAccess(plugin);
-		if (!hasPro) return false;
-	} catch {
-		return false;
-	}
-
-	try {
-		if (typeof plugin?.getSemanticRelatedPathsForFile === "function") {
-			const related: unknown = await plugin.getSemanticRelatedPathsForFile(active);
-			if (related instanceof Set) return related.has(entry);
-		}
-	} catch {
-		// ignore
-	}
 
 	try {
 		if (typeof plugin?.getGraphRelatedPathsForFile === "function") {
@@ -185,7 +165,7 @@ export async function applyMarkColorWithContext(plugin: EpochPlugin, args: {
 
 	let changed = false;
 	for (const p of finalTargets) {
-		if (!p || typeof p !== "string" || p.startsWith("epoch://")) continue;
+		if (!p || typeof p !== "string") continue;
 		try {
 			changed = !!indexer.setFileMarkColor(p, nextColor) || changed;
 		} catch {
@@ -208,20 +188,6 @@ export async function applyMarkColorWithContext(plugin: EpochPlugin, args: {
 		} catch {
 			// ignore
 		}
-	}
-
-	try {
-		if (nextColor != null && hasSimilarityAccess(plugin) && embeddingsSimilarityEnabled(plugin)) {
-			for (const p of finalTargets) {
-				try {
-					state.queueVectorUpdate?.(p);
-				} catch {
-					// ignore
-				}
-			}
-		}
-	} catch {
-		// ignore
 	}
 
 	try {

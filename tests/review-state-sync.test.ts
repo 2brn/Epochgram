@@ -1,189 +1,41 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { mergeReviewStatesForSync } from "../src/indexer/review-state-sync";
-import { persistenceMethods } from "../src/plugin/persistence";
-import type { SerializedEpochIndex } from "../src/indexer/types";
-
-const PATH = "Notes/sync.md";
-const DATE = "2026-10-05";
-
-type State = "draft" | "reviewed" | "hidden";
-
-function makeIndex(options: {
-	state: State;
-	updatedAt?: number;
-	contentHash?: string;
-	bodyHash?: string;
-}): SerializedEpochIndex {
-	const fileEntry: any = {
-		date: DATE,
-		file: PATH,
-		blockStart: 0,
-		blockEnd: 0,
-		summary: "Sync note",
-		source: "cdate"
-	};
-	const dateEntry: any = { ...fileEntry, reviewState: "draft" };
-	if (options.state !== "draft") {
-		fileEntry.reviewState = options.state;
-		dateEntry.reviewState = options.state;
-	}
-	if (options.updatedAt != null) {
-		fileEntry.reviewStateUpdatedAt = options.updatedAt;
-		dateEntry.reviewStateUpdatedAt = options.updatedAt;
-	}
-	return {
-		files: {
-			[PATH]: {
-				cdate: fileEntry,
-				namedDate: null,
-				dateProp: null,
-				contentDates: [],
-				trackedDates: {},
-				trackedSnapshot: null,
-				trackedSnapshotDate: null,
-				trackedBaselineSnapshot: null,
-				trackedBaselineDate: null,
-				contentHash: options.contentHash,
-				bodyHash: options.bodyHash
-			}
-		},
-		dates: { [DATE]: [dateEntry] }
-	} as SerializedEpochIndex;
+import type { ReviewState, SerializedEpochIndex } from "../src/indexer/types";
+import { normalizeReviewState } from "../src/indexer/review-state";
+function snapshot(state: ReviewState, time: number, bodyHash = "body"): SerializedEpochIndex {
+	const entry = { date: "2026-01-01", file: "note.md", source: "cdate" as const, blockStart: 0, blockEnd: 0, summary: "Body", reviewState: state, reviewStateUpdatedAt: time };
+	return { files: { "note.md": { cdate: { ...entry }, namedDate: null, dateProp: null, contentDates: [], bodyHash, contentHash: "full", indexedSize: 4 } }, dates: { "2026-01-01": [{ ...entry }] } };
 }
-
-class MemoryAdapter {
-	private readonly files = new Map<string, string>();
-
-	async exists(path: string): Promise<boolean> {
-		return this.files.has(path);
-	}
-
-	async read(path: string): Promise<string> {
-		const value = this.files.get(path);
-		if (value == null) throw new Error(`Missing ${path}`);
-		return value;
-	}
-
-	async write(path: string, value: string): Promise<void> {
-		this.files.set(path, value);
-	}
-
-	async mkdir(_path: string): Promise<void> {
-		// no-op
-	}
-}
-
-class InterleavingAdapter extends MemoryAdapter {
-	private reads = 0;
-
-	constructor(private readonly replacement: string) {
-		super();
-	}
-
-	async read(path: string): Promise<string> {
-		const current = await super.read(path);
-		this.reads++;
-		if (this.reads === 1) await super.write(path, this.replacement);
-		return current;
-	}
-}
-
-describe("review state Sync reconciliation", () => {
-	it("keeps a legacy Reviewed state when an unchanged synced index says Draft", () => {
-		const syncedDraft = makeIndex({ state: "draft", contentHash: "same", bodyHash: "same-body" });
-		const localReviewed = makeIndex({ state: "reviewed", contentHash: "same", bodyHash: "same-body" });
-
-		expect(mergeReviewStatesForSync(syncedDraft, localReviewed)).toBe(true);
-		expect(syncedDraft.files[PATH]?.cdate?.reviewState).toBe("reviewed");
-		expect(syncedDraft.dates[DATE]?.[0]?.reviewState).toBe("reviewed");
+describe("current review schema Sync reconciliation", () => {
+	it.each(["draft", "reviewed", "hidden"] as const)("preserves newest %s against stale copies", state => {
+		const local = snapshot(state, 20), stale = snapshot("reviewed", 10);
+		mergeReviewStatesForSync(stale, local); mergeReviewStatesForSync(local, stale);
+		expect(normalizeReviewState(local.files["note.md"].cdate!.reviewState)).toBe(state);
+		expect(normalizeReviewState(stale.dates["2026-01-01"][0].reviewState)).toBe(state);
+		expect(stale.dates["2026-01-01"][0].reviewStateUpdatedAt).toBe(20);
 	});
-
-	it("honors a newer explicit Draft mutation from another device", () => {
-		const localReviewed = makeIndex({ state: "reviewed", updatedAt: 100, contentHash: "same" });
-		const syncedDraft = makeIndex({ state: "draft", updatedAt: 200, contentHash: "same" });
-
-		expect(mergeReviewStatesForSync(localReviewed, syncedDraft)).toBe(true);
-		expect(localReviewed.files[PATH]?.cdate?.reviewState).toBeUndefined();
-		expect(localReviewed.files[PATH]?.cdate?.reviewStateUpdatedAt).toBe(200);
-		expect(localReviewed.dates[DATE]?.[0]?.reviewState).toBe("draft");
+	it("rejects incompatible bodies and hashless text snapshots", () => {
+		const local = snapshot("draft", 5, "new"), stale = snapshot("reviewed", 20, "old");
+		mergeReviewStatesForSync(local, stale); expect(normalizeReviewState(local.files["note.md"].cdate!.reviewState)).toBe("draft");
+		for (const data of [local.files["note.md"], stale.files["note.md"]]) { delete data.bodyHash; delete data.contentHash; }
+		mergeReviewStatesForSync(local, stale); expect(normalizeReviewState(local.files["note.md"].cdate!.reviewState)).toBe("draft");
 	});
-
-	it("does not resurrect a cleared recurring review from a stale Sync snapshot", () => {
-		const localCleared = makeIndex({ state: "draft", contentHash: "same" });
-		(localCleared.files[PATH] as any).recurReviewedDates = [];
-		(localCleared.files[PATH] as any).recurReviewedDatesUpdatedAt = 200;
-		const syncedReviewed = makeIndex({ state: "draft", contentHash: "same" });
-		(syncedReviewed.files[PATH] as any).recurReviewedDates = [DATE];
-		(syncedReviewed.files[PATH] as any).recurReviewedDatesUpdatedAt = 100;
-
-		mergeReviewStatesForSync(localCleared, syncedReviewed);
-		expect((localCleared.files[PATH] as any).recurReviewedDates).toEqual([]);
-		expect((localCleared.files[PATH] as any).recurReviewedDatesUpdatedAt).toBe(200);
+	it("matches identical bodies despite different frontmatter fingerprints", () => {
+		const local = snapshot("draft", 1), remote = snapshot("reviewed", 2); remote.files["note.md"].contentHash = "different YAML";
+		mergeReviewStatesForSync(local, remote); expect(local.files["note.md"].cdate!.reviewState).toBe("reviewed");
 	});
-
-	it("preserves review state across a frontmatter-only revision", () => {
-		const localDraft = makeIndex({ state: "draft", contentHash: "frontmatter-v2", bodyHash: "body" });
-		const syncedReviewed = makeIndex({ state: "reviewed", contentHash: "frontmatter-v1", bodyHash: "body" });
-
-		mergeReviewStatesForSync(localDraft, syncedReviewed);
-		expect(localDraft.files[PATH]?.cdate?.reviewState).toBe("reviewed");
+	it("merges independent occurrences and keeps per-date Draft tombstones", () => {
+		const local = snapshot("draft", 0), remote = snapshot("draft", 0);
+		local.files["note.md"].recurringReviewStates = { "2026-01-01": { state: "reviewed", updatedAt: 10 }, "2026-01-02": { state: "draft", updatedAt: 30 } };
+		remote.files["note.md"].recurringReviewStates = { "2026-01-02": { state: "reviewed", updatedAt: 20 }, "2026-01-03": { state: "hidden", updatedAt: 15 } };
+		mergeReviewStatesForSync(local, remote); mergeReviewStatesForSync(remote, local);
+		expect(local.files["note.md"].recurringReviewStates).toEqual(remote.files["note.md"].recurringReviewStates);
+		expect(local.files["note.md"].recurringReviewStates["2026-01-02"].state).toBe("draft");
+		expect(Object.keys(local.files["note.md"].recurringReviewStates)).toHaveLength(3);
 	});
-
-	it("does not carry review state across a real content revision", () => {
-		const localDraft = makeIndex({ state: "draft", contentHash: "content-v2", bodyHash: "body-v2" });
-		const syncedReviewed = makeIndex({ state: "reviewed", contentHash: "content-v1", bodyHash: "body-v1" });
-
-		expect(mergeReviewStatesForSync(localDraft, syncedReviewed)).toBe(false);
-		expect(localDraft.files[PATH]?.cdate?.reviewState).toBeUndefined();
-	});
-
-	it("re-reads immediately before write when Sync arrives during reconciliation", async () => {
-		const initialDraft = makeIndex({ state: "draft", contentHash: "same" });
-		const syncedReviewed = makeIndex({ state: "reviewed", contentHash: "same" });
-		const localDraft = makeIndex({ state: "draft", contentHash: "same" });
-		(localDraft.files[PATH] as any).indexedSize = 42;
-		const adapter = new InterleavingAdapter(JSON.stringify(syncedReviewed));
-		await adapter.write("epochgram-index.json", JSON.stringify(initialDraft));
-
-		const load = vi.fn(async () => {});
-		const plugin: any = {
-			app: { vault: { adapter } },
-			indexFilePath: "epochgram-index.json",
-			pluginDirEnsured: true,
-			ensurePluginDir: async () => {},
-			updateIndexFileStat: async () => {},
-			indexer: { load }
-		};
-
-		await persistenceMethods.writeIndexToDisk.call(plugin, localDraft);
-
-		const saved = JSON.parse(await adapter.read("epochgram-index.json")) as SerializedEpochIndex;
-		expect(saved.files[PATH]?.cdate?.reviewState).toBe("reviewed");
-		expect(saved.files[PATH]?.indexedSize).toBe(42);
-		expect(load).toHaveBeenCalledTimes(1);
-	});
-
-	it("rebases a pending write onto the index currently delivered by Sync", async () => {
-		const adapter = new MemoryAdapter();
-		const syncedReviewed = makeIndex({ state: "reviewed", contentHash: "same" });
-		const localDraft = makeIndex({ state: "draft", contentHash: "same" });
-		(localDraft.files[PATH] as any).indexedSize = 42;
-		await adapter.write("epochgram-index.json", JSON.stringify(syncedReviewed));
-
-		const load = vi.fn(async () => {});
-		const plugin: any = {
-			app: { vault: { adapter } },
-			indexFilePath: "epochgram-index.json",
-			pluginDirEnsured: true,
-			ensurePluginDir: async () => {},
-			updateIndexFileStat: async () => {},
-			indexer: { load }
-		};
-
-		await persistenceMethods.writeIndexToDisk.call(plugin, localDraft);
-
-		const saved = JSON.parse(await adapter.read("epochgram-index.json")) as SerializedEpochIndex;
-		expect(saved.files[PATH]?.cdate?.reviewState).toBe("reviewed");
-		expect(load).toHaveBeenCalledTimes(1);
+	it("resolves timestamp ties deterministically", () => {
+		const a = snapshot("hidden", 10), b = snapshot("reviewed", 10);
+		mergeReviewStatesForSync(a, b); mergeReviewStatesForSync(b, a);
+		expect(a.files["note.md"].cdate!.reviewState).toBe("hidden"); expect(b.files["note.md"].cdate!.reviewState).toBe("hidden");
 	});
 });

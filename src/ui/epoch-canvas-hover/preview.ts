@@ -134,20 +134,6 @@ export function attemptHoverPreview(canvas: EpochCanvas, event: MouseEvent | nul
 		state.previewLockedNotified = false;
 	}
 
-	try {
-		const rect = state.canvas.getBoundingClientRect();
-		const localX = event.clientX - rect.left;
-		const localY = event.clientY - rect.top;
-		const entry = canvasState(canvas).findSummaryEntryAtPoint(localX, localY);
-		const filePath = entry ? String(entry.file || "") : "";
-		if (entry && filePath.startsWith("epoch://")) {
-			state.hoverPreviewKey = null;
-			return;
-		}
-	} catch {
-		// ignore
-	}
-
 	state.previewLockedNotified = false;
 
 	if (!state.modKeyActive) {
@@ -301,7 +287,6 @@ function getHoveredSummaryEntry(canvas: EpochCanvas): DateEntry | null {
 export function onWindowKeyDown(canvas: EpochCanvas, event: KeyboardEvent): void {
 	const hState = hoverState(canvas);
 	if (!hState.isPointerDeviceEvent()) return;
-	const epochsViewActive = canvas.isEpochsViewActive?.() === true;
 
 	if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
 		let direction: number | null = null;
@@ -347,7 +332,6 @@ export function onWindowKeyDown(canvas: EpochCanvas, event: KeyboardEvent): void
 		}
 	}
 
-	if (epochsViewActive) return;
 
 	if (!isModKeyEvent(event)) return;
 	if (hState.modKeyActive) return;
@@ -367,7 +351,6 @@ export function onWindowKeyUp(canvas: EpochCanvas, event: KeyboardEvent): void {
 	hState.hoverPreviewKey = null;
 	hState.previewLockedUntilAltRelease = false;
 	stopScrollNavKeyHold(canvas);
-	if (canvas.isEpochsViewActive?.() === true) return;
 }
 
 function tryTriggerHoverPreviewFromState(canvas: EpochCanvas): void {

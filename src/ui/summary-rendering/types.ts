@@ -22,17 +22,12 @@ export interface DaySummaryRenderArgs {
 	prevAnimSummary?: { dayIndex: number; itemIndex: number } | null;
 	outgoingSummaries?: Array<{ dayIndex: number; itemIndex: number; t: number }> | null;
 	activeFilePath: string | null;
-	relatedDateRange?: { start: string; end: string } | null;
-	semanticRelatedPaths?: Set<string> | null;
-	showHidden: boolean;
-	hiddenOnly?: boolean;
+	relatedPaths?: Set<string> | null;
 	filenameWordsCount: number;
 	summaryWordsCount: number;
 	iconCache: CanvasIconCache;
 	fontSmall: string;
 	fontSmallHover: string;
-	fontEpochLine1?: string;
-	fontEpochLine1Hover?: string;
 	colTextBase: string;
 	colTextHover: string;
 	colHighlight: string;
@@ -40,17 +35,9 @@ export interface DaySummaryRenderArgs {
 	colTimelineBg: string;
 	markColors?: string[];
 	inheritedMarkIndexByPath?: Map<string, number> | null;
-	/** Epochs view only: visibility of *marked* (color-marked) child records under current filters. */
-	epochsViewMarkedChildVisibleByDateKey?: Map<string, boolean> | null;
-	pathsWithEmbeddingTerm?: Set<string> | null;
-	pathsWithClassifiedTerm?: Set<string> | null;
-	termSimilarPaths?: Set<string> | null;
 	wrapFadeCache?: Map<string, unknown> | null;
 	getEntryTitle: (entry: DateEntry) => string | null;
 	denseMode: boolean;
-	epochsView?: boolean;
-	/** Epochs view only: disable drop-caps for packed/shifted blocks. */
-	epochDisableDropCaps?: boolean;
 }
 
 export interface DaySummaryRenderResult {

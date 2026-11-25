@@ -3,7 +3,6 @@ import type { EpochPlugin } from "../main";
 import { DEFAULT_SETTINGS } from "../settings-model";
 import { registerInfoResetGesture } from "./info-reset-gesture";
 import { normalizeFrontmatterPropertyKey } from "../plugin/frontmatter-keys";
-import { hasTrackChangesAccess } from "../plugin/pro-feature-state";
 
 export function renderGeneralViewSettings(containerEl: HTMLElement, plugin: EpochPlugin): void {
 	let openOnStartupToggle: ToggleComponent | null = null;
@@ -148,37 +147,6 @@ export function renderGeneralViewSettings(containerEl: HTMLElement, plugin: Epoc
 }
 
 export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlugin): void {
-	const canTrackChanges = hasTrackChangesAccess(plugin);
-	let trackChangesToggle: ToggleComponent | null = null;
-	const trackChangesSetting = new Setting(containerEl)
-		.setName("Track changes")
-		.setDesc(canTrackChanges ? "Tracks note change history on the timeline." : "Requires Epochgram Pro.")
-		.addToggle((toggle) => {
-			trackChangesToggle = toggle;
-			toggle
-				.setValue(canTrackChanges ? plugin.settings.trackChanges === true : false)
-				.setDisabled(!canTrackChanges)
-				.onChange(async (value: boolean) => {
-					if (!canTrackChanges) return;
-					plugin.settings.trackChanges = value;
-					await plugin.onSettingsChanged("trackChanges");
-				});
-		});
-	if (!canTrackChanges) {
-		trackChangesSetting.settingEl?.classList?.add("epoch-pro-locked-row");
-	}
-	registerInfoResetGesture(trackChangesSetting, async () => {
-		const def = DEFAULT_SETTINGS.trackChanges === true;
-		if (plugin.settings.trackChanges === def) {
-			if (trackChangesToggle) trackChangesToggle.setValue(canTrackChanges ? def : false);
-			return;
-		}
-		if (trackChangesToggle) trackChangesToggle.setValue(canTrackChanges ? def : false);
-		if (!canTrackChanges) return;
-		plugin.settings.trackChanges = def;
-		await plugin.onSettingsChanged("trackChanges");
-	});
-
 	const getAnchorMdateDesc = () => {
 		const prop = plugin.settings.yamlDateProperty || DEFAULT_SETTINGS.yamlDateProperty;
 		return `Uses mdate instead of cdate when no date is found in filename or YAML \`${prop}\`.`;

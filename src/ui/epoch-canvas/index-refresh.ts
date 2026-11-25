@@ -3,11 +3,7 @@ import type { EpochIndex } from "../../indexer/types";
 
 import { resetScrollNavTargetState } from "./scroll-nav-reset";
 
-import {
-	updatePathsWithEmbeddingTerm,
-	updatePathsWithClassifiedTerm,
-	updateSemanticRelatedTermPaths
-} from "./semantic";
+import { refreshRelatedForActiveFile } from "./related";
 
 type CanvasRefreshState = {
 	plugin?: {
@@ -19,7 +15,6 @@ type CanvasRefreshState = {
 	__indexVersion?: number;
 	__scrollNavVisibleTargetsSig?: string | null;
 	__scrollNavVisibleTargets?: unknown;
-	semanticRelatedTermLastUpdatedAt?: number | null;
 	scrollNavFile?: string | null;
 	__scrollNavLastModeKey?: string | null;
 	draw?: () => void;
@@ -36,10 +31,7 @@ export function refreshIndex(canvas: EpochCanvas): void {
 	} catch {
 		// ignore
 	}
-	updatePathsWithEmbeddingTerm(canvas);
-	updatePathsWithClassifiedTerm(canvas);
-	c.semanticRelatedTermLastUpdatedAt = null;
-	updateSemanticRelatedTermPaths(canvas);
+	refreshRelatedForActiveFile(canvas, true);
 	// Index refresh (including rebuild/reprocess) should reset scroll-nav state.
 	resetScrollNavTargetState(canvas);
 	c.scrollNavFile = null;

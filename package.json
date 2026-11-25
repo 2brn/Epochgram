@@ -1,12 +1,12 @@
 {
 	"name": "obsidian-epochgram",
-	"version": "1.8.33",
-	"description": "An AI-powered timeline plugin for Obsidian",
+	"version": "2.0.0",
+	"description": "A free interactive timeline plugin for Obsidian",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
-		"build:production": "npm run build && node scripts/prepare-production.js --deploy-vault --require-vault",
+		"build:production": "npm run package:production",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"package:production": "npm run build && node scripts/prepare-production.js",
@@ -22,10 +22,8 @@
 		"@codemirror/view": "^6.38.6",
 		"@eslint/js": "^9.39.4",
 		"@eslint/json": "^0.14.0",
-		"@types/diff": "^5.0.8",
 		"@types/node": "^20.19.25",
 		"esbuild": "^0.28.0",
-		"esbuild-plugin-inline-worker": "^0.1.1",
 		"eslint": "^9.39.4",
 		"eslint-plugin-obsidianmd": "^0.4.1",
 		"obsidian": "^1.8.7",
@@ -36,19 +34,12 @@
 		"vitest": "^4.1.6"
 	},
 	"dependencies": {
-		"@huggingface/transformers": "^4.3.1",
 		"chrono-node": "^2.9.0",
-		"diff": "^5.2.0",
 		"minisearch": "^7.2.0",
-		"onnxruntime-web": "1.24.3",
 		"rrule": "^2.8.1",
 		"yaml": "^2.9.0"
 	},
 	"overrides": {
-		"onnxruntime-web": "1.24.3",
-		"adm-zip": "0.6.1",
-		"protobufjs": "7.6.5",
-		"sharp": "0.35.5",
 		"minimatch": "10.2.5",
 		"brace-expansion": "5.0.8",
 		"postcss": "8.5.24"

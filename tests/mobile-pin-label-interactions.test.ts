@@ -229,7 +229,7 @@ function makeCanvas(options: {
 		offsetY: options.offsetY ?? -1000,
 		activeFilePath,
 		activeFileTimelineEntry: null,
-		semanticRelatedPaths: null,
+		relatedPaths: null,
 		clearHover,
 		keepHoverAfterMenu: false,
 		getToday: () => new Date(),
@@ -316,19 +316,6 @@ describe("mobile pin-label interactions", () => {
 		expect(badge.labels[0]?.textContent).toBe("sine");
 	});
 
-	it("mirrors draft italics for virtual and persisted pin labels", () => {
-		const { badge: virtualBadge } = makeCanvas({ reviewState: "draft" });
-		expect(virtualBadge.labels[0]?.style.font).toMatch(/^italic 700 8px /);
-
-		const { badge: pinnedBadge } = makeCanvas({
-			entryPath: "notes/pinned.md",
-			activeFilePath: "notes/active.md",
-			pinnedFile: "dock",
-			reviewState: "draft"
-		});
-		expect(pinnedBadge.labels[0]?.style.font).toMatch(/^italic 8px /);
-	});
-
 	it("refreshes the active virtual label from the updated record", () => {
 		const { canvas, overlay } = makeCanvas();
 		const date = todayKey();
@@ -338,15 +325,14 @@ describe("mobile pin-label interactions", () => {
 			blockStart: 12,
 			blockEnd: 12,
 			summary: "Before update",
-			source: "content",
-			reviewState: "reviewed"
+			source: "content"
 		};
 		canvas.activeFileTimelineEntry = selected;
 		updatePinOverlay(canvas);
 		expect(overlay.badges[0]?.labels[0]?.textContent).toBe(`current${SUMMARY_ENTRY_SEPARATOR}Before update`);
 
 		canvas.plugin.indexer.index = {
-			[date]: [{ ...selected, summary: "After update", reviewState: "draft" }]
+			[date]: [{ ...selected, summary: "After update" }]
 		};
 		updatePinOverlay(canvas);
 

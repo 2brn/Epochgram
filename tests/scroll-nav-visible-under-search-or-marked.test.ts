@@ -54,8 +54,8 @@ function makeCanvas(overrides: Record<string, any> = {}): any {
 		offsetY: -5 * 48,
 		scale: 1,
 		activeFilePath: "a.md",
-		semanticRelatedScored: [{ path: "b.md", score: 0.9 }],
-		semanticRelatedBasePath: "a.md",
+		relatedScored: [{ path: "b.md", score: 0.9 }],
+		relatedBasePath: "a.md",
 		clearFocusedEpochRange: vi.fn(),
 		requestHoverAnimation: vi.fn(),
 		focusFile: vi.fn(),
@@ -142,38 +142,4 @@ describe("scroll nav uses visible targets when search active", () => {
 		expect((canvas as any).__forcedActiveFileCursorPath).toBeUndefined();
 	});
 
-	test("epochs view navigates through all visible records", () => {
-		const focusDateMock = focusMod.focusDate as any;
-		const canvas = makeCanvas({
-			epochsView: true,
-			searchQuery: "",
-			activeFilePath: "a.md",
-			scrollNavAnchorDayIndex: 0
-		});
-		const ok = advanceScrollNav(canvas, 1, { wrap: false });
-		expect(ok).toBe(true);
-		// Epochs view uses day-based navigation (focusDate), not entry-based.
-		expect(canvas.scrollNavAnchorEntry).toBe(null);
-		expect(focusDateMock).toHaveBeenCalledTimes(1);
-		const focusedDate = focusDateMock.mock.calls[0]?.[1] as Date;
-		expect(focusedDate.getFullYear()).toBe(2020);
-		expect(focusedDate.getMonth()).toBe(0);
-		expect(focusedDate.getDate()).toBe(2);
-		expect((canvas as any).__forcedActiveFileCursorPath).toBeUndefined();
-	});
-
-	test("epochs view respects epochsViewBucket when choosing visible days", () => {
-		const focusDateMock = focusMod.focusDate as any;
-		focusDateMock.mockClear();
-		const canvas = makeCanvas({
-			epochsView: true,
-			epochsViewBucket: "month",
-			activeFilePath: "a.md",
-			scrollNavAnchorDayIndex: 0
-		});
-		const ok = advanceScrollNav(canvas, 1, { wrap: false });
-		// With bucket != "day", our mocked getEntriesCountForDateFast returns 0 => no visible days.
-		expect(ok).toBe(false);
-		expect(focusDateMock).not.toHaveBeenCalled();
-	});
 });

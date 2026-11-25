@@ -49,8 +49,7 @@ import {
 } from "./epoch-canvas-actions";
 import {
 	showDateMenu as showDateMenuAction,
-	showSummaryMenu as showSummaryMenuAction,
-	toggleEmptyAreaView as toggleEmptyAreaViewAction
+	showSummaryMenu as showSummaryMenuAction
 } from "./epoch-canvas-menus";
 import { drawCanvas } from "./epoch-canvas-draw";
 import { runCanvasAnimation } from "./epoch-canvas-animate";
@@ -63,32 +62,18 @@ import type { EpochPlugin } from "../main";
 
 import type { DayLayout, HoverOverlay } from "./epoch-canvas-types";
 
-import {
-	hasProAccess as hasProAccessHelper,
-	requirePro as requireProHelper,
-	refreshSemanticRelatedForActiveFile as refreshSemanticRelatedForActiveFileHelper,
-	updatePathsWithEmbeddingTerm as updatePathsWithEmbeddingTermHelper,
-	updatePathsWithClassifiedTerm as updatePathsWithClassifiedTermHelper,
-	updateSemanticRelatedTermPaths as updateSemanticRelatedTermPathsHelper
-} from "./epoch-canvas/semantic";
-import {
-	setEpochsView as setEpochsViewHelper,
-	setEpochsViewWithToolbar as setEpochsViewWithToolbarHelper,
-	exitEpochsViewAndFocusEpoch as exitEpochsViewAndFocusEpochHelper,
-} from "./epoch-canvas/epochs-view";
+import { refreshRelatedForActiveFile } from "./epoch-canvas/related";
 import { refreshIndex as refreshIndexHelper } from "./epoch-canvas/index-refresh";
 import {
-	setShowTrackedChanges as setShowTrackedChangesHelper,
 	setShowContentDates as setShowContentDatesHelper,
 	setShowPropDates as setShowPropDatesHelper,
-	setReviewFilterMode as setReviewFilterModeHelper,
-	setShowAttachments as setShowAttachmentsHelper
+	setShowAttachments as setShowAttachmentsHelper,
+	setShowDraftsOnly as setShowDraftsOnlyHelper
 } from "./epoch-canvas/filters";
 import {
 	suppressNextFocusScrollForPath as suppressNextFocusScrollForPathHelper,
 	setActiveFile as setActiveFileHelper,
 	setActiveFileTimelineEntry as setActiveFileTimelineEntryHelper,
-	clearFocusedEpochRange as clearFocusedEpochRangeHelper,
 	focusActiveFileOrToday as focusActiveFileOrTodayHelper
 } from "./epoch-canvas/active-file";
 import {
@@ -234,11 +219,9 @@ export class EpochCanvas {
 	private lastTapTime = 0; private lastTapX = 0; private lastTapY = 0;
 	private lastTwoFingerTapTime = 0; private lastTwoFingerTapX = 0; private lastTwoFingerTapY = 0;
 	private keepHoverAfterMenu = false;
-	private reviewFilterMode: "reviewed+draft" | "draft" = "reviewed+draft";
-	private showHidden = false; private showDraftOnly = false;
 	private showAttachments = false;
-	private showTrackedChanges = true; private showContentDates = true; private showPropDates = false;
-	private epochsView = false; private focusedEpochRange: { start: string; end: string } | null = null;
+	private showDraftsOnly = false;
+	private showContentDates = true; private showPropDates = false;
 	private searchQuery = "";
 	private __indexVersion = 0;
 	private __scrollNavVisibleTargetsSig: string | null = null;
@@ -251,7 +234,7 @@ export class EpochCanvas {
 		this.searchQuery = next;
 		if (/[!$]similar\b/i.test(next)) {
 			try {
-				this.refreshSemanticRelatedForActiveFile(true);
+				this.refreshRelatedForActiveFile(true);
 			} catch {
 				// ignore
 			}
@@ -274,46 +257,16 @@ export class EpochCanvas {
 		return this.searchQuery;
 	}
 
-	private clearFocusedEpochRange(): void {
-		clearFocusedEpochRangeHelper(this);
-	}
-	private epochsViewBucket: string | null = null; private epochsViewPrevBucket: string | null = null; private epochsViewBucketAnimStart: number | null = null;
 	private pendingVisibilityDraw = false; private visibilityRetryTimeout: number | null = null; private missingFileRebuildPending = false; private missingFileRebuildAttempted = false;
 	private hoverParent: HoverParent | null = null; private hoverSourceId: string;
 	private hoverPreviewKey: string | null = null; private lastPointerEvent: MouseEvent | null = null;
 	private modKeyActive = false; private previewLockedNotified = false; private previewLockedUntilAltRelease = false;
 	private pendingScrollNavHighlight: { dayIndex: number; entry: DateEntry; date: Date; attempts: number; startedAt: number } | null = null; private suppressNextFocusScroll: string | null = null;
-	private semanticRelatedPaths: Set<string> | null = null; private semanticRelatedScored: Array<{ path: string; score: number }> | null = null;
-	private semanticRelatedActiveTerm: string | null = null;
-	private semanticRelatedTermPaths: Set<string> | null = null; private semanticRelatedTermLastUpdatedAt: number | null = null; private semanticRelatedTermLoadInFlight = false;
-	private semanticRelatedRequestId = 0; private semanticRelatedLastThreshold: number | null = null; private semanticRelatedLastZeroShotMinScore: number | null = null;
-	private semanticRelatedLastUseLinks: boolean | null = null; private semanticRelatedLastUseTags: boolean | null = null;
-	private semanticRelatedLastTitleJwThreshold: number | null = null;
-	private cachedPathsWithEmbeddingTerm: Set<string> | null = null; private cachedPathsWithClassifiedTerm: Set<string> | null = null; private cachedClassifiedTermLastUpdatedAt: number | null = null;
-
-	public get pathsWithEmbeddingTerm(): Set<string> | null {
-		return this.cachedPathsWithEmbeddingTerm;
+	private relatedPaths: Set<string> | null = null; private relatedScored: Array<{ path: string; score: number }> | null = null;
+	private relatedRequestId = 0;
+	public refreshRelatedForActiveFile(force: boolean = false): void {
+		refreshRelatedForActiveFile(this, force);
 	}
-
-	public get pathsWithClassifiedTerm(): Set<string> | null {
-		return this.cachedPathsWithClassifiedTerm;
-	}
-
-	private updatePathsWithEmbeddingTerm(): void { updatePathsWithEmbeddingTermHelper(this); }
-
-	private updatePathsWithClassifiedTerm(force = false): boolean {
-		return updatePathsWithClassifiedTermHelper(this, force);
-	}
-
-	private updateSemanticRelatedTermPaths(): void { updateSemanticRelatedTermPathsHelper(this); }
-
-	public refreshSemanticRelatedForActiveFile(force: boolean = false): void {
-		refreshSemanticRelatedForActiveFileHelper(this, force);
-	}
-
-	private hasProAccess(): boolean { return hasProAccessHelper(this); }
-
-	private requirePro(feature: string): boolean { return requireProHelper(this, feature); }
 
 	constructor(root: HTMLElement, plugin: EpochCanvasPlugin, hoverParent: HoverParent | null = null) {
 		this.root = root;
@@ -371,19 +324,7 @@ export class EpochCanvas {
 		}
 	}
 
-	public isEpochsViewActive(): boolean {
-		return this.epochsView === true;
-	}
-
-	public setEpochsView(value: boolean): void { setEpochsViewHelper(this, value); }
-
-	public setEpochsViewWithToolbar(value: boolean): void { setEpochsViewWithToolbarHelper(this, value); }
-
-	public exitEpochsViewAndFocusEpoch(entry: DateEntry): void { exitEpochsViewAndFocusEpochHelper(this, entry); }
-
 	public refreshIndex() { refreshIndexHelper(this); }
-
-	public setShowTrackedChanges(show: boolean) { setShowTrackedChangesHelper(this, show); }
 
 	public setShowContentDates(show: boolean) { setShowContentDatesHelper(this, show); }
 
@@ -406,7 +347,6 @@ export class EpochCanvas {
 		line: number | null = null,
 		options: { draw?: boolean } = {}
 	): void {
-		this.clearFocusedEpochRange();
 		if (preferFilePath) {
 			try {
 				const rect = this.root?.getBoundingClientRect?.();
@@ -456,24 +396,18 @@ export class EpochCanvas {
 		return startPinFlyToTodayHelper(this, entry, onDone);
 	}
 
-	public setReviewFilterMode(mode: "reviewed+draft" | "draft") { setReviewFilterModeHelper(this, mode); }
-
-	public isShowingHidden(): boolean {
-		return this.showHidden;
-	}
-
 	private getTodayOffset(): number {
 		return getTodayOffsetHelper(this);
 	}
 
 	public setShowAttachments(show: boolean) { setShowAttachmentsHelper(this, show); }
+	public setShowDraftsOnly(show: boolean) { setShowDraftsOnlyHelper(this, show); }
 
 	private scaleFont(font: string, factor: number): string {
 		return scaleFontHelper(font, factor);
 	}
 
 	focusToday() {
-		this.clearFocusedEpochRange();
 		resetScrollNavTargetStateHelper(this);
 		focusTodayHelper(this);
 	}
@@ -487,7 +421,6 @@ export class EpochCanvas {
 	private setHoverSummary(dayIndex: number, itemIndex: number, persistent: boolean = false) { setHoverSummaryHelper(this, dayIndex, itemIndex, persistent); }
 
 	private async createNoteForDate(date: Date, focus: boolean = true) {
-		this.clearFocusedEpochRange();
 		await createNoteForDateAction(this, date, focus);
 	}
 
@@ -497,17 +430,14 @@ export class EpochCanvas {
 		focus: boolean = true,
 		options?: { allowFallbackToFirstEntry?: boolean }
 	): Promise<boolean> {
-		this.clearFocusedEpochRange();
 		return openDateNoteAction(this, date, ev, focus, options);
 	}
 
 	private async openFileAtLine(filePath: string, line: number = 0, ev?: MouseEvent) {
-		this.clearFocusedEpochRange();
 		await openFileAtLineAction(this, filePath, line, ev);
 	}
 
 	private async openEntry(entry: DateEntry, ev?: MouseEvent, suppressFocusHover: boolean = false) {
-		this.clearFocusedEpochRange();
 		await openEntryAction(this, entry, ev, suppressFocusHover);
 	}
 
@@ -523,8 +453,6 @@ export class EpochCanvas {
 	) { return showSummaryMenuAction(this, entry, clientX, clientY, options); }
 
 	private showDateMenu(dayIndex: number, clientX: number, clientY: number) { showDateMenuAction(this, dayIndex, clientX, clientY); }
-
-	private toggleEmptyAreaView() { toggleEmptyAreaViewAction(this); }
 
 	private startInertia() {
 		if (this.plugin?.settings?.enableAnimation === false) {

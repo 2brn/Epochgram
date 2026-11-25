@@ -57,10 +57,6 @@ export async function handleDoubleClick(canvas: EpochCanvas, event: MouseEvent):
 	const rect = s.canvas.getBoundingClientRect();
 	const x = event.clientX - rect.left;
 	const y = event.clientY - rect.top;
-	if (s.epochsView) {
-		const hit = s.findSummaryEntryAtPoint(x, y);
-		if (hit) return;
-	}
 	await handleDoublePoint(canvas, x, y);
 }
 
@@ -130,7 +126,6 @@ export function handleContextMenu(canvas: EpochCanvas, event: MouseEvent): void 
 
 	if (!entry && !day) {
 		s.keepHoverAfterMenu = false;
-		s.toggleEmptyAreaView();
 		return;
 	}
 

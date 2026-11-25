@@ -7,6 +7,7 @@ type ParsedJsonResult<T = unknown> = {
 }
 
 type TimelineSearchCacheRuntime = EpochPlugin & {
+	__epochUnloaded?: boolean
 	__timelineSearchCacheDiskLoaded?: boolean
 	__timelineSearchCacheDiskPayload?: string
 	__timelineSearchCacheLastPayload?: string
@@ -64,7 +65,7 @@ function parseJsonBestEffort<T = unknown>(raw: unknown, maxPrefixLen = 64): Pars
 	return { value: null, salvaged: false, prefixLen: 0 }
 }
 
-const CACHE_FILENAME = 'epochgram-search.json'
+const CACHE_FILENAME = 'search.json'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
 	return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
@@ -126,8 +127,7 @@ function normalizeCachePayloadString(raw: string): string {
 
 function getCachePath(plugin: EpochPlugin): string {
 	const dir = String(plugin.app.vault.configDir || '').replace(/\\/g, '/').replace(/\/+$/g, '')
-	if (!dir) return CACHE_FILENAME
-	return `${dir}/${CACHE_FILENAME}`
+	return `${plugin.pluginDirPath || `${dir}/plugins/epochgram`}/${CACHE_FILENAME}`
 }
 
 export async function loadTimelineSearchCache(plugin: EpochPlugin): Promise<boolean> {
@@ -151,15 +151,6 @@ export async function loadTimelineSearchCache(plugin: EpochPlugin): Promise<bool
 				}
 			}
 			const ok = plugin.timelineSearchIndex.loadSerialized(payload)
-			if (!ok) {
-				// If the cache is structurally incompatible/corrupted, delete it so the next rebuild
-				// can persist a clean cache instead of failing to hydrate every startup.
-				try {
-					await adapter.remove(p)
-				} catch {
-					// ignore
-				}
-			}
 			try {
 				const normalizedDisk = typeof raw === 'string' ? normalizeCachePayloadString(raw) : ''
 				runtime.__timelineSearchCacheDiskLoaded = true
@@ -181,6 +172,7 @@ export async function loadTimelineSearchCache(plugin: EpochPlugin): Promise<bool
 export async function saveTimelineSearchCache(plugin: EpochPlugin): Promise<void> {
 	const runtime = getRuntime(plugin)
 	const run = async () => {
+		if (plugin.indexReady === false || runtime.__epochUnloaded) return
 		try {
 			try {
 				if (runtime.__timelineSearchCacheDirty !== true) return
@@ -282,6 +274,7 @@ export async function saveTimelineSearchCache(plugin: EpochPlugin): Promise<void
 }
 
 export function scheduleTimelineSearchCacheSave(plugin: EpochPlugin, delayMs = 1000): void {
+	if (plugin.indexReady === false || getRuntime(plugin).__epochUnloaded) return
 	const runtime = getRuntime(plugin)
 	try {
 		const prior = runtime.__timelineSearchCacheSaveTimer

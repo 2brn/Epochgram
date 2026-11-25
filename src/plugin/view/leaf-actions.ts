@@ -14,7 +14,7 @@ type EditorLike = {
 type CanvasViewLike = {
 	snapInitialPosition?: (path: string | null, line: number | null) => void;
 	refreshIndex?: () => void;
-	refreshSemanticRelatedForActiveFile?: (force: boolean) => void;
+	refreshRelatedForActiveFile?: (force: boolean) => void;
 };
 
 type LeafViewLike = {
@@ -25,16 +25,6 @@ type LeafViewLike = {
 	openTimelineSearch?: () => void;
 	syncPreferencesFromPlugin?: (prefs: unknown) => void;
 	refreshIndex?: () => void;
-};
-
-type EpochPluginRuntime = EpochPlugin & {
-	stopAiBridge?: () => Promise<void> | void;
-	similarityWorker?: Worker | null;
-	similarityWorkerPending?: unknown;
-	similarityWorkerNextId?: number;
-	noteLeaf?: WorkspaceLeaf | null;
-	indexReady?: boolean;
-	viewPreferences?: unknown;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -78,29 +68,13 @@ function getEpochTargetLeaf(plugin: EpochPlugin): WorkspaceLeaf | null {
 }
 
 export function onViewUnload(plugin: EpochPlugin): void {
-	const runtime = plugin as EpochPluginRuntime;
-	try {
-		void runtime.stopAiBridge?.();
-	} catch {
-		// ignore
-	}
-	try {
-		const w: Worker | null = runtime.similarityWorker ?? null;
-		if (w) {
-			w.terminate();
-			runtime.similarityWorker = null;
-		}
-		runtime.similarityWorkerPending = null;
-		runtime.similarityWorkerNextId = 1;
-	} catch {
-		// ignore
-	}
+	plugin.clearInheritedMarksCache();
 	plugin.app.workspace.detachLeavesOfType(VIEW_TYPE_EPOCH);
 	plugin.app.workspace.detachLeavesOfType(VIEW_TYPE_WHATS_NEW);
 }
 
 export async function openEpochView(plugin: EpochPlugin, options: { skipSnap?: boolean; activate?: boolean } = {}): Promise<void> {
-	const runtime = plugin as EpochPluginRuntime;
+	const runtime = plugin;
 	await plugin.ensureIndexLoaded();
 	const shouldActivate = options.activate === true;
 	const current = plugin.app.workspace.getMostRecentLeaf();
@@ -262,9 +236,9 @@ export async function ensureEpochViewLeaf(plugin: EpochPlugin): Promise<void> {
 
 export function refreshEpochViews(
 	plugin: EpochPlugin,
-	options: { forceSemanticRelated?: boolean } = {}
+	options: { forceRelated?: boolean } = {}
 ): void {
-	const runtime = plugin as EpochPluginRuntime;
+	const runtime = plugin;
 	if (!runtime.indexReady) return;
 	const leaves = plugin.app.workspace.getLeavesOfType(VIEW_TYPE_EPOCH);
 	for (const leaf of leaves) {
@@ -281,6 +255,6 @@ export function refreshEpochViews(
 				canvasView.refreshIndex();
 			}
 		}
-		view.canvas?.refreshSemanticRelatedForActiveFile?.(options.forceSemanticRelated === true);
+		view.canvas?.refreshRelatedForActiveFile?.(options.forceRelated === true);
 	}
 }

@@ -1,7 +1,6 @@
 import { TFile } from 'obsidian'
 import type { EpochPlugin } from '../main'
 import { frontmatterToIndexTokens } from '../utils'
-import { isTopicSimilarityEnabled } from './similarity/config'
 
 type TimelineSearchDoc = {
 	id: string
@@ -19,24 +18,17 @@ type TimelineSearchIndexLike = {
 }
 
 type FileIndexDataLike = {
-	reviewState?: string
 	markColor?: number
-	pinnedFile?: boolean
+	pinnedFile?: "today" | "date" | "dock" | null
 }
-
-type TermSimilarityRecordLike = { term?: string; score?: number }
 
 type HydrationPluginState = {
 	timelineSearchIndex?: TimelineSearchIndexLike
-	settings?: { similarityZeroShotMinScore?: number }
-	termSimilarityLoaded?: boolean
-	termSimilarityIndex?: { files?: Record<string, TermSimilarityRecordLike> }
 	indexer: {
-		index?: Record<string, Array<{ file?: string; summary?: string; aiSummary?: string }>>
+		index?: Record<string, Array<{ file?: string; summary?: string }>>
 		files?: Record<string, unknown>
 		getIndexedPaths?: () => string[]
 		getFileIndexData?: (path: string) => FileIndexDataLike | null
-		getFileEmbeddingTerm?: (path: string) => string | null
 	}
 }
 
@@ -60,7 +52,7 @@ export function hydrateTimelineSearchIndexFromLoadedState(plugin: EpochPlugin): 
 			if (!Array.isArray(entries) || entries.length === 0) continue
 			for (const e of entries) {
 				const path = String(e?.file ?? '')
-				if (!path || path.startsWith('epoch://')) continue
+				if (!path) continue
 				let list = summariesByPath.get(path)
 				if (!list) {
 					list = []
@@ -68,8 +60,6 @@ export function hydrateTimelineSearchIndexFromLoadedState(plugin: EpochPlugin): 
 				}
 				const summary = String(e?.summary ?? '').trim()
 				if (summary) list.push(summary)
-				const aiSummary = String(e?.aiSummary ?? '').trim()
-				if (aiSummary) list.push(aiSummary)
 			}
 		}
 
@@ -127,38 +117,9 @@ export function hydrateTimelineSearchIndexFromLoadedState(plugin: EpochPlugin): 
 
 				try {
 					const d = typeof state.indexer?.getFileIndexData === 'function' ? state.indexer.getFileIndexData(p) : null
-					const reviewState = String(d?.reviewState ?? '').trim()
-					if (reviewState) metaParts.push(`review:${reviewState}`)
 					const markColor = d?.markColor
 					if (typeof markColor === 'number' && Number.isFinite(markColor)) metaParts.push(`mark:${markColor}`)
-					if (d?.pinnedFile === true) metaParts.push('pinned')
-				} catch {
-					// ignore
-				}
-
-				try {
-					if (typeof state.indexer?.getFileEmbeddingTerm === 'function') {
-						const term = String(state.indexer.getFileEmbeddingTerm(p) || '').trim()
-						if (term) metaParts.push(term)
-					}
-				} catch {
-					// ignore
-				}
-
-				try {
-					if (isTopicSimilarityEnabled(plugin)) {
-						const zeroShotMinRaw = Number(state?.settings?.similarityZeroShotMinScore ?? 0)
-						const zeroShotMin = Number.isFinite(zeroShotMinRaw) ? Math.max(0, Math.min(1, zeroShotMinRaw)) : 0
-						const storeLoaded = state?.termSimilarityLoaded === true && !!state?.termSimilarityIndex && typeof state.termSimilarityIndex === 'object'
-						if (storeLoaded && zeroShotMin > 0 && zeroShotMin < 1) {
-							const rec = state?.termSimilarityIndex?.files?.[p]
-							const inferred = typeof rec?.term === 'string' ? String(rec.term).trim() : ''
-							const score = Number(rec?.score ?? 0)
-							if (inferred && Number.isFinite(score) && score >= zeroShotMin) {
-								metaParts.push(inferred)
-							}
-						}
-					}
+					if (d?.pinnedFile) metaParts.push('pinned')
 				} catch {
 					// ignore
 				}

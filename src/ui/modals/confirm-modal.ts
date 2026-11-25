@@ -52,7 +52,7 @@ export class ConfirmModal extends Modal {
 		this.priorActiveElement = typeof activeDocument !== "undefined"
 			? toFocusableElement(activeDocument.activeElement)
 			: null;
-		this.modalEl.addClass("mod-epochgram-topic");
+		this.modalEl.addClass("mod-epochgram-confirm");
 		this.titleEl.setText(this.titleText);
 		this.contentEl.empty();
 		if (this.descriptionText) {

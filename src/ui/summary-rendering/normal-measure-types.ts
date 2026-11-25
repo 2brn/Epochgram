@@ -18,9 +18,7 @@ export interface NormalMeasureArgs {
 	prevAnimSummary?: { dayIndex: number; itemIndex: number } | null;
 	outgoingSummaries?: Array<{ dayIndex: number; itemIndex: number; t: number }> | null;
 	activeFilePath: string | null;
-	relatedDateRange?: { start: string; end: string } | null;
-	semanticRelatedPaths?: Set<string> | null;
-	showHidden: boolean;
+	relatedPaths?: Set<string> | null;
 	filenameWordsCount: number;
 	summaryWordsCount: number;
 	fontSmall: string;
@@ -31,9 +29,6 @@ export interface NormalMeasureArgs {
 	colRelated: string;
 	markColors?: string[];
 	inheritedMarkIndexByPath?: Map<string, number> | null;
-	pathsWithEmbeddingTerm?: Set<string> | null;
-	pathsWithClassifiedTerm?: Set<string> | null;
-	termSimilarPaths?: Set<string> | null;
 	getEntryTitle: (entry: DateEntry) => string | null;
 	visibleRowIndexRange?: { start: number; end: number } | null;
 	decorateTitle?: (args: { entryIndex: number; entry: DateEntry; title: string }) => string;
@@ -63,15 +58,12 @@ export type RenderRow = {
 	isActiveEntry: boolean;
 	summaryFont: string;
 	needsBoldFont: boolean;
-	isDraft: boolean;
 	padY: number;
 	baseColor: string;
 	hoverSummaryColor: string;
 	plusNBadgeColor?: string | null;
 	plusNBadgeBold?: boolean | null;
-	hiddenAlpha: number;
 	leadingIconIds: string[];
-	tagTint: boolean;
 	hasTagIcon: boolean;
 	leadingIconMetrics: ReturnType<typeof getSummaryIconMetrics>;
 	tagIconMetrics: ReturnType<typeof getSummaryIconMetrics>;

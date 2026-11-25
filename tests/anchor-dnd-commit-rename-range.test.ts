@@ -33,7 +33,6 @@ describe("Anchor drag-and-drop commit", () => {
 			blockEnd: 0,
 			summary: "",
 			source: "namedate",
-			reviewState: "reviewed"
 		};
 		const canvas: any = {
 			index: {
@@ -433,7 +432,7 @@ describe("Anchor drag-and-drop commit", () => {
 		expect(String((plugin.setYamlDateForPath as any).mock.calls[0]?.[1] ?? "")).toBe(dateKey);
 	});
 
-	it("preserves AI summaries during drag-and-drop", async () => {
+	it("renames a daily note and updates its YAML date during drag-and-drop", async () => {
 		const dropped = new Date("2026-05-19T12:00:00.000Z");
 		const dateKey = resolveDateKeyForCanvasDrop(dropped);
 

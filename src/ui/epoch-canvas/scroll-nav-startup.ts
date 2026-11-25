@@ -13,9 +13,6 @@ type StartupScrollNavCanvasState = {
 	showContentDates?: boolean;
 	showPropDates?: boolean;
 	showAttachments?: boolean;
-	reviewFilterMode?: string;
-	showDraftOnly?: boolean;
-	showHidden?: boolean;
 	root?: HTMLElement;
 	clearHover(force?: boolean): void;
 	draw(): void;
@@ -47,8 +44,6 @@ function getSourcePriority(source: DateEntry["source"]): number {
 			return 2;
 		case "content":
 			return 3;
-		case "tracked":
-			return 4;
 		default:
 			return 10;
 	}

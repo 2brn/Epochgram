@@ -1,334 +1,70 @@
-import { DEFAULT_SETTINGS } from "../settings";
+import { readCurrentSettings } from "../settings-schema";
 import type { PersistedPluginData } from "./state";
 import type { EpochPlugin } from "../main";
-import { normalizeSerializedEpochIndexForDisk } from "../indexer/disk-serialization";
+import { computeTextHash } from "../utils";
+import { scheduleTimelineSearchRebuild } from "./search-rebuild-scheduler";
+import { bumpTimelineSearchIndexVersion } from "./timeline-search-cache";
 import { mergeReviewStatesForSync } from "../indexer/review-state-sync";
-import {
-	applyAiSummaries,
-	applyEpochEntriesByDate,
-	loadEpochSummariesFromDisk
-} from "./ai-summaries/epoch-summaries-store";
-import {
-	mergeSyncedSettingsWithLocalActivation,
-	readLocalActivationState
-} from "./local-activation-state";
-import { isTrackChangesEffective } from "./pro-feature-state";
-
-function fastStringSignature(input: string): string {
-	const s = input ?? "";
-	let hash = 5381;
-	for (let i = 0; i < s.length; i++) {
-		hash = ((hash << 5) + hash) ^ s.charCodeAt(i);
-		hash |= 0;
-	}
-	return `${s.length}:${hash}`;
-}
-
-interface PollOptions {
-	forceIndex?: boolean;
-	forceData?: boolean;
-	forceVectors?: boolean;
-	forceTermSimilarity?: boolean;
-	forceEpochSummaries?: boolean;
-}
-
-type FileStatLike = { mtime: number | null; size: number | null };
-type IncomingFileStatLike = { mtime?: number; size?: number } | null | undefined;
-
-type PollingRuntime = {
-	statTermSimilarityFile?: () => Promise<IncomingFileStatLike>;
-	statEpochSummariesFile?: () => Promise<IncomingFileStatLike>;
-	vectorsFileStat?: FileStatLike;
-	termSimilarityFileStat?: FileStatLike;
-	epochSummariesFileStat?: FileStatLike;
-	lastIndexContentCheckAt?: number;
-	lastVectorsContentCheckAt?: number;
-	lastTermSimilarityContentCheckAt?: number;
-	lastEpochSummariesContentCheckAt?: number;
-	lastIndexDiskSignature?: string;
-	lastVectorsDiskSignature?: string;
-	lastTermSimilarityDiskSignature?: string;
-	lastEpochSummariesDiskSignature?: string;
-	vectorsFilePath?: string;
-	termSimilarityFilePath?: string;
-	epochSummariesFilePath?: string;
-	reloadVectorsFromDisk?: () => Promise<void>;
-	reloadTermSimilaritiesFromDisk?: () => Promise<void>;
-	scheduleInheritedMarkRecompute?: (reason?: string) => void;
-};
-
-function toIncomingFileStat(value: IncomingFileStatLike): { mtime?: number; size?: number } {
-	const mtime = typeof value?.mtime === "number" && Number.isFinite(value.mtime) ? value.mtime : undefined;
-	const size = typeof value?.size === "number" && Number.isFinite(value.size) ? value.size : undefined;
-	return { mtime, size };
-}
-
+interface PollOptions { forceIndex?: boolean; forceData?: boolean; }
 export interface PollingMethods {
 	pollExternalIndexChanges(options?: PollOptions): Promise<void>;
 	reloadIndexFromDisk(): Promise<void>;
 	reloadIndexFromPluginData(): Promise<void>;
 }
-
 export const pollingMethods: PollingMethods = {
-	async pollExternalIndexChanges(this: EpochPlugin, options: PollOptions = {}): Promise<void> {
-		const runtime = this as unknown as PollingRuntime;
-		const {
-			forceIndex = false,
-			forceData = false,
-			forceVectors = false,
-			forceTermSimilarity = false,
-			forceEpochSummaries = false
-		} = options;
-		if (this.indexPollInFlight) return;
-		if (this.indexLoadPromise) return;
-		if (!this.indexReady) return;
+	async pollExternalIndexChanges(this: EpochPlugin, options = {}) {
+		if (this.indexPollInFlight || this.indexLoadPromise || !this.indexReady || (this as EpochPlugin & { __epochIndexWriteQueue?: Promise<void> }).__epochIndexWriteQueue) return;
 		this.indexPollInFlight = true;
 		try {
-			this.refreshExcludedMatchers();
-			await this.waitForExcludedSync();
-			const [indexStat, dataStat, vectorsStat, termStat, epochSummariesStat] = await Promise.all([
-				this.statIndexFile(),
-				this.statDataFile(),
-				this.statVectorsFile(),
-				runtime.statTermSimilarityFile?.(),
-				runtime.statEpochSummariesFile?.()
-			]);
-			let indexChanged = forceIndex || this.didStatChange(this.indexFileStat, indexStat);
-			const dataChanged = forceData || this.didStatChange(this.dataFileStat, dataStat);
-			let vectorsChanged = forceVectors || this.didStatChange(runtime.vectorsFileStat ?? { mtime: null, size: null }, toIncomingFileStat(vectorsStat));
-		let termChanged =
-			forceTermSimilarity ||
-				this.didStatChange((runtime.termSimilarityFileStat ?? { mtime: null, size: null }), toIncomingFileStat(termStat));
-		let epochSummariesChanged =
-			forceEpochSummaries ||
-				this.didStatChange((runtime.epochSummariesFileStat ?? { mtime: null, size: null }), toIncomingFileStat(epochSummariesStat));
+			this.refreshExcludedMatchers(); await this.waitForExcludedSync();
+			const [indexStat, dataStat] = await Promise.all([this.statIndexFile(), this.statDataFile()]);
+			let changed = options.forceIndex || this.didStatChange(this.indexFileStat, indexStat);
 			const now = Date.now();
-
-			const normalizedIndexStat = this.normalizeStat(indexStat);
-			const normalizedVectorsStat = this.normalizeStat(vectorsStat);
-			const normalizedTermStat = this.normalizeStat(termStat ?? null);
-			const normalizedEpochSummariesStat = this.normalizeStat(epochSummariesStat ?? null);
-			void normalizedIndexStat;
-			void normalizedVectorsStat;
-			void normalizedTermStat;
-			void normalizedEpochSummariesStat;
-
-			// Some mobile vault adapters may not provide reliable mtime/size signals for sync changes.
-			// Fall back to periodic content checks.
-			const shouldForceIndexContentCheck = !indexChanged && now - Number(runtime.lastIndexContentCheckAt ?? 0) > 60000;
-			const shouldForceVectorsContentCheck = !vectorsChanged && now - Number(runtime.lastVectorsContentCheckAt ?? 0) > 60000;
-			const shouldForceTermContentCheck = !termChanged && now - Number(runtime.lastTermSimilarityContentCheckAt ?? 0) > 60000;
-			const shouldForceEpochSummariesContentCheck =
-				!epochSummariesChanged && now - Number(runtime.lastEpochSummariesContentCheckAt ?? 0) > 60000;
-
-			// Content signature check: catches sync updates where mtime/size do not change.
-			if (shouldForceIndexContentCheck) {
-				runtime.lastIndexContentCheckAt = now;
-				try {
-					const exists = await this.app.vault.adapter.exists(this.indexFilePath);
-					const raw = exists ? await this.app.vault.adapter.read(this.indexFilePath) : "";
-					const sig = fastStringSignature(raw);
-					const prev = String(runtime.lastIndexDiskSignature ?? "");
-					runtime.lastIndexDiskSignature = sig;
-					if (prev && prev !== sig) {
-						indexChanged = true;
-					}
-				} catch {
-					// ignore
-				}
+			if (!changed && now - this.lastIndexContentCheckAt > 60000) {
+				this.lastIndexContentCheckAt = now;
+				const runtime = this as EpochPlugin & { lastIndexDiskSignature?: string };
+				const raw = await this.app.vault.adapter.exists(this.indexFilePath) ? await this.app.vault.adapter.read(this.indexFilePath) : "";
+				let canonical = raw;
+				try { canonical = JSON.stringify(JSON.parse(raw)); } catch { /* Malformed cache remains detectable. */ }
+				const signature = computeTextHash(canonical);
+				const baseline = runtime.lastIndexDiskSignature ?? computeTextHash(JSON.stringify(this.indexer.toJSON()));
+				changed = baseline !== signature;
+				if (!changed) runtime.lastIndexDiskSignature = signature;
 			}
-
-			if (shouldForceVectorsContentCheck) {
-				runtime.lastVectorsContentCheckAt = now;
-				try {
-					const vectorsPath = String(runtime.vectorsFilePath ?? "");
-					if (vectorsPath) {
-						const exists = await this.app.vault.adapter.exists(vectorsPath);
-						const raw = exists ? await this.app.vault.adapter.read(vectorsPath) : "";
-						const sig = fastStringSignature(raw);
-						const prev = String(runtime.lastVectorsDiskSignature ?? "");
-						runtime.lastVectorsDiskSignature = sig;
-						if (prev && prev !== sig) {
-							vectorsChanged = true;
-						}
-					}
-				} catch {
-					// ignore
-				}
-			}
-
-			if (shouldForceTermContentCheck) {
-				runtime.lastTermSimilarityContentCheckAt = now;
-				try {
-					const termPath = String(runtime.termSimilarityFilePath ?? "");
-					if (termPath) {
-						const exists = await this.app.vault.adapter.exists(termPath);
-						const raw = exists ? await this.app.vault.adapter.read(termPath) : "";
-						const sig = fastStringSignature(raw);
-						const prev = String(runtime.lastTermSimilarityDiskSignature ?? "");
-						runtime.lastTermSimilarityDiskSignature = sig;
-						if (prev && prev !== sig) {
-							termChanged = true;
-						}
-					}
-				} catch {
-					// ignore
-				}
-			}
-
-			if (shouldForceEpochSummariesContentCheck) {
-				runtime.lastEpochSummariesContentCheckAt = now;
-				try {
-					const p = String(runtime.epochSummariesFilePath ?? "");
-					if (p) {
-						const exists = await this.app.vault.adapter.exists(p);
-						const raw = exists ? await this.app.vault.adapter.read(p) : "";
-						const sig = fastStringSignature(raw);
-						const prev = String(runtime.lastEpochSummariesDiskSignature ?? "");
-						runtime.lastEpochSummariesDiskSignature = sig;
-						if (prev && prev !== sig) {
-							epochSummariesChanged = true;
-						}
-					}
-				} catch {
-					// ignore
-				}
-			}
-
-			const shouldCheckPluginData =
-				indexChanged ||
-				dataChanged ||
-				forceData ||
-				now - this.lastDataSignatureCheck > 60000;
-
-			if (indexChanged) {
-				await this.reloadIndexFromDisk();
-			}
-
-			if (vectorsChanged) {
-				try {
-					await runtime.reloadVectorsFromDisk?.();
-				} catch {
-					// ignore
-				}
-			}
-
-			if (termChanged) {
-				try {
-					await runtime.reloadTermSimilaritiesFromDisk?.();
-				} catch {
-					// ignore
-				}
-			}
-
-			if (epochSummariesChanged) {
-				try {
-					const loaded = await loadEpochSummariesFromDisk(this);
-					applyEpochEntriesByDate(this, loaded.epochsByDate);
-					applyAiSummaries(this, loaded.aiSummaries);
-					this.refreshEpochViews();
-				} catch {
-					// ignore
-				}
-			}
-
-			if (shouldCheckPluginData) {
-				await this.reloadIndexFromPluginData();
-			}
-
-			this.indexFileStat = normalizedIndexStat;
-			this.dataFileStat = this.normalizeStat(dataStat);
-			runtime.vectorsFileStat = normalizedVectorsStat;
-			runtime.termSimilarityFileStat = normalizedTermStat;
-			runtime.epochSummariesFileStat = normalizedEpochSummariesStat;
-		} catch (error) {
-			void error;
-		} finally {
-			this.indexPollInFlight = false;
-		}
+			if (changed) await this.reloadIndexFromDisk();
+			if (options.forceData || changed || this.didStatChange(this.dataFileStat, dataStat) || now - this.lastDataSignatureCheck > 60000) await this.reloadIndexFromPluginData();
+			if (!changed) this.indexFileStat = this.normalizeStat(indexStat);
+		} finally { this.indexPollInFlight = false; }
 	},
-
-	async reloadIndexFromDisk(this: EpochPlugin): Promise<void> {
-		const runtime = this as unknown as PollingRuntime;
-		try {
-			const diskIndex = await this.loadIndexFromDisk();
-			if (!diskIndex) {
-				await this.updateIndexFileStat();
-				return;
-			}
-			const sanitized = normalizeSerializedEpochIndexForDisk(diskIndex);
-			try {
-				// Keep review mutations made against the same file content when Sync
-				// delivers an older full-index snapshot from another device.
-				mergeReviewStatesForSync(sanitized, this.indexer.toJSON());
-			} catch {
-				// A malformed legacy entry must not block the external reload.
-			}
-			await this.indexer.load(sanitized);
-			try {
-				const loaded = await loadEpochSummariesFromDisk(this);
-				applyEpochEntriesByDate(this, loaded.epochsByDate);
-				applyAiSummaries(this, loaded.aiSummaries);
-			} catch {
-				// ignore
-			}
-			// The index can change due to sync without any local mutation hooks firing.
-			// Inherited mark caches depend on the marked seed set; invalidate + recompute
-			// so cleared marks (unmark) reflect immediately on other devices.
-			try {
-				runtime.scheduleInheritedMarkRecompute?.("index-disk-reload");
-			} catch {
-				// ignore
-			}
-			this.indexReady = true;
-			await this.updateIndexFileStat();
-			this.refreshEpochViews();
-			void this.ensureExcludedSync();
-		} catch (error) {
-			void error;
-		}
+	async reloadIndexFromDisk(this: EpochPlugin) {
+		const pending = (this as EpochPlugin & { __epochIndexWriteQueue?: Promise<void> }).__epochIndexWriteQueue;
+		if (pending) await pending;
+		const revision = this.indexer.revision;
+		const disk = await this.loadIndexFromDisk();
+		if (this.indexLoadPromise || this.indexer.revision !== revision) return;
+		if (!disk) { await this.updateIndexFileStat(); return; }
+		const reconciled = mergeReviewStatesForSync(disk, this.indexer.toJSON());
+		await this.indexer.load(disk);
+		(this as EpochPlugin & { lastIndexDiskSignature?: string }).lastIndexDiskSignature = computeTextHash(JSON.stringify(disk));
+		if (reconciled) await this.saveCurrentIndexToDisk();
+		// Preserve full-text documents while the updated vault is reconciled in the background.
+		scheduleTimelineSearchRebuild(this); bumpTimelineSearchIndexVersion(this);
+		this.scheduleInheritedMarkRecompute("index-disk-reload");
+		this.indexReady = true; await this.updateIndexFileStat();
+		this.refreshEpochViews(); void this.ensureExcludedSync();
 	},
-
-	async reloadIndexFromPluginData(this: EpochPlugin): Promise<void> {
-		let indexUpdated = false;
-		let settingsChanged = false;
+	async reloadIndexFromPluginData(this: EpochPlugin) {
 		try {
-			const saved = (await this.loadData()) as PersistedPluginData | null;
+			const saved = await this.loadData() as PersistedPluginData | null;
 			const signature = this.computeDataSignature(saved);
-			if (signature === this.lastDataSignature) {
-				return;
-			}
+			if (signature === this.lastDataSignature || !saved?.settings) return;
 			this.lastDataSignature = signature;
-			if (!saved) {
-				return;
+			const settings = readCurrentSettings(saved.settings);
+			if (!this.areSettingsEqual(this.settings, settings)) {
+				this.settings = settings;
+				this.viewPreferences = { showAttachments: settings.timelineFilters?.showAttachments === true, showParsed: settings.timelineFilters?.showParsed !== false, showDraftsOnly: this.viewPreferences.showDraftsOnly === true };
+				this.refreshCalendarSyncSchedule(); this.scheduleInheritedMarkRecompute("settings"); this.refreshEpochViews();
 			}
-
-			if (saved.settings) {
-				const nextSettings = Object.assign(
-					{},
-					DEFAULT_SETTINGS,
-					mergeSyncedSettingsWithLocalActivation(saved.settings, readLocalActivationState(this))
-				);
-				const previousTrackChanges = isTrackChangesEffective(this);
-				if (!this.areSettingsEqual(this.settings, nextSettings)) {
-					this.settings = nextSettings;
-					settingsChanged = true;
-				}
-				if (previousTrackChanges !== isTrackChangesEffective(this)) {
-					this.registerFileEvents();
-				}
-			}
-		} catch (error) {
-			void error;
-		} finally {
-			this.lastDataSignatureCheck = Date.now();
-			await this.updateDataFileStat();
-			if (indexUpdated) {
-				await this.ensureExcludedSync();
-			}
-			if (indexUpdated || settingsChanged) {
-				this.refreshEpochViews();
-			}
-		}
+		} finally { this.lastDataSignatureCheck = Date.now(); await this.updateDataFileStat(); }
 	}
 };

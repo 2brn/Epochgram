@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TFile } from "obsidian";
 import { methodsRelatedGraph } from "../src/plugin/similarity/methods-related-graph";
-import { withTrustedPro } from "./helpers/trusted-pro";
 
 function makeFile(path: string): TFile {
 	const name = path.split("/").pop() ?? path;
@@ -52,7 +51,6 @@ describe("Frontmatter similar/nosimilar", () => {
 				similarityUseTags: true,
 				similarityTitleJwThreshold: 0.92
 			},
-			hasProAccess: () => true,
 			app: {
 				vault: {
 					getAbstractFileByPath: vi.fn((p: string) => byPath.get(p) ?? null),
@@ -66,7 +64,6 @@ describe("Frontmatter similar/nosimilar", () => {
 			},
 			shouldIndexFile: vi.fn(() => true)
 		};
-		withTrustedPro(pluginStub);
 	});
 
 	it("nosimilar blocks links and title matching", async () => {

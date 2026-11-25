@@ -1,5 +1,10 @@
 # Epochgram changelog
 
+## [2.0.0]
+- One free Epochgram plugin with calendar sync, recurrence, manual and extracted summaries, search, marks, pins, attachments, daily notes, and title/link/tag similarity.
+- Draft, Reviewed, and Hidden states with review actions, filters, edit resets, and synchronization in the current index.
+- Simplified runtime and packaging; installation does not migrate notes or old sidecars.
+
 ## [1.8.33] - 2026-11-14
 - Refined AI bridge defaults to preserve named projects, concrete actions, task status, and milestones with shorter prompts and unchanged input/output limits.
 - Unified record, epoch, and reduction fallback contexts with the bundled YAML defaults, removing duplicate hard-coded prompts.

@@ -5,17 +5,6 @@ function dateKey(d: string) {
 	return Number(`${yyyy}${mm}${dd}`);
 }
 
-function trackedTimestamp(entry: DateEntry): number {
-	if (!entry || entry.source !== "tracked") return Number.NEGATIVE_INFINITY;
-	const raw = entry.trackedTime;
-	if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-	if (typeof raw === "string") {
-		const parsed = Date.parse(raw);
-		if (Number.isFinite(parsed)) return parsed;
-	}
-	return Number.NEGATIVE_INFINITY;
-}
-
 function stringValue(value: unknown): string {
 	return typeof value === "string" ? value : "";
 }
@@ -41,8 +30,6 @@ export function sortIndex(index: EpochIndex): EpochIndex {
 			};
 			const sourceRank = (entry: DateEntry) => {
 				switch (entry.source) {
-					case "tracked":
-						return 0;
 					case "content":
 						return 1;
 					case "namedate":
@@ -59,11 +46,6 @@ export function sortIndex(index: EpochIndex): EpochIndex {
 			if (srcA !== srcB) return srcA - srcB;
 			const fileCmp = a.file.localeCompare(b.file);
 			if (fileCmp !== 0) return fileCmp;
-			if (a.source === "tracked" && b.source === "tracked") {
-				const timeA = trackedTimestamp(a);
-				const timeB = trackedTimestamp(b);
-				if (timeA !== timeB) return timeB - timeA;
-			}
 			return a.blockStart - b.blockStart;
 		});
 		out[d] = entries;

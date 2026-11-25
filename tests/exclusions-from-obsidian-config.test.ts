@@ -16,11 +16,9 @@ function makePlugin(vaultOverrides: Partial<any> = {}, pluginOverrides: Partial<
 		excludedFilterMatchers: [],
 		indexReady: false,
 		indexLoadPromise: null,
-		indexFilePath: "epochgram-index.json",
-		dataFilePath: "epoch-data.json",
+		indexFilePath: `${vault.configDir}/plugins/epochgram/index.json`,
+		dataFilePath: `${vault.configDir}/plugins/epochgram/data.json`,
 		pluginDirPath: `${vault.configDir}/plugins/epochgram`,
-		vectorsFilePath: "epochgram-semantics.json",
-		termSimilarityFilePath: "epochgram-topics.json",
 		...pluginOverrides
 	};
 
@@ -73,16 +71,13 @@ describe("Obsidian config ignored/excluded paths", () => {
 		expect(plugin.shouldIndexPath("Folder/ok.md")).toBe(true);
 	});
 
-	it("shouldIndexPath does not hard-block exported epoch HTML files", () => {
+	it("shouldIndexPath includes HTML attachments", () => {
 		const plugin = makePlugin({
 			getConfig: () => undefined,
 			config: { userIgnoreFilters: [] }
 		});
 
-		expect(plugin.shouldIndexPath("epochgram-2026-02-16.html")).toBe(true);
-		expect(plugin.shouldIndexPath("Daily/epochgram-2026-02-16.html")).toBe(true);
-		expect(plugin.shouldIndexPath("epoch-2026-02-16.html")).toBe(true);
-		expect(plugin.shouldIndexPath("Daily/epoch-2026-02-16.html")).toBe(true);
-		expect(plugin.shouldIndexPath("epochs-2026-02-16.html")).toBe(true);
+		expect(plugin.shouldIndexPath("page.html")).toBe(true);
+		expect(plugin.shouldIndexPath("Daily/page.html")).toBe(true);
 	});
 });

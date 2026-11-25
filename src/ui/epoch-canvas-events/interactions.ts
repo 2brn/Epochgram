@@ -1,8 +1,6 @@
 import type { EpochCanvas } from "../epoch-canvas";
 import type { DateEntry } from "../../indexer/types";
 import { getEventState } from "./state";
-import { getEpochRangeFromEntry } from "../epoch-canvas-utils";
-import { listRelatedEntriesForEpochRange } from "../epoch-canvas/epochs-view";
 import { getEntriesForDate } from "../entry-helpers";
 import { setCssStyles } from "../../dom";
 
@@ -14,7 +12,6 @@ function nowMs(): number {
 
 type CanvasInteractionState = ReturnType<typeof getEventState> & {
 	__suppressExternalAutoScrollUntil?: number;
-	__epochOpenCursor?: EpochOpenCursorState;
 	__compactOpenCursor?: CompactOpenCursorState;
 	activeFilePath?: string | null;
 	scrollNavAnchorEntry?: DateEntry;
@@ -36,7 +33,6 @@ type CanvasInteractionState = ReturnType<typeof getEventState> & {
 	resetScrollNavToToday(): void;
 	getToday(): Date;
 	getDateForIndex(index: number, today: Date): Date;
-	epochsView?: boolean;
 	isPointerDeviceEvent(): boolean;
 	layouts: Array<{
 		hasVisibleDate: boolean;
@@ -56,42 +52,11 @@ type CanvasInteractionState = ReturnType<typeof getEventState> & {
 	canvas: HTMLCanvasElement;
 };
 
-function isEpochEntry(entry: DateEntry | null | undefined): boolean {
-	if (!entry) return false;
-	const file = String(entry.file || "");
-	return file.startsWith("epoch://");
-}
-
 function clearHoverAfterMobileRecordOpen(s: CanvasInteractionState): void {
 	if (s.isPointerDeviceEvent()) return;
 	s.keepHoverUntilPointerMove = false;
 	s.clearHover(true);
 }
-
-async function openEpochEntryTarget(
-	canvas: EpochCanvas,
-	entry: DateEntry,
-	ev: { ctrlKey: boolean; metaKey: boolean },
-	suppressFocusHover: boolean
-): Promise<boolean> {
-	const s = getEventState(canvas) as CanvasInteractionState;
-	const range = getEpochRangeFromEntry(entry);
-	if (!range) return false;
-	const next = pickNextEpochEntryFromRange(canvas, range.start, range.end, s);
-	if (!next) return false;
-	try {
-		s.suppressNextFocusScrollForPath?.(next.file);
-	} catch {
-		// ignore
-	}
-	await s.openEntry(next, ev, suppressFocusHover);
-	return true;
-}
-
-type EpochOpenCursorState = {
-	key: string;
-	index: number;
-};
 
 type CompactOpenCursorState = {
 	key: string;
@@ -173,26 +138,6 @@ async function openCompactCollapsedEntryTarget(
 	return true;
 }
 
-export function pickNextEpochEntryFromRange(canvas: EpochCanvas, start: string, end: string, state: CanvasInteractionState & { __epochOpenCursor?: EpochOpenCursorState }): DateEntry | null {
-	const ordered = listRelatedEntriesForEpochRange(canvas, start, end);
-	if (!ordered.length) return null;
-	const key = `${start}|${end}`;
-	const prev: EpochOpenCursorState | null = state && typeof state === "object"
-		? (state.__epochOpenCursor ?? null)
-		: null;
-	let index = 0;
-	if (prev && prev.key === key) {
-		const lastIndex = Number(prev.index);
-		if (Number.isInteger(lastIndex) && lastIndex >= 0) {
-			index = (lastIndex + 1) % ordered.length;
-		}
-	}
-	if (state && typeof state === "object") {
-		state.__epochOpenCursor = { key, index };
-	}
-	return ordered[index] ?? null;
-}
-
 export async function handlePointClick(
 	canvas: EpochCanvas,
 	x: number,
@@ -245,26 +190,9 @@ export async function handlePointClick(
 		} catch {
 			// ignore
 		}
-		if (s.epochsView && isEpochEntry(best.entry)) {
-			await openEpochEntryTarget(canvas, best.entry, { ctrlKey, metaKey }, true);
-			try {
-				s.scrollNavAnchorEntry = best.entry;
-				s.scrollNavAnchorDayIndex = best.dayIndex;
-			} catch {
-				// ignore
-			}
-			if (s.isPointerDeviceEvent()) {
-				s.keepHoverUntilPointerMove = true;
-				s.setHoverSummary(best.dayIndex, best.itemIndex, true);
-				setCssStyles(s.canvas, { cursor: "pointer" });
-			} else {
-				clearHoverAfterMobileRecordOpen(interactionState);
-			}
-			return;
-		}
 		const compactHiddenCount = Number(best.compactHiddenCount ?? 0);
 		const compactTotalCount = Number(best.compactTotalCount ?? 0);
-		if (!s.epochsView && compactHiddenCount > 0 && compactTotalCount > best.itemIndex + 1) {
+		if (compactHiddenCount > 0 && compactTotalCount > best.itemIndex + 1) {
 			const opened = await openCompactCollapsedEntryTarget(
 				canvas,
 				best.dayIndex,
@@ -384,26 +312,9 @@ export async function handleTapWithHover(canvas: EpochCanvas, x: number, y: numb
 		s.requestHoverAnimation();
 
 		await new Promise(resolve => window.setTimeout(resolve, 120));
-		if (s.epochsView && isEpochEntry(best.entry)) {
-			await openEpochEntryTarget(canvas, best.entry, { ctrlKey: false, metaKey: false }, true);
-			try {
-				s.scrollNavAnchorEntry = best.entry;
-				s.scrollNavAnchorDayIndex = best.dayIndex;
-			} catch {
-				// ignore
-			}
-			if (s.isPointerDeviceEvent()) {
-				s.keepHoverUntilPointerMove = true;
-				s.setHoverSummary(best.dayIndex, best.itemIndex, true);
-				setCssStyles(s.canvas, { cursor: "pointer" });
-			} else {
-				clearHoverAfterMobileRecordOpen(interactionState);
-			}
-			return;
-		}
 		const compactHiddenCount = Number(best.compactHiddenCount ?? 0);
 		const compactTotalCount = Number(best.compactTotalCount ?? 0);
-		if (!s.epochsView && compactHiddenCount > 0 && compactTotalCount > best.itemIndex + 1) {
+		if (compactHiddenCount > 0 && compactTotalCount > best.itemIndex + 1) {
 			const opened = await openCompactCollapsedEntryTarget(
 				canvas,
 				best.dayIndex,
@@ -472,16 +383,6 @@ export async function handleDoublePoint(canvas: EpochCanvas, x: number, y: numbe
 			interactionState.scrollNavAnchorDayIndex = null;
 		} catch {
 			// ignore
-		}
-		if (s.epochsView && isEpochEntry(summaryEntry)) {
-			await openEpochEntryTarget(canvas, summaryEntry, { ctrlKey: false, metaKey: false }, true);
-			if (s.isPointerDeviceEvent()) {
-				s.keepHoverUntilPointerMove = true;
-				setCssStyles(s.canvas, { cursor: "pointer" });
-			} else {
-				clearHoverAfterMobileRecordOpen(interactionState);
-			}
-			return;
 		}
 		interactionState.suppressNextFocusScrollForPath?.(summaryEntry.file);
 		await s.openEntry(summaryEntry, undefined, true);

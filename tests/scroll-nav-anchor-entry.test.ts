@@ -63,7 +63,7 @@ function makeCanvas(): any {
 		offsetY: -5 * 48,
 		scale: 1,
 		activeFilePath: "a.md",
-		semanticRelatedScored: [{ path: "b.md", score: 0.9 }],
+		relatedScored: [{ path: "b.md", score: 0.9 }],
 		clearFocusedEpochRange: vi.fn(),
 		requestHoverAnimation: vi.fn(),
 		focusFile: vi.fn(),
@@ -75,7 +75,7 @@ function makeCanvas(): any {
 		pendingScrollNavHighlight: null,
 		scrollNavIndex: -1,
 		scrollNavFile: null,
-		semanticRelatedBasePath: "a.md",
+		relatedBasePath: "a.md",
 		scrollNavAnchorEntry: bEntry,
 		scrollNavAnchorDayIndex: 5
 	};

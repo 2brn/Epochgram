@@ -1,17 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/ui/epoch-canvas/semantic", () => {
-	return {
-		refreshSemanticRelatedForActiveFile: vi.fn()
-	};
-});
-
-import { refreshSemanticRelatedForActiveFile } from "../src/ui/epoch-canvas/semantic";
+vi.mock("../src/ui/epoch-canvas/related", () => ({ refreshRelatedForActiveFile: vi.fn() }));
+import { refreshRelatedForActiveFile } from "../src/ui/epoch-canvas/related";
 import { setActiveFile } from "../src/ui/epoch-canvas/active-file";
 import { Platform } from "obsidian";
 
-describe("setActiveFile initial semantic refresh", () => {
-	it("refreshes semantic highlights when path is unchanged", () => {
+describe("setActiveFile initial related refresh", () => {
+	it("refreshes related highlights when path is unchanged", () => {
 		const canvas: any = {
 			activeFilePath: "A.md",
 			root: { matches: () => false },
@@ -23,8 +18,8 @@ describe("setActiveFile initial semantic refresh", () => {
 
 		setActiveFile(canvas, "A.md", null, { suppressFocus: true });
 
-		expect(refreshSemanticRelatedForActiveFile).toHaveBeenCalledTimes(1);
-		expect(refreshSemanticRelatedForActiveFile).toHaveBeenCalledWith(canvas, false);
+		expect(refreshRelatedForActiveFile).toHaveBeenCalledTimes(1);
+		expect(refreshRelatedForActiveFile).toHaveBeenCalledWith(canvas, false);
 	});
 
 	it("preserves pending focus when path is unchanged", () => {

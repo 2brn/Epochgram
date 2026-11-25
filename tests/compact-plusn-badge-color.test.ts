@@ -269,7 +269,7 @@ describe("compact-mode +n badge accent color", () => {
 			entries,
 			visibleCount: 2,
 			activeFilePath: "c.md",
-			semanticRelatedPaths: null,
+			relatedPaths: null,
 			markColors: undefined,
 			inheritedMarkIndexByPath: null,
 			colHighlight: "#f00",

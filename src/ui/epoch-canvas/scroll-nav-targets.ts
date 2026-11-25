@@ -8,42 +8,22 @@ import {
 } from "../epoch-canvas-focus";
 import { getEntriesCountForDateFast, getEntriesForDate, pickEntryForFile } from "../entry-helpers";
 
-type EpochBucket = "day" | "2days" | "4days" | "week" | "2weeks" | "month" | "3months" | "6months" | "year";
-
 type EntryTarget = Extract<ScrollNavTarget, { kind: "entry" }>;
 
 type ScrollNavTargetsState = {
 	index?: Record<string, DateEntry[]>;
-	epochsViewBucket?: string | null;
-	epochsView?: boolean;
 	searchQuery?: string;
 	__indexVersion?: number;
 	showAttachments?: boolean;
-	showTrackedChanges?: boolean;
+	showDraftsOnly?: boolean;
 	showContentDates?: boolean;
-	showHidden?: boolean;
-	showDraftOnly?: boolean;
+	showPropDates?: boolean;
 	__scrollNavVisibleTargetsSig?: string | null;
 	__scrollNavVisibleTargets?: EntryTarget[] | null;
 };
 
 function state(canvas: EpochCanvas): ScrollNavTargetsState {
 	return canvas as unknown as ScrollNavTargetsState;
-}
-
-function normalizeEpochBucket(value: unknown): EpochBucket | null {
-	const bucket = typeof value === "string" ? value : "";
-	return bucket === "day" ||
-		bucket === "2days" ||
-		bucket === "4days" ||
-		bucket === "week" ||
-		bucket === "2weeks" ||
-		bucket === "month" ||
-		bucket === "3months" ||
-		bucket === "6months" ||
-		bucket === "year"
-		? bucket
-		: null;
 }
 
 function entryKey(date: Date, entry: DateEntry): string {
@@ -128,21 +108,15 @@ export function computeVisibleScrollNavEntryTargets(canvas: EpochCanvas): EntryT
 	const index = c.index ?? null;
 	if (!index || typeof index !== "object") return [];
 
-	const epochBucket = normalizeEpochBucket(c.epochsViewBucket ?? "");
-	const epochBucketOpt = c.epochsView && epochBucket ? { epochBucket } : undefined;
-
 	const sig = (() => {
 		const q = String(c.searchQuery || "").trim().toLowerCase();
 		const parts = [
 			`v:${Number(c.__indexVersion) || 0}`,
 			`Q:${q}`,
 			`A:${c.showAttachments ? 1 : 0}`,
-			`T:${c.showTrackedChanges ? 1 : 0}`,
 			`C:${c.showContentDates ? 1 : 0}`,
-			`H:${c.showHidden ? 1 : 0}`,
-			`D:${c.showDraftOnly ? 1 : 0}`,
-			`E:${c.epochsView ? 1 : 0}`,
-			`B:${String(c.epochsViewBucket || "")}`
+			`P:${c.showPropDates ? 1 : 0}`,
+			`D:${c.showDraftsOnly ? 1 : 0}`
 		];
 		return parts.join("|");
 	})();
@@ -160,7 +134,7 @@ export function computeVisibleScrollNavEntryTargets(canvas: EpochCanvas): EntryT
 	for (const dateKey of Object.keys(index)) {
 		const date = dateKeyToDateHelper(dateKey);
 		if (!date) continue;
-		const entries = getEntriesForDate(canvas, date, epochBucketOpt);
+		const entries = getEntriesForDate(canvas, date);
 		if (!entries || entries.length === 0) continue;
 		const dayIndexRaw = getDayIndexForDateHelper(canvas, date);
 		const dayIndex = Number.isFinite(dayIndexRaw) ? Number(dayIndexRaw) : Number.POSITIVE_INFINITY;
@@ -176,7 +150,7 @@ export function computeVisibleScrollNavEntryTargets(canvas: EpochCanvas): EntryT
 	const seen = new Set<string>();
 
 	for (const { date } of days) {
-		const entries = getEntriesForDate(canvas, date, epochBucketOpt);
+		const entries = getEntriesForDate(canvas, date);
 		if (!entries || entries.length === 0) continue;
 		for (const entry of entries) {
 			if (!entry) continue;
@@ -202,14 +176,11 @@ export function computeVisibleScrollNavDayTargets(canvas: EpochCanvas): Array<{ 
 	const index = c.index ?? null;
 	if (!index || typeof index !== "object") return [];
 
-	const epochBucket = normalizeEpochBucket(c.epochsViewBucket ?? "");
-
 	const days: Array<{ dayIndex: number; date: Date }> = [];
 	for (const dateKey of Object.keys(index)) {
 		const date = dateKeyToDateHelper(dateKey);
 		if (!date) continue;
-		const options = epochBucket ? { epochBucket } : undefined;
-		const count = getEntriesCountForDateFast(canvas, date, options);
+		const count = getEntriesCountForDateFast(canvas, date);
 		if (!Number.isFinite(count) || count <= 0) continue;
 		const dayIndexRaw = getDayIndexForDateHelper(canvas, date);
 		const dayIndex = Number.isFinite(dayIndexRaw) ? Number(dayIndexRaw) : Number.POSITIVE_INFINITY;

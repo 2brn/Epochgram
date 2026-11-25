@@ -4,7 +4,6 @@ import { resetScrollNavToToday } from "../src/ui/epoch-canvas/scroll-nav";
 
 describe("scroll to Today resets scroll-nav target", () => {
 	test("resetScrollNavToToday clears anchor/target state and animates", () => {
-		const clearFocusedEpochRange = vi.fn();
 		const animateToToday = vi.fn();
 
 		const canvas: any = {
@@ -15,13 +14,11 @@ describe("scroll to Today resets scroll-nav target", () => {
 			scrollNavAnchorEntry: { file: "Old.md" },
 			scrollNavAnchorDayIndex: 7,
 			__scrollNavAnchorMode: "summary",
-			clearFocusedEpochRange,
 			animateToToday
 		};
 
 		resetScrollNavToToday(canvas);
 
-		expect(clearFocusedEpochRange).toHaveBeenCalledTimes(1);
 		expect(canvas.scrollNavIndex).toBe(-1);
 		expect(canvas.pendingScrollNavHighlight).toBe(null);
 		expect(canvas.scrollNavAnchorEntry).toBe(null);

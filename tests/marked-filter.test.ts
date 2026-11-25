@@ -6,11 +6,8 @@ function makeCanvas(overrides: any = {}) {
 	const base = {
 		index: {},
 		showAttachments: true,
-		showTrackedChanges: true,
-		showHidden: true,
 		showContentDates: true,
 		showPropDates: false,
-		epochsView: false,
 		searchQuery: "",
 		plugin: {}
 	};
@@ -53,13 +50,13 @@ describe("!marked token", () => {
 		expect(out[0]?.file).toBe("B.md");
 	});
 
-	it("does not bypass the Tracked filter", () => {
+	it("does not bypass the content-date filter", () => {
 		const canvas = makeCanvas({
 			searchQuery: "!marked",
-			showTrackedChanges: false,
+			showContentDates: false,
 			index: {
 				"2026-01-04": [
-					{ date: "2026-01-04", file: "A.md", blockStart: 0, blockEnd: 0, summary: "", source: "tracked", markColor: 2 }
+					{ date: "2026-01-04", file: "A.md", blockStart: 0, blockEnd: 0, summary: "", source: "content", markColor: 2 }
 				]
 			}
 		});

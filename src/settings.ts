@@ -9,7 +9,7 @@ export { DEFAULT_SETTINGS } from "./settings-model";
 
 import { renderGeneralViewSettings, renderIndexerSettings } from "./settings-ui/general";
 import { renderMaintenanceSettings } from "./settings-ui/maintenance";
-import { renderProPanel } from "./settings-ui/pro";
+import { renderAdvancedSettings } from "./settings-ui/advanced";
 import { createSettingGroup } from "./settings-ui/setting-groups";
 
 type RuntimeWindowLike = Window & { require?: (id: string) => unknown };
@@ -46,10 +46,6 @@ export class EpochSettingTab extends PluginSettingTab {
 		}
 	}
 
-	getSettingDefinitions() {
-		return [];
-	}
-
 	private refreshDisplay(): void {
 		const display = (this as unknown as { display?: () => void }).display;
 		display?.call(this);
@@ -65,15 +61,7 @@ export class EpochSettingTab extends PluginSettingTab {
 
 		const { itemsEl: indexerItems } = createSettingGroup(containerEl, "Indexer");
 
-		renderProPanel(containerEl, this.app, this.plugin, () => this.refreshDisplay());
-		try {
-			const proGroup = containerEl.querySelector<HTMLElement>(":scope > .setting-group.epoch-pro-settings-group");
-			if (proGroup && containerEl.firstElementChild !== proGroup) {
-				containerEl.insertBefore(proGroup, containerEl.firstElementChild);
-			}
-		} catch {
-			// ignore
-		}
+		renderAdvancedSettings(containerEl, this.app, this.plugin, () => this.refreshDisplay());
 		renderIndexerSettings(indexerItems, this.plugin);
 		renderMaintenanceSettings(indexerItems, this.app, this.plugin, () => this.refreshDisplay());
 
@@ -81,12 +69,12 @@ export class EpochSettingTab extends PluginSettingTab {
 		const versionSetting = new Setting(versionItems)
 			.setName(`Version ${version}`);
 		versionSetting.addButton((button) => {
+			button.buttonEl.classList.add("epoch-community-button");
 			button
 				.setButtonText("Reddit community")
 				.onClick(() => {
 					openExternalUrl("https://www.reddit.com/r/Epochgram/");
 				});
-			button.buttonEl?.classList?.add("epoch-pro-get-pro-button");
 		});
 		const changelogLink = versionSetting.descEl.createEl("a", {
 			text: "Read the changelog.",

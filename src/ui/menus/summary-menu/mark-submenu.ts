@@ -14,7 +14,6 @@ import {
 	isPathInheritedMarked
 } from "../../mark-group";
 import { getMenuState } from "../menu-state";
-import { getTopicGroupForPath } from "./topic-group";
 import { setCssStyles } from "../../../dom";
 
 const activeDocument = typeof window !== "undefined" ? window.document : null;
@@ -57,7 +56,7 @@ type MarkMenuStateLike = ReturnType<typeof getMenuState> & {
 
 type CanvasRootLike = {
 	root?: HTMLElement;
-	semanticRelatedPaths?: Set<string>;
+	relatedPaths?: Set<string>;
 };
 
 function isNativeMenusEnabled(app: MarkMenuPluginLike["app"] | null | undefined): boolean {
@@ -135,7 +134,7 @@ export function addMarkSubmenu(
 					try {
 						const af = plugin?.app?.workspace?.getActiveFile?.();
 						const p = typeof af?.path === "string" ? String(af.path || "") : "";
-						if (!p || p.startsWith("epoch://")) return "";
+						if (!p) return "";
 						if (typeof plugin?.shouldIndexFile === "function" && af && !plugin.shouldIndexFile(af)) return "";
 						if (typeof plugin?.indexer?.isFileKnown === "function" && !plugin.indexer.isFileKnown(p)) return "";
 						return p;
@@ -160,7 +159,7 @@ export function addMarkSubmenu(
 					if (!activeFilePath) return false;
 					if (entry.file === activeFilePath) return true;
 					try {
-						const set: unknown = typedCanvas.semanticRelatedPaths;
+						const set: unknown = typedCanvas.relatedPaths;
 						return set instanceof Set ? set.has(entry.file) : false;
 					} catch {
 						return false;
@@ -180,18 +179,9 @@ export function addMarkSubmenu(
 				});
 				const finalTargets = targets;
 
-				// Touch topic-group helper so term store is loaded (helps the next inherited recompute)
-				try {
-					if (resolvedAncestorPathFinal) {
-						await getTopicGroupForPath(state, resolvedAncestorPathFinal);
-					}
-				} catch {
-					// ignore
-				}
-
 				try {
 					for (const p of finalTargets) {
-						if (!p || p.startsWith("epoch://")) continue;
+						if (!p) continue;
 						try {
 							changed = !!indexer.setFileMarkColor(p, color) || changed;
 						} catch {

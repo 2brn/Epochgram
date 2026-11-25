@@ -1,4 +1,4 @@
-import type { DateEntry, TrackedChangeType } from "../indexer/types";
+import type { DateEntry } from "../indexer/types";
 import { formatDate } from "../utils";
 import {
 	SUMMARY_ICON_ATTACHMENT,
@@ -7,9 +7,6 @@ import {
 	SUMMARY_ICON_RECURRING,
 	SUMMARY_ICON_ICS_SYNC,
 	SUMMARY_ICON_PIN,
-	SUMMARY_ICON_TRACKED_ADDED,
-	SUMMARY_ICON_TRACKED_MODIFIED,
-	SUMMARY_ICON_TRACKED_REMOVED,
 	SUMMARY_ENTRY_SEPARATOR,
 	SUMMARY_PREFIX_SEPARATOR
 } from "./epoch-canvas-constants";
@@ -151,7 +148,7 @@ export function withFontStyle(font: string, style: "italic" | "normal" | "obliqu
 
 export function shouldRenderEntry(entry: DateEntry): boolean {
 	if (!entry) return false;
-	return entry.reviewState !== "hidden";
+	return true;
 }
 
 type TimelineCandidate = {
@@ -163,17 +160,6 @@ function blockPosition(entry: DateEntry): number {
 	const { blockEnd, blockStart } = entry;
 	if (Number.isFinite(blockEnd)) return blockEnd;
 	return Number.isFinite(blockStart) ? blockStart : 0;
-}
-
-function trackedTimestamp(entry: DateEntry): number {
-	if (!entry || entry.source !== "tracked") return Number.NEGATIVE_INFINITY;
-	const raw = entry.trackedTime;
-	if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-	if (typeof raw === "string") {
-		const parsed = Date.parse(raw);
-		if (Number.isFinite(parsed)) return parsed;
-	}
-	return Number.NEGATIVE_INFINITY;
 }
 
 function stringValue(value: unknown): string {
@@ -190,8 +176,6 @@ function isSyntheticPinnedTodayClone(entry: DateEntry): boolean {
 function timelineSourcePriority(entry: DateEntry): number {
 	if (entry?.pinned === true) return 0;
 	switch (entry?.source) {
-		case "tracked":
-			return 1;
 		case "content":
 			return 2;
 		case "namedate":
@@ -215,23 +199,10 @@ function pickTimelineCandidate(candidates: TimelineCandidate[]): TimelineCandida
 		});
 		return pool[0];
 	}
-	const tracked = candidates.filter(candidate => candidate.entry.source === "tracked");
-	if (tracked.length > 0) {
-		tracked.sort((a, b) => {
-			const timeA = trackedTimestamp(a.entry);
-			const timeB = trackedTimestamp(b.entry);
-			if (timeA !== timeB) return timeB - timeA;
-			if (a.order !== b.order) return b.order - a.order;
-			return blockPosition(b.entry) - blockPosition(a.entry);
-		});
-		return tracked[0];
-	}
 	const content = candidates.filter(candidate => candidate.entry.source === "content");
 	if (content.length > 0) {
-		const reviewed = content.filter(c => c.entry.reviewState === "reviewed");
-		const contentPool = reviewed.length > 0 ? reviewed : content;
-		const nonRecurring = contentPool.filter(c => c.entry.recurring !== true);
-		const pool = nonRecurring.length > 0 ? nonRecurring : contentPool;
+		const nonRecurring = content.filter(c => c.entry.recurring !== true);
+		const pool = nonRecurring.length > 0 ? nonRecurring : content;
 		pool.sort((a, b) => {
 			if (a.order !== b.order) return a.order - b.order;
 			return blockPosition(a.entry) - blockPosition(b.entry);
@@ -311,35 +282,6 @@ export function pickTimelineEntryForFile(entries: DateEntry[]): DateEntry | null
 	return selected[0] ?? null;
 }
 
-const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-export function getEpochRangeFromEntry(entry: DateEntry | null | undefined): { start: string; end: string } | null {
-	if (!entry) return null;
-	const start = String(entry.epochStart || "");
-	const end = String(entry.epochEnd || "");
-	if (DATE_KEY_RE.test(start) && DATE_KEY_RE.test(end)) {
-		return { start, end };
-	}
-	const file = String(entry.file || "");
-	if (file.startsWith("epoch://")) {
-		// Format: epoch://<bucket>/<start>-<end>
-		const rest = file.slice("epoch://".length);
-		const slash = rest.indexOf("/");
-		if (slash >= 0) {
-			const tail = rest.slice(slash + 1);
-			const m = tail.match(/^(\d{4}-\d{2}-\d{2})-(\d{4}-\d{2}-\d{2})$/);
-			if (m) {
-				const startKey = m[1];
-				const endKey = m[2];
-				if (DATE_KEY_RE.test(startKey) && DATE_KEY_RE.test(endKey)) {
-					return { start: startKey, end: endKey };
-				}
-			}
-		}
-	}
-	return null;
-}
-
 export function entryFileName(entry: DateEntry): string {
 	if (!entry) return "";
 	const parts = entry.file?.split?.("/") ?? [];
@@ -353,12 +295,6 @@ function entryDisplayName(entry: DateEntry): string {
 	return name.toLowerCase().endsWith(".md") ? name.slice(0, -3) : name;
 }
 
-const TRACKED_ICON_BY_CHANGE: Record<TrackedChangeType, string> = {
-	added: SUMMARY_ICON_TRACKED_ADDED,
-	removed: SUMMARY_ICON_TRACKED_REMOVED,
-	modified: SUMMARY_ICON_TRACKED_MODIFIED
-};
-
 const SUMMARY_ICON_LABELS: Record<string, string> = {};
 if (SUMMARY_ICON_PIN) SUMMARY_ICON_LABELS[SUMMARY_ICON_PIN] = "PIN";
 if (SUMMARY_ICON_NOTE) SUMMARY_ICON_LABELS[SUMMARY_ICON_NOTE] = "NOTE";
@@ -366,10 +302,6 @@ if (SUMMARY_ICON_PARSED) SUMMARY_ICON_LABELS[SUMMARY_ICON_PARSED] = "DATE";
 if (SUMMARY_ICON_RECURRING) SUMMARY_ICON_LABELS[SUMMARY_ICON_RECURRING] = "RECUR";
 if (SUMMARY_ICON_ICS_SYNC) SUMMARY_ICON_LABELS[SUMMARY_ICON_ICS_SYNC] = "SYNC";
 if (SUMMARY_ICON_ATTACHMENT) SUMMARY_ICON_LABELS[SUMMARY_ICON_ATTACHMENT] = "FILE";
-SUMMARY_ICON_LABELS["epochgram-logo"] = "EPOCH";
-SUMMARY_ICON_LABELS[SUMMARY_ICON_TRACKED_ADDED] = "+";
-SUMMARY_ICON_LABELS[SUMMARY_ICON_TRACKED_REMOVED] = "-";
-SUMMARY_ICON_LABELS[SUMMARY_ICON_TRACKED_MODIFIED] = "EDIT";
 
 export function summaryIconLabel(iconId: string): string {
 	return SUMMARY_ICON_LABELS[iconId] ?? iconId.toUpperCase();
@@ -398,14 +330,6 @@ export function entrySummaryComponents(entry: DateEntry): { base: string; iconId
 	}
 
 	switch (entry.source) {
-		case "epoch":
-			addIcon("epochgram-logo");
-			break;
-		case "tracked": {
-			const tracked = entry.trackedChange ?? "modified";
-			addIcon(TRACKED_ICON_BY_CHANGE[tracked]);
-			break;
-		}
 		case "content":
 			addIcon(entry.recurring ? SUMMARY_ICON_RECURRING : SUMMARY_ICON_PARSED);
 			break;

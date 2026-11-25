@@ -1,13 +1,9 @@
 import { normalizeMarkColorIndex } from "./mark-colors";
-import { hasSimilarityAccess } from "../plugin/pro-feature-state";
-import { embeddingsSimilarityEnabled } from "../plugin/similarity/config";
 import type { EpochPlugin } from "../main";
 
 type MarkGroupPluginLike = EpochPlugin & {
 	__epochInheritedMarkSourceByPath?: Map<string, string>;
-	getSemanticRelatedPathsForFile?: (path: string) => Promise<unknown>;
 	getGraphRelatedPathsForFile?: (path: string) => Promise<unknown>;
-	getSemanticRelatedScoredForFile?: (path: string) => Promise<unknown>;
 };
 
 type MarkGroupIndexerLike = {
@@ -15,11 +11,9 @@ type MarkGroupIndexerLike = {
 	getFileMarkHex?(path: string): string | null | undefined;
 };
 
-type ScoredPathLike = { path?: string };
-
 function normalizeNonEpochPath(value: unknown): string {
 	const p = typeof value === "string" ? String(value || "").trim() : "";
-	if (!p || p.startsWith("epoch://")) return "";
+	if (!p) return "";
 	return p;
 }
 
@@ -117,30 +111,16 @@ export async function getSimilarGroupPathsForMarking(
 ): Promise<Set<string>> {
 	const out = new Set<string>();
 	const base = String(centerPath || "");
-	if (!base || base.startsWith("epoch://")) return out;
+	if (!base) return out;
 	out.add(base);
 	const p = plugin as MarkGroupPluginLike;
 
 	try {
-		const hasPro = hasSimilarityAccess(p);
-		if (!hasPro) return out;
-		const vectorsEnabled = embeddingsSimilarityEnabled(p);
-
-		if (vectorsEnabled && typeof p.getSemanticRelatedPathsForFile === "function") {
-			const related: unknown = await p.getSemanticRelatedPathsForFile(base);
-			if (related instanceof Set) {
-				for (const p of related) {
-					if (typeof p === "string" && p && !p.startsWith("epoch://")) out.add(p);
-				}
-			}
-			return out;
-		}
-
 		if (typeof p.getGraphRelatedPathsForFile === "function") {
 			const related: unknown = await p.getGraphRelatedPathsForFile(base);
 			if (related instanceof Set) {
 				for (const p of related) {
-					if (typeof p === "string" && p && !p.startsWith("epoch://")) out.add(p);
+					if (typeof p === "string" && p) out.add(p);
 				}
 			}
 		}
@@ -158,8 +138,8 @@ export function getMarkCenterPathForGroupActions(
 ): string {
 	const entry = String(entryPath || "");
 	const inherited = inheritedSourcePath ? String(inheritedSourcePath || "") : "";
-	if (!entry || entry.startsWith("epoch://")) return entry;
-	if (!inherited || inherited.startsWith("epoch://") || inherited === entry) return entry;
+	if (!entry) return entry;
+	if (!inherited || inherited === entry) return entry;
 
 	try {
 		if (hasExplicitMark(indexer, entry)) return entry;
@@ -202,32 +182,9 @@ export async function resolveMarkAncestorPath(
 		// ignore
 	}
 
-	// Fallback: scan semantic scored results for the first explicitly marked file.
-	try {
-		const hasPro = hasSimilarityAccess(p);
-		if (hasPro && typeof p.getSemanticRelatedScoredForFile === "function") {
-			const scoredRaw: unknown = await p.getSemanticRelatedScoredForFile(entry);
-			const scored: ScoredPathLike[] = Array.isArray(scoredRaw) ? scoredRaw as ScoredPathLike[] : [];
-			if (Array.isArray(scored)) {
-				for (const item of scored) {
-					const candidate = normalizeNonEpochPath(item?.path);
-					if (!candidate || candidate === entry) continue;
-					try {
-						if (hasExplicitMark(indexer, candidate)) return candidate;
-					} catch {
-						// ignore
-					}
-				}
-			}
-		}
-	} catch {
-		// ignore
-	}
-
 	// Fallback: scan graph-related set for any explicitly marked file.
 	try {
-		const hasPro = hasSimilarityAccess(p);
-		if (hasPro && typeof p.getGraphRelatedPathsForFile === "function") {
+		if (typeof p.getGraphRelatedPathsForFile === "function") {
 			const related: unknown = await p.getGraphRelatedPathsForFile(entry);
 			if (related instanceof Set) {
 				for (const p0 of related) {

@@ -1,7 +1,6 @@
 import { TFile } from "obsidian";
 import type { EpochPlugin } from "../main";
 import { getUsedMarkColorIndexSet, pickDefaultMarkColorIndex } from "../ui/mark-colors";
-import { embeddingsSimilarityEnabled } from "./similarity/config";
 
 export interface FileFlagMethods {
 	setFileMarkColor(file: TFile, markColor: number | null): Promise<void>;
@@ -18,14 +17,6 @@ export const fileFlagMethods: FileFlagMethods = {
 		if (!changed) return;
 		try {
 			this.scheduleInheritedMarkRecompute?.("mark-change");
-		} catch {
-			// ignore
-		}
-		// If we just marked a file and similarity is enabled, prioritize building its vector.
-		try {
-			if (markColor != null && this.hasProAccess?.() && embeddingsSimilarityEnabled(this)) {
-				this.queueVectorUpdate?.(file.path);
-			}
 		} catch {
 			// ignore
 		}

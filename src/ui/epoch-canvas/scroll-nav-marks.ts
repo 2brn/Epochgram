@@ -37,7 +37,6 @@ export function getInheritedMarkSourceByPath(canvas: EpochCanvas): Map<string, s
 export function normalizeNonEpochPath(path: string | null | undefined): string | null {
 	const p = String(path ?? "");
 	if (!p) return null;
-	if (p.startsWith("epoch://")) return null;
 	return p;
 }
 
@@ -85,7 +84,7 @@ export function getExplicitMarkPathsInGroup(canvas: EpochCanvas, groupSet: Set<n
 		for (const entry of list) {
 			if (!entry) continue;
 			const file = String(entry.file ?? "");
-			if (!file || file.startsWith("epoch://")) continue;
+			if (!file) continue;
 			const idx = normalizeMarkColorIndex(entry.markColor);
 			const explicitHex = typeof (entry as { markColorHex?: unknown }).markColorHex === "string"
 				? String((entry as { markColorHex?: string }).markColorHex || "").trim()

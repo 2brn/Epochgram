@@ -12,7 +12,7 @@ const cdate = {
 	source: "cdate" as const
 };
 
-function entry(date: string, source: "namedate" | "dateprop" | "content" | "tracked" | "cdate", extras: Record<string, unknown> = {}): any {
+function entry(date: string, source: "namedate" | "dateprop" | "content" | "cdate", extras: Record<string, unknown> = {}): any {
 	return {
 		date,
 		file,
@@ -56,12 +56,8 @@ function makeCanvas(index: Record<string, any[]>, overrides: Record<string, unkn
 		scrollNavAnchorEntry: null,
 		scrollNavAnchorDayIndex: null,
 		showAttachments: true,
-		showTrackedChanges: true,
-		showHidden: false,
-		showDraftOnly: false,
 		showContentDates: true,
 		showPropDates: true,
-		epochsView: false,
 		searchQuery: "",
 		...overrides
 	};
@@ -73,7 +69,6 @@ describe("startup file snap", () => {
 		["frontmatter anchor", entry("2025-01-11", "dateprop")],
 		["content date", entry("2025-01-11", "content")],
 		["recurring occurrence", entry("2025-01-11", "content", { recurring: true })],
-		["tracked change", entry("2025-01-11", "tracked")],
 		["pinned record", entry("2025-01-11", "cdate", { pinned: true, originalDate: "2020-01-01" })]
 	])("uses a visible nearest %s regardless of source", (_kind, candidate) => {
 		const canvas = makeCanvas({
@@ -86,13 +81,13 @@ describe("startup file snap", () => {
 	});
 
 	test("skips a nearer record that is not visible under the current filters", () => {
-		const hidden = entry("2025-01-10", "content", { reviewState: "hidden" });
+		const hidden = entry("2025-01-10", "content", { fromFrontmatter: true });
 		const visibleRecurring = entry("2025-01-11", "content", { recurring: true });
 		const canvas = makeCanvas({
 			[cdate.date]: [cdate],
 			[hidden.date]: [hidden],
 			[visibleRecurring.date]: [visibleRecurring]
-		});
+		}, { showPropDates: false });
 
 		expect(snapToFile(canvas, file, null, { draw: false })).toBe(true);
 		expect(canvas.scrollNavAnchorEntry).toBe(visibleRecurring);

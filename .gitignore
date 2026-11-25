@@ -12,9 +12,6 @@ node_modules
 # They should be uploaded to GitHub releases instead.
 main.js
 
-# Generated standalone export bundle (built by esbuild.config.mjs)
-export-epochs-standalone.js
-
 # Exclude sourcemaps
 *.map
 

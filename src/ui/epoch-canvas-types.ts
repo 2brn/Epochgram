@@ -35,13 +35,6 @@ export interface HoverOverlay {
 	yBottom: number;
 	yCenter: number;
 	width: number;
-	isEpoch?: boolean;
-	// Epochs-view layout hints (optional; used to match non-hover drop-cap wrapping)
-	yTextTop?: number;
-	epochDropLineCount?: number;
-	epochHasDropMixedLine?: boolean;
-	epochDropMixedPrefix?: string;
-	epochDropMixedRest?: string;
 	tagIcon?: { x: number; centerY: number; size: number; gap: number; color: string; alpha: number };
 	text: string;
 	lines?: string[];

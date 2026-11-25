@@ -3,7 +3,6 @@ import { RRule } from "rrule";
 import type { EpochPlugin } from "../main";
 import { formatDate } from "../utils";
 import { getYamlDatePropertyKey, getYamlDescriptionPropertyKey } from "./frontmatter-keys";
-import { hasVerifiedEntitlement } from "./pro-feature-state";
 import { resolveSecretPlaceholders } from "../utils/secret-placeholders";
 
 export type CalendarSyncPeriod = "manual" | "startup" | "1m" | "5m" | "15m" | "1h" | "6h" | "24h";
@@ -771,7 +770,6 @@ export const calendarSyncMethods: CalendarSyncMethods = {
 			window.clearInterval(existing);
 			runtime.__epochCalendarSyncTimer = null;
 		}
-		if (!hasVerifiedEntitlement(this)) return;
 		const period = normalizeCalendarSyncPeriod(this.settings.calendarSyncPeriod);
 		if (period === "manual" || period === "startup") return;
 		const ms = periodToMs(period);
@@ -784,14 +782,12 @@ export const calendarSyncMethods: CalendarSyncMethods = {
 	},
 
 	async maybeRunCalendarSyncOnStartup(this: EpochPlugin): Promise<void> {
-		if (!hasVerifiedEntitlement(this)) return;
 		const period = normalizeCalendarSyncPeriod(this.settings.calendarSyncPeriod);
 		if (period !== "startup") return;
 		await this.runCalendarSync({ reason: "startup", showNotice: false });
 	},
 
 	async runCalendarSync(this: EpochPlugin, options?: { reason?: "manual" | "startup" | "interval"; showNotice?: boolean }): Promise<void> {
-		if (!hasVerifiedEntitlement(this)) return;
 		const runtime = this as unknown as CalendarSyncRuntime;
 		if (runtime.__epochCalendarSyncRunning) {
 			if (options?.showNotice) new Notice("Calendar sync is already running.");

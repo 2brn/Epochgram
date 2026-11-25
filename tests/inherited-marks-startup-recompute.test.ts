@@ -8,7 +8,6 @@ describe("inherited marks", () => {
 		const plugin: any = {
 			indexReady: true,
 			indexLoadPromise: null,
-			hasProAccess: () => true,
 			scheduleInheritedMarkRecompute,
 			__epochInheritedMarkIndexByPath: null,
 			__epochInheritedMarkComputedAt: 0

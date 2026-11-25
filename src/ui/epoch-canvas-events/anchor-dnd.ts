@@ -139,15 +139,6 @@ function getEntryBlockEnd(entry: DateEntry | null | undefined): number {
 	return typeof raw === "number" ? raw : -1;
 }
 
-function isEpochEntry(entry: DateEntry | null | undefined): boolean {
-	try {
-		const file = getEntryFile(entry);
-		return file.startsWith("epoch://");
-	} catch {
-		return false;
-	}
-}
-
 function isSyntheticPinnedTodayClone(entry: DateEntry | null | undefined): boolean {
 	try {
 		if (!entry || !getEntryPinned(entry)) return false;
@@ -161,7 +152,6 @@ function isSyntheticPinnedTodayClone(entry: DateEntry | null | undefined): boole
 
 export function isDraggableAnchorEntry(entry: DateEntry | null | undefined): boolean {
 	if (!entry) return false;
-	if (isEpochEntry(entry)) return false;
 	if (isSyntheticPinnedTodayClone(entry)) return false;
 	const src = getEntrySource(entry);
 	if (!(src === "cdate" || src === "namedate" || src === "dateprop")) return false;
@@ -190,7 +180,6 @@ export function isDraggableAnchorEntry(entry: DateEntry | null | undefined): boo
 export function resolveDraggableAnchorEntry(canvas: EpochCanvas, hit: DateEntry | null | undefined): DateEntry | null {
 	if (!hit) return null;
 	if (isDraggableAnchorEntry(hit)) return hit;
-	if (isEpochEntry(hit)) return null;
 
 	const file = getEntryFile(hit).trim();
 	if (!file) return null;
