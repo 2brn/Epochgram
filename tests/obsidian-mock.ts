@@ -240,6 +240,10 @@ export const Platform = {
 	isMobile: false
 };
 
+export function requireApiVersion(_version: string): boolean {
+	return false;
+}
+
 let requestUrlHandler: ((request: any) => unknown) | null = null;
 
 export function __setRequestUrlHandler(handler: ((request: any) => unknown) | null): void {

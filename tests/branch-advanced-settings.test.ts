@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Setting } from "obsidian";
+import { requireApiVersion, Setting } from "obsidian";
 const captures = vi.hoisted(() => ({ settings: [] as any[], groups: [] as string[] }));
-vi.mock("obsidian", async () => ({ ...(await vi.importActual("obsidian")), Setting: class {
-	name = ""; desc = ""; reset: any; slider: any; dropdown: any; texts: any[] = [];
-	settingEl = { classList: { add() {} } }; descEl = { createEl: vi.fn() };
+vi.mock("obsidian", async () => ({ ...(await vi.importActual("obsidian")), requireApiVersion: vi.fn(() => false), Setting: class {
+	name = ""; desc = ""; reset: any; slider: any; dropdown: any; texts: any[] = []; buttons: any[] = [];
+	settingEl = { classList: { add() {} } }; descEl = { createEl: vi.fn(() => ({ addEventListener() {} })) };
 	constructor(_root: any) { captures.settings.push(this); }
 	setName(name: string) { this.name = name; return this; } setDesc(desc: string) { this.desc = desc; return this; }
 	control() { return { value: undefined as any, change: undefined as any, handlers: {} as any, inputEl: undefined as any,
 		setValue(value: any) { this.value = value; return this; }, getValue() { return this.value; }, setLimits() { return this; }, setPlaceholder() { return this; }, addOption() { return this; }, onChange(fn: any) { this.change = fn; return this; } }; }
+	addButton(fn: any) {
+		const button = { buttonEl: { classList: { add: vi.fn() } }, setButtonText: vi.fn().mockReturnThis(), onClick: vi.fn().mockReturnThis(), setDestructive: vi.fn() };
+		this.buttons.push(button); fn(button); return this;
+	}
 	addToggle(fn: any) { fn(this.control()); return this; }
 	addSlider(fn: any) { this.slider = this.control(); fn(this.slider); return this; }
 	addDropdown(fn: any) { this.dropdown = this.control(); fn(this.dropdown); return this; }
@@ -20,7 +24,11 @@ import { defineAdvancedSettings } from "../src/settings-ui/advanced";
 import { renderLegacySettings } from "../src/settings-ui/setting-definitions";
 import { EpochSettingTab } from "../src/settings";
 import { DEFAULT_SETTINGS, type EpochSettings } from "../src/settings-model";
-beforeEach(() => { captures.settings.length = 0; captures.groups.length = 0; });
+beforeEach(() => {
+	captures.settings.length = 0;
+	captures.groups.length = 0;
+	vi.mocked(requireApiVersion).mockReset().mockReturnValue(false);
+});
 function makePlugin(overrides: Partial<EpochSettings> = {}) {
 	return { settings: { ...structuredClone(DEFAULT_SETTINGS), ...overrides }, getDailyNoteFolder: () => "", onSettingsChanged: vi.fn(async () => {}) };
 }
@@ -86,13 +94,14 @@ describe("native settings definitions", () => {
 	});
 
 	it.each([true, false])("refreshes the calendar inputs through the available API (native=%s)", async (native) => {
+		vi.mocked(requireApiVersion).mockReturnValue(native);
 		const plugin = makePlugin();
 		const tab = new EpochSettingTab({} as any, plugin as any);
 		const scroll = { scrollTop: 250 };
-		tab.containerEl = { closest: () => scroll } as unknown as HTMLElement;
 		const refresh = vi.fn(() => { scroll.scrollTop = 0; });
+		tab.containerEl = { closest: () => scroll, empty: native ? vi.fn() : refresh } as unknown as HTMLElement;
 		if (native) tab.update = refresh;
-		else vi.spyOn(tab, "display").mockImplementation(refresh);
+		const display = vi.spyOn(tab, "display");
 		const definition = tab.getSettingDefinitions().flatMap(section => section.items).find(row => row.name === "ICS link");
 		if (!definition) throw new Error("Missing ICS link definition");
 		definition.render(new Setting(tab.containerEl));
@@ -100,8 +109,27 @@ describe("native settings definitions", () => {
 		input.setValue("webcal://example.com/events.ics");
 		input.handlers.blur();
 		await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+		expect(requireApiVersion).toHaveBeenCalledWith("1.13.0");
+		expect(display).not.toHaveBeenCalled();
 		expect(scroll.scrollTop).toBe(250);
 		expect(plugin.settings.calendarSyncIcsUrls).toEqual(["webcal://example.com/events.ics"]);
 		expect(plugin.onSettingsChanged).toHaveBeenCalledWith("calendarSyncIcsUrls");
+	});
+
+	it.each([true, false])("uses the available reset button styling (native=%s)", (native) => {
+		vi.mocked(requireApiVersion).mockReturnValue(native);
+		const tab = new EpochSettingTab({} as any, makePlugin() as any);
+		const definition = tab.getSettingDefinitions().flatMap(section => section.items).find(row => row.name === "Index");
+		if (!definition) throw new Error("Missing Index setting definition");
+		definition.render(new Setting(tab.containerEl));
+		const reset = captures.settings[0].buttons[1];
+		expect(requireApiVersion).toHaveBeenCalledWith("1.13.0");
+		if (native) {
+			expect(reset.setDestructive).toHaveBeenCalledOnce();
+			expect(reset.buttonEl.classList.add).not.toHaveBeenCalled();
+		} else {
+			expect(reset.setDestructive).not.toHaveBeenCalled();
+			expect(reset.buttonEl.classList.add).toHaveBeenCalledWith("mod-warning");
+		}
 	});
 });

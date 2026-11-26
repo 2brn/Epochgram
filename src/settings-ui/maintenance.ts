@@ -1,4 +1,4 @@
-import { Notice, type App } from "obsidian";
+import { Notice, requireApiVersion, type App } from "obsidian";
 import type { EpochPlugin } from "../main";
 import { promptMaintenanceChoices } from "../ui/modals";
 import { runRebuild, runReset } from "../plugin/maintenance";
@@ -26,7 +26,7 @@ export function defineMaintenanceSetting(app: App, plugin: EpochPlugin, refresh:
 			setting.addButton(button => button.setButtonText("Rebuild").onClick(() => run(false)));
 			setting.addButton((button) => {
 				button.setButtonText("Reset").onClick(() => run(true));
-				if (typeof button.setDestructive === "function") button.setDestructive();
+				if (requireApiVersion("1.13.0")) button.setDestructive();
 				else button.buttonEl.classList.add("mod-warning"); // Obsidian 1.12
 			});
 		}

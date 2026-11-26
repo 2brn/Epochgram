@@ -420,7 +420,8 @@
   -webkit-appearance: none;
   -webkit-tap-highlight-color: transparent;
   background: transparent;
-  color: var(--epoch-pin-text, var(--text-muted));
+  color: var(--epoch-pin-text, var(--background-primary));
+  border-radius: 3px;
   overflow: visible;
   pointer-events: auto;
   cursor: pointer;
@@ -428,20 +429,60 @@
   transition: opacity 160ms ease, transform 140ms ease;
 }
 
+.epoch-root .epoch-pin-badge:not(.is-outlined)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 9.5px;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px 2px 2px 3px;
+  background: var(--epoch-pin-fill, var(--text-normal));
+}
+
+.epoch-root .epoch-pin-badge:not(.is-outlined)::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-left: 10px solid var(--epoch-pin-fill, var(--text-normal));
+}
+
+.epoch-root .epoch-pin-badge-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  pointer-events: none;
+}
+
+.epoch-root .epoch-pin-badge.is-outlined .epoch-pin-badge-outline {
+  display: block;
+}
+
+.epoch-root .epoch-pin-badge.is-outlined,
+.epoch-root .epoch-pin-badge.is-outlined:is(:hover, :active, :focus-visible) {
+  background: transparent;
+  box-shadow: none;
+}
+
 .epoch-root .epoch-pin-badge:focus-visible,
 .epoch-root .epoch-pin-badge:active,
 .epoch-root .epoch-pin-badge.is-menu-hovered {
   background: transparent;
-  box-shadow: none;
-  color: var(--epoch-pin-text, var(--text-muted));
+  color: var(--epoch-pin-text, var(--background-primary));
   transform: scale(1.375);
 }
 
 @media (any-hover: hover) and (any-pointer: fine) {
   .epoch-root .epoch-pin-badge:hover {
     background: transparent;
-    box-shadow: none;
-    color: var(--epoch-pin-text, var(--text-muted));
+    color: var(--epoch-pin-text, var(--background-primary));
     transform: scale(1.375);
   }
 }
@@ -453,7 +494,7 @@
 .epoch-root .epoch-pin-badge-label {
   position: absolute;
   left: 4px;
-  right: 3px;
+  right: 10px;
   top: 0;
   bottom: 0;
   display: block;
@@ -468,7 +509,7 @@
 }
 
 .epoch-root.is-macos .epoch-pin-badge-label {
-  right: 3.5px;
+  right: 10.5px;
 }
 
 .epoch-root .epoch-pin-badge:focus-visible .epoch-pin-badge-label,

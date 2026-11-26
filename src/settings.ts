@@ -1,4 +1,4 @@
-import { PluginSettingTab, type App, type Setting } from "obsidian";
+import { PluginSettingTab, requireApiVersion, type App, type Setting } from "obsidian";
 import type { EpochPlugin } from "./main";
 export type { EpochSettings } from "./settings-model";
 export { DEFAULT_SETTINGS } from "./settings-model";
@@ -43,8 +43,8 @@ export class EpochSettingTab extends PluginSettingTab {
 	}
 
 	private refreshDisplay(): void {
-		if (typeof this.update === "function") this.update();
-		else this.display();
+		if (requireApiVersion("1.13.0")) this.update();
+		else this.renderLegacyDisplay();
 	}
 
 	override getSettingDefinitions(): SettingSection[] {
@@ -70,6 +70,10 @@ export class EpochSettingTab extends PluginSettingTab {
 	}
 
 	override display(): void {
+		this.renderLegacyDisplay();
+	}
+
+	private renderLegacyDisplay(): void {
 		this.containerEl.empty();
 		renderLegacySettings(this.containerEl, this.getSettingDefinitions());
 	}

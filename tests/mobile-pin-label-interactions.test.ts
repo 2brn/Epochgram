@@ -27,12 +27,14 @@ class FakeClassList {
 	}
 }
 
+const pinTheme: Record<string, string> = {
+	"--background-primary": "#eeeeee",
+	"--text-accent": "#6655cc",
+	"--text-muted": "#686868"
+};
+
 class FakeDocument {
-	readonly defaultView = { getComputedStyle: () => ({ getPropertyValue: (name: string) => {
-		if (name === "--text-accent") return "#6655cc";
-		if (name === "--text-muted") return "#686868";
-		return "";
-	} }) };
+	readonly defaultView = { getComputedStyle: () => ({ getPropertyValue: (name: string) => pinTheme[name] ?? "" }) };
 	readonly listeners = new Map<string, Array<(event: any) => void>>();
 	win?: { createEl: (tag: string) => { getContext: (type: string) => object } };
 
@@ -52,11 +54,24 @@ class FakeDocument {
 	}
 }
 
+class FakeSvg {
+	readonly children: FakeSvg[] = [];
+
+	constructor(readonly tag: string, readonly options: SvgElementInfo) {}
+
+	createSvg(tag: string, options: SvgElementInfo): FakeSvg {
+		const child = new FakeSvg(tag, options);
+		this.children.push(child);
+		return child;
+	}
+}
+
 class FakeBadge {
 	ownerDocument: FakeDocument | null = null;
 	parentElement: FakeOverlay | null = null;
 	readonly classList = new FakeClassList();
 	readonly labels: Array<{ classList: FakeClassList; style: Record<string, unknown>; textContent: string }> = [];
+	readonly outlines: FakeSvg[] = [];
 	readonly style: Record<string, unknown> & { setProperty: (name: string, value: string) => void } = {
 		setProperty: (name, value) => { this.style[name] = value; }
 	};
@@ -67,6 +82,12 @@ class FakeBadge {
 
 	getBoundingClientRect() {
 		return { width: 39, height: 16, left: 0, top: 72 };
+	}
+
+	createSvg(tag: string, options: SvgElementInfo): FakeSvg {
+		const svg = new FakeSvg(tag, options);
+		this.outlines.push(svg);
+		return svg;
 	}
 
 	createSpan(): { classList: FakeClassList; style: Record<string, unknown>; textContent: string } {
@@ -272,6 +293,7 @@ function makeCanvas(options: {
 afterEach(() => {
 	Platform.isMobile = false;
 	vi.useRealTimers();
+	vi.unstubAllGlobals();
 });
 
 describe("mobile pin-label interactions", () => {
@@ -281,15 +303,23 @@ describe("mobile pin-label interactions", () => {
 		expect(badge.labels[0]?.style.lineHeight).toBe("16px");
 	});
 
-	it("uses the former pin fill colors for virtual, date, and marked dock text", () => {
+	it("keeps the opened pin filled and outlines other pins in their original fill colors", () => {
+		const { badge: opened } = makeCanvas();
 		const inactive = { activeFilePath: "notes/other.md" };
-		const { badge: active } = makeCanvas();
-		const { badge: date } = makeCanvas({ ...inactive, pinnedFile: "date", offsetY: 0 });
-		const { badge: marked } = makeCanvas({ ...inactive, pinnedFile: "dock", markColorHex: "#ab1234" });
+		const { badge: date } = makeCanvas({ ...inactive, pinnedFile: "date", offsetY: 80 });
+		const { badge: dock } = makeCanvas({ ...inactive, pinnedFile: "dock", markColorHex: "#ab1234" });
 
-		expect(active.style["--epoch-pin-text"]).toBe("#6655cc");
-		expect(date.style["--epoch-pin-text"]).toBe("#686868");
-		expect(marked.style["--epoch-pin-text"]).toBe("#ab1234");
+		expect(opened.classList.contains("is-outlined")).toBe(false);
+		expect(opened.style["--epoch-pin-fill"]).toBe("#6655cc");
+		expect(opened.style["--epoch-pin-text"]).toBe("#eeeeee");
+		for (const [badge, color] of [[date, "#686868"], [dock, "#ab1234"]] as const) {
+			expect(badge.classList.contains("is-outlined")).toBe(true);
+			expect(badge.style["--epoch-pin-fill"]).toBe(color);
+			expect(badge.style["--epoch-pin-text"]).toBe(color);
+			expect(badge.outlines[0]?.children[0]?.options.attr).toMatchObject({
+				fill: "none", stroke: "currentColor", "stroke-width": 1
+			});
+		}
 	});
 
 	it("uses the timeline record label for virtual, date, and dock pins", () => {
@@ -394,6 +424,7 @@ describe("mobile pin-label interactions", () => {
 			updatePinOverlay(canvas);
 		});
 
+		expect(badge.classList.contains("is-outlined")).toBe(true);
 		badge.dispatch("mouseenter", {});
 		const hoverDateIndex = canvas.hoverDateIndex;
 		badge.dispatch("click", interactionEvent());
@@ -401,6 +432,9 @@ describe("mobile pin-label interactions", () => {
 
 		expect(openFile).toHaveBeenCalledTimes(1);
 		expect(overlay.badges[0]).toBe(badge);
+		expect(badge.classList.contains("is-outlined")).toBe(false);
+		expect(badge.style["--epoch-pin-text"]).toBe("#eeeeee");
+		expect(badge.outlines).toHaveLength(1);
 		if (!mobile) {
 			expect(canvas.hoverDateIndex).toBe(hoverDateIndex);
 			expect(clearHover).not.toHaveBeenCalledWith(true);
@@ -424,15 +458,21 @@ describe("mobile pin-label interactions", () => {
 		expect(canvas.dateOverlayEl.classList.contains("is-visible")).toBe(true);
 	});
 
-	it("draws a dragged pin as colored text on a transparent ghost", async () => {
+	it.each([true, false])("keeps the active pin filled and other pins outlined while dragging (active=%s)", async (active) => {
 		Platform.isMobile = true;
 		vi.useFakeTimers();
-		const { canvas, badge, document } = makeCanvas({ offsetY: 80, markColorHex: "#ab1234" });
+		vi.stubGlobal("Path2D", class { constructor(readonly path: string) {} });
+		const { canvas, badge, document } = makeCanvas({
+			activeFilePath: active ? "notes/current.md" : "notes/other.md",
+			pinnedFile: "date",
+			offsetY: 80,
+			markColorHex: "#ab1234"
+		});
 		canvas.canvas = { getBoundingClientRect: () => ({ height: 200, top: 0, left: 0 }) };
 		canvas.draw = vi.fn();
 		canvas.entryDragAutoScrollRaf = 1;
 		const ctx = {
-			fillStyle: "", fill: vi.fn(), fillText: vi.fn(), clearRect: vi.fn(),
+			fillStyle: "", strokeStyle: "", lineWidth: 0, fill: vi.fn(), stroke: vi.fn(), fillText: vi.fn(), clearRect: vi.fn(),
 			save: vi.fn(), restore: vi.fn(), beginPath: vi.fn(), rect: vi.fn(), clip: vi.fn(),
 			moveTo: vi.fn(), lineTo: vi.fn(), quadraticCurveTo: vi.fn(), closePath: vi.fn()
 		};
@@ -444,10 +484,14 @@ describe("mobile pin-label interactions", () => {
 		badge.dispatch("touchmove", { ...interactionEvent(), touches: [{ clientX: 10, clientY: 96 }] });
 
 		expect(canvas.entryDragGhost?.img).toBe(ghost);
-		expect(ctx.rect).toHaveBeenCalledWith(4, 0, 32, 16);
-		expect(ctx.fillStyle).toBe("#ab1234");
 		expect(ctx.fillText).toHaveBeenCalledWith(badge.labels[0].textContent, 4, 8);
-		expect(ctx.fill).not.toHaveBeenCalled();
+		expect(ctx.fill).toHaveBeenCalledTimes(active ? 1 : 0);
+		expect(ctx.stroke).toHaveBeenCalledTimes(active ? 0 : 1);
+		expect(ctx.fillStyle).toBe(active ? "#eeeeee" : "#ab1234");
+		if (!active) {
+			expect(ctx.strokeStyle).toBe("#ab1234");
+			expect(ctx.lineWidth).toBe(1);
+		}
 	});
 
 	it("turns a same-label second touch into focus instead of a delayed open", async () => {

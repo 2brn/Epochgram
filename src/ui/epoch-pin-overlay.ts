@@ -89,7 +89,9 @@ type PinRenderItem = {
 	label: string;
 	dayIndex: number;
 	date: Date;
-	textColor: string;
+	active: boolean;
+	fill: string;
+	text: string;
 	left: number;
 	width: number;
 	top: number;
@@ -107,7 +109,10 @@ export type PinBadgeRect = {
 	y2: number;
 };
 
+const PIN_WIDTH = TIMELINE_X - LABEL_OFFSET_X;
 const PIN_HEIGHT = 16;
+const PIN_TIP_WIDTH = 10;
+const PIN_OUTLINE_WIDTH = 1;
 const PIN_GAP = 4;
 const PIN_TOP_PAD = 4;
 const PIN_BOTTOM_PAD = 4;
@@ -157,6 +162,14 @@ function getMode(data: FileIndexData | null | undefined): Exclude<PinMode, "toda
 	return mode === "date" || mode === "dock" ? mode : null;
 }
 
+function getBackgroundColor(root: HTMLElement): string {
+	const css = root.ownerDocument?.defaultView?.getComputedStyle(root);
+	return css?.getPropertyValue("--background-primary").trim()
+		|| css?.getPropertyValue("--background-secondary").trim()
+		|| css?.backgroundColor
+		|| "var(--background-primary)";
+}
+
 function getDefaultTextColor(root: HTMLElement): string {
 	const css = root.ownerDocument?.defaultView?.getComputedStyle(root);
 	return css?.getPropertyValue("--text-muted").trim()
@@ -169,7 +182,7 @@ function getRelatedColor(root: HTMLElement): string {
 	return css?.getPropertyValue("--text-accent").trim() || getDefaultTextColor(root);
 }
 
-function getPinTextColor(s: PinOverlayState, entry: DateEntry): string {
+function getFillColor(s: PinOverlayState, entry: DateEntry): string {
 	const root = s.root;
 	const fallback = getDefaultTextColor(root);
 	const highlight = getRelatedColor(root);
@@ -260,7 +273,7 @@ function computeItems(canvas: EpochCanvas): PinRenderItem[] {
 	const activePath = String(s.activeFilePath ?? "");
 	const hiddenOnly = hasHiddenOnlyToken(parseTimelineQuery(s.searchQuery ?? ""));
 	const today = getToday();
-	const width = TIMELINE_X - LABEL_OFFSET_X;
+	const background = getBackgroundColor(s.root);
 	const css = s.root.ownerDocument?.defaultView?.getComputedStyle(s.root);
 	const fontMain = fontMinusPx(css?.getPropertyValue("--epoch-font-main").trim() || "12px var(--font-text)", PIN_FONT_DELTA_PX);
 	const fontActive = withFontWeight(fontMain, "700");
@@ -269,14 +282,15 @@ function computeItems(canvas: EpochCanvas): PinRenderItem[] {
 	const bottomDocked: PinRenderItem[] = [];
 	let hasActiveDockItem = false;
 
-	const addItem = (path: string, entry: DateEntry, mode: Exclude<PinMode, "today">, virtual: boolean = false): void => {
+	const addItem = (path: string, entry: DateEntry, mode: Exclude<PinMode, "today">, active: boolean): void => {
 		if (!entry?.date || !isReviewVisible(entry, s.showDraftsOnly === true, hiddenOnly)) return;
 		const dayIndex = dayIndexForDate(entry.date, today);
 		if (dayIndex == null) return;
 		const targetY = dayIndex * BASE_SPACING * s.scale + s.offsetY;
 		const inViewport = targetY >= 0 && targetY <= s.root.clientHeight;
 		if (mode === "date" && !inViewport) return;
-		const font = reviewSummaryFont(entry, path === activePath ? fontActive : fontMain);
+		const font = reviewSummaryFont(entry, active ? fontActive : fontMain);
+		const fill = getFillColor(s, entry);
 		const item: PinRenderItem = {
 			// A pin's persisted/active mode can change when opening its file, but it
 			// still represents the same label. Keep its DOM identity stable so hover
@@ -286,9 +300,11 @@ function computeItems(canvas: EpochCanvas): PinRenderItem[] {
 			label: getLabel(entry, s.plugin?.settings),
 			dayIndex,
 			date: parseDateKey(entry.date) ?? today,
-			textColor: getPinTextColor(s, entry),
+			active,
+			fill,
+			text: active ? background : fill,
 			left: 0,
-			width,
+			width: PIN_WIDTH,
 			top: 0,
 			opacity: (inViewport ? PIN_VISIBLE_OPACITY : PIN_DOCK_OPACITY) * reviewSummaryOpacity(entry),
 			font,
@@ -356,11 +372,39 @@ function buildSignature(items: PinRenderItem[]): string {
 			item.top,
 			item.opacity,
 			item.label,
-			item.textColor,
+			item.active,
+			item.fill,
+			item.text,
 			item.dock,
 			item.font
 		].join("|"))
 		.join(";");
+}
+
+function pinOutlinePath(width: number, height: number, tip: number): string {
+	// Center the stroke on the half pixel so its full width fits inside the badge.
+	const edge = PIN_OUTLINE_WIDTH / 2;
+	const bottom = height - edge;
+	const shoulder = width - tip;
+	const corner = 3;
+	return `M${corner} ${edge}H${shoulder}L${width - edge} ${height / 2}L${shoulder} ${bottom}H${corner}Q${edge} ${bottom} ${edge} ${height - corner}V${corner}Q${edge} ${edge} ${corner} ${edge}Z`;
+}
+
+function createBadgeOutline(button: HTMLButtonElement): void {
+	const outline = button.createSvg("svg", {
+		cls: "epoch-pin-badge-outline",
+		attr: { viewBox: `0 0 ${PIN_WIDTH} ${PIN_HEIGHT}`, "aria-hidden": "true" }
+	});
+	outline.createSvg("path", {
+		attr: {
+			d: pinOutlinePath(PIN_WIDTH, PIN_HEIGHT, PIN_TIP_WIDTH),
+			fill: "none",
+			stroke: "currentColor",
+			"stroke-width": PIN_OUTLINE_WIDTH,
+			"stroke-linejoin": "round",
+			"vector-effect": "non-scaling-stroke"
+		}
+	});
 }
 
 function createBadgeGhost(canvas: EpochCanvas, button: HTMLButtonElement, item: PinRenderItem, clientX: number, clientY: number): DragGhostLike | null {
@@ -379,7 +423,32 @@ function createBadgeGhost(canvas: EpochCanvas, button: HTMLButtonElement, item: 
 		const g = off.getContext("2d");
 		if (!g) return null;
 
-		g.fillStyle = item.textColor;
+		g.clearRect(0, 0, w, h);
+		const tip = item.active
+			? Math.max(6, Math.min(14, Math.round(w * 0.06)))
+			: w * PIN_TIP_WIDTH / PIN_WIDTH;
+		if (item.active) {
+			g.fillStyle = item.fill;
+			const r = Math.max(1.5, Math.min(3, h * 0.2));
+			g.beginPath();
+			g.moveTo(r, 0);
+			g.lineTo(w - tip, 0);
+			g.lineTo(w, h / 2);
+			g.lineTo(w - tip, h);
+			g.lineTo(r, h);
+			g.quadraticCurveTo(0, h, 0, h - r);
+			g.lineTo(0, r);
+			g.quadraticCurveTo(0, 0, r, 0);
+			g.closePath();
+			g.fill();
+		} else {
+			g.strokeStyle = item.fill;
+			g.lineWidth = PIN_OUTLINE_WIDTH;
+			g.lineJoin = "round";
+			g.stroke(new Path2D(pinOutlinePath(w, h, tip)));
+		}
+
+		g.fillStyle = item.text;
 		g.font = item.font;
 		g.textBaseline = "middle";
 		g.textAlign = "left";
@@ -387,7 +456,7 @@ function createBadgeGhost(canvas: EpochCanvas, button: HTMLButtonElement, item: 
 		const labelScale = scaleY > 1 ? 1.08 : 1;
 		g.save();
 		g.beginPath();
-		g.rect(4, 0, Math.max(0, w - 7), h);
+		g.rect(4, 0, Math.max(0, w - tip - 4), h);
 		g.clip();
 		if (labelScale !== 1) {
 			g.translate(4, h / 2);
@@ -670,7 +739,9 @@ function updatePinBadgePresentation(
 	button.style.width = `${item.width}px`;
 	button.style.height = `${PIN_HEIGHT}px`;
 	button.style.opacity = `${item.opacity}`;
-	button.style.setProperty("--epoch-pin-text", item.textColor);
+	button.style.setProperty("--epoch-pin-fill", item.fill);
+	button.style.setProperty("--epoch-pin-text", item.text);
+	button.classList.toggle("is-outlined", !item.active);
 	button.classList.toggle("is-top", item.dock === "top");
 	button.classList.toggle("is-bottom", item.dock === "bottom");
 	button.classList.toggle("is-touch-unhovered", hasSamePinTarget(s.touchUnhoveredPin, item));
@@ -682,7 +753,7 @@ function updatePinBadgePresentation(
 	s.ctx.font = item.font;
 	const textWidth = s.ctx.measureText(item.label).width;
 	s.ctx.restore();
-	const textMaxWidth = Math.max(0, item.width - 10);
+	const textMaxWidth = Math.max(0, item.width - 17);
 	const shouldJustify = textWidth > 0 && textWidth <= textMaxWidth;
 	label.classList.toggle("is-justify", shouldJustify);
 	label.classList.toggle("is-left", !shouldJustify);
@@ -730,6 +801,7 @@ export function updatePinOverlay(canvas: EpochCanvas): void {
 		button.draggable = false;
 		button.removeAttribute("title");
 		button.setAttribute("aria-hidden", "true");
+		createBadgeOutline(button);
 		const label = button.createSpan({ cls: "epoch-pin-badge-label" });
 		updatePinBadgePresentation(s, button, label, item);
 		button.addEventListener("mouseenter", () => {
