@@ -11,7 +11,7 @@ type SuggestChooserLike = {
 };
 
 function toFocusableElement(value: Element | null): FocusableElement | null {
-	return value instanceof HTMLElement ? value : null;
+	return value?.instanceOf?.(HTMLElement) ? value : null;
 }
 
 function getChooser(modal: SuggestModal<TFolder>): SuggestChooserLike | null {

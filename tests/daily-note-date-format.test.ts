@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	isValidDailyNoteDateFormat,
+	normalizeDailyNoteDateFormatInput,
 	parseDateFromDailyNoteFormat,
 } from "../src/utils";
 
@@ -45,6 +46,11 @@ describe("daily note date format", () => {
 
 	it("parses prefix + compact tokens", () => {
 		expect(parseDateFromDailyNoteFormat("daily_260106", "daily_yyddmm")).toBe("2026-06-01");
+	});
+
+	it("normalizes date tokens without changing weekday or minute tokens", () => {
+		expect(normalizeDailyNoteDateFormatInput("dd/dd/mm/mm/yyyy")).toBe("DD/DD/MM/MM/YYYY");
+		expect(normalizeDailyNoteDateFormatInput("ddd dddd dd-yyyy HH:mm")).toBe("ddd dddd DD-YYYY HH:mm");
 	});
 
 	it("parses without local Date getter dependency in moment path", () => {

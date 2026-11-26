@@ -1,380 +1,150 @@
-import { Setting, type SliderComponent, type TextComponent, type ToggleComponent } from "obsidian";
+import type { Setting } from "obsidian";
 import type { EpochPlugin } from "../main";
 import { DEFAULT_SETTINGS } from "../settings-model";
-import { registerInfoResetGesture } from "./info-reset-gesture";
 import { normalizeFrontmatterPropertyKey } from "../plugin/frontmatter-keys";
+import { registerInfoResetGesture } from "./info-reset-gesture";
+import type { SettingRow } from "./setting-definitions";
 
-export function renderGeneralViewSettings(containerEl: HTMLElement, plugin: EpochPlugin): void {
-	let openOnStartupToggle: ToggleComponent | null = null;
-	const openOnStartupSetting = new Setting(containerEl)
-			.setName("Open on startup")
-			.setDesc("Automatically opens the timeline when Obsidian starts.")
-		.addToggle((toggle) => {
-			openOnStartupToggle = toggle;
-			toggle
-				.setValue(plugin.settings.openEpochViewOnStartup)
-				.onChange(async (value: boolean) => {
-					plugin.settings.openEpochViewOnStartup = value;
-					await plugin.onSettingsChanged("openEpochViewOnStartup");
+type ToggleKey = "openEpochViewOnStartup" | "enableAnimation" | "anchorMdate" | "parseDatesInFrontmatter";
+type SliderKey = "compactModeMinWidthPercent" | "searchResultsLimit" | "filenameWordsCount" | "summaryWordsCount";
+type FrontmatterKey = "yamlDateProperty" | "yamlDescriptionProperty";
+
+function toggleRow(plugin: EpochPlugin, key: ToggleKey, name: string, desc: string): SettingRow {
+	return {
+		name,
+		desc,
+		render(setting) {
+			setting.addToggle((toggle) => {
+				const save = async (value: boolean) => {
+					if (plugin.settings[key] === value) return;
+					plugin.settings[key] = value;
+					await plugin.onSettingsChanged(key);
+				};
+				toggle.setValue(plugin.settings[key] === true).onChange(save);
+				registerInfoResetGesture(setting, async () => {
+					const value = DEFAULT_SETTINGS[key] === true;
+					toggle.setValue(value);
+					await save(value);
 				});
-		});
-	registerInfoResetGesture(openOnStartupSetting, async () => {
-		const def = DEFAULT_SETTINGS.openEpochViewOnStartup;
-		if (plugin.settings.openEpochViewOnStartup === def) {
-			if (openOnStartupToggle) openOnStartupToggle.setValue(def);
-			return;
-		}
-		if (openOnStartupToggle) openOnStartupToggle.setValue(def);
-		plugin.settings.openEpochViewOnStartup = def;
-		await plugin.onSettingsChanged("openEpochViewOnStartup");
-	});
-
-	let enableAnimationToggle: ToggleComponent | null = null;
-	const enableAnimationSetting = new Setting(containerEl)
-		.setName("Enable animation")
-		.setDesc("Turns on/off all animation.")
-		.addToggle((toggle) => {
-			enableAnimationToggle = toggle;
-			toggle
-				.setValue(plugin.settings.enableAnimation)
-				.onChange(async (value: boolean) => {
-					plugin.settings.enableAnimation = value;
-					await plugin.onSettingsChanged("enableAnimation");
-				});
-		});
-	registerInfoResetGesture(enableAnimationSetting, async () => {
-		const def = DEFAULT_SETTINGS.enableAnimation;
-		if (plugin.settings.enableAnimation === def) {
-			if (enableAnimationToggle) enableAnimationToggle.setValue(def);
-			return;
-		}
-		if (enableAnimationToggle) enableAnimationToggle.setValue(def);
-		plugin.settings.enableAnimation = def;
-		await plugin.onSettingsChanged("enableAnimation");
-	});
-
-	const compactModeMinWidthSetting = new Setting(containerEl);
-	const setCompactModeMinWidthLabel = (val: number) => {
-		if (val <= 0) {
-			compactModeMinWidthSetting.setName("Record width limit (disabled)");
-		} else {
-			compactModeMinWidthSetting.setName(`Record width limit (${val}%)`);
+			});
 		}
 	};
-	const currentCompactModeMinWidth = Number.isFinite(Number(plugin.settings.compactModeMinWidthPercent))
-		? Math.max(0, Math.min(100, Math.round(Number(plugin.settings.compactModeMinWidthPercent))))
-		: Math.max(0, Math.min(100, Math.round(Number(DEFAULT_SETTINGS.compactModeMinWidthPercent))));
-	setCompactModeMinWidthLabel(currentCompactModeMinWidth);
-	compactModeMinWidthSetting.setDesc("Collapses overflow records into a (+n) group.");
-	let compactModeMinWidthSlider: SliderComponent | null = null;
-	let suppressCompactModeMinWidthOnChange = false;
-	compactModeMinWidthSetting.addSlider((slider) => {
-		compactModeMinWidthSlider = slider;
-		slider
-			.setLimits(0, 100, 1)
-			.setValue(currentCompactModeMinWidth)
-			.onChange(async (value) => {
-				if (suppressCompactModeMinWidthOnChange) return;
-				const rounded = Math.max(0, Math.min(100, Math.round(value)));
-				if (rounded !== value) {
-					slider.setValue(rounded);
-					return;
-				}
-				if (plugin.settings.compactModeMinWidthPercent === rounded) return;
-				plugin.settings.compactModeMinWidthPercent = rounded;
-				setCompactModeMinWidthLabel(rounded);
-				await plugin.onSettingsChanged("compactModeMinWidthPercent");
-			});
-	});
-	registerInfoResetGesture(compactModeMinWidthSetting, async () => {
-		const def = Math.max(0, Math.min(100, Math.round(Number(DEFAULT_SETTINGS.compactModeMinWidthPercent))));
-		if (!compactModeMinWidthSlider) return;
-		if (plugin.settings.compactModeMinWidthPercent === def) {
-			setCompactModeMinWidthLabel(def);
-			return;
-		}
-		suppressCompactModeMinWidthOnChange = true;
-		compactModeMinWidthSlider.setValue(def);
-		suppressCompactModeMinWidthOnChange = false;
-		plugin.settings.compactModeMinWidthPercent = def;
-		setCompactModeMinWidthLabel(def);
-		await plugin.onSettingsChanged("compactModeMinWidthPercent");
-	});
-
-	const searchResultsSetting = new Setting(containerEl);
-	const setSearchResultsLabel = (val: number) => {
-		searchResultsSetting.setName(`Search results count (${val})`);
-	};
-	const currentSearchResults = Number.isFinite(Number(plugin.settings.searchResultsLimit))
-		? Math.max(1, Math.min(50, Math.round(Number(plugin.settings.searchResultsLimit))))
-		: Math.max(1, Math.min(50, Math.round(Number(DEFAULT_SETTINGS.searchResultsLimit))));
-	setSearchResultsLabel(currentSearchResults);
-	searchResultsSetting.setDesc("Limits search record suggestions count.");
-	let searchResultsSlider: SliderComponent | null = null;
-	let suppressSearchResultsOnChange = false;
-	searchResultsSetting.addSlider((slider) => {
-		searchResultsSlider = slider;
-		slider
-			.setLimits(1, 50, 1)
-			.setValue(currentSearchResults)
-			.onChange(async (value) => {
-				if (suppressSearchResultsOnChange) return;
-				const rounded = Math.max(1, Math.min(50, Math.round(value)));
-				if (rounded !== value) {
-					slider.setValue(rounded);
-					return;
-				}
-				if (plugin.settings.searchResultsLimit === rounded) return;
-				plugin.settings.searchResultsLimit = rounded;
-				setSearchResultsLabel(rounded);
-				await plugin.onSettingsChanged("searchResultsLimit");
-			});
-	});
-	registerInfoResetGesture(searchResultsSetting, async () => {
-		const def = Math.max(1, Math.min(50, Math.round(Number(DEFAULT_SETTINGS.searchResultsLimit))));
-		if (!searchResultsSlider) return;
-		if (plugin.settings.searchResultsLimit === def) {
-			setSearchResultsLabel(def);
-			return;
-		}
-		suppressSearchResultsOnChange = true;
-		searchResultsSlider.setValue(def);
-		suppressSearchResultsOnChange = false;
-		plugin.settings.searchResultsLimit = def;
-		setSearchResultsLabel(def);
-		await plugin.onSettingsChanged("searchResultsLimit");
-	});
 }
 
-export function renderIndexerSettings(containerEl: HTMLElement, plugin: EpochPlugin): void {
+function sliderRow(
+	plugin: EpochPlugin,
+	key: SliderKey,
+	name: string,
+	desc: string,
+	min: number,
+	max: number,
+	formatValue: (value: number) => string
+): SettingRow {
+	return {
+		name,
+		desc,
+		render(setting) {
+			const normalize = (value: number) => Number.isFinite(value)
+				? Math.max(min, Math.min(max, Math.round(value)))
+				: DEFAULT_SETTINGS[key];
+			const setLabel = (value: number) => setting.setName(`${name} (${value === 0 ? "disabled" : formatValue(value)})`);
+			const current = normalize(plugin.settings[key]);
+			setLabel(current);
+			setting.addSlider((slider) => {
+				let resetting = false;
+				const save = async (value: number) => {
+					setLabel(value);
+					if (plugin.settings[key] === value) return;
+					plugin.settings[key] = value;
+					await plugin.onSettingsChanged(key);
+				};
+				slider.setLimits(min, max, 1).setValue(current).onChange(async (value) => {
+					if (resetting) return;
+					const normalized = normalize(value);
+					if (normalized !== value) {
+						slider.setValue(normalized);
+						return;
+					}
+					await save(normalized);
+				});
+				registerInfoResetGesture(setting, async () => {
+					const value = DEFAULT_SETTINGS[key];
+					resetting = true;
+					slider.setValue(value);
+					resetting = false;
+					await save(value);
+				});
+			});
+		}
+	};
+}
+
+function frontmatterRow(
+	plugin: EpochPlugin,
+	key: FrontmatterKey,
+	name: string,
+	desc: string,
+	onCommit?: () => void
+): SettingRow {
+	return {
+		name,
+		desc,
+		render(setting) {
+			const defaultValue = DEFAULT_SETTINGS[key];
+			setting.addText((text) => {
+				text.inputEl.classList.add("epoch-frontmatter-prop-input");
+				text.setPlaceholder(defaultValue).setValue(plugin.settings[key] || defaultValue);
+				const commit = async (value: string) => {
+					if (text.getValue() !== value) text.setValue(value);
+					const changed = plugin.settings[key] !== value;
+					if (changed) plugin.settings[key] = value;
+					onCommit?.();
+					if (changed) await plugin.onSettingsChanged(key);
+				};
+				text.inputEl.addEventListener("blur", () => {
+					void commit(normalizeFrontmatterPropertyKey(text.getValue(), defaultValue));
+				});
+				registerInfoResetGesture(setting, () => commit(defaultValue));
+			});
+		}
+	};
+}
+
+export function defineGeneralViewSettings(plugin: EpochPlugin): SettingRow[] {
+	return [
+		toggleRow(plugin, "openEpochViewOnStartup", "Open on startup", "Automatically opens the timeline when Obsidian starts."),
+		toggleRow(plugin, "enableAnimation", "Enable animation", "Turns on/off all animation."),
+		sliderRow(plugin, "compactModeMinWidthPercent", "Record width limit", "Collapses overflow records into a (+n) group.", 0, 100, (value) => `${value}%`),
+		sliderRow(plugin, "searchResultsLimit", "Search results count", "Limits search record suggestions count.", 1, 50, String)
+	];
+}
+
+export function defineIndexerSettings(plugin: EpochPlugin): SettingRow[] {
+	let anchorMdateSetting: Setting | undefined;
 	const getAnchorMdateDesc = () => {
 		const prop = plugin.settings.yamlDateProperty || DEFAULT_SETTINGS.yamlDateProperty;
 		return `Uses mdate instead of cdate when no date is found in filename or YAML \`${prop}\`.`;
 	};
-	let anchorMdateToggle: ToggleComponent | null = null;
-	const anchorMdateSetting = new Setting(containerEl)
-		.setName("Anchor mdate")
-		.setDesc(getAnchorMdateDesc())
-		.addToggle((toggle) => {
-			anchorMdateToggle = toggle;
-			toggle
-				.setValue(plugin.settings.anchorMdate === true)
-				.onChange(async (value: boolean) => {
-					plugin.settings.anchorMdate = value;
-					await plugin.onSettingsChanged("anchorMdate");
-				});
-		});
-	registerInfoResetGesture(anchorMdateSetting, async () => {
-		const def = DEFAULT_SETTINGS.anchorMdate === true;
-		if (plugin.settings.anchorMdate === def) {
-			if (anchorMdateToggle) anchorMdateToggle.setValue(def);
-			return;
-		}
-		if (anchorMdateToggle) anchorMdateToggle.setValue(def);
-		plugin.settings.anchorMdate = def;
-		await plugin.onSettingsChanged("anchorMdate");
-	});
-
-	let yamlDatePropText: TextComponent | null = null;
-	let yamlDatePropPending = String(plugin.settings.yamlDateProperty || DEFAULT_SETTINGS.yamlDateProperty);
-	const commitYamlDateProperty = async (): Promise<void> => {
-		const normalized = normalizeFrontmatterPropertyKey(yamlDatePropPending, DEFAULT_SETTINGS.yamlDateProperty);
-		if (yamlDatePropText && yamlDatePropText.getValue() !== normalized) {
-			yamlDatePropText.setValue(normalized);
-		}
-		yamlDatePropPending = normalized;
-		if (plugin.settings.yamlDateProperty === normalized) return;
-		plugin.settings.yamlDateProperty = normalized;
-		anchorMdateSetting.setDesc(getAnchorMdateDesc());
-		await plugin.onSettingsChanged("yamlDateProperty");
-	};
-	const yamlDatePropSetting = new Setting(containerEl)
-		.setName("Anchor property")
-		.setDesc("Uses as the note anchor date.")
-		.addText((text) => {
-			yamlDatePropText = text;
-			text.inputEl?.classList.add("epoch-frontmatter-prop-input");
-			text
-				.setPlaceholder(DEFAULT_SETTINGS.yamlDateProperty)
-				.setValue(yamlDatePropPending)
-				.onChange((value: string) => {
-					yamlDatePropPending = value;
-				});
-			text.inputEl?.addEventListener("blur", () => {
-				void commitYamlDateProperty();
-			});
-		});
-	registerInfoResetGesture(yamlDatePropSetting, async () => {
-		const def = DEFAULT_SETTINGS.yamlDateProperty;
-		if (plugin.settings.yamlDateProperty === def) {
-			if (yamlDatePropText) yamlDatePropText.setValue(def);
-			yamlDatePropPending = def;
-			anchorMdateSetting.setDesc(getAnchorMdateDesc());
-			return;
-		}
-		if (yamlDatePropText) yamlDatePropText.setValue(def);
-		yamlDatePropPending = def;
-		plugin.settings.yamlDateProperty = def;
-		anchorMdateSetting.setDesc(getAnchorMdateDesc());
-		await plugin.onSettingsChanged("yamlDateProperty");
-	});
-
-	let yamlDescriptionPropText: TextComponent | null = null;
-	let yamlDescriptionPropPending = String(plugin.settings.yamlDescriptionProperty || DEFAULT_SETTINGS.yamlDescriptionProperty);
-	const commitYamlDescriptionProperty = async (): Promise<void> => {
-		const normalized = normalizeFrontmatterPropertyKey(yamlDescriptionPropPending, DEFAULT_SETTINGS.yamlDescriptionProperty);
-		if (yamlDescriptionPropText && yamlDescriptionPropText.getValue() !== normalized) {
-			yamlDescriptionPropText.setValue(normalized);
-		}
-		yamlDescriptionPropPending = normalized;
-		if (plugin.settings.yamlDescriptionProperty === normalized) return;
-		plugin.settings.yamlDescriptionProperty = normalized;
-		await plugin.onSettingsChanged("yamlDescriptionProperty");
-	};
-	const yamlDescriptionPropSetting = new Setting(containerEl)
-		.setName("Summary property")
-		.setDesc("Uses as the manual summary override.")
-		.addText((text) => {
-			yamlDescriptionPropText = text;
-			text.inputEl?.classList.add("epoch-frontmatter-prop-input");
-			text
-				.setPlaceholder(DEFAULT_SETTINGS.yamlDescriptionProperty)
-				.setValue(yamlDescriptionPropPending)
-				.onChange((value: string) => {
-					yamlDescriptionPropPending = value;
-				});
-			text.inputEl?.addEventListener("blur", () => {
-				void commitYamlDescriptionProperty();
-			});
-		});
-	registerInfoResetGesture(yamlDescriptionPropSetting, async () => {
-		const def = DEFAULT_SETTINGS.yamlDescriptionProperty;
-		if (plugin.settings.yamlDescriptionProperty === def) {
-			if (yamlDescriptionPropText) yamlDescriptionPropText.setValue(def);
-			yamlDescriptionPropPending = def;
-			return;
-		}
-		if (yamlDescriptionPropText) yamlDescriptionPropText.setValue(def);
-		yamlDescriptionPropPending = def;
-		plugin.settings.yamlDescriptionProperty = def;
-		await plugin.onSettingsChanged("yamlDescriptionProperty");
-	});
-
-	let parseDatesInFrontmatterToggle: ToggleComponent | null = null;
-	const parseDatesInFrontmatterSetting = new Setting(containerEl)
-		.setName("Parse all properties")
-		.setDesc("Scans all YAML properties for date values.")
-		.addToggle((toggle) => {
-			parseDatesInFrontmatterToggle = toggle;
-			toggle
-				.setValue(plugin.settings.parseDatesInFrontmatter === true)
-				.onChange(async (value: boolean) => {
-					plugin.settings.parseDatesInFrontmatter = value;
-					await plugin.onSettingsChanged("parseDatesInFrontmatter");
-				});
-		});
-	registerInfoResetGesture(parseDatesInFrontmatterSetting, async () => {
-		const def = DEFAULT_SETTINGS.parseDatesInFrontmatter === true;
-		if (plugin.settings.parseDatesInFrontmatter === def) {
-			if (parseDatesInFrontmatterToggle) parseDatesInFrontmatterToggle.setValue(def);
-			return;
-		}
-		if (parseDatesInFrontmatterToggle) parseDatesInFrontmatterToggle.setValue(def);
-		plugin.settings.parseDatesInFrontmatter = def;
-		await plugin.onSettingsChanged("parseDatesInFrontmatter");
-	});
-
-	const filenameSetting = new Setting(containerEl);
-	const setFilenameLabel = (val: number) => {
-		if (val <= 0) {
-			filenameSetting.setName("Filename length (disabled)");
-		} else {
-			filenameSetting.setName(`Filename length (${val} words)`);
-		}
-	};
-	const currentFilenameWords = plugin.settings.filenameWordsCount;
-	setFilenameLabel(currentFilenameWords);
-	filenameSetting.setDesc("Words of filename shown before summary (0 disables).");
-	let filenameSlider: SliderComponent | null = null;
-	let suppressFilenameSliderOnChange = false;
-	filenameSetting.addSlider((slider) => {
-		filenameSlider = slider;
-		slider
-			.setLimits(0, 12, 1)
-			.setValue(currentFilenameWords)
-			.onChange(async (value) => {
-				if (suppressFilenameSliderOnChange) return;
-				const rounded = Math.round(value);
-				if (rounded !== value) {
-					slider.setValue(rounded);
-					return;
-				}
-				if (plugin.settings.filenameWordsCount === rounded) return;
-				plugin.settings.filenameWordsCount = rounded;
-				setFilenameLabel(rounded);
-				await plugin.onSettingsChanged("filenameWordsCount");
-			});
-	});
-
-	registerInfoResetGesture(filenameSetting, async () => {
-		const def = DEFAULT_SETTINGS.filenameWordsCount;
-		if (!filenameSlider) return;
-		if (plugin.settings.filenameWordsCount === def) {
-			setFilenameLabel(def);
-			return;
-		}
-		suppressFilenameSliderOnChange = true;
-		filenameSlider.setValue(def);
-		suppressFilenameSliderOnChange = false;
-		plugin.settings.filenameWordsCount = def;
-		setFilenameLabel(def);
-		await plugin.onSettingsChanged("filenameWordsCount");
-	});
-
-	const summarySetting = new Setting(containerEl);
-	const setSummaryLabel = (val: number) => {
-		if (val <= 0) {
-			summarySetting.setName("Summary length (disabled)");
-		} else {
-			summarySetting.setName(`Summary length (${val} words)`);
-		}
-	};
-	const currentSummaryWords = plugin.settings.summaryWordsCount;
-	setSummaryLabel(currentSummaryWords);
-	summarySetting.setDesc("Words per summary (0 disables).");
-	let summarySlider: SliderComponent | null = null;
-	let suppressSummarySliderOnChange = false;
-	summarySetting.addSlider((slider) => {
-		summarySlider = slider;
-		slider
-			.setLimits(0, 12, 1)
-			.setValue(currentSummaryWords)
-			.onChange(async (value) => {
-				if (suppressSummarySliderOnChange) return;
-				const rounded = Math.round(value);
-				if (rounded !== value) {
-					slider.setValue(rounded);
-					return;
-				}
-				if (plugin.settings.summaryWordsCount === rounded) return;
-				plugin.settings.summaryWordsCount = rounded;
-				setSummaryLabel(rounded);
-				await plugin.onSettingsChanged("summaryWordsCount");
-			});
-	});
-
-	registerInfoResetGesture(summarySetting, async () => {
-		const def = DEFAULT_SETTINGS.summaryWordsCount;
-		if (!summarySlider) return;
-		if (plugin.settings.summaryWordsCount === def) {
-			setSummaryLabel(def);
-			return;
-		}
-		suppressSummarySliderOnChange = true;
-		summarySlider.setValue(def);
-		suppressSummarySliderOnChange = false;
-		plugin.settings.summaryWordsCount = def;
-		setSummaryLabel(def);
-		await plugin.onSettingsChanged("summaryWordsCount");
-	});
+	const anchorMdate = toggleRow(plugin, "anchorMdate", "Anchor mdate", "Uses mdate instead of cdate when no date is found in filename or the anchor property.");
+	const words = (value: number) => `${value} words`;
+	return [
+		{
+			...anchorMdate,
+			render(setting) {
+				anchorMdateSetting = setting;
+				setting.setDesc(getAnchorMdateDesc());
+				anchorMdate.render(setting);
+				return () => {
+					if (anchorMdateSetting === setting) anchorMdateSetting = undefined;
+				};
+			}
+		},
+		frontmatterRow(plugin, "yamlDateProperty", "Anchor property", "Uses as the note anchor date.", () => {
+			anchorMdateSetting?.setDesc(getAnchorMdateDesc());
+		}),
+		frontmatterRow(plugin, "yamlDescriptionProperty", "Summary property", "Uses as the manual summary override."),
+		toggleRow(plugin, "parseDatesInFrontmatter", "Parse all properties", "Scans all YAML properties for date values."),
+		sliderRow(plugin, "filenameWordsCount", "Filename length", "Words of filename shown before summary (0 disables).", 0, 12, words),
+		sliderRow(plugin, "summaryWordsCount", "Summary length", "Words per summary (0 disables).", 0, 12, words)
+	];
 }

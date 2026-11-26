@@ -9,7 +9,7 @@ type FocusableElement = HTMLElement & {
 };
 
 function toFocusableElement(value: Element | null): FocusableElement | null {
-	return value instanceof HTMLElement ? value : null;
+	return value?.instanceOf?.(HTMLElement) ? value : null;
 }
 
 

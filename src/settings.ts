@@ -1,16 +1,12 @@
-import {
-	App,
-	PluginSettingTab,
-	Setting,
-} from "obsidian";
+import { PluginSettingTab, type App, type Setting } from "obsidian";
 import type { EpochPlugin } from "./main";
 export type { EpochSettings } from "./settings-model";
 export { DEFAULT_SETTINGS } from "./settings-model";
 
-import { renderGeneralViewSettings, renderIndexerSettings } from "./settings-ui/general";
-import { renderMaintenanceSettings } from "./settings-ui/maintenance";
-import { renderAdvancedSettings } from "./settings-ui/advanced";
-import { createSettingGroup } from "./settings-ui/setting-groups";
+import { defineGeneralViewSettings, defineIndexerSettings } from "./settings-ui/general";
+import { defineMaintenanceSetting } from "./settings-ui/maintenance";
+import { defineAdvancedSettings } from "./settings-ui/advanced";
+import { renderLegacySettings, type SettingSection } from "./settings-ui/setting-definitions";
 
 type RuntimeWindowLike = Window & { require?: (id: string) => unknown };
 type ElectronLike = { shell?: { openExternal?: (url: string) => Promise<void> | void } };
@@ -47,27 +43,38 @@ export class EpochSettingTab extends PluginSettingTab {
 	}
 
 	private refreshDisplay(): void {
-		const display = (this as unknown as { display?: () => void }).display;
-		display?.call(this);
+		if (typeof this.update === "function") this.update();
+		else this.display();
 	}
 
-	display(): void {
-		const { containerEl } = this;
-		containerEl.empty();
-		const version = String(this.plugin?.manifest?.version ?? "Unknown");
+	override getSettingDefinitions(): SettingSection[] {
+		const { app, plugin } = this;
+		const refresh = () => this.refreshDisplay();
+		return [
+			{ type: "group", items: defineGeneralViewSettings(plugin) },
+			{
+				type: "group",
+				heading: "Indexer",
+				items: [...defineIndexerSettings(plugin), defineMaintenanceSetting(app, plugin, refresh)]
+			},
+			...defineAdvancedSettings(this.containerEl, app, plugin, refresh),
+			{
+				type: "group",
+				items: [{
+					name: `Version ${plugin.manifest?.version ?? "Unknown"}`,
+					searchable: false,
+					render: (setting) => this.renderVersion(setting)
+				}]
+			}
+		];
+	}
 
-		const { itemsEl: generalItems } = createSettingGroup(containerEl);
-		renderGeneralViewSettings(generalItems, this.plugin);
+	override display(): void {
+		this.containerEl.empty();
+		renderLegacySettings(this.containerEl, this.getSettingDefinitions());
+	}
 
-		const { itemsEl: indexerItems } = createSettingGroup(containerEl, "Indexer");
-
-		renderAdvancedSettings(containerEl, this.app, this.plugin, () => this.refreshDisplay());
-		renderIndexerSettings(indexerItems, this.plugin);
-		renderMaintenanceSettings(indexerItems, this.app, this.plugin, () => this.refreshDisplay());
-
-		const { itemsEl: versionItems } = createSettingGroup(containerEl);
-		const versionSetting = new Setting(versionItems)
-			.setName(`Version ${version}`);
+	private renderVersion(versionSetting: Setting): void {
 		versionSetting.addButton((button) => {
 			button.buttonEl.classList.add("epoch-community-button");
 			button

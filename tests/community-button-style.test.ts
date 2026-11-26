@@ -9,9 +9,9 @@ vi.mock("obsidian", async () => ({ ...(await vi.importActual("obsidian")), Setti
 		captured.button = button; callback(button); return this;
 	}
 } }));
-vi.mock("../src/settings-ui/general", () => ({ renderGeneralViewSettings() {}, renderIndexerSettings() {} }));
-vi.mock("../src/settings-ui/advanced", () => ({ renderAdvancedSettings() {} }));
-vi.mock("../src/settings-ui/maintenance", () => ({ renderMaintenanceSettings() {} }));
+vi.mock("../src/settings-ui/general", () => ({ defineGeneralViewSettings: () => [], defineIndexerSettings: () => [] }));
+vi.mock("../src/settings-ui/advanced", () => ({ defineAdvancedSettings: () => [] }));
+vi.mock("../src/settings-ui/maintenance", () => ({ defineMaintenanceSetting: () => ({ name: "Index", render() {} }) }));
 vi.mock("../src/settings-ui/setting-groups", () => ({ createSettingGroup: () => ({ itemsEl: {} }) }));
 import { EpochSettingTab } from "../src/settings";
 describe("community button presentation", () => {

@@ -325,6 +325,10 @@ describe("SUMMARY / URL CLEANING", () => {
 		expect(r).toBe("Вкладення файл.тест та нотатка");
 	});
 
+	it("preserves adjacent filenames and numeric dots without keeping standalone dots", () => {
+		expect(flattenForSummary("one.txt&два.md a...b 1.5 .5 5.")).toBe("one.txt&два.md a b 1.5 .5 5.");
+	});
+
 	it("removes punctuation outside links", () => {
 		const r = flattenForSummary("Check: https://example.com/a-b-c?x=1.");
 		expect(r).toBe("Check ↗︎ example.com/a-b-c...");

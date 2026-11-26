@@ -1,8 +1,10 @@
-import { Notice, Setting, type App } from "obsidian";
+import { Notice, type App } from "obsidian";
 import type { EpochPlugin } from "../main";
 import { promptMaintenanceChoices } from "../ui/modals";
 import { runRebuild, runReset } from "../plugin/maintenance";
-export function renderMaintenanceSettings(containerEl: HTMLElement, app: App, plugin: EpochPlugin, refresh: () => void): void {
+import type { SettingRow } from "./setting-definitions";
+
+export function defineMaintenanceSetting(app: App, plugin: EpochPlugin, refresh: () => void): SettingRow {
 	let busy = false;
 	const run = async (reset: boolean) => {
 		if (busy) return;
@@ -16,7 +18,17 @@ export function renderMaintenanceSettings(containerEl: HTMLElement, app: App, pl
 		} catch (error) { console.error("Epochgram maintenance failed", error); new Notice("Epochgram maintenance failed", 5000); }
 		finally { busy = false; refresh(); }
 	};
-	new Setting(containerEl).setName("Index").setDesc("Rebuild recomputes selected stores. Reset clears selected data.")
-		.addButton(button => button.setButtonText("Rebuild").onClick(() => run(false)))
-		.addButton(button => button.setButtonText("Reset").setWarning().onClick(() => run(true)));
+	return {
+		name: "Index",
+		desc: "Rebuild recomputes selected stores. Reset clears selected data.",
+		aliases: ["Reset reviews", "Rebuild search"],
+		render(setting) {
+			setting.addButton(button => button.setButtonText("Rebuild").onClick(() => run(false)));
+			setting.addButton((button) => {
+				button.setButtonText("Reset").onClick(() => run(true));
+				if (typeof button.setDestructive === "function") button.setDestructive();
+				else button.buttonEl.classList.add("mod-warning"); // Obsidian 1.12
+			});
+		}
+	};
 }

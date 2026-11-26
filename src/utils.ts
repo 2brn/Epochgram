@@ -55,11 +55,11 @@ export function normalizeDailyNoteDateFormatInput(format: string): string {
 	f = f.replace(/yyyy/g, "YYYY");
 	f = f.replace(/yyy/g, "YYYY");
 	// Avoid touching weekday tokens like ddd/dddd.
-	f = f.replace(/(?<!d)dd(?!d)/g, "DD");
+	f = f.replace(/(^|[^d])dd(?!d)/g, "$1DD");
 	// Only normalize month `mm` -> `MM` when format does not look like it contains time.
 	// (In Moment, `mm` is minutes.)
 	if (!/[Hh:]/.test(f)) {
-		f = f.replace(/(?<!m)mm(?!m)/g, "MM");
+		f = f.replace(/(^|[^m])mm(?!m)/g, "$1MM");
 	}
 	// Two-digit year is safe to normalize.
 	f = f.replace(/yy/g, "YY");

@@ -28,8 +28,13 @@ class FakeClassList {
 }
 
 class FakeDocument {
-	readonly defaultView = { getComputedStyle: () => ({ getPropertyValue: () => "" }) };
+	readonly defaultView = { getComputedStyle: () => ({ getPropertyValue: (name: string) => {
+		if (name === "--text-accent") return "#6655cc";
+		if (name === "--text-muted") return "#686868";
+		return "";
+	} }) };
 	readonly listeners = new Map<string, Array<(event: any) => void>>();
+	win?: { createEl: (tag: string) => { getContext: (type: string) => object } };
 
 	addEventListener(name: string, listener: (event: any) => void): void {
 		const listeners = this.listeners.get(name) ?? [];
@@ -53,12 +58,16 @@ class FakeBadge {
 	readonly classList = new FakeClassList();
 	readonly labels: Array<{ classList: FakeClassList; style: Record<string, unknown>; textContent: string }> = [];
 	readonly style: Record<string, unknown> & { setProperty: (name: string, value: string) => void } = {
-		setProperty: () => {}
+		setProperty: (name, value) => { this.style[name] = value; }
 	};
 	readonly listeners = new Map<string, Array<(event: any) => void>>();
 	readonly blur = vi.fn();
 	type = "";
 	draggable = false;
+
+	getBoundingClientRect() {
+		return { width: 39, height: 16, left: 0, top: 72 };
+	}
 
 	createSpan(): { classList: FakeClassList; style: Record<string, unknown>; textContent: string } {
 		const label = { classList: new FakeClassList(), style: {}, textContent: "" };
@@ -145,6 +154,7 @@ function makeCanvas(options: {
 	activeFilePath?: string;
 	pinnedFile?: "date" | "dock" | null;
 	reviewState?: "draft" | "reviewed";
+	markColorHex?: string;
 	summary?: string;
 	filenameWordsCount?: number;
 	summaryWordsCount?: number;
@@ -205,7 +215,8 @@ function makeCanvas(options: {
 						blockEnd: 0,
 						summary,
 						source: "cdate",
-						reviewState: options.reviewState ?? "reviewed"
+						reviewState: options.reviewState ?? "reviewed",
+						markColorHex: options.markColorHex
 					},
 					namedDate: null,
 					dateProp: null,
@@ -268,6 +279,17 @@ describe("mobile pin-label interactions", () => {
 		const { badge } = makeCanvas();
 		expect(badge.labels[0]?.style.font).toMatch(/^700 8px /);
 		expect(badge.labels[0]?.style.lineHeight).toBe("16px");
+	});
+
+	it("uses the former pin fill colors for virtual, date, and marked dock text", () => {
+		const inactive = { activeFilePath: "notes/other.md" };
+		const { badge: active } = makeCanvas();
+		const { badge: date } = makeCanvas({ ...inactive, pinnedFile: "date", offsetY: 0 });
+		const { badge: marked } = makeCanvas({ ...inactive, pinnedFile: "dock", markColorHex: "#ab1234" });
+
+		expect(active.style["--epoch-pin-text"]).toBe("#6655cc");
+		expect(date.style["--epoch-pin-text"]).toBe("#686868");
+		expect(marked.style["--epoch-pin-text"]).toBe("#ab1234");
 	});
 
 	it("uses the timeline record label for virtual, date, and dock pins", () => {
@@ -400,6 +422,32 @@ describe("mobile pin-label interactions", () => {
 		await vi.advanceTimersByTimeAsync(LONG_PRESS_MS);
 		expect(showSummaryMenu).toHaveBeenCalledTimes(1);
 		expect(canvas.dateOverlayEl.classList.contains("is-visible")).toBe(true);
+	});
+
+	it("draws a dragged pin as colored text on a transparent ghost", async () => {
+		Platform.isMobile = true;
+		vi.useFakeTimers();
+		const { canvas, badge, document } = makeCanvas({ offsetY: 80, markColorHex: "#ab1234" });
+		canvas.canvas = { getBoundingClientRect: () => ({ height: 200, top: 0, left: 0 }) };
+		canvas.draw = vi.fn();
+		canvas.entryDragAutoScrollRaf = 1;
+		const ctx = {
+			fillStyle: "", fill: vi.fn(), fillText: vi.fn(), clearRect: vi.fn(),
+			save: vi.fn(), restore: vi.fn(), beginPath: vi.fn(), rect: vi.fn(), clip: vi.fn(),
+			moveTo: vi.fn(), lineTo: vi.fn(), quadraticCurveTo: vi.fn(), closePath: vi.fn()
+		};
+		const ghost = { getContext: () => ctx };
+		document.win = { createEl: () => ghost };
+
+		badge.dispatch("touchstart", { touches: [{ clientX: 10, clientY: 80 }] });
+		await vi.advanceTimersByTimeAsync(LONG_PRESS_MS);
+		badge.dispatch("touchmove", { ...interactionEvent(), touches: [{ clientX: 10, clientY: 96 }] });
+
+		expect(canvas.entryDragGhost?.img).toBe(ghost);
+		expect(ctx.rect).toHaveBeenCalledWith(4, 0, 32, 16);
+		expect(ctx.fillStyle).toBe("#ab1234");
+		expect(ctx.fillText).toHaveBeenCalledWith(badge.labels[0].textContent, 4, 8);
+		expect(ctx.fill).not.toHaveBeenCalled();
 	});
 
 	it("turns a same-label second touch into focus instead of a delayed open", async () => {

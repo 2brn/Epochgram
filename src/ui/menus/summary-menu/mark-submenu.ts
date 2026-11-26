@@ -291,7 +291,7 @@ export function addMarkSubmenu(
 					const domEl: HTMLElement | null = domAny && typeof domAny?.addEventListener === "function" ? domAny : null;
 					const iconHTMLElement: HTMLElement | null =
 						iconEl && typeof iconEl?.addEventListener === "function" ? iconEl : null;
-					const targets = [domEl, iconHTMLElement].filter((target): target is HTMLElement => target instanceof HTMLElement);
+					const targets = [domEl, iconHTMLElement].filter((target): target is HTMLElement => target?.instanceOf?.(HTMLElement) === true);
 					const handler = (evt: Event) => {
 						if (!isDesktopPointer()) return;
 						try {

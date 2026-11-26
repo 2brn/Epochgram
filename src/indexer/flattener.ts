@@ -220,10 +220,10 @@ export function flattenForSummary(raw: string): string {
 	// text = text.replace(/\b[\w.-]+\.(png|jpg|jpeg|gif|svg|webp|bmp|tiff|avif)\b/gi, " ");
 
 	// Protect remaining filenames (any ext)
-	text = text.replace(/(?<![\p{L}\p{N}_-])[\p{L}\p{N}_-]+\.[\p{L}\p{N}_]{2,5}(?![\p{L}\p{N}_-])/gu, m => {
+	text = text.replace(/(^|[^\p{L}\p{N}_-])([\p{L}\p{N}_-]+\.[\p{L}\p{N}_]{2,5})(?![\p{L}\p{N}_-])/gu, (_, prefix: string, filename: string) => {
 		const id = files.length;
-		files.push(m);
-		return `FILETOKEN${id}`;
+		files.push(filename);
+		return `${prefix}FILETOKEN${id}`;
 	});
 
 	// Protect common numeric date formats
@@ -280,7 +280,7 @@ export function flattenForSummary(raw: string): string {
 	text = text.replace(/(\d):(\d{2})/g, "$1TIMEP_$2");
 	text = text.replace(/[!?;]+/g, " ");
 	text = text.replace(/,(?!\d)/g, " ");
-	text = text.replace(/(?<!\d)\.(?!\d)/g, " ");
+	text = text.replace(/\.(?!\d)/g, (dot, offset: number, source: string) => /\d/.test(source.charAt(offset - 1)) ? dot : " ");
 	text = text.replace(/:/g, " ");
 	text = text.replace(/TIMEP_/g, ":");
 

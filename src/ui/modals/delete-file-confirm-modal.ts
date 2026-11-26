@@ -21,7 +21,7 @@ type FileLike = {
 };
 
 function toFocusableElement(value: Element | null): FocusableElement | null {
-	return value instanceof HTMLElement ? value : null;
+	return value?.instanceOf?.(HTMLElement) ? value : null;
 }
 
 function getVaultLike(app: App): VaultLike | null {
